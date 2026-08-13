@@ -1,0 +1,86 @@
+import { readdir, readFile, stat } from "node:fs/promises";
+import { liveDiffstat, repoRoot } from "../git.ts";
+import { parseJob, renderJob } from "../job.ts";
+import { processGroupAlive } from "../proc.ts";
+
+export async function jobsCommand(_args: readonly string[], cwd: string): Promise<void> {
+	const root = repoRoot(cwd);
+	const jobsRoot = `${root}/.control/jobs`;
+	const entries = await readdir(jobsRoot, { withFileTypes: true });
+	const ids = entries
+		.filter((entry) => entry.isDirectory())
+		.map((entry) => entry.name)
+		.sort()
+		.reverse();
+	if (ids.length === 0) {
+		console.log("no jobs");
+		return;
+	}
+	const rendered: string[] = [];
+	for (const id of ids) rendered.push(await renderJobDirectory(root, jobsRoot, id));
+	console.log(rendered.join("\n\n"));
+}
+
+async function renderJobDirectory(root: string, jobsRoot: string, id: string): Promise<string> {
+	const jobDir = `${jobsRoot}/${id}`;
+	const [state, branch, pid, log, taskStat, logStat] = await Promise.all([
+		text(`${jobDir}/state`),
+		text(`${jobDir}/branch`),
+		text(`${jobDir}/pid`),
+		text(`${jobDir}/log`),
+		optionalStat(`${jobDir}/task.md`),
+		optionalStat(`${jobDir}/log`),
+	]);
+	if (!taskStat || !logStat) return `INVALID ${id} · missing task.md or log`;
+	const detail = [...log.split("\n")].reverse().find((line) => line.startsWith("[control ")) ?? "";
+	const tail = tailText(log, 20, 4_096);
+	return Promise.resolve()
+		.then(() => {
+			const job = parseJob({
+				id,
+				state,
+				branch,
+				...(pid ? { pid } : {}),
+				startedAt: taskStat.mtime,
+				lastOutputAt: logStat.mtime,
+				detail,
+			});
+			return renderJob(job, {
+				elapsedMs: Date.now() - taskStat.mtimeMs,
+				silentMs: Date.now() - logStat.mtimeMs,
+				...(job.phase === "running" ? { processAlive: processGroupAlive(job.pid) } : {}),
+				diffstat: liveDiffstat(root, branch),
+				logTail: tail,
+			});
+		})
+		.then(
+			(value) => value,
+			(error: unknown) =>
+				`INVALID ${id} · ${error instanceof Error ? error.message : String(error)}${tail ? `\n  log:\n${tail}` : ""}`,
+		);
+}
+
+function text(path: string): Promise<string> {
+	return readFile(path, "utf8").then(
+		(value) => value.trim(),
+		() => "",
+	);
+}
+
+function optionalStat(path: string) {
+	return stat(path).then(
+		(value) => value,
+		() => undefined,
+	);
+}
+
+function tailText(value: string, maxLines: number, maxBytes: number): string {
+	const lines = value.trimEnd().split("\n").slice(-maxLines).join("\n");
+	const bytes = Buffer.from(lines);
+	return bytes.byteLength <= maxBytes
+		? lines
+		: bytes
+				.subarray(bytes.byteLength - maxBytes)
+				.toString("utf8")
+				.replace(/^[^\n]*\n?/, "…\n");
+}

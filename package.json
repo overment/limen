@@ -1,0 +1,38 @@
+{
+	"name": "@overment/control",
+	"version": "0.1.0",
+	"description": "A minimal one-human-many-agents harness built from files, git, and one CLI.",
+	"type": "module",
+	"bin": {
+		"control": "bin/control"
+	},
+	"files": [
+		"bin",
+		"src",
+		"hook",
+		"templates",
+		"README.md",
+		"LICENSE"
+	],
+	"scripts": {
+		"test": "node --test test/*.test.ts",
+		"typecheck": "tsc --noEmit",
+		"format": "biome format --write .",
+		"check": "tsc --noEmit && biome check . && node --test test/*.test.ts"
+	},
+	"engines": {
+		"node": ">=24"
+	},
+	"keywords": [
+		"pi",
+		"coding-agent",
+		"git-worktree"
+	],
+	"license": "MIT",
+	"dependencies": {},
+	"devDependencies": {
+		"@biomejs/biome": "^2.5.8",
+		"@types/node": "^24.0.0",
+		"typescript": "^5.9.0"
+	}
+}
