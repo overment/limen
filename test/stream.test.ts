@@ -14,5 +14,6 @@ test("json events become a human log and last-tool names", () => {
 		[{ kind: "log", line: "done" }],
 	);
 	assert.deepEqual(parser.push("plain diagnostic\n"), [{ kind: "log", line: "plain diagnostic" }]);
+	assert.deepEqual(parser.push("{}\n"), []);
 	assert.deepEqual(parser.flush(), []);
 });
