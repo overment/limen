@@ -2,14 +2,20 @@
 
 The coordinator keeps this useful as a narrative board. Staleness is ordinary documentation debt, never a runtime gate.
 
-## Now
+Status marks are prose only: 🟠 ACTIVE · 🔴 PLANNED · 🟢 PROVEN · ⚪ DROPPED. Nothing in `control` parses them.
 
-- <!-- Current outcome and link to its feature folder. -->
+## TRACK
 
-## Next
+<!-- One short paragraph: what this stretch of work is for. -->
 
-- <!-- Likely follow-up work. -->
+## NOW
 
-## Done
+- `FNNN-slug` (ACTIVE): <!-- Current outcome and link to its feature folder. -->
 
-- <!-- Landed outcomes and useful commit/review references. -->
+## NEXT
+
+- `FNNN-slug` (PLANNED): <!-- Likely follow-up work. -->
+
+## PROVEN
+
+- `FNNN-slug` (PROVEN): <!-- Landed outcome and useful commit/review references. -->

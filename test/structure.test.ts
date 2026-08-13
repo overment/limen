@@ -51,6 +51,7 @@ test("strict TypeScript and templates preserve the capability-judgment line", as
 		"fresh reviewer",
 		"control wait",
 		"never poll",
+		"control jobs",
 		"merge",
 		"genuine ambiguity",
 		"never blocks",

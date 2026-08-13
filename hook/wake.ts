@@ -31,18 +31,18 @@ export default function controlWake(pi: PiApi): void {
 		context.ui.setStatus("control", undefined);
 	};
 	const updateStatus = (jobs: string, context: Context) => {
-		const next = runningStatus(jobs);
-		if (!next) {
-			clearStatus(context);
-			return;
-		}
-		statusBody = next;
 		const draw = () => {
+			const next = runningStatus(jobs);
+			if (!next) {
+				clearStatus(context);
+				return;
+			}
+			statusBody = next;
 			context.ui.setStatus("control", `${SPINNER[frame]} ${statusBody}`);
 			frame = (frame + 1) % SPINNER.length;
 		};
 		draw();
-		if (!statusTimer) {
+		if (statusBody && !statusTimer) {
 			statusTimer = setInterval(draw, 120);
 			statusTimer.unref();
 		}
@@ -81,13 +81,14 @@ export default function controlWake(pi: PiApi): void {
 				const parts = filename?.toString().split(/[\\/]/);
 				const id = parts?.[0];
 				const file = parts?.at(-1);
-				if (!id || (file !== "state" && file !== "last-tool")) return;
+				if (!id || (file !== "state" && file !== "last-tool" && file !== "activity" && file !== "log")) return;
 				updateStatus(jobs, context);
 				if (file === "state") observe(id);
 			} catch {
 				// Display and wake delivery are advisory; durable state remains on disk.
 			}
 		});
+		watcher.unref();
 		watcher.on("error", () => {
 			watcher?.close();
 			clearStatus(context);
@@ -110,13 +111,35 @@ function runningStatus(jobs: string): string {
 		.filter((id) => stateOf(jobs, id) === "running")
 		.map((id) => {
 			const name = shortLabel(text(join(jobs, id, "label")) || id);
+			const pulse = pulseOf(jobs, id);
 			const tool = text(join(jobs, id, "last-tool"));
-			return tool ? `${name}:${tool}` : name;
+			const detail = pulse === "tool" && tool ? `${pulse}:${tool}` : pulse;
+			return `${name} ${detail}`;
 		});
 	if (running.length === 0) return "";
 	const visible = running.slice(0, 3).join(" ");
 	const more = running.length > 3 ? ` +${running.length - 3}` : "";
 	return `ctl ${running.length} · ${visible}${more}`;
+}
+
+function pulseOf(jobs: string, id: string): string {
+	// Copied into the project as a standalone extension; keep identical to src/job.ts derivePulse.
+	const pid = Number(text(join(jobs, id, "pid")));
+	const recorded = Number.isSafeInteger(pid) && pid > 0 ? pid : undefined;
+	const activity = text(join(jobs, id, "activity"));
+	if (recorded === undefined) return "starting";
+	if (!processGroupAlive(recorded)) return "dead";
+	if (activity === "tool" || activity === "wait") return activity;
+	return "think";
+}
+
+function processGroupAlive(pid: number): boolean {
+	try {
+		process.kill(-pid, 0);
+		return true;
+	} catch (error) {
+		return typeof error === "object" && error !== null && "code" in error && error.code === "EPERM";
+	}
 }
 
 function shortLabel(label: string): string {

@@ -1,6 +1,6 @@
 import { readdir, readFile, stat } from "node:fs/promises";
 import { liveDiffstat, repoRoot } from "../git.ts";
-import { parseJob, renderJob } from "../job.ts";
+import { derivePulse, parseJob, renderJob } from "../job.ts";
 import { processGroupAlive } from "../proc.ts";
 
 export async function jobsCommand(_args: readonly string[], cwd: string): Promise<void> {
@@ -19,15 +19,15 @@ export async function jobsCommand(_args: readonly string[], cwd: string): Promis
 		console.log("no jobs");
 		return;
 	}
-	const rendered: string[] = [];
+	const rendered = [];
 	for (const id of ids) rendered.push(await renderJobDirectory(root, jobsRoot, id));
 	console.log(rendered.join("\n\n"));
 }
 
 async function renderJobDirectory(root: string, jobsRoot: string, id: string): Promise<string> {
 	const jobDir = `${jobsRoot}/${id}`;
-	const [state, label, branch, pid, log, started, finished, toolCalls, lastTool, taskStat, logStat] = await Promise.all(
-		[
+	const [state, label, branch, pid, log, started, finished, toolCalls, lastTool, activity, taskStat, logStat] =
+		await Promise.all([
 			text(`${jobDir}/state`),
 			text(`${jobDir}/label`),
 			text(`${jobDir}/branch`),
@@ -37,10 +37,10 @@ async function renderJobDirectory(root: string, jobsRoot: string, id: string): P
 			text(`${jobDir}/finished-at`),
 			text(`${jobDir}/tool-calls`),
 			text(`${jobDir}/last-tool`),
+			text(`${jobDir}/activity`),
 			optionalStat(`${jobDir}/task.md`),
 			optionalStat(`${jobDir}/log`),
-		],
-	);
+		]);
 	if (!taskStat || !logStat) return `INVALID ${id} · missing task.md or log`;
 	const detail = [...log.split("\n")].reverse().find((line) => line.startsWith("[control ")) ?? "";
 	const tail = tailText(log, 20, 4_096);
@@ -59,12 +59,22 @@ async function renderJobDirectory(root: string, jobsRoot: string, id: string): P
 			});
 			const observedAt =
 				job.phase === "running" ? Date.now() : recordedDate(finished, new Date(), "finished-at").getTime();
+			const processAlive = job.phase === "running" && job.pid !== undefined && processGroupAlive(job.pid);
 			return renderJob(job, {
 				elapsedMs: observedAt - startedAt.getTime(),
 				silentMs: observedAt - logStat.mtimeMs,
 				...(toolCalls ? { toolCalls: recordedCount(toolCalls) } : {}),
 				...(lastTool ? { lastTool } : {}),
-				...(job.phase === "running" ? { processAlive: processGroupAlive(job.pid) } : {}),
+				...(job.phase === "running"
+					? {
+							pulse: derivePulse({
+								alive: processAlive,
+								...(job.pid !== undefined ? { pid: job.pid } : {}),
+								...(activity ? { activity } : {}),
+							}),
+							...(job.pid !== undefined ? { processAlive } : {}),
+						}
+					: {}),
 				diffstat: liveDiffstat(root, branch),
 				logTail: tail,
 			});

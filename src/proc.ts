@@ -99,13 +99,13 @@ export async function runInternalJob(): Promise<void> {
 		"CONTROL_TIMEOUT_MS",
 		"CONTROL_MODEL",
 		"CONTROL_LABEL",
-		"CONTROL_TOOL_COUNT_FILE",
 	]) {
 		delete childEnvironment[name];
 	}
 	const parser = createStreamParser();
+	const seen = { activity: "" };
 	const apply = (events: readonly StreamEvent[]) => {
-		pending = pending.then(() => recordEvents(jobDir, events, () => (tools += 1))).catch(() => {});
+		pending = pending.then(() => recordEvents(jobDir, events, () => (tools += 1), seen)).catch(() => {});
 	};
 	const child = spawn(process.env.CONTROL_PI ?? "pi", args, {
 		cwd: worktree,
@@ -126,6 +126,7 @@ export async function runInternalJob(): Promise<void> {
 	});
 	await atomicWrite(`${jobDir}/pid`, `${process.pid}\n`);
 	await atomicWrite(`${jobDir}/state`, "running\n");
+	await appendControlLog(jobDir, "worker started");
 	const timeout = timeoutMs
 		? setTimeout(() => {
 				timedOut = true;
@@ -164,13 +165,22 @@ export async function finalizeJob(jobDir: string, state: "done" | "failed" | "st
 	await rm(`${jobDir}/pid`, { force: true });
 }
 
-async function recordEvents(jobDir: string, events: readonly StreamEvent[], nextCount: () => number): Promise<void> {
+async function recordEvents(
+	jobDir: string,
+	events: readonly StreamEvent[],
+	nextCount: () => number,
+	seen: { activity: string },
+): Promise<void> {
 	for (const event of events) {
 		if (event.kind === "tool") {
-			const count = nextCount();
+			seen.activity = "tool";
 			await atomicWrite(`${jobDir}/last-tool`, `${event.name}\n`);
-			await atomicWrite(`${jobDir}/tool-calls`, `${count}\n`);
+			await atomicWrite(`${jobDir}/activity`, "tool\n");
+			await atomicWrite(`${jobDir}/tool-calls`, `${nextCount()}\n`);
 			await appendFile(`${jobDir}/log`, `${event.name}\n`);
+		} else if (event.kind === "activity") {
+			await atomicWrite(`${jobDir}/activity`, `${event.name}\n`);
+			if (seen.activity !== event.name) await appendFile(`${jobDir}/log`, `${(seen.activity = event.name)}\n`);
 		} else await appendFile(`${jobDir}/log`, `${event.line}\n`);
 	}
 }

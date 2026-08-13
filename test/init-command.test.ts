@@ -14,6 +14,9 @@ test("init fills gaps, preserves existing bytes, and ignores runtime state once"
 	assert.equal(await readFile(join(scratch.root, "AGENTS.md"), "utf8"), "mine-no-newline");
 	assert.equal(await readFile(join(scratch.root, ".gitignore"), "utf8"), "dist/\n/.control/\n");
 	assert.match(await readFile(join(scratch.root, "spec/vision.md"), "utf8"), /Human-owned/);
+	assert.match(await readFile(join(scratch.root, "spec/vision.md"), "utf8"), /Product principles/);
+	assert.match(await readFile(join(scratch.root, "spec/build.md"), "utf8"), /## TRACK/);
+	assert.match(await readFile(join(scratch.root, "spec/build.md"), "utf8"), /## PROVEN/);
 	assert.match(await readFile(join(scratch.root, ".agents/control/reviewer.md"), "utf8"), /do not rewrite/i);
 	assert.match(await readFile(join(scratch.root, "spec/features/_template/ticket.md"), "utf8"), /FNNN/);
 	assert.match(await readFile(join(scratch.root, "spec/features/_template/outcome.md"), "utf8"), /## Result/);

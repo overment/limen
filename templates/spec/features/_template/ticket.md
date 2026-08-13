@@ -1,6 +1,10 @@
-# FNNN — Feature title
+# FNNN-slug · Feature title
 
 > Allocate the next unused feature number. Keep it for the feature's whole life and never reuse it.
+
+[YYYY-MM-DD] [🔴] [STATUS] [COORDINATOR] PLANNED · FNNN-slug
+
+Status marks are prose: 🔴 PLANNED · 🟠 ACTIVE · 🟢 PROVEN · ⚪ DROPPED. Update the line when the folder moves. Nothing in `control` parses it.
 
 ## Outcome
 

@@ -1,6 +1,8 @@
+export type Activity = "think" | "tool" | "wait";
 export type StreamEvent =
 	| { readonly kind: "log"; readonly line: string }
-	| { readonly kind: "tool"; readonly name: string };
+	| { readonly kind: "tool"; readonly name: string }
+	| { readonly kind: "activity"; readonly name: Activity };
 
 export function createStreamParser(): { push(chunk: string): StreamEvent[]; flush(): StreamEvent[] } {
 	let buffer = "";
@@ -35,9 +37,19 @@ function interpret(event: unknown): StreamEvent | undefined {
 	if (record.type === "tool_execution_start" && typeof record.toolName === "string" && record.toolName.trim()) {
 		return { kind: "tool", name: record.toolName.trim() };
 	}
+	if (record.type === "tool_execution_end") return { kind: "activity", name: "wait" };
 	if (record.type === "message_end") {
 		const line = assistantText(record.message);
 		if (line) return { kind: "log", line };
+		return { kind: "activity", name: "think" };
+	}
+	if (
+		record.type === "agent_start" ||
+		record.type === "turn_start" ||
+		record.type === "message_start" ||
+		record.type === "message_update"
+	) {
+		return { kind: "activity", name: "think" };
 	}
 	return;
 }

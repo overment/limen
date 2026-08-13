@@ -4,21 +4,28 @@ A minimal harness for one human working through one coordinator with many coding
 
 Everything involving judgment—what to build, ticket quality, whether review is sufficient, what should merge, and whether a board is tidy—stays in prompts and plain specifications. The API is the filesystem, Git, and one small CLI. There are no registered model tools, configuration files, gates, receipts, role state, watchdogs, daemons, or runtime dependencies.
 
-Requires macOS or Linux, Node.js 24+, Git, and the [`pi`](https://pi.dev) CLI on `PATH`.
+## Trust boundary
+
+`control spawn` launches [`pi`](https://pi.dev) with `--approve` in a sibling worktree as the current user. Isolation is a process tree and a Git worktree, not a sandbox. Workers inherit your permissions, environment, and credentials. Review candidate diffs before merging. Use a real sandbox when executing untrusted code. PID and process-group control target POSIX systems; Windows is unsupported. See [SECURITY.md](SECURITY.md).
 
 ## Install
 
+Requires macOS or Linux, Node.js 24+, Git, and the [`pi`](https://pi.dev) CLI on `PATH`.
+
 ```bash
-cd ~/.overment/control
+git clone https://github.com/overment/control.git
+cd control
 npm install
 npm link                 # exposes `control` on PATH
-cd /path/to/project
+cd /path/to/your-project
 control init
 ```
 
+From a published release, `npm install -g @overment/control` is the same binary.
+
 `control init` fills gaps only. It creates missing `AGENTS.md`, worker/reviewer preambles, the numbered `spec/` filing skeleton, optional Pi wake extension, and `.control/jobs/`; existing targets remain byte-for-byte untouched. It appends `/.control/` to `.gitignore` only when no equivalent line exists. If a project already has `AGENTS.md`, merge the shop-manual template manually if desired—the command will not guess.
 
-Project-local Pi extensions load only for a trusted project. `control` invokes spawned sessions with `--approve`; the coordinator should restart or `/reload` after init to load the optional wake extension.
+Project-local Pi extensions load only for a trusted project. After init, restart the coordinator or `/reload` so the optional wake extension loads.
 
 ## Commands
 
@@ -40,22 +47,24 @@ control spawn --label "F001 auth implementation" \
 # → 2026-08-13-f001-auth-implementation-7a2f
 ```
 
-A new launch creates branch `control/<job-id>` and an external linked worktree next to the primary repository. `--label` supplies readable status, notification, and Pi session names; the final output line remains the durable ID for scripts. Without it, the first task line becomes the label. The footer shortens feature labels to `FNNN` and other labels to their first word, and appends the latest tool when one exists. The wrapper invokes ephemeral Pi JSON mode, writes a human log plus `last-tool` as events arrive, and atomically changes `state` on exit. Multiple independent jobs run concurrently; an informational note never enforces a cap.
+A new launch creates branch `control/<job-id>` and an external linked worktree next to the primary repository. `--label` supplies readable status, notification, and Pi session names; the final output line remains the durable ID for scripts. Without it, the first task line becomes the label. The footer shortens feature labels to `FNNN` and other labels to their first word, then appends a live pulse (`starting`, `think`, `tool`, `wait`, or `dead`) and the latest tool when one exists. The wrapper invokes ephemeral Pi JSON mode, writes a human log plus `last-tool` as events arrive, and atomically changes `state` on exit. Multiple independent jobs run concurrently; an informational note never enforces a cap.
 
-### Wait and inspect
+### Watch and inspect
 
 ```bash
-control wait 7a2f                 # unique suffix, label, or full id
-control jobs                      # or type !control jobs inside Pi
+control jobs                      # health check; or type !control jobs inside Pi
+tail -f .control/jobs/<id>/log    # think / tool / wait lines plus assistant text
 ls .control/jobs/*/state
-tail -f .control/jobs/<id>/log
 git worktree list
 git diff HEAD...<branch>
+control wait 7a2f                 # scripts only; unique suffix, label, or full id
 ```
 
-Use `control wait` instead of repeated `sleep` polling only when the next action depends on a job. It watches the job directory and keeps a one-second portable fallback check in case filesystem watching fails. To keep the coordinator available for conversation, do not wait: the footer tracks running jobs and the completion wake resumes the coordinator when one settles.
+Stay available after `spawn`. The footer and one completion wake are the loop. `control jobs` is the health check: labels, elapsed time, pulse, last tool, liveness, silence, tail, and diffstat. It never stores “stalled” or repairs malformed records. Pulse is derived on read from pid liveness and the last observed activity: `starting`, `think`, `tool`, `wait`, or `dead`. There is no silence timer. A human can run `!control jobs` in interactive Pi.
 
-`control jobs` is convenience output. It shows full labels, elapsed time, tool-call count, last tool, process liveness, log silence, tail, and diffstat; it never stores “stalled” or repairs malformed records. A human can run it directly in interactive Pi as `!control jobs`. Worker logs are a thin human stream of tool names and final assistant text, not the raw JSON event dump.
+Do not poll with `sleep`. Do not `control wait` in a coordinator session — that blocks conversation. Scripts may wait: it watches the job directory and keeps a one-second portable fallback check.
+
+Worker logs are a thin human stream. The wrapper writes a start line, then think/wait as the pulse changes, each tool name as it starts, and final assistant text — not the raw JSON event dump.
 
 ### Review
 
@@ -91,17 +100,18 @@ Stop sends TERM to the recorded process group, waits five seconds, then uses KIL
   finished-at    ISO timestamp written before terminal state
   tool-calls     informational count from Pi tool-start events
   last-tool      latest tool name, if any
+  activity       latest observed think/tool/wait hint
   log            append-only human worker and control output
 ```
 
 One fact per file. Mutable state and PID writes use same-directory temporary files and atomic rename. Terminal state is written before PID removal. The records are not harness property: inspect or correct them with ordinary tools after a wrapper crash. Worktrees deliberately remain for inspection and resume; clean them with `git worktree remove`, `git worktree prune`, and normal branch deletion.
 
-The optional `.pi/extensions/control-wake.ts` watches new state changes during a coordinator session. Its footer uses a small Braille spinner and short names for running jobs, for example `⠹ ctl 1 · F003:bash`; animation stops and the footer clears when none remain. It also shows one start notice and sends one terminal message. When the coordinator is busy, terminal delivery uses Pi's `steer` queue so it is handled after the active tool call instead of waiting for the whole turn to end. Display and progress data are advisory. The extension stores no acknowledgement, enforces nothing, and performs no retry. If watching or delivery fails—or the coordinator is gone—the job state and branch still survive.
+The optional `.pi/extensions/control-wake.ts` watches new state changes during a coordinator session. Its footer uses a small Braille spinner and short names for running jobs, for example `⠹ ctl 1 · F003 tool:bash`; animation stops and the footer clears when none remain. Pulse words are observations: `starting` (handshake), `think` (model), `tool` (executing), `wait` (between tools), `dead` (process gone). It also shows one start notice and sends one terminal message. When the coordinator is busy, terminal delivery uses Pi's `steer` queue so it is handled after the active tool call instead of waiting for the whole turn to end. Display and progress data are advisory. The extension stores no acknowledgement, enforces nothing, and performs no retry. If watching or delivery fails—or the coordinator is gone—the job state and branch still survive.
 
 ## Specs and operating model
 
-- `spec/vision.md`: human-owned why; the coordinator proposes changes rather than inventing intent.
-- `spec/build.md`: coordinator-maintained Now / Next / Done narrative.
+- `spec/vision.md`: human-owned why; Product principles and Current direction. The coordinator proposes changes rather than inventing intent.
+- `spec/build.md`: coordinator-maintained TRACK / NOW / NEXT / PROVEN narrative. Status marks 🟠🔴🟢⚪ are prose only.
 - `spec/features/planned/FNNN-slug/`: accepted numbered backlog.
 - `spec/features/active/FNNN-slug/`: numbered work currently being pursued.
 - `spec/features/done/YYYY-MM/FNNN-slug/`: landed history with `outcome.md`.
@@ -118,7 +128,7 @@ Checks are whatever the project itself defines. Review independence comes from a
 
 | Failure | Native recovery |
 |---|---|
-| silent or rambling job | inspect `log`, stop the process group, inspect the worktree, resume with a sharper task |
+| silent or rambling job | inspect `control jobs` first; stop on `dead`, or after checking the worktree, then resume |
 | worker asks a real question | read its committed partial work/question file, answer, resume `--branch` |
 | dead wrapper with stale `running` | check PID, edit `state`, inspect branch/worktree, resume |
 | junk candidate | do not merge; remove its worktree and branch |
@@ -144,6 +154,8 @@ The twenty mover requirements map directly:
 
 ## Develop
 
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the source budget and the capability/judgment line. CI runs `npm run check` on Linux and macOS.
+
 ```bash
 npm run typecheck
 npm test
@@ -151,7 +163,3 @@ npm run check
 ```
 
 Tests use `node:test`, fake Pi executables, and real temporary Git repositories. Runtime dependencies are zero. The source budget is checked to keep mechanism small; behavior incidents should normally change templates, not add guards.
-
-## Trust boundary
-
-This is process/worktree isolation, not a hostile-code sandbox. Spawned agents run with the user's permissions. Review code and use a real sandbox when executing untrusted code. PID/process-group behavior targets POSIX systems; Windows is unsupported.

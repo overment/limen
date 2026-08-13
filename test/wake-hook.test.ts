@@ -49,6 +49,7 @@ test("wake ignores history, announces start, and steers once on terminal change"
 		},
 	};
 	handlers.get("session_start")?.({}, session);
+	context.after(() => handlers.get("session_shutdown")?.({}, session));
 	assert.deepEqual(messages, []);
 	await mkdir(join(jobs, "new"));
 	await writeFile(join(jobs, "new/label"), "F001 implementation\n");
@@ -56,9 +57,10 @@ test("wake ignores history, announces start, and steers once on terminal change"
 	await writeFile(join(jobs, "new/state"), "running\n");
 	await waitUntil(() => notifications.length === 1);
 	assert.deepEqual(notifications, ["control: F001 implementation started (new)"]);
+	await writeFile(join(jobs, "new/activity"), "tool\n");
 	await writeFile(join(jobs, "new/last-tool"), "bash\n");
-	await waitUntil(() => new Set(statuses.filter((value) => value?.includes("ctl 1 · F001:bash"))).size >= 2);
-	assert.match(statuses.find((value) => value?.includes("ctl 1 · F001:bash")) ?? "", /^[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] /);
+	await waitUntil(() => new Set(statuses.filter((value) => value?.includes("ctl 1 · F001 starting"))).size >= 2);
+	assert.match(statuses.find((value) => value?.includes("ctl 1 · F001 starting")) ?? "", /^[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] /);
 	await writeFile(join(jobs, "new/state"), "done\n");
 	await waitUntil(() => messages.length === 1);
 	assert.equal(statuses.at(-1), undefined);
@@ -73,6 +75,7 @@ test("wake ignores history, announces start, and steers once on terminal change"
 	assert.equal(messages.length, 1, "a corrected terminal state must not send another wake");
 	handlers.get("session_shutdown")?.({}, session);
 	assert.deepEqual((await import("node:fs/promises").then(({ readdir }) => readdir(join(jobs, "new")))).sort(), [
+		"activity",
 		"branch",
 		"label",
 		"last-tool",
@@ -100,8 +103,8 @@ test("wake recreates the ignored jobs directory on session start", async (contex
 	});
 	const session = { cwd: root, isIdle: () => true, ui: { notify() {}, setStatus() {} } };
 	handlers.get("session_start")?.({}, session);
+	context.after(() => handlers.get("session_shutdown")?.({}, session));
 	await import("node:fs/promises").then(({ access }) => access(join(root, ".control/jobs")));
-	handlers.get("session_shutdown")?.({}, session);
 });
 
 test("wake remains inert inside workers", () => {

@@ -37,6 +37,10 @@ test("spawn creates isolated branch, canonical record, runs pi, and resumes its 
 	assert.equal(argv[argv.indexOf("--mode") + 1], "json");
 	assert.equal(await readFile(join(job, "last-tool"), "utf8"), "bash\n");
 	assert.equal(await readFile(join(job, "tool-calls"), "utf8"), "1\n");
+	const log = await readFile(join(job, "log"), "utf8");
+	assert.match(log, /worker started/);
+	assert.match(log, /^think$/m);
+	assert.match(log, /^bash$/m);
 	assert.notEqual(worktree, scratch.root);
 	await writeFile(join(worktree, "uncommitted.txt"), "keep me\n");
 	const resumed = control(scratch, "spawn", "continue work", "--branch", `control/${id}`);

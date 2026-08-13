@@ -36,13 +36,12 @@ function waitForTerminal(jobDir: string): Promise<string> {
 		}
 		try {
 			watcher = watch(jobDir, check);
+			watcher.unref();
 			watcher.on("error", () => {
 				watcher?.close();
 				watcher = undefined;
 			});
-		} catch {
-			// The periodic check remains as the portable fallback.
-		}
+		} catch {}
 		check();
 	});
 }

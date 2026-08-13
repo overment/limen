@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parseDuration, parseJob, renderJob, resolveJobId } from "../src/job.ts";
+import { derivePulse, parseDuration, parseJob, renderJob, resolveJobId } from "../src/job.ts";
 
 test("duration parsing is explicit and bounded", () => {
 	assert.equal(parseDuration("500ms"), 500);
@@ -31,11 +31,12 @@ test("jobs use one discriminated union and derived display facts", () => {
 			silentMs: 2_000,
 			toolCalls: 7,
 			lastTool: "bash",
+			pulse: "dead",
 			processAlive: false,
 			diffstat: "one file changed",
 			logTail: "hello",
 		}),
-		/RUNNING F001 implementation.*id x.*elapsed 1m.*tools 7 · bash.*pid 42 \(not alive\)/,
+		/RUNNING F001 implementation.*id x.*elapsed 1m.*dead · tools 7 · bash.*pid 42 \(not alive\)/,
 	);
 	assert.throws(
 		() =>
@@ -49,6 +50,37 @@ test("jobs use one discriminated union and derived display facts", () => {
 				detail: "",
 			}),
 		/unknown state/,
+	);
+});
+
+test("pulse is observed activity and liveness, never a timer", () => {
+	assert.equal(derivePulse({ alive: true }), "starting");
+	assert.equal(derivePulse({ pid: 1, alive: false, activity: "tool" }), "dead");
+	assert.equal(derivePulse({ pid: 1, alive: true, activity: "tool" }), "tool");
+	assert.equal(derivePulse({ pid: 1, alive: true, activity: "wait" }), "wait");
+	assert.equal(derivePulse({ pid: 1, alive: true }), "think");
+});
+
+test("a running job with no pid is the handshake, not invalid", () => {
+	const now = new Date();
+	const job = parseJob({
+		id: "x",
+		state: "running",
+		label: "F001 implementation",
+		branch: "control/x",
+		startedAt: now,
+		lastOutputAt: now,
+		detail: "",
+	});
+	assert.equal(job.phase, "running");
+	assert.equal(job.pid, undefined);
+	assert.match(
+		renderJob(job, { elapsedMs: 400, silentMs: 0, pulse: "starting", diffstat: "", logTail: "" }),
+		/starting/,
+	);
+	assert.doesNotMatch(
+		renderJob(job, { elapsedMs: 400, silentMs: 0, pulse: "starting", diffstat: "", logTail: "" }),
+		/pid /,
 	);
 });
 

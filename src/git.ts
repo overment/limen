@@ -1,11 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
 
-export type GitWorktree = {
-	readonly path: string;
-	readonly branch?: string;
-	readonly detached: boolean;
-};
+export type GitWorktree = { readonly path: string; readonly branch?: string; readonly detached: boolean };
 type GitResult = { readonly stdout: string; readonly stderr: string; readonly status: number };
 
 export function repoRoot(cwd: string): string {

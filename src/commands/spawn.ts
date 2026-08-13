@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { basename, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -71,6 +71,7 @@ export async function spawnCommand(args: readonly string[], cwd: string): Promis
 		writeFile(`${jobDir}/started-at`, `${new Date().toISOString()}\n`, { flag: "wx", flush: true }),
 		writeFile(`${jobDir}/tool-calls`, "0\n", { flag: "wx", flush: true }),
 		writeFile(`${jobDir}/last-tool`, "", { flag: "wx", flush: true }),
+		writeFile(`${jobDir}/activity`, "think\n", { flag: "wx", flush: true }),
 		writeFile(`${jobDir}/log`, "", { flag: "wx", flush: true }),
 	]);
 	await atomicWrite(`${jobDir}/state`, "running\n");
@@ -173,7 +174,6 @@ function makeJobId(label: string): string {
 }
 
 async function countRunning(jobsRoot: string): Promise<number> {
-	const { readdir } = await import("node:fs/promises");
 	const entries = await readdir(jobsRoot, { withFileTypes: true });
 	let count = 0;
 	for (const entry of entries) if (entry.isDirectory() && (await liveJob(`${jobsRoot}/${entry.name}`))) count += 1;
@@ -181,7 +181,6 @@ async function countRunning(jobsRoot: string): Promise<number> {
 }
 
 async function liveJobUsesBranch(jobsRoot: string, branch: string): Promise<boolean> {
-	const { readdir } = await import("node:fs/promises");
 	const entries = await readdir(jobsRoot, { withFileTypes: true });
 	for (const entry of entries) {
 		if (!entry.isDirectory()) continue;

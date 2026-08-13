@@ -23,6 +23,25 @@ test("malformed records are informational and do not get rewritten", async (cont
 	);
 });
 
+test("a running record without pid is starting, not invalid", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	control(scratch, "init");
+	const job = join(scratch.root, ".control/jobs/handshake");
+	await mkdir(job);
+	await writeFile(join(job, "task.md"), "soon\n");
+	await writeFile(join(job, "state"), "running\n");
+	await writeFile(join(job, "label"), "F001 implementation\n");
+	await writeFile(join(job, "branch"), "control/handshake\n");
+	await writeFile(join(job, "log"), "");
+	await writeFile(join(job, "activity"), "think\n");
+	const result = control(scratch, "jobs");
+	assert.equal(result.status, 0, result.stderr);
+	assert.match(result.stdout, /RUNNING F001 implementation/);
+	assert.match(result.stdout, /starting/);
+	assert.doesNotMatch(result.stdout, /INVALID/);
+});
+
 test("jobs reports an empty set before init", async (context) => {
 	const scratch = await scratchRepo();
 	context.after(scratch.cleanup);

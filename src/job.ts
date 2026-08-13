@@ -1,12 +1,7 @@
 type JobIdentity = { readonly id: string; readonly label: string; readonly branch: string };
 export type Job = JobIdentity &
 	(
-		| {
-				readonly phase: "running";
-				readonly pid: number;
-				readonly startedAt: Date;
-				readonly lastOutputAt: Date;
-		  }
+		| { readonly phase: "running"; readonly pid?: number; readonly startedAt: Date; readonly lastOutputAt: Date }
 		| { readonly phase: "done" }
 		| { readonly phase: "failed"; readonly error: string }
 		| { readonly phase: "stopped"; readonly reason: string }
@@ -23,11 +18,13 @@ export type JobInput = {
 	readonly detail: string;
 };
 
+export type Pulse = "starting" | "think" | "tool" | "wait" | "dead";
 export type JobView = {
 	readonly elapsedMs: number;
 	readonly silentMs: number;
 	readonly toolCalls?: number;
 	readonly lastTool?: string;
+	readonly pulse?: Pulse;
 	readonly processAlive?: boolean;
 	readonly diffstat: string;
 	readonly logTail: string;
@@ -46,11 +43,11 @@ export function parseJob(input: JobInput): Job {
 	switch (input.state) {
 		case "running": {
 			const pid = Number(input.pid);
-			if (!Number.isSafeInteger(pid) || pid <= 0) throw new Error(`running job ${input.id} has no valid pid`);
+			const recorded = Number.isSafeInteger(pid) && pid > 0 ? { pid } : {};
 			return {
 				...identity,
 				phase: "running",
-				pid,
+				...recorded,
 				startedAt: input.startedAt,
 				lastOutputAt: input.lastOutputAt,
 			};
@@ -64,6 +61,17 @@ export function parseJob(input: JobInput): Job {
 		default:
 			throw new Error(`job ${input.id} has unknown state ${JSON.stringify(input.state)}`);
 	}
+}
+
+export function derivePulse(input: {
+	readonly pid?: number;
+	readonly alive: boolean;
+	readonly activity?: string;
+}): Pulse {
+	if (input.pid === undefined) return "starting";
+	if (!input.alive) return "dead";
+	if (input.activity === "tool" || input.activity === "wait") return input.activity;
+	return "think";
 }
 
 export function resolveJobId(
@@ -109,9 +117,11 @@ export function renderJob(job: Job, view: JobView): string {
 		`elapsed ${formatDuration(view.elapsedMs)}`,
 		`silent ${formatDuration(view.silentMs)}`,
 	];
+	if (view.pulse) facts.push(view.pulse);
 	if (view.toolCalls !== undefined) facts.push(`tools ${view.toolCalls}`);
 	if (view.lastTool) facts.push(view.lastTool);
-	if (job.phase === "running") facts.push(`pid ${job.pid}${view.processAlive === false ? " (not alive)" : ""}`);
+	if (job.phase === "running" && job.pid !== undefined)
+		facts.push(`pid ${job.pid}${view.processAlive === false ? " (not alive)" : ""}`);
 	const blocks = [facts.join(" · ")];
 	const detail = terminalDetail(job);
 	if (detail) blocks.push(`  ${detail}`);

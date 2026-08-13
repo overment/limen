@@ -15,20 +15,33 @@
 		"LICENSE"
 	],
 	"scripts": {
-		"test": "node --test test/*.test.ts",
+		"test": "node --test --test-timeout=30000 test/*.test.ts",
 		"typecheck": "tsc --noEmit",
 		"format": "biome format --write .",
-		"check": "tsc --noEmit && biome check . && node --test test/*.test.ts"
+		"check": "tsc --noEmit && biome check . && node --test --test-timeout=30000 test/*.test.ts"
 	},
 	"engines": {
 		"node": ">=24"
 	},
+	"os": [
+		"darwin",
+		"linux"
+	],
 	"keywords": [
 		"pi",
 		"coding-agent",
 		"git-worktree"
 	],
 	"license": "MIT",
+	"author": "Adam Gospodarczyk <adam@overment.com>",
+	"homepage": "https://github.com/overment/control#readme",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/overment/control.git"
+	},
+	"bugs": {
+		"url": "https://github.com/overment/control/issues"
+	},
 	"dependencies": {},
 	"devDependencies": {
 		"@biomejs/biome": "^2.5.8",
