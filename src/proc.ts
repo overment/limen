@@ -5,18 +5,24 @@ import { createStreamParser, type StreamEvent } from "./stream.ts";
 
 const STOP_GRACE_MS = 5_000;
 export async function atomicWrite(path: string, content: string): Promise<void> {
-	const temporary = `${path}.${process.pid}.${Math.random().toString(16).slice(2)}.tmp`;
+	const temporary = `${path}.${process.pid}.${Date.now().toString(16)}.tmp`;
 	const handle = await open(temporary, "wx");
-	await handle.writeFile(content);
-	await handle.sync();
+	try {
+		await handle.writeFile(content);
+		await handle.sync();
+	} catch (error) {
+		await handle.close();
+		await rm(temporary, { force: true });
+		throw error;
+	}
 	await handle.close();
 	await rename(temporary, path);
 }
+
 export function processGroupAlive(pid: number): boolean {
 	const result = signalProcessGroup(pid, 0);
 	return result === "sent" || result === "denied";
 }
-
 export function signalProcessGroup(pid: number, signal: NodeJS.Signals | 0): "sent" | "missing" | "denied" {
 	try {
 		process.kill(-pid, signal);
@@ -27,17 +33,14 @@ export function signalProcessGroup(pid: number, signal: NodeJS.Signals | 0): "se
 		throw error;
 	}
 }
-
 export async function waitForProcessGroup(pid: number, milliseconds: number): Promise<boolean> {
 	const deadline = Date.now() + milliseconds;
 	while (processGroupAlive(pid) && Date.now() < deadline) await delay(100);
 	return !processGroupAlive(pid);
 }
-
 export async function appendControlLog(jobDir: string, message: string): Promise<void> {
 	await appendFile(`${jobDir}/log`, `[control ${new Date().toISOString()}] ${message}\n`);
 }
-
 export async function launchWrapper(environment: Readonly<Record<string, string>>): Promise<number> {
 	const executable = fileURLToPath(new URL("../bin/control", import.meta.url));
 	const child = spawn(process.execPath, [executable], {
@@ -53,7 +56,6 @@ export async function launchWrapper(environment: Readonly<Record<string, string>
 	child.unref();
 	return child.pid;
 }
-
 export async function runInternalJob(): Promise<void> {
 	const jobDir = requiredEnvironment("CONTROL_JOB_DIR");
 	const worktree = requiredEnvironment("CONTROL_WORKTREE");
@@ -104,8 +106,12 @@ export async function runInternalJob(): Promise<void> {
 	}
 	const parser = createStreamParser();
 	const seen = { activity: "" };
+	const failLog = (error: unknown) =>
+		appendControlLog(jobDir, `log write failed: ${error instanceof Error ? error.message : String(error)}`).catch(
+			() => {},
+		);
 	const apply = (events: readonly StreamEvent[]) => {
-		pending = pending.then(() => recordEvents(jobDir, events, () => (tools += 1), seen)).catch(() => {});
+		pending = pending.then(() => recordEvents(jobDir, events, () => (tools += 1), seen)).catch(failLog);
 	};
 	const child = spawn(process.env.CONTROL_PI ?? "pi", args, {
 		cwd: worktree,
@@ -114,7 +120,7 @@ export async function runInternalJob(): Promise<void> {
 	});
 	child.stdout?.on("data", (chunk: Buffer | string) => apply(parser.push(chunk.toString())));
 	child.stderr?.on("data", (chunk: Buffer | string) => {
-		pending = pending.then(() => appendFile(`${jobDir}/log`, chunk.toString())).catch(() => {});
+		pending = pending.then(() => appendFile(`${jobDir}/log`, chunk.toString())).catch(failLog);
 	});
 	const outcome = new Promise<{
 		code: number | null;
@@ -151,20 +157,17 @@ export async function runInternalJob(): Promise<void> {
 	else if (result.code === 0) await finalizeJob(jobDir, "done", "worker exited successfully");
 	else await finalizeJob(jobDir, "failed", `worker exited with code ${result.code ?? "unknown"}`);
 }
-
 export async function failInternalJob(error: unknown): Promise<void> {
 	const jobDir = process.env.CONTROL_JOB_DIR;
 	if (!jobDir) return;
 	await finalizeJob(jobDir, "failed", error instanceof Error ? error.message : String(error));
 }
-
 export async function finalizeJob(jobDir: string, state: "done" | "failed" | "stopped", detail: string): Promise<void> {
 	await appendControlLog(jobDir, `${state}: ${detail}`);
 	await atomicWrite(`${jobDir}/finished-at`, `${new Date().toISOString()}\n`);
 	await atomicWrite(`${jobDir}/state`, `${state}\n`);
 	await rm(`${jobDir}/pid`, { force: true });
 }
-
 async function recordEvents(
 	jobDir: string,
 	events: readonly StreamEvent[],
@@ -184,17 +187,14 @@ async function recordEvents(
 		} else await appendFile(`${jobDir}/log`, `${event.line}\n`);
 	}
 }
-
 function requiredEnvironment(name: string): string {
 	const value = process.env[name];
 	if (!value) throw new Error(`internal job wrapper is missing ${name}`);
 	return value;
 }
-
 function isCode(error: unknown, code: string): boolean {
 	return typeof error === "object" && error !== null && "code" in error && error.code === code;
 }
-
 function delay(milliseconds: number): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
