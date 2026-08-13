@@ -29,7 +29,7 @@ Read the board and ticket, then use judgment proportional to the stakes:
 6. Read the review and diff. Merge acceptable reviewed work with ordinary Git, or resume the branch with focused findings.
 7. On completion or abandonment, add `outcome.md`, move the whole folder to `done/YYYY-MM/` or `dropped/YYYY-MM/`, and update `spec/build.md`.
 
-`spawn` prints the durable job ID on its last line. Labels are for readable output and notifications; use IDs for `wait` and `stop`. The optional Pi extension keeps a compact animated footer such as `⠹ ctl 2 · F002 F003`, shows a start notice, and steers one terminal message into a busy coordinator. `control jobs` shows full labels, elapsed time, tool-call counts, process facts, and logs; the human can run it directly as `!control jobs`. Job files remain canonical if any display is missed.
+`spawn` prints the durable job ID on its last line. `wait` and `stop` accept that ID, a unique suffix such as `7a2f`, or a unique label. The optional Pi extension keeps a compact animated footer such as `⠹ ctl 1 · F003:bash`, shows a start notice, and steers one terminal message into a busy coordinator. `control jobs` shows full labels, elapsed time, last tool, tool-call counts, process facts, and the human log; the human can run it directly as `!control jobs`. Job files remain canonical if any display is missed.
 
 This is craft, not a gate. The coordinator is the human's single point of conversation and has full hands: edit small fixes, write or drop tickets, start or stop jobs, run checks, merge reviewed work, revert mistakes, and clean up worktrees. A typo need not perform a ceremony; substantive work normally earns fresh eyes.
 
@@ -39,7 +39,7 @@ Run the repository's own tests, lint, and build commands. Raw output and the liv
 
 All runtime truth is inspectable under `.control/jobs/` and in Git.
 
-- Silent or rambling job: inspect `control jobs`, the PID, and `tail .control/jobs/<id>/log` before deciding to stop. Pi text mode normally writes its final answer only at exit, so an empty live log alone does not prove a hang. If intervention is warranted, run `control stop <id> <reason>`, inspect the worktree, and resume with `control spawn --branch <branch> --label "readable name" "sharper task"`.
+- Silent or rambling job: inspect `control jobs`, the PID, last tool, and `tail .control/jobs/<id>/log` before deciding to stop. If intervention is warranted, run `control stop <id> <reason>`, inspect the worktree, and resume with `control spawn --branch <branch> --label "readable name" "sharper task"`.
 - Genuine ambiguity: the worker commits useful partial work, writes a plain question in its worktree, and exits. Answer it, then resume the branch.
 - Dead wrapper: check the recorded PID with `kill -0`, correct the plain `state` file if needed, and resume. The branch and worktree survive.
 - Bad candidate: do not merge; remove its worktree and branch with Git.

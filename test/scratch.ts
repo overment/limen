@@ -105,7 +105,8 @@ const task = promptIndex >= 0 ? readFileSync(args[promptIndex].slice(1), "utf8")
 writeFileSync("pi-args.json", JSON.stringify(args));
 writeFileSync("pi-task.txt", task);
 writeFileSync("pi-env.json", JSON.stringify({ internal: process.env.CONTROL_INTERNAL_RUN, job: process.env.CONTROL_JOB, id: process.env.CONTROL_JOB_ID, label: process.env.CONTROL_JOB_LABEL }));
-console.log("fake pi completed");
+console.log(JSON.stringify({ type: "tool_execution_start", toolName: "bash" }));
+console.log(JSON.stringify({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text: "fake pi completed" }] } }));
 if (task.includes("make commit")) {
   writeFileSync("candidate.txt", "candidate\\n");
   execFileSync("git", ["add", "."]);

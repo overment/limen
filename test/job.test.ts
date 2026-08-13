@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { parseDuration, parseJob, renderJob } from "../src/job.ts";
+import { parseDuration, parseJob, renderJob, resolveJobId } from "../src/job.ts";
 
 test("duration parsing is explicit and bounded", () => {
 	assert.equal(parseDuration("500ms"), 500);
@@ -30,11 +30,12 @@ test("jobs use one discriminated union and derived display facts", () => {
 			elapsedMs: 65_000,
 			silentMs: 2_000,
 			toolCalls: 7,
+			lastTool: "bash",
 			processAlive: false,
 			diffstat: "one file changed",
 			logTail: "hello",
 		}),
-		/RUNNING F001 implementation.*id x.*elapsed 1m.*tools 7.*pid 42 \(not alive\)/,
+		/RUNNING F001 implementation.*id x.*elapsed 1m.*tools 7 · bash.*pid 42 \(not alive\)/,
 	);
 	assert.throws(
 		() =>
@@ -49,4 +50,17 @@ test("jobs use one discriminated union and derived display facts", () => {
 			}),
 		/unknown state/,
 	);
+});
+
+test("job ids resolve uniquely by suffix or label", () => {
+	const ids = ["2026-08-13-f001-implementation-7a2f", "2026-08-13-f001-review-d482"];
+	const labels = {
+		"2026-08-13-f001-implementation-7a2f": "F001 implementation",
+		"2026-08-13-f001-review-d482": "F001 review",
+	};
+	assert.equal(resolveJobId("7a2f", ids, labels), "2026-08-13-f001-implementation-7a2f");
+	assert.equal(resolveJobId("F001 review", ids, labels), "2026-08-13-f001-review-d482");
+	assert.throws(() => resolveJobId("F001", ids, labels), /ambiguous/);
+	assert.throws(() => resolveJobId("ab", ids, labels), /no job matches/);
+	assert.throws(() => resolveJobId("missing", ids, labels), /no job matches/);
 });

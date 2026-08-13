@@ -1,9 +1,9 @@
 import { spawn } from "node:child_process";
 import { appendFile, open, readFile, rename, rm } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
+import { createStreamParser, type StreamEvent } from "./stream.ts";
 
 const STOP_GRACE_MS = 5_000;
-const PROGRESS_HOOK = fileURLToPath(new URL("../hook/progress.ts", import.meta.url));
 export async function atomicWrite(path: string, content: string): Promise<void> {
 	const temporary = `${path}.${process.pid}.${Math.random().toString(16).slice(2)}.tmp`;
 	const handle = await open(temporary, "wx");
@@ -63,20 +63,20 @@ export async function runInternalJob(): Promise<void> {
 	const label = process.env.CONTROL_LABEL || jobId;
 	const timeoutMs = process.env.CONTROL_TIMEOUT_MS ? Number(process.env.CONTROL_TIMEOUT_MS) : undefined;
 	const preamble = await readFile(preambleFile, "utf8");
-	const log = await open(`${jobDir}/log`, "a");
 	let stopRequested = false;
 	let timedOut = false;
 	let graceTimer: NodeJS.Timeout | undefined;
+	let tools = 0;
+	let pending = Promise.resolve();
 	process.on("SIGTERM", () => {
 		stopRequested = true;
 	});
 	const args = [
-		"--print",
+		"--mode",
+		"json",
 		"--approve",
 		"--no-session",
 		"--no-context-files",
-		"--extension",
-		PROGRESS_HOOK,
 		"--name",
 		`control: ${label}`,
 		"--append-system-prompt",
@@ -89,7 +89,6 @@ export async function runInternalJob(): Promise<void> {
 		CONTROL_JOB: "1",
 		CONTROL_JOB_ID: jobId,
 		CONTROL_JOB_LABEL: label,
-		CONTROL_TOOL_COUNT_FILE: `${jobDir}/tool-calls`,
 	};
 	for (const name of [
 		"CONTROL_INTERNAL_RUN",
@@ -100,13 +99,22 @@ export async function runInternalJob(): Promise<void> {
 		"CONTROL_TIMEOUT_MS",
 		"CONTROL_MODEL",
 		"CONTROL_LABEL",
+		"CONTROL_TOOL_COUNT_FILE",
 	]) {
 		delete childEnvironment[name];
 	}
+	const parser = createStreamParser();
+	const apply = (events: readonly StreamEvent[]) => {
+		pending = pending.then(() => recordEvents(jobDir, events, () => (tools += 1))).catch(() => {});
+	};
 	const child = spawn(process.env.CONTROL_PI ?? "pi", args, {
 		cwd: worktree,
-		stdio: ["ignore", log.fd, log.fd],
+		stdio: ["ignore", "pipe", "pipe"],
 		env: childEnvironment,
+	});
+	child.stdout?.on("data", (chunk: Buffer | string) => apply(parser.push(chunk.toString())));
+	child.stderr?.on("data", (chunk: Buffer | string) => {
+		pending = pending.then(() => appendFile(`${jobDir}/log`, chunk.toString())).catch(() => {});
 	});
 	const outcome = new Promise<{
 		code: number | null;
@@ -133,7 +141,8 @@ export async function runInternalJob(): Promise<void> {
 	const result = await outcome;
 	if (timeout) clearTimeout(timeout);
 	if (graceTimer) clearTimeout(graceTimer);
-	await log.close();
+	apply(parser.flush());
+	await pending;
 	if (timedOut) await finalizeJob(jobDir, "failed", `timeout after ${timeoutMs}ms`);
 	else if (stopRequested || result.signal === "SIGTERM" || result.signal === "SIGKILL") {
 		await finalizeJob(jobDir, "stopped", "process group interrupted");
@@ -153,6 +162,17 @@ export async function finalizeJob(jobDir: string, state: "done" | "failed" | "st
 	await atomicWrite(`${jobDir}/finished-at`, `${new Date().toISOString()}\n`);
 	await atomicWrite(`${jobDir}/state`, `${state}\n`);
 	await rm(`${jobDir}/pid`, { force: true });
+}
+
+async function recordEvents(jobDir: string, events: readonly StreamEvent[], nextCount: () => number): Promise<void> {
+	for (const event of events) {
+		if (event.kind === "tool") {
+			const count = nextCount();
+			await atomicWrite(`${jobDir}/last-tool`, `${event.name}\n`);
+			await atomicWrite(`${jobDir}/tool-calls`, `${count}\n`);
+			await appendFile(`${jobDir}/log`, `${event.name}\n`);
+		} else await appendFile(`${jobDir}/log`, `${event.line}\n`);
+	}
 }
 
 function requiredEnvironment(name: string): string {

@@ -1,12 +1,11 @@
 import { readFile } from "node:fs/promises";
-import { repoRoot } from "../git.ts";
+import { resolveJob } from "../lookup.ts";
 import { appendControlLog, finalizeJob, signalProcessGroup, waitForProcessGroup } from "../proc.ts";
 
 export async function stopCommand(args: readonly string[], cwd: string): Promise<void> {
-	const id = args[0];
-	if (!id) throw new Error("stop requires a job id");
-	const root = repoRoot(cwd);
-	const jobDir = `${root}/.control/jobs/${id}`;
+	const query = args[0];
+	if (!query) throw new Error("stop requires a job id");
+	const { id, jobDir } = await resolveJob(cwd, query);
 	const state = (await readFile(`${jobDir}/state`, "utf8")).trim();
 	if (state !== "running") {
 		console.log(`${id} is already ${state}`);

@@ -56,8 +56,9 @@ test("wake ignores history, announces start, and steers once on terminal change"
 	await writeFile(join(jobs, "new/state"), "running\n");
 	await waitUntil(() => notifications.length === 1);
 	assert.deepEqual(notifications, ["control: F001 implementation started (new)"]);
-	await waitUntil(() => new Set(statuses.filter((value) => value?.includes("ctl 1 · F001"))).size >= 2);
-	assert.match(statuses.find((value) => value?.includes("ctl 1 · F001")) ?? "", /^[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] /);
+	await writeFile(join(jobs, "new/last-tool"), "bash\n");
+	await waitUntil(() => new Set(statuses.filter((value) => value?.includes("ctl 1 · F001:bash"))).size >= 2);
+	assert.match(statuses.find((value) => value?.includes("ctl 1 · F001:bash")) ?? "", /^[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] /);
 	await writeFile(join(jobs, "new/state"), "done\n");
 	await waitUntil(() => messages.length === 1);
 	assert.equal(statuses.at(-1), undefined);
@@ -74,6 +75,7 @@ test("wake ignores history, announces start, and steers once on terminal change"
 	assert.deepEqual((await import("node:fs/promises").then(({ readdir }) => readdir(join(jobs, "new")))).sort(), [
 		"branch",
 		"label",
+		"last-tool",
 		"state",
 	]);
 });

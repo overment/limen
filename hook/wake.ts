@@ -80,9 +80,10 @@ export default function controlWake(pi: PiApi): void {
 			try {
 				const parts = filename?.toString().split(/[\\/]/);
 				const id = parts?.[0];
-				if (!id || parts?.at(-1) !== "state") return;
+				const file = parts?.at(-1);
+				if (!id || (file !== "state" && file !== "last-tool")) return;
 				updateStatus(jobs, context);
-				observe(id);
+				if (file === "state") observe(id);
 			} catch {
 				// Display and wake delivery are advisory; durable state remains on disk.
 			}
@@ -107,7 +108,11 @@ function runningStatus(jobs: string): string {
 	const running = readdirSync(jobs)
 		.sort()
 		.filter((id) => stateOf(jobs, id) === "running")
-		.map((id) => shortLabel(text(join(jobs, id, "label")) || id));
+		.map((id) => {
+			const name = shortLabel(text(join(jobs, id, "label")) || id);
+			const tool = text(join(jobs, id, "last-tool"));
+			return tool ? `${name}:${tool}` : name;
+		});
 	if (running.length === 0) return "";
 	const visible = running.slice(0, 3).join(" ");
 	const more = running.length > 3 ? ` +${running.length - 3}` : "";

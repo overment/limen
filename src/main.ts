@@ -20,8 +20,8 @@ usage:
   control init
   control spawn "task text" [--label L] [--model X] [--branch B] [--timeout 20m]
   control spawn --review --branch B --label L "review task"
-  control wait <id>
-  control stop <id> [reason]
+  control wait <id|suffix|label>
+  control stop <id|suffix|label> [reason]
   control jobs`;
 
 export async function main(args: readonly string[], cwd = process.cwd()): Promise<void> {

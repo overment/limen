@@ -70,6 +70,7 @@ export async function spawnCommand(args: readonly string[], cwd: string): Promis
 		writeFile(`${jobDir}/branch`, `${branch}\n`, { flag: "wx", flush: true }),
 		writeFile(`${jobDir}/started-at`, `${new Date().toISOString()}\n`, { flag: "wx", flush: true }),
 		writeFile(`${jobDir}/tool-calls`, "0\n", { flag: "wx", flush: true }),
+		writeFile(`${jobDir}/last-tool`, "", { flag: "wx", flush: true }),
 		writeFile(`${jobDir}/log`, "", { flag: "wx", flush: true }),
 	]);
 	await atomicWrite(`${jobDir}/state`, "running\n");

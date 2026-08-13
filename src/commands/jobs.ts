@@ -26,18 +26,21 @@ export async function jobsCommand(_args: readonly string[], cwd: string): Promis
 
 async function renderJobDirectory(root: string, jobsRoot: string, id: string): Promise<string> {
 	const jobDir = `${jobsRoot}/${id}`;
-	const [state, label, branch, pid, log, started, finished, toolCalls, taskStat, logStat] = await Promise.all([
-		text(`${jobDir}/state`),
-		text(`${jobDir}/label`),
-		text(`${jobDir}/branch`),
-		text(`${jobDir}/pid`),
-		text(`${jobDir}/log`),
-		text(`${jobDir}/started-at`),
-		text(`${jobDir}/finished-at`),
-		text(`${jobDir}/tool-calls`),
-		optionalStat(`${jobDir}/task.md`),
-		optionalStat(`${jobDir}/log`),
-	]);
+	const [state, label, branch, pid, log, started, finished, toolCalls, lastTool, taskStat, logStat] = await Promise.all(
+		[
+			text(`${jobDir}/state`),
+			text(`${jobDir}/label`),
+			text(`${jobDir}/branch`),
+			text(`${jobDir}/pid`),
+			text(`${jobDir}/log`),
+			text(`${jobDir}/started-at`),
+			text(`${jobDir}/finished-at`),
+			text(`${jobDir}/tool-calls`),
+			text(`${jobDir}/last-tool`),
+			optionalStat(`${jobDir}/task.md`),
+			optionalStat(`${jobDir}/log`),
+		],
+	);
 	if (!taskStat || !logStat) return `INVALID ${id} · missing task.md or log`;
 	const detail = [...log.split("\n")].reverse().find((line) => line.startsWith("[control ")) ?? "";
 	const tail = tailText(log, 20, 4_096);
@@ -60,6 +63,7 @@ async function renderJobDirectory(root: string, jobsRoot: string, id: string): P
 				elapsedMs: observedAt - startedAt.getTime(),
 				silentMs: observedAt - logStat.mtimeMs,
 				...(toolCalls ? { toolCalls: recordedCount(toolCalls) } : {}),
+				...(lastTool ? { lastTool } : {}),
 				...(job.phase === "running" ? { processAlive: processGroupAlive(job.pid) } : {}),
 				diffstat: liveDiffstat(root, branch),
 				logTail: tail,

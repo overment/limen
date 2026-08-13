@@ -26,8 +26,8 @@ Project-local Pi extensions load only for a trusted project. `control` invokes s
 control init
 control spawn "task text" [--label L] [--model X] [--branch B] [--timeout 500ms|90s|20m|2h]
 control spawn --review --branch B --label L "review task"
-control wait <id>
-control stop <id> [reason]
+control wait <id|suffix|label>
+control stop <id|suffix|label> [reason]
 control jobs
 ```
 
@@ -40,12 +40,12 @@ control spawn --label "F001 auth implementation" \
 # → 2026-08-13-f001-auth-implementation-7a2f
 ```
 
-A new launch creates branch `control/<job-id>` and an external linked worktree next to the primary repository. `--label` supplies readable status, notification, and Pi session names; the final output line remains the durable ID for scripts. Without it, the first task line becomes the label. The footer shortens feature labels to `FNNN` and other labels to their first word. The wrapper invokes ephemeral non-interactive Pi and atomically changes `state` on exit. Multiple independent jobs run concurrently; an informational note never enforces a cap.
+A new launch creates branch `control/<job-id>` and an external linked worktree next to the primary repository. `--label` supplies readable status, notification, and Pi session names; the final output line remains the durable ID for scripts. Without it, the first task line becomes the label. The footer shortens feature labels to `FNNN` and other labels to their first word, and appends the latest tool when one exists. The wrapper invokes ephemeral Pi JSON mode, writes a human log plus `last-tool` as events arrive, and atomically changes `state` on exit. Multiple independent jobs run concurrently; an informational note never enforces a cap.
 
 ### Wait and inspect
 
 ```bash
-control wait <id>                 # returns at done, failed, or stopped
+control wait 7a2f                 # unique suffix, label, or full id
 control jobs                      # or type !control jobs inside Pi
 ls .control/jobs/*/state
 tail -f .control/jobs/<id>/log
@@ -55,7 +55,7 @@ git diff HEAD...<branch>
 
 Use `control wait` instead of repeated `sleep` polling only when the next action depends on a job. It watches the job directory and keeps a one-second portable fallback check in case filesystem watching fails. To keep the coordinator available for conversation, do not wait: the footer tracks running jobs and the completion wake resumes the coordinator when one settles.
 
-`control jobs` is convenience output. It shows full labels, elapsed time, tool-call count, process liveness, log silence, tail, and diffstat; it never stores “stalled” or repairs malformed records. A human can run it directly in interactive Pi as `!control jobs`. Pi text mode emits the ordinary assistant answer only when the run exits, so an empty live log alone is not evidence that a job is hung.
+`control jobs` is convenience output. It shows full labels, elapsed time, tool-call count, last tool, process liveness, log silence, tail, and diffstat; it never stores “stalled” or repairs malformed records. A human can run it directly in interactive Pi as `!control jobs`. Worker logs are a thin human stream of tool names and final assistant text, not the raw JSON event dump.
 
 ### Review
 
@@ -69,7 +69,7 @@ Review uses the exact same process and tools as implementation but starts fresh 
 ### Stop and resume
 
 ```bash
-control stop <id> "silent after investigation"
+control stop 7a2f "silent after investigation"
 control spawn --branch control/<id> --label "F001 auth follow-up" \
   "Resume with this clarified requirement: ..."
 ```
@@ -90,14 +90,13 @@ Stop sends TERM to the recorded process group, waits five seconds, then uses KIL
   started-at     ISO timestamp written before launch
   finished-at    ISO timestamp written before terminal state
   tool-calls     informational count from Pi tool-start events
-  log            append-only combined worker and control output
+  last-tool      latest tool name, if any
+  log            append-only human worker and control output
 ```
 
 One fact per file. Mutable state and PID writes use same-directory temporary files and atomic rename. Terminal state is written before PID removal. The records are not harness property: inspect or correct them with ordinary tools after a wrapper crash. Worktrees deliberately remain for inspection and resume; clean them with `git worktree remove`, `git worktree prune`, and normal branch deletion.
 
-The optional `.pi/extensions/control-wake.ts` watches new state changes during a coordinator session. Its footer uses a small Braille spinner and short names for running jobs, for example `⠹ ctl 2 · F002 F003`; animation stops and the footer clears when none remain. It also shows one start notice and sends one terminal message. When the coordinator is busy, terminal delivery uses Pi's `steer` queue so it is handled after the active tool call instead of waiting for the whole turn to end.
-
-Workers receive a passive Control extension that increments `tool-calls`; it observes Pi lifecycle events but exposes no command or model-callable tool. All display and progress data is advisory. The extensions store no acknowledgement, enforce nothing, and perform no retry. If watching or delivery fails—or the coordinator is gone—the job state and branch still survive.
+The optional `.pi/extensions/control-wake.ts` watches new state changes during a coordinator session. Its footer uses a small Braille spinner and short names for running jobs, for example `⠹ ctl 1 · F003:bash`; animation stops and the footer clears when none remain. It also shows one start notice and sends one terminal message. When the coordinator is busy, terminal delivery uses Pi's `steer` queue so it is handled after the active tool call instead of waiting for the whole turn to end. Display and progress data are advisory. The extension stores no acknowledgement, enforces nothing, and performs no retry. If watching or delivery fails—or the coordinator is gone—the job state and branch still survive.
 
 ## Specs and operating model
 

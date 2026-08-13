@@ -1,11 +1,11 @@
 import { type FSWatcher, watch } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { repoRoot } from "../git.ts";
+import { resolveJob } from "../lookup.ts";
 
 export async function waitCommand(args: readonly string[], cwd: string): Promise<void> {
-	const id = args[0];
-	if (!id || args.length !== 1) throw new Error("wait requires exactly one job id");
-	const jobDir = `${repoRoot(cwd)}/.control/jobs/${id}`;
+	const query = args[0];
+	if (!query || args.length !== 1) throw new Error("wait requires exactly one job id");
+	const { id, jobDir } = await resolveJob(cwd, query);
 	let state = await readState(jobDir);
 	if (state === "running") state = await waitForTerminal(jobDir);
 	else if (!isTerminal(state)) throw new Error(`job ${id} has unknown state ${JSON.stringify(state)}`);

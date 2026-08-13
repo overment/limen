@@ -27,6 +27,7 @@ export type JobView = {
 	readonly elapsedMs: number;
 	readonly silentMs: number;
 	readonly toolCalls?: number;
+	readonly lastTool?: string;
 	readonly processAlive?: boolean;
 	readonly diffstat: string;
 	readonly logTail: string;
@@ -65,6 +66,27 @@ export function parseJob(input: JobInput): Job {
 	}
 }
 
+export function resolveJobId(
+	query: string,
+	ids: readonly string[],
+	labels: Readonly<Record<string, string>> = {},
+): string {
+	const needle = query.trim();
+	if (!needle) throw new Error("job id required");
+	if (ids.includes(needle)) return needle;
+	const matches = ids.filter((id) => {
+		const label = labels[id] ?? "";
+		return (
+			label === needle ||
+			(needle.length >= 3 &&
+				(id.endsWith(needle) || id.endsWith(`-${needle}`) || label.toLowerCase().startsWith(needle.toLowerCase())))
+		);
+	});
+	if (matches.length === 1) return matches[0] ?? needle;
+	if (matches.length === 0) throw new Error(`no job matches ${JSON.stringify(needle)}`);
+	throw new Error(`ambiguous job ${JSON.stringify(needle)}: ${matches.join(", ")}`);
+}
+
 export function parseDuration(value: string): number {
 	const match = /^(\d+)(ms|s|m|h)$/.exec(value);
 	if (!match) throw new Error(`invalid timeout ${JSON.stringify(value)}; use 500ms, 90s, 20m, or 2h`);
@@ -88,6 +110,7 @@ export function renderJob(job: Job, view: JobView): string {
 		`silent ${formatDuration(view.silentMs)}`,
 	];
 	if (view.toolCalls !== undefined) facts.push(`tools ${view.toolCalls}`);
+	if (view.lastTool) facts.push(view.lastTool);
 	if (job.phase === "running") facts.push(`pid ${job.pid}${view.processAlive === false ? " (not alive)" : ""}`);
 	const blocks = [facts.join(" · ")];
 	const detail = terminalDetail(job);

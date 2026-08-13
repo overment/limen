@@ -17,7 +17,6 @@ test("spawn creates isolated branch, canonical record, runs pi, and resumes its 
 	assert.equal(await readFile(join(job, "branch"), "utf8"), `control/${id}\n`);
 	assert.equal(await readFile(join(job, "task.md"), "utf8"), "make commit\n");
 	assert.equal(await readFile(join(job, "label"), "utf8"), "F001 implementation\n");
-	assert.equal(await readFile(join(job, "tool-calls"), "utf8"), "0\n");
 	assert.ok(Number.isFinite(Date.parse((await readFile(join(job, "started-at"), "utf8")).trim())));
 	assert.ok(Number.isFinite(Date.parse((await readFile(join(job, "finished-at"), "utf8")).trim())));
 	await assert.rejects(readFile(join(job, "pid")));
@@ -35,7 +34,9 @@ test("spawn creates isolated branch, canonical record, runs pi, and resumes its 
 	};
 	assert.deepEqual(childEnvironment, { job: "1", id, label: "F001 implementation" });
 	const argv = JSON.parse(await readFile(join(worktree, "pi-args.json"), "utf8")) as string[];
-	assert.match(argv[argv.indexOf("--extension") + 1] ?? "", /hook\/progress\.ts$/);
+	assert.equal(argv[argv.indexOf("--mode") + 1], "json");
+	assert.equal(await readFile(join(job, "last-tool"), "utf8"), "bash\n");
+	assert.equal(await readFile(join(job, "tool-calls"), "utf8"), "1\n");
 	assert.notEqual(worktree, scratch.root);
 	await writeFile(join(worktree, "uncommitted.txt"), "keep me\n");
 	const resumed = control(scratch, "spawn", "continue work", "--branch", `control/${id}`);
@@ -54,7 +55,7 @@ test("failure is durable and jobs renders live facts", async (context) => {
 	const jobs = control(scratch, "jobs");
 	assert.equal(jobs.status, 0, jobs.stderr);
 	assert.match(jobs.stdout, new RegExp(`FAILED fail now · id ${id}`));
-	assert.match(jobs.stdout, /tools 0/);
+	assert.match(jobs.stdout, /tools 1 · bash/);
 	assert.match(jobs.stdout, /worker exited with code 7/);
 	assert.match(jobs.stdout, /fake pi completed/);
 });
