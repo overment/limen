@@ -1,29 +1,21 @@
-export type Job =
-	| {
-			readonly phase: "running";
-			readonly id: string;
-			readonly branch: string;
-			readonly pid: number;
-			readonly startedAt: Date;
-			readonly lastOutputAt: Date;
-	  }
-	| { readonly phase: "done"; readonly id: string; readonly branch: string }
-	| {
-			readonly phase: "failed";
-			readonly id: string;
-			readonly branch: string;
-			readonly error: string;
-	  }
-	| {
-			readonly phase: "stopped";
-			readonly id: string;
-			readonly branch: string;
-			readonly reason: string;
-	  };
+type JobIdentity = { readonly id: string; readonly label: string; readonly branch: string };
+export type Job = JobIdentity &
+	(
+		| {
+				readonly phase: "running";
+				readonly pid: number;
+				readonly startedAt: Date;
+				readonly lastOutputAt: Date;
+		  }
+		| { readonly phase: "done" }
+		| { readonly phase: "failed"; readonly error: string }
+		| { readonly phase: "stopped"; readonly reason: string }
+	);
 
 export type JobInput = {
 	readonly id: string;
 	readonly state: string;
+	readonly label: string;
 	readonly branch: string;
 	readonly pid?: string;
 	readonly startedAt: Date;
@@ -47,36 +39,26 @@ const PHASE_LABELS = {
 } as const satisfies Record<Job["phase"], string>;
 
 export function parseJob(input: JobInput): Job {
-	if (!input.id || !input.branch) throw new Error("job id and branch must not be empty");
+	if (!input.id || !input.label || !input.branch) throw new Error("job id, label, and branch must not be empty");
+	const identity = { id: input.id, label: input.label, branch: input.branch };
 	switch (input.state) {
 		case "running": {
 			const pid = Number(input.pid);
 			if (!Number.isSafeInteger(pid) || pid <= 0) throw new Error(`running job ${input.id} has no valid pid`);
 			return {
+				...identity,
 				phase: "running",
-				id: input.id,
-				branch: input.branch,
 				pid,
 				startedAt: input.startedAt,
 				lastOutputAt: input.lastOutputAt,
 			};
 		}
 		case "done":
-			return { phase: "done", id: input.id, branch: input.branch };
+			return { ...identity, phase: "done" };
 		case "failed":
-			return {
-				phase: "failed",
-				id: input.id,
-				branch: input.branch,
-				error: input.detail || "see log",
-			};
+			return { ...identity, phase: "failed", error: input.detail || "see log" };
 		case "stopped":
-			return {
-				phase: "stopped",
-				id: input.id,
-				branch: input.branch,
-				reason: input.detail || "see log",
-			};
+			return { ...identity, phase: "stopped", reason: input.detail || "see log" };
 		default:
 			throw new Error(`job ${input.id} has unknown state ${JSON.stringify(input.state)}`);
 	}
@@ -98,7 +80,8 @@ export function parseDuration(value: string): number {
 
 export function renderJob(job: Job, view: JobView): string {
 	const facts = [
-		`${PHASE_LABELS[job.phase]} ${job.id}`,
+		`${PHASE_LABELS[job.phase]} ${job.label}`,
+		`id ${job.id}`,
 		`branch ${job.branch}`,
 		`elapsed ${formatDuration(view.elapsedMs)}`,
 		`silent ${formatDuration(view.silentMs)}`,

@@ -17,6 +17,7 @@ test("jobs use one discriminated union and derived display facts", () => {
 	const job = parseJob({
 		id: "x",
 		state: "running",
+		label: "F001 implementation",
 		branch: "control/x",
 		pid: "42",
 		startedAt: now,
@@ -32,13 +33,14 @@ test("jobs use one discriminated union and derived display facts", () => {
 			diffstat: "one file changed",
 			logTail: "hello",
 		}),
-		/RUNNING x.*elapsed 1m.*pid 42 \(not alive\)/,
+		/RUNNING F001 implementation.*id x.*elapsed 1m.*pid 42 \(not alive\)/,
 	);
 	assert.throws(
 		() =>
 			parseJob({
 				id: "x",
 				state: "stalled",
+				label: "bad",
 				branch: "b",
 				startedAt: now,
 				lastOutputAt: now,

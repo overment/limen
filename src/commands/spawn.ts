@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { basename, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -12,8 +12,8 @@ import {
 } from "../git.ts";
 import { parseDuration } from "../job.ts";
 import {
-	appendControlLog,
 	atomicWrite,
+	finalizeJob,
 	launchWrapper,
 	processGroupAlive,
 	signalProcessGroup,
@@ -22,6 +22,7 @@ import {
 
 type SpawnOptions = {
 	task: string;
+	label: string;
 	branch?: string;
 	model?: string;
 	timeoutMs?: number;
@@ -31,7 +32,7 @@ const TEMPLATE_ROOT = fileURLToPath(new URL("../../templates", import.meta.url))
 export async function spawnCommand(args: readonly string[], cwd: string): Promise<void> {
 	const options = parseSpawnArgs(args);
 	const root = repoRoot(cwd);
-	const id = makeJobId(options.task);
+	const id = makeJobId(options.label);
 	const jobsRoot = `${root}/.control/jobs`;
 	await mkdir(jobsRoot, { recursive: true });
 	const running = await countRunning(jobsRoot);
@@ -63,9 +64,13 @@ export async function spawnCommand(args: readonly string[], cwd: string): Promis
 	}
 	const jobDir = `${jobsRoot}/${id}`;
 	await mkdir(jobDir);
-	await writeFile(`${jobDir}/task.md`, `${options.task.trim()}\n`, { flag: "wx", flush: true });
-	await writeFile(`${jobDir}/branch`, `${branch}\n`, { flag: "wx", flush: true });
-	await writeFile(`${jobDir}/log`, "", { flag: "wx", flush: true });
+	await Promise.all([
+		writeFile(`${jobDir}/task.md`, `${options.task.trim()}\n`, { flag: "wx", flush: true }),
+		writeFile(`${jobDir}/label`, `${options.label}\n`, { flag: "wx", flush: true }),
+		writeFile(`${jobDir}/branch`, `${branch}\n`, { flag: "wx", flush: true }),
+		writeFile(`${jobDir}/started-at`, `${new Date().toISOString()}\n`, { flag: "wx", flush: true }),
+		writeFile(`${jobDir}/log`, "", { flag: "wx", flush: true }),
+	]);
 	await atomicWrite(`${jobDir}/state`, "running\n");
 	const localPreamble = `${root}/.agents/control/${options.review ? "reviewer" : "worker"}.md`;
 	const preamble = (await fileExists(localPreamble))
@@ -77,6 +82,7 @@ export async function spawnCommand(args: readonly string[], cwd: string): Promis
 		CONTROL_TASK_FILE: `${jobDir}/task.md`,
 		CONTROL_PREAMBLE: preamble,
 		CONTROL_JOB_ID: id,
+		CONTROL_LABEL: options.label,
 	};
 	if (options.model) environment.CONTROL_MODEL = options.model;
 	if (options.timeoutMs) environment.CONTROL_TIMEOUT_MS = String(options.timeoutMs);
@@ -84,18 +90,20 @@ export async function spawnCommand(args: readonly string[], cwd: string): Promis
 	try {
 		wrapperPid = await launchWrapper(environment);
 	} catch (error) {
-		await appendControlLog(
+		await finalizeJob(
 			jobDir,
+			"failed",
 			`failed to launch wrapper: ${error instanceof Error ? error.message : String(error)}`,
 		);
-		await atomicWrite(`${jobDir}/state`, "failed\n");
 		throw error;
 	}
 	await waitForHandshake(jobDir, wrapperPid);
+	console.log(`started ${options.label}`);
 	console.log(id);
 }
 function parseSpawnArgs(args: readonly string[]): SpawnOptions {
 	let branch: string | undefined;
+	let label: string | undefined;
 	let model: string | undefined;
 	let timeoutMs: number | undefined;
 	let review = false;
@@ -106,13 +114,19 @@ function parseSpawnArgs(args: readonly string[]): SpawnOptions {
 		if (!value) continue;
 		if (value === "--") positional = true;
 		else if (!positional && value === "--review") review = true;
-		else if (!positional && (value === "--branch" || value === "--model" || value === "--timeout")) {
+		else if (
+			!positional &&
+			(value === "--branch" || value === "--label" || value === "--model" || value === "--timeout")
+		) {
 			const optionValue = args[index + 1];
 			if (!optionValue) throw new Error(`${value} requires a value`);
 			index += 1;
 			if (value === "--branch") {
 				if (branch) throw new Error("--branch may be supplied only once");
 				branch = optionValue;
+			} else if (value === "--label") {
+				if (label) throw new Error("--label may be supplied only once");
+				label = normalizeLabel(optionValue);
 			} else if (value === "--model") {
 				if (model) throw new Error("--model may be supplied only once");
 				model = optionValue;
@@ -124,8 +138,10 @@ function parseSpawnArgs(args: readonly string[]): SpawnOptions {
 		else task.push(value);
 	}
 	if (task.length === 0 || !task.join(" ").trim()) throw new Error("spawn requires task text");
+	const taskText = task.join(" ");
 	return {
-		task: task.join(" "),
+		task: taskText,
+		label: label ?? defaultLabel(taskText),
 		review,
 		...(branch ? { branch } : {}),
 		...(model ? { model } : {}),
@@ -133,10 +149,20 @@ function parseSpawnArgs(args: readonly string[]): SpawnOptions {
 	};
 }
 
-function makeJobId(task: string): string {
+function defaultLabel(task: string): string {
+	return task.trim().split(/\r?\n/, 1)[0]?.trim().slice(0, 80) || "job";
+}
+
+function normalizeLabel(value: string): string {
+	const label = value.trim();
+	if (!label || /[\r\n]/.test(label)) throw new Error("--label must be one non-empty line");
+	return label;
+}
+
+function makeJobId(label: string): string {
 	const date = new Date().toISOString().slice(0, 10);
 	const slug =
-		task
+		label
 			.toLowerCase()
 			.replace(/[^a-z0-9]+/g, "-")
 			.replace(/^-|-$/g, "")
@@ -195,8 +221,6 @@ async function waitForHandshake(jobDir: string, wrapperPid: number): Promise<voi
 		signalProcessGroup(wrapperPid, "SIGKILL");
 		await waitForProcessGroup(wrapperPid, 1_000);
 	}
-	await appendControlLog(jobDir, "failed: detached wrapper did not become ready");
-	await atomicWrite(`${jobDir}/state`, "failed\n");
-	await rm(`${jobDir}/pid`, { force: true });
+	await finalizeJob(jobDir, "failed", "detached wrapper did not become ready");
 	throw new Error("detached job wrapper did not start; inspect the job record");
 }

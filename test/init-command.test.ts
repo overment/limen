@@ -20,7 +20,9 @@ test("init fills gaps, preserves existing bytes, and ignores runtime state once"
 	for (const lane of ["planned", "active", "done", "dropped"]) {
 		await access(join(scratch.root, "spec/features", lane));
 	}
-	assert.match(await readFile(join(scratch.root, ".pi/extensions/control-wake.ts"), "utf8"), /sendUserMessage/);
+	const wake = await readFile(join(scratch.root, ".pi/extensions/control-wake.ts"), "utf8");
+	assert.match(wake, /sendUserMessage/);
+	assert.match(wake, /deliverAs: "steer"/);
 	await writeFile(join(scratch.root, "spec/build.md"), "custom bytes\0allowed");
 	const second = control(scratch, "init");
 	assert.equal(second.status, 0, second.stderr);

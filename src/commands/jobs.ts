@@ -26,11 +26,14 @@ export async function jobsCommand(_args: readonly string[], cwd: string): Promis
 
 async function renderJobDirectory(root: string, jobsRoot: string, id: string): Promise<string> {
 	const jobDir = `${jobsRoot}/${id}`;
-	const [state, branch, pid, log, taskStat, logStat] = await Promise.all([
+	const [state, label, branch, pid, log, started, finished, taskStat, logStat] = await Promise.all([
 		text(`${jobDir}/state`),
+		text(`${jobDir}/label`),
 		text(`${jobDir}/branch`),
 		text(`${jobDir}/pid`),
 		text(`${jobDir}/log`),
+		text(`${jobDir}/started-at`),
+		text(`${jobDir}/finished-at`),
 		optionalStat(`${jobDir}/task.md`),
 		optionalStat(`${jobDir}/log`),
 	]);
@@ -39,18 +42,22 @@ async function renderJobDirectory(root: string, jobsRoot: string, id: string): P
 	const tail = tailText(log, 20, 4_096);
 	return Promise.resolve()
 		.then(() => {
+			const startedAt = recordedDate(started, taskStat.mtime, "started-at");
 			const job = parseJob({
 				id,
 				state,
+				label: label || id,
 				branch,
 				...(pid ? { pid } : {}),
-				startedAt: taskStat.mtime,
+				startedAt,
 				lastOutputAt: logStat.mtime,
 				detail,
 			});
+			const observedAt =
+				job.phase === "running" ? Date.now() : recordedDate(finished, new Date(), "finished-at").getTime();
 			return renderJob(job, {
-				elapsedMs: Date.now() - taskStat.mtimeMs,
-				silentMs: Date.now() - logStat.mtimeMs,
+				elapsedMs: observedAt - startedAt.getTime(),
+				silentMs: observedAt - logStat.mtimeMs,
 				...(job.phase === "running" ? { processAlive: processGroupAlive(job.pid) } : {}),
 				diffstat: liveDiffstat(root, branch),
 				logTail: tail,
@@ -75,6 +82,13 @@ function optionalStat(path: string) {
 		(value) => value,
 		() => undefined,
 	);
+}
+
+function recordedDate(value: string, fallback: Date, name: string): Date {
+	if (!value) return fallback;
+	const date = new Date(value);
+	if (Number.isNaN(date.getTime())) throw new Error(`invalid ${name} ${JSON.stringify(value)}`);
+	return date;
 }
 
 function tailText(value: string, maxLines: number, maxBytes: number): string {

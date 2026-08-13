@@ -1,6 +1,6 @@
 # control
 
-A minimal harness for one human working through one coordinator with many coding sessions. It fills only the physical capability gap a model has: start a sibling session, observe it, interrupt its process tree, and receive a best-effort completion wake.
+A minimal harness for one human working through one coordinator with many coding sessions. It fills only the physical capability gap a model has: start a sibling session, wait for or observe it, interrupt its process tree, and receive best-effort start/completion notices.
 
 Everything involving judgment—what to build, ticket quality, whether review is sufficient, what should merge, and whether a board is tidy—stays in prompts and plain specifications. The API is the filesystem, Git, and one small CLI. There are no registered model tools, configuration files, gates, receipts, role state, watchdogs, daemons, or runtime dependencies.
 
@@ -24,8 +24,9 @@ Project-local Pi extensions load only for a trusted project. `control` invokes s
 
 ```text
 control init
-control spawn "task text" [--model X] [--branch B] [--timeout 500ms|90s|20m|2h]
-control spawn --review --branch B "review task"
+control spawn "task text" [--label L] [--model X] [--branch B] [--timeout 500ms|90s|20m|2h]
+control spawn --review --branch B --label L "review task"
+control wait <id>
 control stop <id> [reason]
 control jobs
 ```
@@ -33,15 +34,18 @@ control jobs
 ### Start implementation
 
 ```bash
-control spawn "$(cat spec/features/active/F001-auth/ticket.md)"
-# → 2026-08-13-implement-auth-7a2f
+control spawn --label "F001 auth implementation" \
+  "$(cat spec/features/active/F001-auth/ticket.md)"
+# → started F001 auth implementation
+# → 2026-08-13-f001-auth-implementation-7a2f
 ```
 
-A new launch creates branch `control/<job-id>` and an external linked worktree next to the primary repository. It writes the job record before detaching a wrapper process. The wrapper invokes ephemeral non-interactive Pi, appends stdout/stderr to `log`, and atomically changes `state` on exit. Multiple independent jobs run concurrently; an informational note never enforces a cap.
+A new launch creates branch `control/<job-id>` and an external linked worktree next to the primary repository. `--label` supplies readable status, notification, and Pi session names; the final output line remains the durable ID for scripts. Without it, the first task line becomes the label. The wrapper invokes ephemeral non-interactive Pi and atomically changes `state` on exit. Multiple independent jobs run concurrently; an informational note never enforces a cap.
 
-### Inspect
+### Wait and inspect
 
 ```bash
+control wait <id>                 # returns at done, failed, or stopped
 control jobs
 ls .control/jobs/*/state
 tail -f .control/jobs/<id>/log
@@ -49,12 +53,14 @@ git worktree list
 git diff HEAD...<branch>
 ```
 
-`control jobs` is convenience output. It derives elapsed time, silence, process liveness, log tail, and diffstat live; it never stores “stalled” or repairs malformed records.
+Use `control wait` instead of repeated `sleep` polling when the next action depends on a job. It watches the job directory and keeps a one-second portable fallback check in case filesystem watching fails. It reports terminal state but exits successfully for `done`, `failed`, and `stopped`; inspect the state, log, and branch to decide what follows.
+
+`control jobs` is convenience output. It derives elapsed time, silence, process liveness, log tail, and diffstat live; it never stores “stalled” or repairs malformed records. Pi text mode emits the ordinary assistant answer only when the run exits, so an empty live log alone is not evidence that a job is hung.
 
 ### Review
 
 ```bash
-control spawn --review --branch control/<job-id> \
+control spawn --review --branch control/<job-id> --label "F001 auth review" \
   "Read spec/features/active/F001-auth/ticket.md; review the candidate and name the commit covered."
 ```
 
@@ -64,7 +70,8 @@ Review uses the exact same process and tools as implementation but starts fresh 
 
 ```bash
 control stop <id> "silent after investigation"
-control spawn --branch control/<id> "Resume with this clarified requirement: ..."
+control spawn --branch control/<id> --label "F001 auth follow-up" \
+  "Resume with this clarified requirement: ..."
 ```
 
 Stop sends TERM to the recorded process group, waits five seconds, then uses KILL only if necessary. Stopping an already-terminal job is harmless. Resume reuses the branch's existing worktree when available, preserving committed and uncommitted work. A branch checked out in the primary tree or already used by a live job cannot be isolated, so spawn reports the mechanical impossibility.
@@ -76,15 +83,18 @@ Stop sends TERM to the recorded process group, waits five seconds, then uses KIL
 ```text
 .control/jobs/<id>/
   task.md        exact task text
+  label          human-readable job name
   state          running | done | failed | stopped
   pid            wrapper process-group id while running
   branch         worker branch (candidate branch for review)
+  started-at     ISO timestamp written before launch
+  finished-at    ISO timestamp written before terminal state
   log            append-only combined worker and control output
 ```
 
 One fact per file. Mutable state and PID writes use same-directory temporary files and atomic rename. Terminal state is written before PID removal. The records are not harness property: inspect or correct them with ordinary tools after a wrapper crash. Worktrees deliberately remain for inspection and resume; clean them with `git worktree remove`, `git worktree prune`, and normal branch deletion.
 
-The optional `.pi/extensions/control-wake.ts` watches terminal state changes during a coordinator session and queues one in-memory-deduplicated follow-up. It registers no commands or tools, stores no acknowledgement, performs no retry, and does not scan old terminal jobs as new events. If watching or delivery fails—or the coordinator is gone—the job state and branch still survive.
+The optional `.pi/extensions/control-wake.ts` watches new state changes during a coordinator session. It shows one start notice and sends one terminal message; when the coordinator is busy, terminal delivery uses Pi's `steer` queue so it is handled after the active tool call instead of waiting for the whole turn to end. Events are deduplicated only in memory. The extension registers no commands or tools, stores no acknowledgement, performs no retry, and does not announce pre-existing jobs. If watching or delivery fails—or the coordinator is gone—the job state and branch still survive.
 
 ## Specs and operating model
 
@@ -119,7 +129,7 @@ There is deliberately no channel into a running job. Redirect by stop → amend 
 
 ## Architecture and requirement trace
 
-`src/job.ts` is the pure domain core and owns the sole discriminated union. `src/git.ts` and `src/proc.ts` are impure edges; `src/commands/*` only compose them; `src/main.ts` is the only entry point and catch. Source uses erasable TypeScript, direct Node execution, semantic private helpers, checked tables, and no barrels, shared type pool, enums, namespaces, or parameter properties.
+`src/job.ts` is the pure domain core and owns the sole discriminated union. `src/git.ts` and `src/proc.ts` are impure edges; `src/commands/*` only compose them, including the small filesystem-backed wait; `src/main.ts` is the only entry point and catch. Source uses erasable TypeScript, direct Node execution, semantic private helpers, checked tables, and no barrels, shared type pool, enums, namespaces, or parameter properties.
 
 The twenty mover requirements map directly:
 

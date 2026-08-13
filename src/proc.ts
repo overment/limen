@@ -59,6 +59,7 @@ export async function runInternalJob(): Promise<void> {
 	const taskFile = requiredEnvironment("CONTROL_TASK_FILE");
 	const preambleFile = requiredEnvironment("CONTROL_PREAMBLE");
 	const jobId = requiredEnvironment("CONTROL_JOB_ID");
+	const label = process.env.CONTROL_LABEL || jobId;
 	const timeoutMs = process.env.CONTROL_TIMEOUT_MS ? Number(process.env.CONTROL_TIMEOUT_MS) : undefined;
 	const preamble = await readFile(preambleFile, "utf8");
 	const log = await open(`${jobDir}/log`, "a");
@@ -74,13 +75,18 @@ export async function runInternalJob(): Promise<void> {
 		"--no-session",
 		"--no-context-files",
 		"--name",
-		`control-${jobId}`,
+		`control: ${label}`,
 		"--append-system-prompt",
 		preamble,
 	];
 	if (process.env.CONTROL_MODEL) args.push("--model", process.env.CONTROL_MODEL);
 	args.push(`@${taskFile}`);
-	const childEnvironment: NodeJS.ProcessEnv = { ...process.env, CONTROL_JOB: "1", CONTROL_JOB_ID: jobId };
+	const childEnvironment: NodeJS.ProcessEnv = {
+		...process.env,
+		CONTROL_JOB: "1",
+		CONTROL_JOB_ID: jobId,
+		CONTROL_JOB_LABEL: label,
+	};
 	for (const name of [
 		"CONTROL_INTERNAL_RUN",
 		"CONTROL_JOB_DIR",
@@ -89,6 +95,7 @@ export async function runInternalJob(): Promise<void> {
 		"CONTROL_PREAMBLE",
 		"CONTROL_TIMEOUT_MS",
 		"CONTROL_MODEL",
+		"CONTROL_LABEL",
 	]) {
 		delete childEnvironment[name];
 	}
@@ -113,7 +120,7 @@ export async function runInternalJob(): Promise<void> {
 				void appendControlLog(jobDir, `timeout after ${timeoutMs}ms; sending TERM`);
 				signalProcessGroup(process.pid, "SIGTERM");
 				graceTimer = setTimeout(() => {
-					void finalize(jobDir, "failed", `timeout after ${timeoutMs}ms`).then(() => {
+					void finalizeJob(jobDir, "failed", `timeout after ${timeoutMs}ms`).then(() => {
 						signalProcessGroup(process.pid, "SIGKILL");
 					});
 				}, STOP_GRACE_MS);
@@ -123,22 +130,23 @@ export async function runInternalJob(): Promise<void> {
 	if (timeout) clearTimeout(timeout);
 	if (graceTimer) clearTimeout(graceTimer);
 	await log.close();
-	if (timedOut) await finalize(jobDir, "failed", `timeout after ${timeoutMs}ms`);
+	if (timedOut) await finalizeJob(jobDir, "failed", `timeout after ${timeoutMs}ms`);
 	else if (stopRequested || result.signal === "SIGTERM" || result.signal === "SIGKILL") {
-		await finalize(jobDir, "stopped", "process group interrupted");
-	} else if (result.error) await finalize(jobDir, "failed", result.error.message);
-	else if (result.code === 0) await finalize(jobDir, "done", "worker exited successfully");
-	else await finalize(jobDir, "failed", `worker exited with code ${result.code ?? "unknown"}`);
+		await finalizeJob(jobDir, "stopped", "process group interrupted");
+	} else if (result.error) await finalizeJob(jobDir, "failed", result.error.message);
+	else if (result.code === 0) await finalizeJob(jobDir, "done", "worker exited successfully");
+	else await finalizeJob(jobDir, "failed", `worker exited with code ${result.code ?? "unknown"}`);
 }
 
 export async function failInternalJob(error: unknown): Promise<void> {
 	const jobDir = process.env.CONTROL_JOB_DIR;
 	if (!jobDir) return;
-	await finalize(jobDir, "failed", error instanceof Error ? error.message : String(error));
+	await finalizeJob(jobDir, "failed", error instanceof Error ? error.message : String(error));
 }
 
-async function finalize(jobDir: string, state: "done" | "failed" | "stopped", detail: string): Promise<void> {
+export async function finalizeJob(jobDir: string, state: "done" | "failed" | "stopped", detail: string): Promise<void> {
 	await appendControlLog(jobDir, `${state}: ${detail}`);
+	await atomicWrite(`${jobDir}/finished-at`, `${new Date().toISOString()}\n`);
 	await atomicWrite(`${jobDir}/state`, `${state}\n`);
 	await rm(`${jobDir}/pid`, { force: true });
 }

@@ -22,11 +22,14 @@ A useful ticket states the outcome, scope, out-of-scope work, and observable acc
 Read the board and ticket, then use judgment proportional to the stakes:
 
 1. Choose or create the next numbered ticket under `planned/`, then move its whole folder to `active/` when work begins.
-2. Start substantive implementation with `control spawn "$(cat spec/features/active/FNNN-slug/ticket.md)"`.
-3. Inspect `.control/jobs/<id>/`, its worktree, commits, and `git diff HEAD...<branch>`.
-4. Start a fresh reviewer with `control spawn --review --branch <branch> "Review spec/features/active/FNNN-slug/ticket.md and the candidate diff. Name the commit reviewed."`.
-5. Read the review and diff. Merge acceptable reviewed work with ordinary Git, or resume the branch with focused findings.
-6. On completion or abandonment, add `outcome.md`, move the whole folder to `done/YYYY-MM/` or `dropped/YYYY-MM/`, and update `spec/build.md`.
+2. Start substantive implementation with `control spawn --label "FNNN short name" "$(cat spec/features/active/FNNN-slug/ticket.md)"`.
+3. Use `control wait <id>` when the next action depends on that job. Never poll with repeated `sleep`; the wait is filesystem-driven and returns on any terminal state.
+4. Inspect `.control/jobs/<id>/`, its worktree, commits, and `git diff HEAD...<branch>`.
+5. Start a fresh reviewer with `control spawn --review --branch <branch> --label "FNNN review" "Review spec/features/active/FNNN-slug/ticket.md and the candidate diff. Name the commit reviewed."`, then wait the same way.
+6. Read the review and diff. Merge acceptable reviewed work with ordinary Git, or resume the branch with focused findings.
+7. On completion or abandonment, add `outcome.md`, move the whole folder to `done/YYYY-MM/` or `dropped/YYYY-MM/`, and update `spec/build.md`.
+
+`spawn` prints the durable job ID on its last line. Labels are for readable output and notifications; use IDs for `wait` and `stop`. The optional Pi extension shows a start notice and steers one terminal message into a busy coordinator, but job files remain canonical if a notice is missed.
 
 This is craft, not a gate. The coordinator is the human's single point of conversation and has full hands: edit small fixes, write or drop tickets, start or stop jobs, run checks, merge reviewed work, revert mistakes, and clean up worktrees. A typo need not perform a ceremony; substantive work normally earns fresh eyes.
 
@@ -36,7 +39,7 @@ Run the repository's own tests, lint, and build commands. Raw output and the liv
 
 All runtime truth is inspectable under `.control/jobs/` and in Git.
 
-- Silent or rambling job: `tail .control/jobs/<id>/log`, then `control stop <id> <reason>`; inspect the worktree and resume with `control spawn --branch <branch> "sharper task"`.
+- Silent or rambling job: inspect `control jobs`, the PID, and `tail .control/jobs/<id>/log` before deciding to stop. Pi text mode normally writes its final answer only at exit, so an empty live log alone does not prove a hang. If intervention is warranted, run `control stop <id> <reason>`, inspect the worktree, and resume with `control spawn --branch <branch> --label "readable name" "sharper task"`.
 - Genuine ambiguity: the worker commits useful partial work, writes a plain question in its worktree, and exits. Answer it, then resume the branch.
 - Dead wrapper: check the recorded PID with `kill -0`, correct the plain `state` file if needed, and resume. The branch and worktree survive.
 - Bad candidate: do not merge; remove its worktree and branch with Git.

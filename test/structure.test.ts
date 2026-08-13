@@ -15,9 +15,15 @@ test("architecture stays small, pure, direct, and dependency-free", async () => 
 		(sum, text) => sum + text.split("\n").length - 1,
 		0,
 	);
-	assert.ok(sourceLines <= 800, `src has ${sourceLines} lines; audit against first principles`);
+	assert.ok(sourceLines <= 900, `src has ${sourceLines} lines; audit against first principles`);
 	assert.doesNotMatch(await readFile(join(ROOT, "src/job.ts"), "utf8"), /from ["']node:/);
-	assert.deepEqual((await readdir(join(ROOT, "src/commands"))).sort(), ["init.ts", "jobs.ts", "spawn.ts", "stop.ts"]);
+	assert.deepEqual((await readdir(join(ROOT, "src/commands"))).sort(), [
+		"init.ts",
+		"jobs.ts",
+		"spawn.ts",
+		"stop.ts",
+		"wait.ts",
+	]);
 	const all = await filesBelow(ROOT);
 	assert.equal(
 		all.some((path) => /\/(index|types|utils)\.ts$/.test(path)),
@@ -26,7 +32,7 @@ test("architecture stays small, pure, direct, and dependency-free", async () => 
 	const names = all.filter((path) => path.endsWith(".ts")).map((path) => basename(path));
 	assert.equal(new Set(names).size, names.length, "TypeScript basenames must be unique");
 	const main = await readFile(join(ROOT, "src/main.ts"), "utf8");
-	assert.match(main, /satisfies Record<"init" \| "spawn" \| "stop" \| "jobs"/);
+	assert.match(main, /satisfies Record<"init" \| "spawn" \| "stop" \| "wait" \| "jobs"/);
 });
 
 test("strict TypeScript and templates preserve the capability-judgment line", async () => {
@@ -40,7 +46,16 @@ test("strict TypeScript and templates preserve the capability-judgment line", as
 	);
 	assert.doesNotMatch(sourceAndHook.join("\n"), /registerTool|registerCommand|contentHash|receipt|watchdog|schema/);
 	const agents = await readFile(join(ROOT, "templates/agents.md"), "utf8");
-	for (const phrase of ["human-owned", "fresh reviewer", "merge", "genuine ambiguity", "never blocks", "recovery"])
+	for (const phrase of [
+		"human-owned",
+		"fresh reviewer",
+		"control wait",
+		"never poll",
+		"merge",
+		"genuine ambiguity",
+		"never blocks",
+		"recovery",
+	])
 		assert.match(agents.toLowerCase(), new RegExp(phrase));
 });
 

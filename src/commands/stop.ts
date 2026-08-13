@@ -1,6 +1,6 @@
-import { readFile, rm } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { repoRoot } from "../git.ts";
-import { appendControlLog, atomicWrite, signalProcessGroup, waitForProcessGroup } from "../proc.ts";
+import { appendControlLog, finalizeJob, signalProcessGroup, waitForProcessGroup } from "../proc.ts";
 
 export async function stopCommand(args: readonly string[], cwd: string): Promise<void> {
 	const id = args[0];
@@ -27,8 +27,6 @@ export async function stopCommand(args: readonly string[], cwd: string): Promise
 		console.log(`${id} is already ${settledState}`);
 		return;
 	}
-	await appendControlLog(jobDir, `stopped: ${reason}`);
-	await atomicWrite(`${jobDir}/state`, "stopped\n");
-	await rm(`${jobDir}/pid`, { force: true });
+	await finalizeJob(jobDir, "stopped", reason);
 	console.log(`stopped ${id}: ${reason}`);
 }
