@@ -26,6 +26,7 @@ export type JobInput = {
 export type JobView = {
 	readonly elapsedMs: number;
 	readonly silentMs: number;
+	readonly toolCalls?: number;
 	readonly processAlive?: boolean;
 	readonly diffstat: string;
 	readonly logTail: string;
@@ -86,6 +87,7 @@ export function renderJob(job: Job, view: JobView): string {
 		`elapsed ${formatDuration(view.elapsedMs)}`,
 		`silent ${formatDuration(view.silentMs)}`,
 	];
+	if (view.toolCalls !== undefined) facts.push(`tools ${view.toolCalls}`);
 	if (job.phase === "running") facts.push(`pid ${job.pid}${view.processAlive === false ? " (not alive)" : ""}`);
 	const blocks = [facts.join(" · ")];
 	const detail = terminalDetail(job);

@@ -23,13 +23,13 @@ Read the board and ticket, then use judgment proportional to the stakes:
 
 1. Choose or create the next numbered ticket under `planned/`, then move its whole folder to `active/` when work begins.
 2. Start substantive implementation with `control spawn --label "FNNN short name" "$(cat spec/features/active/FNNN-slug/ticket.md)"`.
-3. Use `control wait <id>` when the next action depends on that job. Never poll with repeated `sleep`; the wait is filesystem-driven and returns on any terminal state.
+3. Use `control wait <id>` only when the next action truly depends on that job. Otherwise remain available to the human and let the footer and completion wake report it. Never poll with repeated `sleep`.
 4. Inspect `.control/jobs/<id>/`, its worktree, commits, and `git diff HEAD...<branch>`.
-5. Start a fresh reviewer with `control spawn --review --branch <branch> --label "FNNN review" "Review spec/features/active/FNNN-slug/ticket.md and the candidate diff. Name the commit reviewed."`, then wait the same way.
+5. Start a fresh reviewer with `control spawn --review --branch <branch> --label "FNNN review" "Review spec/features/active/FNNN-slug/ticket.md and the candidate diff. Name the commit reviewed."`; wait only if there is nothing useful to do meanwhile.
 6. Read the review and diff. Merge acceptable reviewed work with ordinary Git, or resume the branch with focused findings.
 7. On completion or abandonment, add `outcome.md`, move the whole folder to `done/YYYY-MM/` or `dropped/YYYY-MM/`, and update `spec/build.md`.
 
-`spawn` prints the durable job ID on its last line. Labels are for readable output and notifications; use IDs for `wait` and `stop`. The optional Pi extension shows a start notice and steers one terminal message into a busy coordinator, but job files remain canonical if a notice is missed.
+`spawn` prints the durable job ID on its last line. Labels are for readable output and notifications; use IDs for `wait` and `stop`. The optional Pi extension keeps a compact footer such as `ctl 2 · F002 F003`, shows a start notice, and steers one terminal message into a busy coordinator. `control jobs` shows full labels, elapsed time, tool-call counts, process facts, and logs; the human can run it directly as `!control jobs`. Job files remain canonical if any display is missed.
 
 This is craft, not a gate. The coordinator is the human's single point of conversation and has full hands: edit small fixes, write or drop tickets, start or stop jobs, run checks, merge reviewed work, revert mistakes, and clean up worktrees. A typo need not perform a ceremony; substantive work normally earns fresh eyes.
 

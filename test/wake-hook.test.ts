@@ -7,7 +7,10 @@ import controlWake from "../hook/wake.ts";
 type TestContext = {
 	readonly cwd: string;
 	isIdle(): boolean;
-	readonly ui: { notify(message: string, level: "info"): void };
+	readonly ui: {
+		notify(message: string, level: "info"): void;
+		setStatus(key: string, value: string | undefined): void;
+	};
 };
 
 test("wake ignores history, announces start, and steers once on terminal change", async (context) => {
@@ -27,6 +30,7 @@ test("wake ignores history, announces start, and steers once on terminal change"
 	await writeFile(join(jobs, "old/branch"), "old-branch\n");
 	const handlers = new Map<string, (event: unknown, context: TestContext) => void>();
 	const notifications: string[] = [];
+	const statuses: Array<string | undefined> = [];
 	const messages: Array<{ content: string; deliverAs?: string }> = [];
 	controlWake({
 		on(event, handler) {
@@ -39,7 +43,10 @@ test("wake ignores history, announces start, and steers once on terminal change"
 	const session = {
 		cwd: root,
 		isIdle: () => false,
-		ui: { notify: (message: string) => notifications.push(message) },
+		ui: {
+			notify: (message: string) => notifications.push(message),
+			setStatus: (_key: string, value: string | undefined) => statuses.push(value),
+		},
 	};
 	handlers.get("session_start")?.({}, session);
 	assert.deepEqual(messages, []);
@@ -49,8 +56,10 @@ test("wake ignores history, announces start, and steers once on terminal change"
 	await writeFile(join(jobs, "new/state"), "running\n");
 	await waitUntil(() => notifications.length === 1);
 	assert.deepEqual(notifications, ["control: F001 implementation started (new)"]);
+	assert.ok(statuses.includes("ctl 1 · F001"));
 	await writeFile(join(jobs, "new/state"), "done\n");
 	await waitUntil(() => messages.length === 1);
+	assert.equal(statuses.at(-1), undefined);
 	assert.deepEqual(messages, [
 		{
 			content: "control: F001 implementation is done (new); inspect .control/jobs/new/ and branch candidate.",
@@ -86,10 +95,38 @@ test("wake recreates the ignored jobs directory on session start", async (contex
 		},
 		sendUserMessage() {},
 	});
-	const session = { cwd: root, isIdle: () => true, ui: { notify() {} } };
+	const session = { cwd: root, isIdle: () => true, ui: { notify() {}, setStatus() {} } };
 	handlers.get("session_start")?.({}, session);
 	await import("node:fs/promises").then(({ access }) => access(join(root, ".control/jobs")));
 	handlers.get("session_shutdown")?.({}, session);
+});
+
+test("wake remains inert inside workers", () => {
+	const inheritedJob = process.env.CONTROL_JOB;
+	process.env.CONTROL_JOB = "1";
+	try {
+		const handlers = new Map<string, (event: unknown, context: TestContext) => void>();
+		const statuses: Array<string | undefined> = [];
+		controlWake({
+			on(event, handler) {
+				handlers.set(event, handler);
+			},
+			sendUserMessage() {
+				assert.fail("worker must not receive coordinator wakes");
+			},
+		});
+		const session = {
+			cwd: "/missing",
+			isIdle: () => true,
+			ui: { notify() {}, setStatus: (_key: string, value: string | undefined) => statuses.push(value) },
+		};
+		handlers.get("session_start")?.({}, session);
+		handlers.get("session_shutdown")?.({}, session);
+		assert.deepEqual(statuses, []);
+	} finally {
+		if (inheritedJob === undefined) delete process.env.CONTROL_JOB;
+		else process.env.CONTROL_JOB = inheritedJob;
+	}
 });
 
 async function waitUntil(predicate: () => boolean): Promise<void> {

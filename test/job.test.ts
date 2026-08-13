@@ -29,11 +29,12 @@ test("jobs use one discriminated union and derived display facts", () => {
 		renderJob(job, {
 			elapsedMs: 65_000,
 			silentMs: 2_000,
+			toolCalls: 7,
 			processAlive: false,
 			diffstat: "one file changed",
 			logTail: "hello",
 		}),
-		/RUNNING F001 implementation.*id x.*elapsed 1m.*pid 42 \(not alive\)/,
+		/RUNNING F001 implementation.*id x.*elapsed 1m.*tools 7.*pid 42 \(not alive\)/,
 	);
 	assert.throws(
 		() =>

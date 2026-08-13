@@ -26,7 +26,7 @@ export async function jobsCommand(_args: readonly string[], cwd: string): Promis
 
 async function renderJobDirectory(root: string, jobsRoot: string, id: string): Promise<string> {
 	const jobDir = `${jobsRoot}/${id}`;
-	const [state, label, branch, pid, log, started, finished, taskStat, logStat] = await Promise.all([
+	const [state, label, branch, pid, log, started, finished, toolCalls, taskStat, logStat] = await Promise.all([
 		text(`${jobDir}/state`),
 		text(`${jobDir}/label`),
 		text(`${jobDir}/branch`),
@@ -34,6 +34,7 @@ async function renderJobDirectory(root: string, jobsRoot: string, id: string): P
 		text(`${jobDir}/log`),
 		text(`${jobDir}/started-at`),
 		text(`${jobDir}/finished-at`),
+		text(`${jobDir}/tool-calls`),
 		optionalStat(`${jobDir}/task.md`),
 		optionalStat(`${jobDir}/log`),
 	]);
@@ -58,6 +59,7 @@ async function renderJobDirectory(root: string, jobsRoot: string, id: string): P
 			return renderJob(job, {
 				elapsedMs: observedAt - startedAt.getTime(),
 				silentMs: observedAt - logStat.mtimeMs,
+				...(toolCalls ? { toolCalls: recordedCount(toolCalls) } : {}),
 				...(job.phase === "running" ? { processAlive: processGroupAlive(job.pid) } : {}),
 				diffstat: liveDiffstat(root, branch),
 				logTail: tail,
@@ -89,6 +91,12 @@ function recordedDate(value: string, fallback: Date, name: string): Date {
 	const date = new Date(value);
 	if (Number.isNaN(date.getTime())) throw new Error(`invalid ${name} ${JSON.stringify(value)}`);
 	return date;
+}
+
+function recordedCount(value: string): number {
+	const count = Number(value);
+	if (!Number.isSafeInteger(count) || count < 0) throw new Error(`invalid tool-calls ${JSON.stringify(value)}`);
+	return count;
 }
 
 function tailText(value: string, maxLines: number, maxBytes: number): string {

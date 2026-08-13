@@ -3,6 +3,7 @@ import { appendFile, open, readFile, rename, rm } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
 const STOP_GRACE_MS = 5_000;
+const PROGRESS_HOOK = fileURLToPath(new URL("../hook/progress.ts", import.meta.url));
 export async function atomicWrite(path: string, content: string): Promise<void> {
 	const temporary = `${path}.${process.pid}.${Math.random().toString(16).slice(2)}.tmp`;
 	const handle = await open(temporary, "wx");
@@ -74,6 +75,8 @@ export async function runInternalJob(): Promise<void> {
 		"--approve",
 		"--no-session",
 		"--no-context-files",
+		"--extension",
+		PROGRESS_HOOK,
 		"--name",
 		`control: ${label}`,
 		"--append-system-prompt",
@@ -86,6 +89,7 @@ export async function runInternalJob(): Promise<void> {
 		CONTROL_JOB: "1",
 		CONTROL_JOB_ID: jobId,
 		CONTROL_JOB_LABEL: label,
+		CONTROL_TOOL_COUNT_FILE: `${jobDir}/tool-calls`,
 	};
 	for (const name of [
 		"CONTROL_INTERNAL_RUN",

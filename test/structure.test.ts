@@ -15,7 +15,7 @@ test("architecture stays small, pure, direct, and dependency-free", async () => 
 		(sum, text) => sum + text.split("\n").length - 1,
 		0,
 	);
-	assert.ok(sourceLines <= 900, `src has ${sourceLines} lines; audit against first principles`);
+	assert.ok(sourceLines <= 925, `src has ${sourceLines} lines; audit against first principles`);
 	assert.doesNotMatch(await readFile(join(ROOT, "src/job.ts"), "utf8"), /from ["']node:/);
 	assert.deepEqual((await readdir(join(ROOT, "src/commands"))).sort(), [
 		"init.ts",

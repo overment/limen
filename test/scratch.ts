@@ -53,6 +53,7 @@ export function control(
 		"CONTROL_MODEL",
 		"CONTROL_LABEL",
 		"CONTROL_JOB_LABEL",
+		"CONTROL_TOOL_COUNT_FILE",
 	])
 		delete environment[name];
 	const result = spawnSync(process.execPath, [CONTROL, ...args], {
