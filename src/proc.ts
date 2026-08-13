@@ -3,7 +3,6 @@ import { appendFile, open, readFile, rename, rm } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
 const STOP_GRACE_MS = 5_000;
-
 export async function atomicWrite(path: string, content: string): Promise<void> {
 	const temporary = `${path}.${process.pid}.${Math.random().toString(16).slice(2)}.tmp`;
 	const handle = await open(temporary, "wx");
@@ -12,7 +11,6 @@ export async function atomicWrite(path: string, content: string): Promise<void> 
 	await handle.close();
 	await rename(temporary, path);
 }
-
 export function processGroupAlive(pid: number): boolean {
 	const result = signalProcessGroup(pid, 0);
 	return result === "sent" || result === "denied";
@@ -74,6 +72,7 @@ export async function runInternalJob(): Promise<void> {
 		"--print",
 		"--approve",
 		"--no-session",
+		"--no-context-files",
 		"--name",
 		`control-${jobId}`,
 		"--append-system-prompt",
@@ -89,6 +88,7 @@ export async function runInternalJob(): Promise<void> {
 		"CONTROL_TASK_FILE",
 		"CONTROL_PREAMBLE",
 		"CONTROL_TIMEOUT_MS",
+		"CONTROL_MODEL",
 	]) {
 		delete childEnvironment[name];
 	}

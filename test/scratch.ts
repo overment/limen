@@ -36,10 +36,27 @@ export function control(
 	scratch: Scratch,
 	...args: readonly string[]
 ): { readonly stdout: string; readonly stderr: string; readonly status: number } {
+	const environment: NodeJS.ProcessEnv = {
+		...process.env,
+		PATH: `${scratch.fakeBin}:${process.env.PATH}`,
+		CONTROL_PI: "pi",
+	};
+	for (const name of [
+		"CONTROL_INTERNAL_RUN",
+		"CONTROL_JOB",
+		"CONTROL_JOB_ID",
+		"CONTROL_JOB_DIR",
+		"CONTROL_WORKTREE",
+		"CONTROL_TASK_FILE",
+		"CONTROL_PREAMBLE",
+		"CONTROL_TIMEOUT_MS",
+		"CONTROL_MODEL",
+	])
+		delete environment[name];
 	const result = spawnSync(process.execPath, [CONTROL, ...args], {
 		cwd: scratch.root,
 		encoding: "utf8",
-		env: { ...process.env, PATH: `${scratch.fakeBin}:${process.env.PATH}`, CONTROL_PI: "pi" },
+		env: environment,
 	});
 	if (result.error) throw result.error;
 	return { stdout: result.stdout ?? "", stderr: result.stderr ?? "", status: result.status ?? 1 };

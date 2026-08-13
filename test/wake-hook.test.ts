@@ -5,6 +5,12 @@ import test from "node:test";
 import controlWake from "../hook/wake.ts";
 
 test("wake ignores history, reports a new terminal change, and does not persist acknowledgements", async (context) => {
+	const inheritedJob = process.env.CONTROL_JOB;
+	delete process.env.CONTROL_JOB;
+	context.after(() => {
+		if (inheritedJob === undefined) delete process.env.CONTROL_JOB;
+		else process.env.CONTROL_JOB = inheritedJob;
+	});
 	const root = await import("node:fs/promises").then(({ mkdtemp }) =>
 		mkdtemp(join(process.env.TMPDIR ?? "/tmp", "control-wake-")),
 	);

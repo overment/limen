@@ -6,7 +6,10 @@ import { processGroupAlive } from "../proc.ts";
 export async function jobsCommand(_args: readonly string[], cwd: string): Promise<void> {
 	const root = repoRoot(cwd);
 	const jobsRoot = `${root}/.control/jobs`;
-	const entries = await readdir(jobsRoot, { withFileTypes: true });
+	const entries = await readdir(jobsRoot, { withFileTypes: true }).catch((error: unknown) => {
+		if (typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT") return [];
+		throw error;
+	});
 	const ids = entries
 		.filter((entry) => entry.isDirectory())
 		.map((entry) => entry.name)

@@ -16,7 +16,7 @@ cd /path/to/project
 control init
 ```
 
-`control init` fills gaps only. It creates missing `AGENTS.md`, worker/reviewer preambles, `spec/` skeleton, optional Pi wake extension, and `.control/jobs/`; existing targets remain byte-for-byte untouched. It appends `/.control/` to `.gitignore` only when no equivalent line exists. If a project already has `AGENTS.md`, merge the shop-manual template manually if desired—the command will not guess.
+`control init` fills gaps only. It creates missing `AGENTS.md`, worker/reviewer preambles, the numbered `spec/` filing skeleton, optional Pi wake extension, and `.control/jobs/`; existing targets remain byte-for-byte untouched. It appends `/.control/` to `.gitignore` only when no equivalent line exists. If a project already has `AGENTS.md`, merge the shop-manual template manually if desired—the command will not guess.
 
 Project-local Pi extensions load only for a trusted project. `control` invokes spawned sessions with `--approve`; the coordinator should restart or `/reload` after init to load the optional wake extension.
 
@@ -33,7 +33,7 @@ control jobs
 ### Start implementation
 
 ```bash
-control spawn "$(cat spec/features/auth/ticket.md)"
+control spawn "$(cat spec/features/active/F001-auth/ticket.md)"
 # → 2026-08-13-implement-auth-7a2f
 ```
 
@@ -55,7 +55,7 @@ git diff HEAD...<branch>
 
 ```bash
 control spawn --review --branch control/<job-id> \
-  "Read spec/features/auth/ticket.md; review the complete candidate and name the commit covered."
+  "Read spec/features/active/F001-auth/ticket.md; review the candidate and name the commit covered."
 ```
 
 Review uses the exact same process and tools as implementation but starts fresh in a detached worktree at the candidate branch tip with reviewer birth text. It can run tests and is not fenced read-only. No role or reviewer identity is persisted. The coordinator reads the result and live diff, then lands acceptable work with ordinary Git.
@@ -90,7 +90,13 @@ The optional `.pi/extensions/control-wake.ts` watches terminal state changes dur
 
 - `spec/vision.md`: human-owned why; the coordinator proposes changes rather than inventing intent.
 - `spec/build.md`: coordinator-maintained Now / Next / Done narrative.
-- `spec/features/<name>/`: plain ticket, notes, questions, and review text. `ls` is the index; no code parses it.
+- `spec/features/planned/FNNN-slug/`: accepted numbered backlog.
+- `spec/features/active/FNNN-slug/`: numbered work currently being pursued.
+- `spec/features/done/YYYY-MM/FNNN-slug/`: landed history with `outcome.md`.
+- `spec/features/dropped/YYYY-MM/FNNN-slug/`: stopped history with `outcome.md`.
+- `spec/features/_template/`: ticket and outcome templates.
+
+Feature numbers are allocated in ascending order, stay attached for life, and are never reused. Month partitions keep terminal history bounded. These paths are a filing convention, not a state machine: no code parses, validates, or gates them. Moving a folder and updating the narrative board are ordinary file edits.
 
 The standing `AGENTS.md` teaches the default loop: write/read a useful ticket → spawn isolated implementation → inspect → spawn a fresh reviewer → read review and diff → merge or resume with findings → update the board. It is a default, not a ritual. The coordinator remains the only session talking directly to the human and has full authority to merge, revert, stop, clean up, and make proportional small edits. Genuine product ambiguity is escalated distinctly from a process failure.
 
@@ -120,7 +126,7 @@ The twenty mover requirements map directly:
 1–3. The coordinator convention, ambiguity signal, and human-owned vision are taught in `agents.md`.
 4–6. Full coordinator Git authority, fresh-process review, and worktree isolation are construction plus prompt.
 7–9. The loop, ticket craft, and project-native checks are prose rather than gates.
-10–12. Init seeds the three plain spec locations non-destructively; folders and `ls` remain the index.
+10–12. Init seeds the numbered planned/active/monthly-history filing convention non-destructively; folders and `ls` remain the index.
 13–15. Job files, Git, independent concurrent worktrees, stop, and branch resume provide observation and recovery.
 16–20. There is no hygiene block, stored identity, per-turn evaluator, policy refusal, or open-ended governance surface. Only impossible mechanics error; everything else informs.
 

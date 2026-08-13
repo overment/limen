@@ -22,3 +22,11 @@ test("malformed records are informational and do not get rewritten", async (cont
 		"mystery\n",
 	);
 });
+
+test("jobs reports an empty set before init", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	const result = control(scratch, "jobs");
+	assert.equal(result.status, 0, result.stderr);
+	assert.equal(result.stdout, "no jobs\n");
+});

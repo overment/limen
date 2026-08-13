@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile, writeFile } from "node:fs/promises";
+import { access, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import test from "node:test";
 import { control, scratchRepo } from "./scratch.ts";
@@ -15,6 +15,11 @@ test("init fills gaps, preserves existing bytes, and ignores runtime state once"
 	assert.equal(await readFile(join(scratch.root, ".gitignore"), "utf8"), "dist/\n/.control/\n");
 	assert.match(await readFile(join(scratch.root, "spec/vision.md"), "utf8"), /Human-owned/);
 	assert.match(await readFile(join(scratch.root, ".agents/control/reviewer.md"), "utf8"), /do not rewrite/i);
+	assert.match(await readFile(join(scratch.root, "spec/features/_template/ticket.md"), "utf8"), /FNNN/);
+	assert.match(await readFile(join(scratch.root, "spec/features/_template/outcome.md"), "utf8"), /## Result/);
+	for (const lane of ["planned", "active", "done", "dropped"]) {
+		await access(join(scratch.root, "spec/features", lane));
+	}
 	assert.match(await readFile(join(scratch.root, ".pi/extensions/control-wake.ts"), "utf8"), /sendUserMessage/);
 	await writeFile(join(scratch.root, "spec/build.md"), "custom bytes\0allowed");
 	const second = control(scratch, "init");

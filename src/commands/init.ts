@@ -16,6 +16,10 @@ export async function initCommand(_args: readonly string[], cwd: string): Promis
 		[`${TEMPLATE_ROOT}/spec/vision.md`, `${root}/spec/vision.md`],
 		[`${TEMPLATE_ROOT}/spec/build.md`, `${root}/spec/build.md`],
 		[`${TEMPLATE_ROOT}/spec/features/_template/ticket.md`, `${root}/spec/features/_template/ticket.md`],
+		[`${TEMPLATE_ROOT}/spec/features/_template/outcome.md`, `${root}/spec/features/_template/outcome.md`],
+		...(["planned", "active", "done", "dropped"] as const).map(
+			(lane) => [`${TEMPLATE_ROOT}/spec/features/${lane}/.gitkeep`, `${root}/spec/features/${lane}/.gitkeep`] as const,
+		),
 		[HOOK, `${root}/.pi/extensions/control-wake.ts`],
 	] as const;
 	for (const [source, target] of copies) {

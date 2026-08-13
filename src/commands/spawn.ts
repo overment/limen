@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -11,7 +11,14 @@ import {
 	worktreeForBranch,
 } from "../git.ts";
 import { parseDuration } from "../job.ts";
-import { atomicWrite, launchWrapper, processGroupAlive } from "../proc.ts";
+import {
+	appendControlLog,
+	atomicWrite,
+	launchWrapper,
+	processGroupAlive,
+	signalProcessGroup,
+	waitForProcessGroup,
+} from "../proc.ts";
 
 type SpawnOptions = {
 	task: string;
@@ -21,7 +28,6 @@ type SpawnOptions = {
 	review: boolean;
 };
 const TEMPLATE_ROOT = fileURLToPath(new URL("../../templates", import.meta.url));
-
 export async function spawnCommand(args: readonly string[], cwd: string): Promise<void> {
 	const options = parseSpawnArgs(args);
 	const root = repoRoot(cwd);
@@ -74,11 +80,20 @@ export async function spawnCommand(args: readonly string[], cwd: string): Promis
 	};
 	if (options.model) environment.CONTROL_MODEL = options.model;
 	if (options.timeoutMs) environment.CONTROL_TIMEOUT_MS = String(options.timeoutMs);
-	await launchWrapper(environment);
-	await waitForHandshake(jobDir);
+	let wrapperPid: number;
+	try {
+		wrapperPid = await launchWrapper(environment);
+	} catch (error) {
+		await appendControlLog(
+			jobDir,
+			`failed to launch wrapper: ${error instanceof Error ? error.message : String(error)}`,
+		);
+		await atomicWrite(`${jobDir}/state`, "failed\n");
+		throw error;
+	}
+	await waitForHandshake(jobDir, wrapperPid);
 	console.log(id);
 }
-
 function parseSpawnArgs(args: readonly string[]): SpawnOptions {
 	let branch: string | undefined;
 	let model: string | undefined;
@@ -168,14 +183,20 @@ async function fileExists(path: string): Promise<boolean> {
 	);
 }
 
-async function waitForHandshake(jobDir: string): Promise<void> {
+async function waitForHandshake(jobDir: string, wrapperPid: number): Promise<void> {
 	const deadline = Date.now() + 2_000;
 	while (Date.now() < deadline) {
 		const state = await text(`${jobDir}/state`);
 		if (state !== "running" || (await text(`${jobDir}/pid`))) return;
 		await new Promise((resolve) => setTimeout(resolve, 20));
 	}
+	signalProcessGroup(wrapperPid, "SIGTERM");
+	if (!(await waitForProcessGroup(wrapperPid, 1_000))) {
+		signalProcessGroup(wrapperPid, "SIGKILL");
+		await waitForProcessGroup(wrapperPid, 1_000);
+	}
+	await appendControlLog(jobDir, "failed: detached wrapper did not become ready");
 	await atomicWrite(`${jobDir}/state`, "failed\n");
-	await writeFile(`${jobDir}/log`, "[control] detached wrapper did not start\n", { flag: "a" });
+	await rm(`${jobDir}/pid`, { force: true });
 	throw new Error("detached job wrapper did not start; inspect the job record");
 }

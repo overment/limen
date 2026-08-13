@@ -67,6 +67,7 @@ test("review gets fresh detached worktree and reviewer birth text", async (conte
 	assert.ok(reviewPath);
 	const argv = JSON.parse(await readFile(join(reviewPath, "pi-args.json"), "utf8")) as string[];
 	const prompt = argv[argv.indexOf("--append-system-prompt") + 1];
+	assert.ok(argv.includes("--no-context-files"));
 	assert.match(prompt ?? "", /Review; do not rewrite/);
 	assert.equal(git(reviewPath, "rev-parse", "HEAD"), git(scratch.root, "rev-parse", branch));
 });

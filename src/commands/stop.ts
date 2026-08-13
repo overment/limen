@@ -22,6 +22,12 @@ export async function stopCommand(args: readonly string[], cwd: string): Promise
 		signalProcessGroup(pid, "SIGKILL");
 		await waitForProcessGroup(pid, 1_000);
 	}
+	const settledState = (await readFile(`${jobDir}/state`, "utf8")).trim();
+	if (settledState !== "running") {
+		console.log(`${id} is already ${settledState}`);
+		return;
+	}
+	await appendControlLog(jobDir, `stopped: ${reason}`);
 	await atomicWrite(`${jobDir}/state`, "stopped\n");
 	await rm(`${jobDir}/pid`, { force: true });
 	console.log(`stopped ${id}: ${reason}`);

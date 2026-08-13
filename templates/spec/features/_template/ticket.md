@@ -1,4 +1,6 @@
-# Feature
+# FNNN — Feature title
+
+> Allocate the next unused feature number. Keep it for the feature's whole life and never reuse it.
 
 ## Outcome
 
