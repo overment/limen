@@ -1,4 +1,4 @@
-import { readdir, readFile, stat } from "node:fs/promises";
+import { open, readdir, readFile, stat } from "node:fs/promises";
 import { liveDiffstat, repoRoot } from "../git.ts";
 import { derivePulse, parseJob, renderJob } from "../job.ts";
 import { processGroupAlive } from "../proc.ts";
@@ -26,13 +26,12 @@ export async function jobsCommand(_args: readonly string[], cwd: string): Promis
 
 async function renderJobDirectory(root: string, jobsRoot: string, id: string): Promise<string> {
 	const jobDir = `${jobsRoot}/${id}`;
-	const [state, label, branch, pid, log, started, finished, toolCalls, lastTool, activity, taskStat, logStat] =
+	const [state, label, branch, pid, started, finished, toolCalls, lastTool, activity, taskStat, logStat, log] =
 		await Promise.all([
 			text(`${jobDir}/state`),
 			text(`${jobDir}/label`),
 			text(`${jobDir}/branch`),
 			text(`${jobDir}/pid`),
-			text(`${jobDir}/log`),
 			text(`${jobDir}/started-at`),
 			text(`${jobDir}/finished-at`),
 			text(`${jobDir}/tool-calls`),
@@ -40,50 +39,45 @@ async function renderJobDirectory(root: string, jobsRoot: string, id: string): P
 			text(`${jobDir}/activity`),
 			optionalStat(`${jobDir}/task.md`),
 			optionalStat(`${jobDir}/log`),
+			readLog(`${jobDir}/log`),
 		]);
 	if (!taskStat || !logStat) return `INVALID ${id} · missing task.md or log`;
-	const detail = [...log.split("\n")].reverse().find((line) => line.startsWith("[control ")) ?? "";
-	const tail = tailText(log, 20, 4_096);
-	return Promise.resolve()
-		.then(() => {
-			const startedAt = recordedDate(started, taskStat.mtime, "started-at");
-			const job = parseJob({
-				id,
-				state,
-				label: label || id,
-				branch,
-				...(pid ? { pid } : {}),
-				startedAt,
-				lastOutputAt: logStat.mtime,
-				detail,
-			});
-			const observedAt =
-				job.phase === "running" ? Date.now() : recordedDate(finished, new Date(), "finished-at").getTime();
-			const processAlive = job.phase === "running" && job.pid !== undefined && processGroupAlive(job.pid);
-			return renderJob(job, {
-				elapsedMs: observedAt - startedAt.getTime(),
-				silentMs: observedAt - logStat.mtimeMs,
-				...(toolCalls ? { toolCalls: recordedCount(toolCalls) } : {}),
-				...(lastTool ? { lastTool } : {}),
-				...(job.phase === "running"
-					? {
-							pulse: derivePulse({
-								alive: processAlive,
-								...(job.pid !== undefined ? { pid: job.pid } : {}),
-								...(activity ? { activity } : {}),
-							}),
-							...(job.pid !== undefined ? { processAlive } : {}),
-						}
-					: {}),
-				diffstat: liveDiffstat(root, branch),
-				logTail: tail,
-			});
-		})
-		.then(
-			(value) => value,
-			(error: unknown) =>
-				`INVALID ${id} · ${error instanceof Error ? error.message : String(error)}${tail ? `\n  log:\n${tail}` : ""}`,
-		);
+	try {
+		const startedAt = recordedDate(started, taskStat.mtime, "started-at");
+		const job = parseJob({
+			id,
+			state,
+			label: label || id,
+			branch,
+			...(pid ? { pid } : {}),
+			startedAt,
+			lastOutputAt: logStat.mtime,
+			detail: log.detail,
+		});
+		const observedAt =
+			job.phase === "running" ? Date.now() : recordedDate(finished, new Date(), "finished-at").getTime();
+		const processAlive = job.phase === "running" && job.pid !== undefined && processGroupAlive(job.pid);
+		return renderJob(job, {
+			elapsedMs: observedAt - startedAt.getTime(),
+			silentMs: observedAt - logStat.mtimeMs,
+			...(toolCalls ? { toolCalls: recordedCount(toolCalls) } : {}),
+			...(lastTool ? { lastTool } : {}),
+			...(job.phase === "running"
+				? {
+						pulse: derivePulse({
+							alive: processAlive,
+							...(job.pid !== undefined ? { pid: job.pid } : {}),
+							...(activity ? { activity } : {}),
+						}),
+						...(job.pid !== undefined ? { processAlive } : {}),
+					}
+				: {}),
+			diffstat: liveDiffstat(root, branch),
+			logTail: log.tail,
+		});
+	} catch (error: unknown) {
+		return `INVALID ${id} · ${error instanceof Error ? error.message : String(error)}${log.tail ? `\n  log:\n${log.tail}` : ""}`;
+	}
 }
 
 function text(path: string): Promise<string> {
@@ -113,13 +107,24 @@ function recordedCount(value: string): number {
 	return count;
 }
 
-function tailText(value: string, maxLines: number, maxBytes: number): string {
-	const lines = value.trimEnd().split("\n").slice(-maxLines).join("\n");
-	const bytes = Buffer.from(lines);
-	return bytes.byteLength <= maxBytes
-		? lines
-		: bytes
-				.subarray(bytes.byteLength - maxBytes)
-				.toString("utf8")
-				.replace(/^[^\n]*\n?/, "…\n");
+async function readLog(path: string): Promise<{ tail: string; detail: string }> {
+	try {
+		const handle = await open(path, "r");
+		try {
+			const { size } = await handle.stat();
+			const buf = Buffer.alloc(Math.min(size, 8_192));
+			await handle.read(buf, 0, buf.length, Math.max(0, size - buf.length));
+			const raw = buf.toString("utf8");
+			const lines = (size > buf.length ? raw.replace(/^[^\n]*\n?/, "") : raw).trimEnd().split("\n");
+			const bytes = Buffer.from(lines.slice(-20).join("\n"));
+			const overflow = bytes.byteLength > 4_096;
+			const slice = overflow ? bytes.subarray(bytes.byteLength - 4_096) : bytes;
+			const tail = overflow ? slice.toString("utf8").replace(/^[^\n]*\n?/, "…\n") : slice.toString();
+			return { tail, detail: lines.findLast((line) => line.startsWith("[control ")) ?? "" };
+		} finally {
+			await handle.close();
+		}
+	} catch {
+		return { tail: "", detail: "" };
+	}
 }

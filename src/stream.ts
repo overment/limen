@@ -33,25 +33,20 @@ export function createStreamParser(): { push(chunk: string): StreamEvent[]; flus
 
 function interpret(event: unknown): StreamEvent | undefined {
 	if (!event || typeof event !== "object" || !("type" in event)) return;
-	const record = event as { type?: unknown; toolName?: unknown; message?: unknown };
-	if (record.type === "tool_execution_start" && typeof record.toolName === "string" && record.toolName.trim()) {
-		return { kind: "tool", name: record.toolName.trim() };
-	}
-	if (record.type === "tool_execution_end") return { kind: "activity", name: "wait" };
-	if (record.type === "message_end") {
-		const line = assistantText(record.message);
-		if (line) return { kind: "log", line };
-		return { kind: "activity", name: "think" };
+	const tool = "toolName" in event && typeof event.toolName === "string" ? event.toolName.trim() : "";
+	if (event.type === "tool_execution_start" && tool) return { kind: "tool", name: tool };
+	if (event.type === "tool_execution_end") return { kind: "activity", name: "wait" };
+	if (event.type === "message_end") {
+		const line = assistantText("message" in event ? event.message : undefined);
+		return line ? { kind: "log", line } : { kind: "activity", name: "think" };
 	}
 	if (
-		record.type === "agent_start" ||
-		record.type === "turn_start" ||
-		record.type === "message_start" ||
-		record.type === "message_update"
-	) {
+		event.type === "agent_start" ||
+		event.type === "turn_start" ||
+		event.type === "message_start" ||
+		event.type === "message_update"
+	)
 		return { kind: "activity", name: "think" };
-	}
-	return;
 }
 
 function assistantText(message: unknown): string {
