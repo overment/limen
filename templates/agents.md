@@ -29,7 +29,7 @@ Read the board and ticket, then use judgment proportional to the stakes:
 6. Read the review and diff. Merge acceptable reviewed work with ordinary Git, or resume the branch with focused findings.
 7. On completion or abandonment, add `outcome.md`, move the whole folder to `done/YYYY-MM/` or `dropped/YYYY-MM/`, and update `spec/build.md`.
 
-`spawn` prints the durable job ID on its last line. Labels are for readable output and notifications; use IDs for `wait` and `stop`. The optional Pi extension keeps a compact footer such as `ctl 2 · F002 F003`, shows a start notice, and steers one terminal message into a busy coordinator. `control jobs` shows full labels, elapsed time, tool-call counts, process facts, and logs; the human can run it directly as `!control jobs`. Job files remain canonical if any display is missed.
+`spawn` prints the durable job ID on its last line. Labels are for readable output and notifications; use IDs for `wait` and `stop`. The optional Pi extension keeps a compact animated footer such as `⠹ ctl 2 · F002 F003`, shows a start notice, and steers one terminal message into a busy coordinator. `control jobs` shows full labels, elapsed time, tool-call counts, process facts, and logs; the human can run it directly as `!control jobs`. Job files remain canonical if any display is missed.
 
 This is craft, not a gate. The coordinator is the human's single point of conversation and has full hands: edit small fixes, write or drop tickets, start or stop jobs, run checks, merge reviewed work, revert mistakes, and clean up worktrees. A typo need not perform a ceremony; substantive work normally earns fresh eyes.
 

@@ -14,10 +14,39 @@ type PiApi = {
 	sendUserMessage(content: string, options?: { readonly deliverAs: "steer" }): void;
 };
 
+const SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"] as const;
+
 export default function controlWake(pi: PiApi): void {
 	let watcher: FSWatcher | undefined;
+	let statusTimer: NodeJS.Timeout | undefined;
+	let statusBody = "";
+	let frame = 0;
 	let active = false;
 	const seen = new Set<string>();
+	const clearStatus = (context: Context) => {
+		if (statusTimer) clearInterval(statusTimer);
+		statusTimer = undefined;
+		statusBody = "";
+		frame = 0;
+		context.ui.setStatus("control", undefined);
+	};
+	const updateStatus = (jobs: string, context: Context) => {
+		const next = runningStatus(jobs);
+		if (!next) {
+			clearStatus(context);
+			return;
+		}
+		statusBody = next;
+		const draw = () => {
+			context.ui.setStatus("control", `${SPINNER[frame]} ${statusBody}`);
+			frame = (frame + 1) % SPINNER.length;
+		};
+		draw();
+		if (!statusTimer) {
+			statusTimer = setInterval(draw, 120);
+			statusTimer.unref();
+		}
+	};
 	pi.on("session_start", (_event, context) => {
 		if (process.env.CONTROL_JOB === "1") return;
 		const jobs = join(context.cwd, ".control", "jobs");
@@ -60,7 +89,7 @@ export default function controlWake(pi: PiApi): void {
 		});
 		watcher.on("error", () => {
 			watcher?.close();
-			context.ui.setStatus("control", undefined);
+			clearStatus(context);
 		});
 		for (const id of readdirSync(jobs)) observe(id);
 		updateStatus(jobs, context);
@@ -70,18 +99,19 @@ export default function controlWake(pi: PiApi): void {
 		active = false;
 		watcher?.close();
 		watcher = undefined;
-		context.ui.setStatus("control", undefined);
+		clearStatus(context);
 	});
 }
 
-function updateStatus(jobs: string, context: Context): void {
+function runningStatus(jobs: string): string {
 	const running = readdirSync(jobs)
 		.sort()
 		.filter((id) => stateOf(jobs, id) === "running")
 		.map((id) => shortLabel(text(join(jobs, id, "label")) || id));
+	if (running.length === 0) return "";
 	const visible = running.slice(0, 3).join(" ");
 	const more = running.length > 3 ? ` +${running.length - 3}` : "";
-	context.ui.setStatus("control", running.length > 0 ? `ctl ${running.length} · ${visible}${more}` : undefined);
+	return `ctl ${running.length} · ${visible}${more}`;
 }
 
 function shortLabel(label: string): string {
