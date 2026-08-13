@@ -46,6 +46,10 @@ export async function launchWrapper(environment: Readonly<Record<string, string>
 		stdio: "ignore",
 		env: { ...process.env, ...environment, CONTROL_INTERNAL_RUN: "1" },
 	});
+	await new Promise<void>((resolve, reject) => {
+		child.once("spawn", resolve);
+		child.once("error", reject);
+	});
 	if (!child.pid) throw new Error("could not start the detached job wrapper");
 	child.unref();
 	return child.pid;
@@ -77,10 +81,21 @@ export async function runInternalJob(): Promise<void> {
 	];
 	if (process.env.CONTROL_MODEL) args.push("--model", process.env.CONTROL_MODEL);
 	args.push(`@${taskFile}`);
+	const childEnvironment: NodeJS.ProcessEnv = { ...process.env, CONTROL_JOB: "1", CONTROL_JOB_ID: jobId };
+	for (const name of [
+		"CONTROL_INTERNAL_RUN",
+		"CONTROL_JOB_DIR",
+		"CONTROL_WORKTREE",
+		"CONTROL_TASK_FILE",
+		"CONTROL_PREAMBLE",
+		"CONTROL_TIMEOUT_MS",
+	]) {
+		delete childEnvironment[name];
+	}
 	const child = spawn(process.env.CONTROL_PI ?? "pi", args, {
 		cwd: worktree,
 		stdio: ["ignore", log.fd, log.fd],
-		env: { ...process.env, CONTROL_JOB: "1", CONTROL_JOB_ID: jobId },
+		env: childEnvironment,
 	});
 	const outcome = new Promise<{
 		code: number | null;

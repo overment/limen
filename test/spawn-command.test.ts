@@ -22,6 +22,12 @@ test("spawn creates isolated branch, canonical record, runs pi, and resumes its 
 	assert.ok(worktreeLine);
 	const worktree = worktreeLine.slice("worktree ".length);
 	assert.equal(await readFile(join(worktree, "candidate.txt"), "utf8"), "candidate\n");
+	const childEnvironment = JSON.parse(await readFile(join(worktree, "pi-env.json"), "utf8")) as {
+		internal?: string;
+		job?: string;
+		id?: string;
+	};
+	assert.deepEqual(childEnvironment, { job: "1", id });
 	assert.notEqual(worktree, scratch.root);
 	await writeFile(join(worktree, "uncommitted.txt"), "keep me\n");
 	const resumed = control(scratch, "spawn", "continue work", "--branch", `control/${id}`);

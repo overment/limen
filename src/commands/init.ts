@@ -32,8 +32,11 @@ export async function initCommand(_args: readonly string[], cwd: string): Promis
 async function ensureIgnored(path: string): Promise<void> {
 	const exists = await pathExists(path);
 	const content = exists ? await readFile(path, "utf8") : "";
-	const ignored = content.split(/\r?\n/).some((line) => line.trim() === ".control/" || line.trim() === "/.control/");
-	if (ignored) return;
+	const relevant = content
+		.split(/\r?\n/)
+		.map((line) => line.trim())
+		.filter((line) => [".control/", "/.control/", "!.control/", "!/.control/"].includes(line));
+	if ([".control/", "/.control/"].includes(relevant.at(-1) ?? "")) return;
 	const addition = `${content && !content.endsWith("\n") ? "\n" : ""}/.control/\n`;
 	if (exists) await appendFile(path, addition);
 	else await writeFile(path, addition);

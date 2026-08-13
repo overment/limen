@@ -21,4 +21,7 @@ test("init fills gaps, preserves existing bytes, and ignores runtime state once"
 	assert.equal(second.status, 0, second.stderr);
 	assert.equal(await readFile(join(scratch.root, "spec/build.md"), "utf8"), "custom bytes\0allowed");
 	assert.equal((await readFile(join(scratch.root, ".gitignore"), "utf8")).match(/\.control\//g)?.length, 1);
+	await writeFile(join(scratch.root, ".gitignore"), "/.control/\n!/.control/\n");
+	control(scratch, "init");
+	assert.equal(await readFile(join(scratch.root, ".gitignore"), "utf8"), "/.control/\n!/.control/\n/.control/\n");
 });
