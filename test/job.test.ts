@@ -58,6 +58,7 @@ test("pulse is observed activity and liveness, never a timer", () => {
 	assert.equal(derivePulse({ pid: 1, alive: false, activity: "tool" }), "dead");
 	assert.equal(derivePulse({ pid: 1, alive: true, activity: "tool" }), "tool");
 	assert.equal(derivePulse({ pid: 1, alive: true, activity: "wait" }), "wait");
+	// Thresholds 20_000 / 45_000 / 120_000 must match hook/wake.ts.
 	assert.equal(derivePulse({ pid: 1, alive: true }), "think");
 });
 

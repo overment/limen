@@ -60,6 +60,40 @@ test("strict TypeScript and templates preserve the capability-judgment line", as
 		assert.match(agents.toLowerCase(), new RegExp(phrase));
 });
 
+test("copied pulse law stays in lockstep", async () => {
+	const job = await readFile(join(ROOT, "src/job.ts"), "utf8");
+	const wake = await readFile(join(ROOT, "hook/wake.ts"), "utf8");
+	for (const literal of ["45_000", "20_000", "120_000"]) {
+		assert.match(job, new RegExp(literal));
+		assert.match(wake, new RegExp(literal));
+	}
+	assert.match(job, /Number\.isSafeInteger\(pid\) && pid > 0/);
+	assert.match(job, /readonly pid\?: number/);
+	assert.match(wake, /const recorded = Number\.isSafeInteger\(pid\) && pid > 0/);
+	assert.match(wake, /const alive = !recorded \|\| processGroupAlive\(pid\)/);
+	assert.doesNotMatch(job, /from ["']node:/);
+});
+
+test("job-file table is written by spawn and read by jobs", async () => {
+	const spawn = await readFile(join(ROOT, "src/commands/spawn.ts"), "utf8");
+	const jobs = await readFile(join(ROOT, "src/commands/jobs.ts"), "utf8");
+	for (const name of [
+		"task.md",
+		"label",
+		"branch",
+		"started-at",
+		"tool-calls",
+		"last-tool",
+		"activity",
+		"log",
+		"state",
+	]) {
+		assert.ok(spawn.includes(name), `spawn must write ${name}`);
+		assert.ok(jobs.includes(name), `jobs must read ${name}`);
+	}
+	for (const name of ["pid", "finished-at"]) assert.ok(jobs.includes(name), `jobs must read ${name}`);
+});
+
 async function filesBelow(path: string): Promise<string[]> {
 	const entries = await readdir(path, { withFileTypes: true });
 	const files: string[] = [];
