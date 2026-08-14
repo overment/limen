@@ -1,20 +1,18 @@
 # limen
 
-`limen` is a small CLI for one person working with several coding sessions at once.
+`limen` lets one person coordinate several focused [Pi](https://pi.dev) coding sessions without leaving one conversation.
 
-You stay in one coordinator conversation. When something needs a focused implementer or a fresh reviewer, you start a job. That job is a real [`pi`](https://pi.dev) process in its own Git worktree. When it finishes, you still have the branch, the log, and the session — not a hidden transcript.
+A coordinator starts workers and fresh reviewers as real Pi processes in isolated Git worktrees. Every job leaves ordinary evidence behind: a branch, task, log, state, and Pi session. Limen does not decide what to build or what to merge; tickets, prompts, review, and Git remain the source of judgment.
 
-It does not decide what to build, whether a review is enough, or what should merge. Those stay in prompts, tickets, and ordinary Git.
+![A coordinator starts workers and reviewers in isolated worktrees, then merges with ordinary Git](https://raw.githubusercontent.com/overment/limen/main/docs/limen.gif)
 
-![How limen works: you talk only to the coordinator; each job is a fresh pi process in its own worktree; review is a fresh process at the candidate tip; merging is ordinary Git](https://raw.githubusercontent.com/overment/limen/main/docs/limen.gif)
-
-> **Experimental.** This project is in an early phase. Expect bugs, rough edges, and changes to commands and prompts.
+> **Experimental.** Commands, prompts, and project files may still change.
 
 Requires macOS or Linux, Node.js 24+, Git, and `pi` on `PATH`. Windows is unsupported.
 
-## Trust
+## Trust boundary
 
-`limen spawn` runs `pi --approve` as you. Isolation is a process tree and a worktree, not a sandbox. The worker can do anything you can. Review diffs before you merge. See [SECURITY.md](SECURITY.md).
+`limen spawn` runs `pi --approve` as you. A worktree and process group provide separation, not a security sandbox. A worker can do anything your account can do. Inspect its branch before merging. See [SECURITY.md](SECURITY.md).
 
 ## Install
 
@@ -23,217 +21,221 @@ git clone https://github.com/overment/limen.git
 cd limen
 npm install
 npm link
+
 cd /path/to/your-project
 limen init
 ```
 
-`npm install -g @overment/limen` is the same binary once published.
+Once published, `npm install -g @overment/limen` installs the same binary.
 
-`limen init` only creates files that are missing. Existing `AGENTS.md`, preambles, extensions, and specs are left untouched. When upgrading an initialized project, copy changed shop-manual or extension files deliberately; notification routing requires the current `hook/wake.ts` at `.pi/extensions/limen-wake.ts`. To adopt project context, rename or copy `.agents/limen/communication.md` to `.agents/limen/styleguide.md` and replace `.pi/extensions/limen-communication.ts` with the current `hook/communication.ts`. Restart the coordinator or `/reload` after replacing an extension.
+`limen init` adds missing prompts, extensions, and specs. It never overwrites existing project files.
 
-## Coordinate adjacent repositories
+## Five-minute workflow
 
-For a non-Git parent directory that contains several independent Git repositories, initialize one workspace coordinator instead:
+### 1. Write and commit a ticket
 
-```text
-~/playground/easy/
-  spec/                 shared intent and feature history; intentionally not Git-tracked here
-  .agents/limen/        coordinator, worker, and reviewer prompts
-  .limen/jobs/          runtime records for every child-repository job
-  easy-website/         Git repository
-  easycart/             Git repository
-  easytools-server/     Git repository
-```
+Create a focused ticket under `spec/features/planned/`, move it to `active/` when work starts, and keep `spec/build.md` aligned. Commit the ticket before spawning so the worker’s worktree can see it.
 
-Run this from the parent, not a child repository:
+A useful ticket names:
 
-```bash
-cd ~/playground/easy
-limen workspace init
-```
+- the observable outcome;
+- scope and exclusions;
+- acceptance evidence;
+- unresolved product questions.
 
-It creates the normal specs plus human-owned `spec/workspace.md`, where the coordinator records each adjacent repository's purpose. Limen never parses this map. Select one immediate Git child explicitly for every job:
+### 2. Start one implementation slice
 
 ```bash
-limen spawn --repo easytools-server --label "F073 server slice" \
-  "Implement F073's server slice. Ticket: spec/features/active/F073-checkout/ticket.md"
-
-limen spawn --repo easytools-server --review --branch limen/<id> --label "F073 server review" \
-  "Review F073's server candidate. Ticket: spec/features/active/F073-checkout/ticket.md"
+limen spawn --label "F001 auth handler" \
+  "Implement F001's session-handler slice. Start with the failing session test, then the smallest repair. One commit. Ticket: spec/features/active/F001-auth/ticket.md"
 ```
 
-The selected child is the only repository a job owns: branches, worktrees, review, and diffs stay there. The job record names that repository, while the ticket's conventional `Ticket: spec/...` pointer becomes an absolute workspace path for the worker. A workspace has no repository manifest and no multi-repository job; split a cross-repository feature into clear repository slices. Run `jobs`, `wait`, and `stop` from the workspace parent.
-
-## Roles
-
-These are conventions and birth text, not stored identity. `limen` does not remember who is who.
-
-| Role | Who | What they do |
-|---|---|---|
-| Coordinator | The session talking to you | Reads the board, writes tickets, starts and stops jobs, inspects diffs, merges or resumes. Full Git authority. |
-| Worker | `limen spawn` | Implements one short instruction in an isolated worktree. |
-| Reviewer | `limen spawn --review` | Fresh process at the candidate tip. Reads, runs checks, writes a verdict. Does not rewrite the candidate. |
-
-You talk only to the coordinator. Workers and reviewers never join that conversation.
-
-## What `init` puts in the project
-
-### Specs
-
-A filing cabinet. Nothing in `limen` gates these paths. The project-context extension may surface an advisory when a planned or active feature folder is absent from the build board; it never changes workflow state or blocks work.
+The last output line is the durable job ID:
 
 ```text
-spec/
-  vision.md                 why the project exists (human-owned)
-  build.md                  TRACK / NOW / NEXT / PROVEN board
-  features/
-    _template/              ticket.md and outcome.md
-    planned/FNNN-slug/      accepted backlog
-    active/FNNN-slug/       work being pursued
-    done/YYYY-MM/FNNN-slug/ landed, with outcome.md
-    dropped/YYYY-MM/FNNN-slug/
+2026-08-13-f001-auth-handler-3c8d7a2f
 ```
 
-Allocate the next `FNNN` and never reuse it. Status marks on the board and ticket (🔴 PLANNED · 🟠 ACTIVE · 🟢 PROVEN · ⚪ DROPPED) are prose. Reconcile the board with planned and active feature folders before work, then write a ticket, spawn a short instruction, inspect, review, merge or resume, and update the board with each feature-state change.
+Use a short instruction plus a `Ticket:` pointer. Do not paste the ticket into the prompt. Name the first artifact—usually a failing test, code seam, or diagnostic note—so investigation does not become the job.
 
-### Prompts
-
-```text
-AGENTS.md                              shop manual for the coordinator
-.agents/limen/worker.md              birth text for spawn
-.agents/limen/reviewer.md            birth text for spawn --review
-.agents/limen/styleguide.md          concise working and communication style
-.pi/extensions/limen-wake.ts         footer, start notice, completion wake
-.pi/extensions/limen-communication.ts appends project context to every role
-```
-
-`worker.md` and `reviewer.md` are appended as the job’s system prompt. `AGENTS.md` loads in the coordinator (and in workers, now that spawn no longer passes `--no-context-files`). After every user message and before the model starts, the context extension attaches a hidden project-context message containing the actual `spec/vision.md`, `spec/build.md`, and `.agents/limen/styleguide.md`. Each job reads these from its coordinator project root; a workspace job therefore uses its workspace parent even though its tools run in a selected child worktree. Each source is trimmed to 1000 lines; a truncation notice tells the model to read the canonical file for the remainder. The extension also gives a non-blocking build-board drift advisory. Edit those files to change behavior. `init` will not overwrite them.
-
-## How a job starts
-
-Give the worker a short instruction and a pointer to the ticket. Do not dump the ticket as the prompt.
+### 3. Stay in the coordinator
 
 ```bash
-limen spawn --label "F001 auth implementation" \
-  "Implement F001: users can sign in. Start by writing the session handler. Ticket: spec/features/active/F001-auth/ticket.md"
-# started F001 auth implementation
-# 2026-08-13-f001-auth-implementation-3c8d7a2f
+limen jobs                    # bounded snapshot of live work
+limen jobs <id|suffix|label>  # one job, recent log, and diffstat
+git diff HEAD...<branch>      # inspect the candidate
 ```
 
-The last line is the durable id. `jobs`, `wait`, and `stop` also accept a unique suffix (`7a2f`) or the label.
+The optional wake extension shows live jobs and sends one completion handoff. Do not run `limen wait` in an interactive coordinator; it blocks the conversation. `wait` is for scripts.
 
-### Model policy
+Pulse describes observed activity: `starting`, `think`, `tool`, `wait`, or `dead`. Silence alone is not proof of a stuck worker. Inspect the log and worktree before stopping.
 
-Set routine stage defaults in the coordinator environment — for example, an `.envrc`:
+`done` means Pi exited successfully. It does **not** mean the ticket is complete or the branch is safe to merge.
+
+### 4. Review when the risk earns it
+
+```bash
+limen spawn --review --branch limen/<job-id> --label "F001 auth review" \
+  "Review the F001 candidate against spec/features/active/F001-auth/ticket.md. Name the commit reviewed."
+```
+
+A reviewer is a fresh Pi process at the candidate tip. It reports a verdict; it does not rewrite the candidate. Review is especially useful for process control, security, routing, prompts, migrations, and broad behavior changes.
+
+If review finds a defect, resume the same branch with only the proven findings:
+
+```bash
+limen spawn --branch limen/<job-id> --label "F001 auth repair" \
+  "Repair the rejected auth candidate: preserve the passing session test, fix the listed expiry race, and commit one repair. Ticket: spec/features/active/F001-auth/ticket.md"
+```
+
+Review the repair freshly, then merge with ordinary Git. On completion, add `outcome.md`, move the feature folder to `done/YYYY-MM/`, and update `spec/build.md` in the same change.
+
+## Shape jobs for progress
+
+A normal job is one short, coherent slice—not an open-ended request to understand the repository.
+
+Good:
+
+```text
+Write the smallest failing test for direct ?topic= entry while auth is loading.
+Then add the readiness gate. One commit.
+```
+
+Risky:
+
+```text
+Confirm the complete lifecycle before editing and solve all related cases.
+```
+
+Use an explicit shape when helpful:
+
+- **slice** — one vertical implementation change; one commit;
+- **repair** — fix named findings; one commit;
+- **survey** — produce a durable design or diagnostic note; no code expected;
+- **finish** — validate and commit work already in the worktree;
+- **review** — inspect a named candidate and return evidence plus verdict.
+
+If investigation cannot produce the first artifact, write the finding or question to the worktree and exit. Learning should survive the session.
+
+## Stop, resume, and bounds
+
+```bash
+limen stop <id|suffix|label> "reason"
+limen spawn --branch limen/<job-id> "Focused resume instruction"
+```
+
+Stop sends TERM, then escalates if needed. Resume reuses the branch and its existing worktree, including uncommitted files. Inspect that state before resuming.
+
+Every job is bounded by:
+
+- 90 minutes by default; override with `--timeout 20m`;
+- 900 Pi tool-start events; override with `LIMEN_MAX_TOOL_CALLS`.
+
+A bound records `failed` with its reason. It limits damage; it does not repair a vague handoff.
+
+There is no channel for steering a running job. Stop it, sharpen the instruction, and resume its branch.
+
+## Models
+
+Set stage defaults in the coordinator environment:
 
 ```bash
 export LIMEN_WORKER_MODEL="your-worker-model"
 export LIMEN_REVIEWER_MODEL="your-reviewer-model"
 ```
 
-Ordinary jobs use `LIMEN_WORKER_MODEL`; `spawn --review` uses `LIMEN_REVIEWER_MODEL`. An explicit `--model MODEL` always wins for that job. With neither a stage default nor `--model`, limen leaves model selection to Pi. This is local policy, not a Limen recommendation: a different reviewer model may give genuinely independent priors, while a particular risky ticket may warrant your strongest model.
+`--model MODEL` overrides the stage default for one job. With no setting, Pi chooses as usual.
 
-That spawn creates branch `limen/<id>` and a worktree next to the repo. Commit the feature folder first, or the worktree will not see it. Several jobs may run at once; a note on the second start is not a cap.
+## Adjacent-repository workspaces
+
+When a non-Git parent contains several independent Git repositories, initialize one coordinator at the parent:
+
+```bash
+cd ~/workspace
+limen workspace init
+```
+
+Record each child repository’s purpose in the generated `spec/workspace.md`, then select exactly one immediate Git child per job:
+
+```bash
+limen spawn --repo api --label "F073 API slice" \
+  "Implement F073's API slice. Ticket: spec/features/active/F073-checkout/ticket.md"
+```
+
+The ticket stays under the workspace parent. Branches, worktrees, diffs, and review stay inside the selected child repository. Split cross-repository work into separate jobs.
+
+## Project files
+
+`limen init` creates a small, editable operating system for the project:
+
+```text
+AGENTS.md                              coordinator shop manual
+.agents/limen/worker.md               worker birth prompt
+.agents/limen/reviewer.md             reviewer birth prompt
+.agents/limen/styleguide.md           shared working style
+.pi/extensions/limen-wake.ts          live status and completion handoffs
+.pi/extensions/limen-communication.ts project context injection
+spec/vision.md                        durable product intent
+spec/build.md                         TRACK / NOW / NEXT / PROVEN
+spec/features/                        planned, active, done, and dropped work
+.limen/jobs/<id>/                     runtime evidence
+```
+
+The project-context extension attaches the current vision, board, and styleguide to coordinator, worker, and reviewer turns. These are ordinary project-owned Markdown files; edit them to change guidance.
+
+Project updates are currently deliberate and manual: `init` preserves existing files. Compare new templates and extensions before copying them, preserve local policy, and run `/reload` or restart Pi after replacing an extension. `limen migrate` handles legacy Control project layouts; it is not a general updater.
+
+## Visibility and ownership
+
+The conversation that starts a job subscribes to its wake automatically. Another coordinator can subscribe explicitly:
+
+```bash
+limen watch <id|suffix|label>
+limen watch --running
+limen unwatch <id|suffix|label>
+```
+
+A visible `unwatched` job is presumed to belong to another coordinator. Do not stop, resume, review, or merge it unless ownership is explicitly transferred and this conversation watches it.
+
+Job files and Git remain canonical if a notification is missed.
+
+## Recovery
+
+| Symptom | Safe next step |
+|---|---|
+| Quiet or repetitive job | Inspect `limen jobs <id>`, its log, and worktree. Stop only on evidence, then resume with a narrower artifact. |
+| Worker has a real question | Read its durable note, answer it, and resume the branch. |
+| Wrapper is dead but state says `running` | Verify the recorded PID, correct the plain `state` file, then resume. |
+| Candidate is bad | Do not merge. Remove its worktree and branch with ordinary Git. |
+| Completion wake was missed | Inspect `.limen/jobs/` and Git. |
+| Merge or board is wrong | Repair it with ordinary Git and Markdown edits. |
+
+Limen has no cleanup command. Worktrees and branches remain until you remove them with Git.
+
+## Command reference
 
 ```text
 limen init
-limen spawn "Implement FNNN: <outcome>. Start by writing <slice>. Ticket: spec/features/active/FNNN-slug/ticket.md"
-limen spawn --review --branch B --label L "Review the FNNN candidate against spec/features/active/FNNN-slug/ticket.md"
-limen jobs                              # bounded live-job snapshot
-limen jobs --all                        # historical diagnostics
-limen jobs <id|suffix|label>            # one detailed record
-limen watch <id|suffix|label>   # agent subscribes this conversation
-limen watch --running
-limen unwatch <id|suffix|label>
+limen workspace init
+limen migrate
+limen spawn "instruction" [--label L] [--model M] [--branch B] [--timeout 20m]
+limen spawn --repo R "instruction" [--label L] [--model M]
+limen spawn --review --branch B --label L "instruction"
+limen jobs [--running|--active|--all|<id|suffix|label>]
 limen stop <id|suffix|label> [reason]
-limen wait <id|suffix|label>    # scripts only
+limen wait <id|suffix|label>
+limen watch <id|suffix|label> | --running
+limen unwatch <id|suffix|label> | --all
 ```
 
-## While it runs
-
-Stay in the coordinator. The footer and one completion wake are how you hear back. Do not `limen wait` in that session — it blocks conversation. Do not poll with `sleep`.
-
-```bash
-limen jobs                      # bounded live snapshot; or !limen jobs inside Pi
-limen jobs <id>                 # diffstat and recent human log for one job
-tail -f .limen/jobs/<id>/log
-git diff HEAD...<branch>
-```
-
-`limen jobs` is a bounded active snapshot: it lists every running record first and summarizes terminal history without opening logs or Git. `limen jobs --running` (also `--active`) is the active-only form; `limen jobs --all` restores historical detailed diagnostics, while `limen jobs <id|suffix|label>` shows one record's diffstat and recent log. Pulse is observed, not stored: `starting`, `think`, `tool`, `wait`, `dead`. The log is tool names plus a path or command, then assistant text. The full transcript is `.limen/jobs/<id>/session/`.
-
-The conversation that spawns a job is subscribed automatically. In another coordinator conversation, say “watch F001 here” or “watch the running jobs here”; the coordinator runs `limen watch` through its Bash tool, which carries Pi's session ID. You do not need to type the command. `!limen watch` cannot identify the conversation and is intentionally rejected. Available explicit subscribers receive their own deduplicated wake; unrelated windows stay quiet. If no subscriber receives a completion, one idle coordinator gets a durable fallback handoff after a short grace period. If every coordinator is closed, the next one opened receives it.
-
-`done` is `pi` exiting 0. Look at the branch before you treat the ticket as finished.
-
-## Review, stop, resume
-
-Review is the same kind of job, in a detached worktree at the candidate tip, with reviewer birth text. It can run tests. Nothing stores a reviewer identity. You merge with ordinary Git.
-
-```bash
-limen spawn --review --branch limen/<id> --label "F001 auth review" \
-  "Review the F001 candidate against spec/features/active/F001-auth/ticket.md. Name the commit reviewed."
-
-limen stop 7a2f "silent after investigation"
-limen spawn --branch limen/<id> --label "F001 auth follow-up" \
-  "Resume: the UUID helper is committed; add the registry op next. Do not remap."
-```
-
-Stop sends TERM, waits five seconds, then KILL if needed. Stopping a finished job is harmless. Resume reuses that branch’s worktree. A branch checked out in the primary tree, or already used by a live job, cannot be isolated.
-
-`--timeout` uses the same stop and records `failed`. Every job is bounded even when you forget: 90 minutes by default (`--timeout` overrides it) and 900 tool calls (`LIMEN_MAX_TOOL_CALLS` overrides it). Both record `failed` with the reason, so a silent runaway becomes durable history instead of a burned session. They bound damage; they do not replace a well-shaped handoff.
-
-## What a job leaves behind
-
-```text
-.limen/jobs/<id>/
-  task.md        instruction text
-  label          human-readable name
-  state          running | done | failed | stopped
-  pid            wrapper process group while running
-  branch         worker branch (candidate, for review)
-  started-at     ISO, written before launch
-  finished-at    ISO, written before terminal state
-  tool-calls     count of Pi tool-start events
-  last-tool      latest tool name
-  activity       think | tool | wait
-  log            think/tool/wait, targets, assistant text
-  session/       Pi session for this job
-  origin-session spawning Pi conversation, when available
-  notify/        conversation subscriptions and delivery receipts
-```
-
-One fact per file. Mutable writes use a temp file and rename. Terminal `state` is written before `pid` is removed. After a crash, inspect or edit these files yourself. Worktrees stay until you `git worktree remove` and delete the branch.
-
-The optional wake extension shows every local running job in the footer (`⠹ limen 1 · F003 tool:bash`); a job this conversation has not subscribed to is marked `unwatched`. `unwatched` means visible, not owned — another coordinator likely has it. Passive visibility never changes ownership: do not stop, resume, review, or merge an unwatched job unless this conversation is asked to take it and then watches it. Only subscribers receive start notices and durable terminal handoffs, with the existing fallback election when no subscriber receives one. The handoff tells the coordinator to inspect evidence and take the next safe step autonomously—merge acceptable reviewed work, or resume focused corrections and re-review—asking you only for genuine product ambiguity, scope/risk tradeoffs, or irreversible actions. If the coordinator is busy, the handoff is steered. Job files and Git remain canonical.
-
-The wake extension activates only in projects that contain `.agents/limen/`, so it may instead live globally at `~/.pi/agent/extensions/limen-wake.ts` and stay inert everywhere else. Keep one copy — global or project — or explicitly subscribed conversations may still duplicate displays. `/limen off` temporarily mutes that conversation without removing subscriptions; `/limen on` catches up unless another coordinator already received the fallback handoff; bare `/limen` toggles. Herdr's subscribed pane status remains ambient while muted. `LIMEN_WAKE=0 pi` starts a session silent.
-
-When the coordinator runs inside a [Herdr](https://herdr.dev) pane (`HERDR_ENV=1`), the same extension labels delegated work with compact pulse glyphs — `✦` waking, `◌` thinking, `⚙` working, `◴` waiting, and `⚠` needs attention — then restores `Limen coordinator` when no jobs run; it also titles the pane from all local running jobs, mirrors the footer as a `limen` status token, and relabels the pane's idle state. The coordinator's own Herdr lifecycle remains truthful (`idle` while it delegates), while the display label makes delegated work visible in Herdr's Agents list. A backgrounded tab therefore names the work and raises one Herdr notification per terminal state (your Herdr notification settings decide whether it is shown). Limen publishes reversible pane metadata rather than overwriting persistent Herdr tab or agent names, and clears it on shutdown. Set `LIMEN_HERDR=0` to opt out. Jobs are detached processes, not panes: spawn strips `HERDR_*` from the job environment so nothing inside a worker can misreport the coordinator's pane.
-
-The optional project-context extension attaches `spec/vision.md`, `spec/build.md`, and `.agents/limen/styleguide.md` as a hidden message immediately after every user message and before every role starts work. Workers and reviewers receive it too. Keep all three files concise, bullet-led, and within 1000 lines; if a source is longer, the model receives a notice to read its canonical file. The extension also reports missing build boards or planned/active feature folders absent from the board as an advisory, not a gate. Delete a source file to omit it from context.
-
-## When something goes wrong
-
-| What happened | What to do |
-|---|---|
-| Quiet or rambling job | `limen jobs`, then the worktree. Stop on `dead`, or after you have looked. Resume with a sharper instruction. |
-| Worker asked a real question | Read the file it wrote, answer, resume `--branch`. |
-| Wrapper dead, `state` still `running` | `kill -0` the pid, edit `state`, resume. |
-| Bad candidate | Do not merge. Remove the worktree and branch. |
-| Missed wake or dead coordinator | Open any coordinator; pending completion falls back once, and `.limen/jobs/` plus Git remain canonical. |
-| Bad merge or stale board | Ordinary `git`, or edit the Markdown. |
-
-There is no channel into a running job. Stop it, change the instruction, resume the branch. There is no cleanup command.
+IDs, unique suffixes, and unique labels are interchangeable where shown.
 
 ## Develop
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). CI runs `npm run check` on Linux and macOS.
+See [CONTRIBUTING.md](CONTRIBUTING.md). CI runs the same checks on Linux and macOS:
 
 ```bash
-npm run typecheck
-npm test
 npm run check
 ```
 
-Zero runtime dependencies. `src/` stays under 1200 lines. Change templates when behavior is wrong; do not add guards for judgment.
+Limen has zero runtime dependencies. Capability belongs in `src/`; operating judgment belongs in templates and project files.
