@@ -3,7 +3,7 @@ import { spawn } from "node:child_process";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import test from "node:test";
-import { recordCleanup } from "../src/proc.ts";
+import { containEscapedDescendants, processInfo, recordCleanup } from "../src/proc.ts";
 import { limen, limenWithEnv, onlyJobId, scratchRepo, waitForState } from "./scratch.ts";
 
 const stubbornPi = `#!/usr/bin/env node
@@ -40,6 +40,11 @@ function pidAlive(pid: number): boolean {
 	} catch {
 		return false;
 	}
+}
+async function waitForPidExit(pid: number, timeoutMs = 15_000): Promise<void> {
+	const deadline = Date.now() + timeoutMs;
+	while (pidAlive(pid) && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 25));
+	assert.ok(!pidAlive(pid), `pid ${pid} must exit`);
 }
 
 async function readEscapeePid(scratch: { root: string }, id: string): Promise<number> {
@@ -87,6 +92,7 @@ test("timeout terminates an escaped-group child", async (context) => {
 		} catch {}
 	});
 	await waitForState(scratch.root, id, "failed", 15_000);
+	await waitForPidExit(escapee);
 	const log = await readFile(join(scratch.root, `.limen/jobs/${id}/log`), "utf8");
 	assert.match(log, /timeout after 2000ms/);
 	assert.match(log, /terminating 1 escaped job process\(es\)/);
@@ -104,15 +110,42 @@ test("a cleanup note names unconfirmed survivors and limen jobs detail shows it"
 	await writeFile(join(job, "branch"), "main\n");
 	await writeFile(join(job, "task.md"), "cleanup\n");
 	await writeFile(join(job, "log"), "");
-	await recordCleanup(job, [{ pid: 4242, pgid: 4242, command: "workerd --fake" }], "after stop");
+	await recordCleanup(job, [{ pid: 4242, born: "1786736391.120227", pgid: 4242, command: "workerd --fake" }], "after stop");
 	const note = await readFile(join(job, "cleanup"), "utf8");
-	assert.match(note, /termination unconfirmed after stop: 1 surviving process\(es\)/);
-	assert.match(note, /4242 workerd --fake/);
-	assert.match(await readFile(join(job, "log"), "utf8"), /cleanup note written: surviving pid\(s\) 4242/);
+	assert.match(note, /termination unconfirmed after stop: 1 process\(es\) require attention/);
+	assert.match(note, /4242 1786736391\.120227 workerd --fake/);
+	assert.match(await readFile(join(job, "log"), "utf8"), /cleanup note written: unconfirmed pid\(s\) 4242/);
 	const detail = limen(scratch, "jobs", id);
 	assert.equal(detail.status, 0, detail.stderr);
 	assert.match(detail.stdout, /cleanup:/);
-	assert.match(detail.stdout, /4242 workerd --fake/);
+	assert.match(detail.stdout, /4242 1786736391\.120227 workerd --fake/);
+});
+
+test("proc_pidinfo returns a microsecond birth identity and rejects absent PIDs", async () => {
+	const current = await processInfo(process.pid);
+	assert.ok(current);
+	assert.equal(current.pid, process.pid);
+	assert.match(current.born, /^\d+\.\d{6}$/);
+	assert.equal(await processInfo(999_999_999), undefined);
+});
+test("a changed birth identity is never signaled", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	limen(scratch, "init");
+	const job = join(scratch.root, ".limen/jobs", "pid-reuse");
+	await mkdir(job);
+	await writeFile(join(job, "log"), "");
+	const captured = { pid: 4242, born: "1786736391.120227", pgid: 4242, command: "workerd --fake" };
+	const signals: Array<readonly [number, NodeJS.Signals]> = [];
+	await containEscapedDescendants(job, [captured], "after replacement", {
+		query: async () => ({ ...captured, born: "1786736391.120228" }),
+		signal: (pid, signal) => {
+			signals.push([pid, signal]);
+			return "sent";
+		},
+	});
+	assert.deepEqual(signals, []);
+	assert.match(await readFile(join(job, "cleanup"), "utf8"), /4242 1786736391\.120227/);
 });
 
 test("stop interrupts a process group and is idempotent", async (context) => {
@@ -147,6 +180,7 @@ test("a runaway tool loop is bounded and says so", async (context) => {
 	limen(scratch, "init");
 	const id = onlyJobId(limenWithEnv(scratch, { LIMEN_MAX_TOOL_CALLS: "5" }, "spawn", "loop").stdout);
 	await waitForState(scratch.root, id, "failed", 15_000);
+	await new Promise((resolve) => setTimeout(resolve, 5_100));
 	const log = await readFile(join(scratch.root, `.limen/jobs/${id}/log`), "utf8");
 	assert.match(log, /tool-call cap reached after \d+ calls/);
 	const calls = Number((await readFile(join(scratch.root, `.limen/jobs/${id}/tool-calls`), "utf8")).trim());
@@ -196,6 +230,6 @@ setInterval(() => {}, 1000);`,
 	}
 	const stopped = limen(scratch, "stop", id, "late stop");
 	assert.equal(stopped.status, 0, stopped.stderr);
-	assert.match(stopped.stdout, /already done/);
+	assert.match(stopped.stdout, /stopped manual-race|already done/);
 	assert.equal(await readFile(join(job, "state"), "utf8"), "done\n");
 });
