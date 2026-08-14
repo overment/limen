@@ -37,6 +37,7 @@ export default function limenWake(pi: PiApi): void {
 	let jobsDir: string | undefined;
 	let observeJob: ((id: string) => void) | undefined;
 	const seen = new Set<string>();
+	const herdrSeen = new Set<string>();
 	let herdr: HerdrPane | undefined;
 	let herdrSeq = Date.now();
 	let herdrToken = "";
@@ -74,6 +75,7 @@ export default function limenWake(pi: PiApi): void {
 			}
 			statusBody = next;
 			herdrReportToken(next.slice("limen ".length));
+			if (muted) return;
 			context.ui.setStatus("limen", `${SPINNER[frame]} ${statusBody}`);
 			frame = (frame + 1) % SPINNER.length;
 		};
@@ -99,29 +101,34 @@ export default function limenWake(pi: PiApi): void {
 		herdr = herdrTarget();
 		for (const id of readdirSync(jobs)) {
 			const state = stateOf(jobs, id);
-			if (isObservable(state)) seen.add(observationKey(id, state));
+			if (!isObservable(state)) continue;
+			seen.add(observationKey(id, state));
+			herdrSeen.add(observationKey(id, state));
 		}
 		const observe = (id: string) => {
 			const state = stateOf(jobs, id);
 			if (!isObservable(state)) return;
 			const key = observationKey(id, state);
-			if (seen.has(key)) return;
-			seen.add(key);
 			const label = text(join(jobs, id, "label")) || id;
+			const branch = text(join(jobs, id, "branch"));
+			// Herdr surfaces are ambient, so they stay live while the conversation is muted.
+			if (state !== "running" && !herdrSeen.has(key)) {
+				herdrSeen.add(key);
+				herdrCall(["notification", "show", `limen: ${label} is ${state}`, "--body", `job ${id} · branch ${branch}`, "--sound", state === "done" ? "done" : "request"]);
+			}
+			if (muted || seen.has(key)) return;
+			seen.add(key);
 			if (state === "running") {
 				context.ui.notify(`limen: ${label} started (${id})`, "info");
 				return;
 			}
-			const branch = text(join(jobs, id, "branch"));
 			const message = `limen: ${label} is ${state} (${id}); inspect .limen/jobs/${id}/ and branch ${branch}.`;
-			herdrCall(["notification", "show", `limen: ${label} is ${state}`, "--body", `job ${id} · branch ${branch}`, "--sound", state === "done" ? "done" : "request"]);
 			if (context.isIdle()) pi.sendUserMessage(message);
 			else pi.sendUserMessage(message, { deliverAs: "steer" });
 		};
 		observeJob = observe;
 		watcher = watch(jobs, { recursive: true }, (_kind, filename) => {
 			try {
-				if (muted) return;
 				const parts = filename?.toString().split(/[\\/]/);
 				const id = parts?.[0];
 				const file = parts?.at(-1);
@@ -158,7 +165,7 @@ export default function limenWake(pi: PiApi): void {
 			const request = args.trim();
 			muted = request === "on" ? false : request === "off" ? true : !muted;
 			if (active && session && jobsDir) {
-				if (muted) clearStatus(session);
+				if (muted) session.ui.setStatus("limen", undefined);
 				else {
 					for (const id of readdirSync(jobsDir)) observeJob?.(id);
 					updateStatus(jobsDir, session);

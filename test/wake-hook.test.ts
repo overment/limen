@@ -276,6 +276,66 @@ async function waitUntilAsync(predicate: () => Promise<boolean>): Promise<void> 
 	assert.ok(await predicate(), "timed out waiting for herdr call");
 }
 
+test("herdr surfaces stay live while the conversation is muted", async (context) => {
+	stashEnv(context, "LIMEN_JOB", undefined);
+	const root = await import("node:fs/promises").then(({ mkdtemp }) => mkdtemp(join(process.env.TMPDIR ?? "/tmp", "limen-herdr-mute-")));
+	context.after(() => import("node:fs/promises").then(({ rm }) => rm(root, { recursive: true, force: true })));
+	const calls = join(root, "herdr-calls");
+	await mkdir(calls);
+	const fake = join(root, "herdr");
+	await writeFile(fake, `#!/bin/sh\nout=$(mktemp "${calls}/call.XXXXXX")\nprintf '%s\\n' "$@" > "$out"\n`);
+	await chmod(fake, 0o755);
+	stashEnv(context, "LIMEN_HERDR", fake);
+	stashEnv(context, "HERDR_ENV", "1");
+	stashEnv(context, "HERDR_PANE_ID", "w1:p1");
+	await mkdir(join(root, ".agents/limen"), { recursive: true });
+	const jobs = join(root, ".limen/jobs");
+	const handlers = new Map<string, (event: unknown, context: TestContext) => void>();
+	let command: ((args: string, context: { ui: { notify(message: string, level: "info"): void } }) => void) | undefined;
+	const messages: string[] = [];
+	const notifications: string[] = [];
+	const statuses: Array<string | undefined> = [];
+	limenWake({
+		on(event, handler) {
+			handlers.set(event, handler);
+		},
+		sendUserMessage(content) {
+			messages.push(content);
+		},
+		registerCommand(_name, options) {
+			command = options.handler;
+		},
+	});
+	assert.ok(command);
+	const commandUi = { ui: { notify() {} } };
+	const session = {
+		cwd: root,
+		isIdle: () => true,
+		ui: { notify: (message: string) => notifications.push(message), setStatus: (_key: string, value: string | undefined) => statuses.push(value) },
+	};
+	handlers.get("session_start")?.({}, session);
+	context.after(() => handlers.get("session_shutdown")?.({}, session));
+	command("off", commandUi);
+	await mkdir(join(jobs, "new"), { recursive: true });
+	await writeFile(join(jobs, "new/label"), "F001 implementation\n");
+	await writeFile(join(jobs, "new/branch"), "candidate\n");
+	await writeFile(join(jobs, "new/state"), "running\n");
+	await waitUntilAsync(async () => (await readCalls(calls)).some((call) => call.includes("limen=1 · F001 starting")));
+	assert.deepEqual(
+		statuses.filter((value) => value !== undefined),
+		[],
+		"the muted footer must stay clear while herdr still gets the token",
+	);
+	assert.deepEqual(notifications, [], "a muted session must not show start notices");
+	await writeFile(join(jobs, "new/state"), "done\n");
+	await waitUntilAsync(async () => (await readCalls(calls)).some((call) => call[0] === "notification"));
+	assert.deepEqual(messages, [], "the herdr notification must not unmute the conversation");
+	command("on", commandUi);
+	await waitUntil(() => messages.length === 1);
+	assert.match(messages[0] ?? "", /F001 implementation is done/);
+	assert.equal((await readCalls(calls)).filter((call) => call[0] === "notification").length, 1, "unmute must not repeat the herdr notification");
+});
+
 async function waitUntil(predicate: () => boolean): Promise<void> {
 	const deadline = Date.now() + 2_000;
 	while (!predicate() && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 20));
