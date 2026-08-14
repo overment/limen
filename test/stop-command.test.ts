@@ -91,9 +91,12 @@ test("stop terminates an escaped-group child or records it in a cleanup note", a
 	await waitForState(scratch.root, id, "stopped");
 	const log = await readFile(join(scratch.root, `.limen/jobs/${id}/log`), "utf8");
 	assert.match(log, /terminating 1 escaped job process\(es\)/);
-	// The escapee ignores SIGTERM, so its death proves the KILL escalation; an owned process always yields to KILL.
-	await waitForPidExit(escapee);
-	await assert.rejects(readFile(join(scratch.root, `.limen/jobs/${id}/cleanup`)), "a confirmed termination writes no cleanup note");
+	// Without macOS birth identity, cleanup is advisory rather than an unsafe PID signal.
+	if (await processInfo(escapee)) {
+		// The escapee ignores SIGTERM, so its death proves the KILL escalation; an owned process always yields to KILL.
+		await waitForPidExit(escapee);
+		await assert.rejects(readFile(join(scratch.root, `.limen/jobs/${id}/cleanup`)), "a confirmed termination writes no cleanup note");
+	} else assert.match(await waitForFile(join(scratch.root, `.limen/jobs/${id}/cleanup`)), new RegExp(`${escapee} `));
 });
 
 test("timeout terminates an escaped-group child", async (context) => {
@@ -190,6 +193,47 @@ test("a changed birth identity is never signaled", async (context) => {
 	});
 	assert.deepEqual(signals, []);
 	assert.match(await readFile(join(job, "cleanup"), "utf8"), /4242 1786736391\.120227/);
+});
+
+test("an unavailable identity recheck is recorded without signaling", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	limen(scratch, "init");
+	const job = join(scratch.root, ".limen/jobs", "identity-unavailable");
+	await mkdir(job);
+	await writeFile(join(job, "log"), "");
+	const captured = { pid: 4242, born: "1786736391.120227", pgid: 4242, command: "workerd --fake" };
+	const signals: Array<readonly [number, NodeJS.Signals]> = [];
+	await containEscapedDescendants(job, [captured], "after unavailable identity", {
+		query: async () => undefined,
+		signal: (pid, signal) => {
+			signals.push([pid, signal]);
+			return "sent";
+		},
+	});
+	assert.deepEqual(signals, []);
+	assert.match(await readFile(join(job, "cleanup"), "utf8"), /4242 1786736391\.120227 workerd --fake/);
+});
+
+test("a helper-timeout-style undefined recheck records the captured process", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	limen(scratch, "init");
+	const job = join(scratch.root, ".limen/jobs", "identity-timeout");
+	await mkdir(job);
+	await writeFile(join(job, "log"), "");
+	const captured = { pid: 4242, born: "1786736391.120227", pgid: 4242, command: "workerd --fake" };
+	const signals: Array<readonly [number, NodeJS.Signals]> = [];
+	let rechecks = 0;
+	await containEscapedDescendants(job, [captured], "after identity timeout", {
+		query: async () => (rechecks++ === 0 ? captured : undefined),
+		signal: (pid, signal) => {
+			signals.push([pid, signal]);
+			return "sent";
+		},
+	});
+	assert.deepEqual(signals, [[4242, "SIGTERM"]]);
+	assert.match(await readFile(join(job, "cleanup"), "utf8"), /4242 1786736391\.120227 workerd --fake/);
 });
 
 test("stop interrupts a process group and is idempotent", async (context) => {

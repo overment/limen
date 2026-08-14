@@ -93,7 +93,9 @@ export async function containEscapedDescendants(jobDir: string, escaped: readonl
 	const verify = async (process: JobProcess) => {
 		const current = await query(process.pid);
 		if (current?.pid === process.pid && current.born === process.born) return true;
-		if (current || process.born === "identity-unavailable") warned.push(process);
+		// A missing, malformed, timed-out, or denied recheck is not proof of exit.
+		// Retain the captured identity for advisory cleanup rather than guessing.
+		warned.push(process);
 		return false;
 	};
 	await appendLimenLog(jobDir, `terminating ${escaped.length} escaped job process(es): ${escaped.map((p) => p.pid).join(", ")}`);
