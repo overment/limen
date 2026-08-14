@@ -48,6 +48,13 @@ export function limen(scratch: Scratch, ...args: readonly string[]): { readonly 
 export function limenWithSession(scratch: Scratch, session: string, ...args: readonly string[]): { readonly stdout: string; readonly stderr: string; readonly status: number } {
 	return runLimen(scratch, { PI_SESSION_ID: session, PI_SESSION_FILE: `/sessions/${session}.jsonl` }, args);
 }
+export function limenWithEnv(
+	scratch: Scratch,
+	added: NodeJS.ProcessEnv,
+	...args: readonly string[]
+): { readonly stdout: string; readonly stderr: string; readonly status: number } {
+	return runLimen(scratch, added, args);
+}
 function runLimen(scratch: Scratch, addedEnvironment: NodeJS.ProcessEnv, args: readonly string[]): { readonly stdout: string; readonly stderr: string; readonly status: number } {
 	const environment: NodeJS.ProcessEnv = {
 		...process.env,

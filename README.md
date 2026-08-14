@@ -181,7 +181,7 @@ limen spawn --branch limen/<id> --label "F001 auth follow-up" \
 
 Stop sends TERM, waits five seconds, then KILL if needed. Stopping a finished job is harmless. Resume reuses that branch’s worktree. A branch checked out in the primary tree, or already used by a live job, cannot be isolated.
 
-`--timeout` uses the same stop and records `failed`.
+`--timeout` uses the same stop and records `failed`. Every job is bounded even when you forget: 90 minutes by default (`--timeout` overrides it) and 900 tool calls (`LIMEN_MAX_TOOL_CALLS` overrides it). Both record `failed` with the reason, so a silent runaway becomes durable history instead of a burned session. They bound damage; they do not replace a well-shaped handoff.
 
 ## What a job leaves behind
 

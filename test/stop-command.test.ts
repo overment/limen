@@ -4,7 +4,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import test from "node:test";
 import { recordCleanup } from "../src/proc.ts";
-import { limen, onlyJobId, scratchRepo, waitForState } from "./scratch.ts";
+import { limen, limenWithEnv, onlyJobId, scratchRepo, waitForState } from "./scratch.ts";
 
 const stubbornPi = `#!/usr/bin/env node
 process.on("SIGTERM", () => {});
@@ -21,6 +21,16 @@ escapee.unref();
 writeFileSync("escapee-pid", String(escapee.pid) + "\\n");
 console.log("escapee started");
 setInterval(() => {}, 1000);
+`;
+
+// A pi that keeps calling tools forever; the wrapper must bound it.
+const busyPi = `#!/usr/bin/env node
+process.on("SIGTERM", () => {});
+let n = 0;
+setInterval(() => {
+  n += 1;
+  console.log(JSON.stringify({ type: "tool_execution_start", toolName: "read", args: { path: "file" + n } }));
+}, 5);
 `;
 
 function pidAlive(pid: number): boolean {
@@ -129,6 +139,18 @@ test("timeout is portable and leaves failed durable truth", async (context) => {
 	const log = await readFile(join(scratch.root, `.limen/jobs/${id}/log`), "utf8");
 	assert.match(log, /timeout after 100ms/);
 	assert.ok(Number.isFinite(Date.parse((await readFile(join(scratch.root, `.limen/jobs/${id}/finished-at`), "utf8")).trim())));
+});
+
+test("a runaway tool loop is bounded and says so", async (context) => {
+	const scratch = await scratchRepo(busyPi);
+	context.after(scratch.cleanup);
+	limen(scratch, "init");
+	const id = onlyJobId(limenWithEnv(scratch, { LIMEN_MAX_TOOL_CALLS: "5" }, "spawn", "loop").stdout);
+	await waitForState(scratch.root, id, "failed", 15_000);
+	const log = await readFile(join(scratch.root, `.limen/jobs/${id}/log`), "utf8");
+	assert.match(log, /tool-call cap reached after \d+ calls/);
+	const calls = Number((await readFile(join(scratch.root, `.limen/jobs/${id}/tool-calls`), "utf8")).trim());
+	assert.ok(calls >= 5, `expected the cap to fire after counting, saw ${calls}`);
 });
 
 test("stop preserves terminal truth written while interruption settles", async (context) => {

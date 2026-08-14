@@ -6,6 +6,10 @@ import { createStreamParser, type StreamEvent } from "./stream.ts";
 const STOP_GRACE_MS = 5_000;
 const ESCAPED_TERM_GRACE_MS = 2_000;
 const ESCAPED_KILL_GRACE_MS = 1_000;
+// A job is one short turn. These bounds stop a silent runaway from burning a session; they are not a review gate.
+export const DEFAULT_TIMEOUT_MS = 90 * 60_000;
+export const MAX_TOOL_CALLS = 900;
+const toolCallCap = (): number => Number(process.env.LIMEN_MAX_TOOL_CALLS) || MAX_TOOL_CALLS;
 export type JobProcess = { readonly pid: number; readonly pgid: number; readonly command: string };
 export async function atomicWrite(path: string, content: string): Promise<void> {
 	const temporary = `${path}.${process.pid}.${Date.now().toString(16)}.tmp`;
@@ -123,16 +127,34 @@ export async function runInternalJob(): Promise<void> {
 	const preambleFile = requiredEnvironment("LIMEN_PREAMBLE");
 	const jobId = requiredEnvironment("LIMEN_JOB_ID");
 	const label = process.env.LIMEN_LABEL || jobId;
-	const timeoutMs = process.env.LIMEN_TIMEOUT_MS ? Number(process.env.LIMEN_TIMEOUT_MS) : undefined;
+	const timeoutMs = process.env.LIMEN_TIMEOUT_MS ? Number(process.env.LIMEN_TIMEOUT_MS) : DEFAULT_TIMEOUT_MS;
 	const preamble = await readFile(preambleFile, "utf8");
 	let stopRequested = false;
-	let timedOut = false;
+	let exhausted: string | undefined;
 	let graceTimer: NodeJS.Timeout | undefined;
 	let tools = 0;
 	let pending = Promise.resolve();
 	process.on("SIGTERM", () => {
 		stopRequested = true;
 	});
+	let escapedAtExhaust: Promise<readonly JobProcess[]> = Promise.resolve([]);
+	const exhaust = (reason: string) => {
+		if (exhausted || stopRequested) return;
+		exhausted = reason;
+		// Snapshot escaped descendants before TERM: once pi dies they re-parent to init and become untraceable.
+		escapedAtExhaust = listEscapedDescendants(process.pid).catch(() => []);
+		void escapedAtExhaust.then(async () => {
+			await appendLimenLog(jobDir, `${reason}; sending TERM`);
+			signalProcessGroup(process.pid, "SIGTERM");
+		});
+		graceTimer = setTimeout(() => {
+			void (async () => {
+				await containEscapedDescendants(jobDir, await escapedAtExhaust, "after exhaustion");
+				await finalizeJob(jobDir, "failed", reason);
+				signalProcessGroup(process.pid, "SIGKILL");
+			})();
+		}, STOP_GRACE_MS);
+	};
 	const sessionDir = `${jobDir}/session`;
 	const args = ["--mode", "json", "--approve", "--session-dir", sessionDir, "--name", `limen: ${label}`, "--append-system-prompt", preamble];
 	if (process.env.LIMEN_MODEL) args.push("--model", process.env.LIMEN_MODEL);
@@ -152,7 +174,20 @@ export async function runInternalJob(): Promise<void> {
 	const seen = { activity: "" };
 	const failLog = (error: unknown) => appendLimenLog(jobDir, `log write failed: ${error instanceof Error ? error.message : String(error)}`).catch(() => {});
 	const apply = (events: readonly StreamEvent[]) => {
-		pending = pending.then(() => recordEvents(jobDir, events, () => (tools += 1), seen)).catch(failLog);
+		pending = pending
+			.then(() =>
+				recordEvents(
+					jobDir,
+					events,
+					() => {
+						tools += 1;
+						if (tools >= toolCallCap()) exhaust(`tool-call cap reached after ${tools} calls`);
+						return tools;
+					},
+					seen,
+				),
+			)
+			.catch(failLog);
 	};
 	const child = spawn(process.env.LIMEN_PI ?? "pi", args, {
 		cwd: worktree,
@@ -174,33 +209,15 @@ export async function runInternalJob(): Promise<void> {
 	await atomicWrite(`${jobDir}/pid`, `${process.pid}\n`);
 	await atomicWrite(`${jobDir}/state`, "running\n");
 	await appendLimenLog(jobDir, "worker started");
-	let escapedAtTimeout: Promise<readonly JobProcess[]> = Promise.resolve([]);
-	const timeout = timeoutMs
-		? setTimeout(() => {
-				timedOut = true;
-				// Snapshot escaped descendants before TERM: once pi dies they re-parent to init and become untraceable.
-				escapedAtTimeout = listEscapedDescendants(process.pid).catch(() => []);
-				void escapedAtTimeout.then(async () => {
-					await appendLimenLog(jobDir, `timeout after ${timeoutMs}ms; sending TERM`);
-					signalProcessGroup(process.pid, "SIGTERM");
-				});
-				graceTimer = setTimeout(() => {
-					void (async () => {
-						await containEscapedDescendants(jobDir, await escapedAtTimeout, "after timeout");
-						await finalizeJob(jobDir, "failed", `timeout after ${timeoutMs}ms`);
-						signalProcessGroup(process.pid, "SIGKILL");
-					})();
-				}, STOP_GRACE_MS);
-			}, timeoutMs)
-		: undefined;
+	const timeout = setTimeout(() => exhaust(`timeout after ${timeoutMs}ms`), timeoutMs);
 	const result = await outcome;
-	if (timeout) clearTimeout(timeout);
+	clearTimeout(timeout);
 	if (graceTimer) clearTimeout(graceTimer);
 	apply(parser.flush());
 	await pending;
-	if (timedOut) {
-		await containEscapedDescendants(jobDir, await escapedAtTimeout, "after timeout");
-		await finalizeJob(jobDir, "failed", `timeout after ${timeoutMs}ms`);
+	if (exhausted) {
+		await containEscapedDescendants(jobDir, await escapedAtExhaust, "after exhaustion");
+		await finalizeJob(jobDir, "failed", exhausted);
 	} else if (stopRequested || result.signal === "SIGTERM" || result.signal === "SIGKILL") {
 		await finalizeJob(jobDir, "stopped", "process group interrupted");
 	} else if (result.error) await finalizeJob(jobDir, "failed", result.error.message);
