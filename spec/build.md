@@ -6,6 +6,7 @@
 
 ## NOW
 
+- `F007-terminal-process-containment` (ACTIVE): reproduce escaped-descendant survival at stop/timeout, then best-effort cleanup with a durable note when termination is unconfirmed.
 - `F006-interactive-managed-updates` (ACTIVE): shape an interactive, advisory-first update experience and the agent response settings before implementation.
 
 ## NEXT
