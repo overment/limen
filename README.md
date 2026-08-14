@@ -6,6 +6,8 @@ You stay in one coordinator conversation. When something needs a focused impleme
 
 It does not decide what to build, whether a review is enough, or what should merge. Those stay in prompts, tickets, and ordinary Git.
 
+![How limen works: you talk only to the coordinator; each job is a fresh pi process in its own worktree; review is a fresh process at the candidate tip; merging is ordinary Git](https://raw.githubusercontent.com/overment/limen/main/docs/limen.gif)
+
 > **Experimental.** This project is in an early phase. Expect bugs, rough edges, and changes to commands and prompts.
 
 Requires macOS or Linux, Node.js 24+, Git, and `pi` on `PATH`. Windows is unsupported.
