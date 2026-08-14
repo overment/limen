@@ -12,7 +12,7 @@ Stopping or timing out a Limen job leaves no silently surviving job-started proc
 - Track job descendants beyond the initial process group and make `stop` and timeout termination best-effort against them (TERM, wait, KILL), scoped strictly to processes started by that job — never a broad pattern kill.
 - When any process cannot be confirmed dead, write a durable note in the job directory (for example `cleanup`) naming the surviving PIDs and commands, and surface it in `limen jobs` detail. Advisory only: it must never block state transitions, spawns, or merges.
 - Add one reviewer-template rule: a failed or unclean runtime setup is a finding to report, not a harness to repair; return the verdict with that check marked unverified.
-- Keep the implementation dependency-free and portable across macOS and Linux.
+- Target macOS. A macOS-native process identity mechanism may be used when it keeps cleanup scoped to a job; Linux behavior is out of scope for this feature.
 
 ## Out of scope
 
@@ -27,8 +27,11 @@ Stopping or timing out a Limen job leaves no silently surviving job-started proc
 - After the fix: `limen stop` and `--timeout` terminate a deliberately escaping child, or the job record contains a cleanup note naming it; the test covers both branches.
 - `limen jobs <id>` shows the cleanup note when present.
 - Existing stop/timeout tests still pass; `npm run check` is green.
+- On macOS, the test proves a PID-reuse collision cannot signal the unrelated replacement process.
 - `templates/reviewer.md` carries the runtime-setup finding rule.
 
 ## Notes
 
 Motivating incident: the F001 Easy review's bounded Pages smoke test launched wrangler/workerd, which escaped the process group; `limen stop` marked the job stopped while workerd survived and the review lost its verdict. Investigation record: agent cf3662de, 2026-08-14.
+
+[2026-08-14] Human decision: narrow F007 to macOS so cleanup can use a trustworthy platform process identity rather than claim portable PID safety.
