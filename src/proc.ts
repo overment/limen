@@ -1,9 +1,12 @@
-import { spawn } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { appendFile, open, readFile, rename, rm } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { createStreamParser, type StreamEvent } from "./stream.ts";
 
 const STOP_GRACE_MS = 5_000;
+const ESCAPED_TERM_GRACE_MS = 2_000;
+const ESCAPED_KILL_GRACE_MS = 1_000;
+export type JobProcess = { readonly pid: number; readonly pgid: number; readonly command: string };
 export async function atomicWrite(path: string, content: string): Promise<void> {
 	const temporary = `${path}.${process.pid}.${Date.now().toString(16)}.tmp`;
 	const handle = await open(temporary, "wx");
@@ -23,8 +26,11 @@ export function processGroupAlive(pid: number): boolean {
 	return result === "sent" || result === "denied";
 }
 export function signalProcessGroup(pid: number, signal: NodeJS.Signals | 0): "sent" | "missing" | "denied" {
+	return signalTarget(-pid, signal);
+}
+function signalTarget(target: number, signal: NodeJS.Signals | 0): "sent" | "missing" | "denied" {
 	try {
-		process.kill(-pid, signal);
+		process.kill(target, signal);
 		return "sent";
 	} catch (error) {
 		if (isCode(error, "ESRCH")) return "missing";
@@ -36,6 +42,61 @@ export async function waitForProcessGroup(pid: number, milliseconds: number): Pr
 	const deadline = Date.now() + milliseconds;
 	while (processGroupAlive(pid) && Date.now() < deadline) await delay(100);
 	return !processGroupAlive(pid);
+}
+export function processAlive(pid: number): boolean {
+	return signalTarget(pid, 0) !== "missing";
+}
+// Descendants of the wrapper that left its process group (setsid or equivalent). Snapshot while the
+// parent chain is still alive: once intermediate processes die, escapees re-parent to init and are
+// no longer attributable to the job. Best effort by design; a failed ps yields an empty list.
+export async function listEscapedDescendants(rootPid: number): Promise<readonly JobProcess[]> {
+	const table = await processTable();
+	const escaped: JobProcess[] = [];
+	const seen = new Set([rootPid]);
+	const queue = [rootPid];
+	for (let parent = queue.shift(); parent !== undefined; parent = queue.shift()) {
+		for (const row of table) {
+			if (row.ppid !== parent || seen.has(row.pid)) continue;
+			seen.add(row.pid);
+			queue.push(row.pid);
+			if (row.pgid !== rootPid) escaped.push({ pid: row.pid, pgid: row.pgid, command: row.command });
+		}
+	}
+	return escaped;
+}
+// Best-effort TERM, wait, KILL against processes the job started outside its group — never a
+// pattern kill. Survivors become a durable cleanup note; nothing here blocks state transitions.
+export async function containEscapedDescendants(jobDir: string, escaped: readonly JobProcess[], context: string): Promise<void> {
+	if (escaped.length === 0) return;
+	await appendLimenLog(jobDir, `terminating ${escaped.length} escaped job process(es): ${escaped.map((p) => p.pid).join(", ")}`);
+	for (const p of escaped) signalTarget(p.pid, "SIGTERM");
+	await waitForPids(escaped, ESCAPED_TERM_GRACE_MS);
+	const stubborn = escaped.filter((p) => processAlive(p.pid));
+	for (const p of stubborn) signalTarget(p.pid, "SIGKILL");
+	await waitForPids(stubborn, ESCAPED_KILL_GRACE_MS);
+	const survivors = escaped.filter((p) => processAlive(p.pid));
+	if (survivors.length > 0) await recordCleanup(jobDir, survivors, context);
+}
+export async function recordCleanup(jobDir: string, survivors: readonly JobProcess[], context: string): Promise<void> {
+	const header = `[limen ${new Date().toISOString()}] termination unconfirmed ${context}: ${survivors.length} surviving process(es)`;
+	const lines = survivors.map((p) => `${p.pid} ${p.command}`);
+	await atomicWrite(`${jobDir}/cleanup`, `${[header, ...lines].join("\n")}\n`);
+	await appendLimenLog(jobDir, `cleanup note written: surviving pid(s) ${survivors.map((p) => p.pid).join(", ")}`);
+}
+async function waitForPids(processes: readonly JobProcess[], milliseconds: number): Promise<void> {
+	const deadline = Date.now() + milliseconds;
+	while (processes.some((p) => processAlive(p.pid)) && Date.now() < deadline) await delay(100);
+}
+async function processTable(): Promise<ReadonlyArray<JobProcess & { readonly ppid: number }>> {
+	const output = await new Promise<string>((resolve) => {
+		execFile("ps", ["-Ao", "pid=,pgid=,ppid=,command="], { maxBuffer: 16 * 1024 * 1024 }, (error, stdout) => resolve(error ? "" : stdout));
+	});
+	const rows: Array<JobProcess & { readonly ppid: number }> = [];
+	for (const line of output.split("\n")) {
+		const match = /^\s*(\d+)\s+(\d+)\s+(\d+)\s+(.*)$/.exec(line);
+		if (match) rows.push({ pid: Number(match[1]), pgid: Number(match[2]), ppid: Number(match[3]), command: (match[4] ?? "").trim() });
+	}
+	return rows;
 }
 export async function appendLimenLog(jobDir: string, message: string): Promise<void> {
 	await appendFile(`${jobDir}/log`, `[limen ${new Date().toISOString()}] ${message}\n`);
@@ -113,15 +174,22 @@ export async function runInternalJob(): Promise<void> {
 	await atomicWrite(`${jobDir}/pid`, `${process.pid}\n`);
 	await atomicWrite(`${jobDir}/state`, "running\n");
 	await appendLimenLog(jobDir, "worker started");
+	let escapedAtTimeout: Promise<readonly JobProcess[]> = Promise.resolve([]);
 	const timeout = timeoutMs
 		? setTimeout(() => {
 				timedOut = true;
-				void appendLimenLog(jobDir, `timeout after ${timeoutMs}ms; sending TERM`);
-				signalProcessGroup(process.pid, "SIGTERM");
+				// Snapshot escaped descendants before TERM: once pi dies they re-parent to init and become untraceable.
+				escapedAtTimeout = listEscapedDescendants(process.pid).catch(() => []);
+				void escapedAtTimeout.then(async () => {
+					await appendLimenLog(jobDir, `timeout after ${timeoutMs}ms; sending TERM`);
+					signalProcessGroup(process.pid, "SIGTERM");
+				});
 				graceTimer = setTimeout(() => {
-					void finalizeJob(jobDir, "failed", `timeout after ${timeoutMs}ms`).then(() => {
+					void (async () => {
+						await containEscapedDescendants(jobDir, await escapedAtTimeout, "after timeout");
+						await finalizeJob(jobDir, "failed", `timeout after ${timeoutMs}ms`);
 						signalProcessGroup(process.pid, "SIGKILL");
-					});
+					})();
 				}, STOP_GRACE_MS);
 			}, timeoutMs)
 		: undefined;
@@ -130,8 +198,10 @@ export async function runInternalJob(): Promise<void> {
 	if (graceTimer) clearTimeout(graceTimer);
 	apply(parser.flush());
 	await pending;
-	if (timedOut) await finalizeJob(jobDir, "failed", `timeout after ${timeoutMs}ms`);
-	else if (stopRequested || result.signal === "SIGTERM" || result.signal === "SIGKILL") {
+	if (timedOut) {
+		await containEscapedDescendants(jobDir, await escapedAtTimeout, "after timeout");
+		await finalizeJob(jobDir, "failed", `timeout after ${timeoutMs}ms`);
+	} else if (stopRequested || result.signal === "SIGTERM" || result.signal === "SIGKILL") {
 		await finalizeJob(jobDir, "stopped", "process group interrupted");
 	} else if (result.error) await finalizeJob(jobDir, "failed", result.error.message);
 	else if (result.code === 0) await finalizeJob(jobDir, "done", "pi exited 0");
