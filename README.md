@@ -161,7 +161,7 @@ One fact per file. Mutable writes use a temp file and rename. Terminal `state` i
 
 The optional wake extension shows a footer (`⠹ limen 1 · F003 tool:bash`), one start notice, and one terminal message. If the coordinator is busy, that message is steered. Display is advisory. If you miss it, the job files and branch are still there.
 
-The wake extension activates only in projects that contain `.agents/limen/`, so it may instead live globally at `~/.pi/agent/extensions/limen-wake.ts` and stay inert everywhere else. Keep one copy — global or project — or every wake arrives twice. `LIMEN_WAKE=0 pi` silences it for one session.
+The wake extension activates only in projects that contain `.agents/limen/`, so it may instead live globally at `~/.pi/agent/extensions/limen-wake.ts` and stay inert everywhere else. Keep one copy — global or project — or every wake arrives twice. `/limen off` mutes a live session (footer, wakes, and Herdr mirroring); `/limen on` resumes and delivers anything missed once; bare `/limen` toggles. `LIMEN_WAKE=0 pi` starts a session silent.
 
 When the coordinator runs inside a [Herdr](https://herdr.dev) pane (`HERDR_ENV=1`), the same extension mirrors that footer as a `limen` status token on the pane, so a backgrounded tab still names the running jobs, and raises one Herdr notification per terminal state (your Herdr notification settings decide whether it is shown). Set `LIMEN_HERDR=0` to opt out. Jobs are detached processes, not panes: spawn strips `HERDR_*` from the job environment so nothing inside a worker can misreport the coordinator's pane.
 

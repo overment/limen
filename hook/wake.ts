@@ -13,6 +13,14 @@ type Context = {
 type PiApi = {
 	on(event: "session_start" | "session_shutdown", handler: (event: unknown, context: Context) => void): void;
 	sendUserMessage(content: string, options?: { readonly deliverAs: "steer" }): void;
+	registerCommand?(
+		name: string,
+		options: {
+			readonly description: string;
+			getArgumentCompletions?(prefix: string): ReadonlyArray<{ readonly value: string; readonly label: string }> | null;
+			handler(args: string, context: { readonly ui: { notify(message: string, level: "info"): void } }): void;
+		},
+	): void;
 };
 
 const SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"] as const;
@@ -24,6 +32,10 @@ export default function limenWake(pi: PiApi): void {
 	let statusBody = "";
 	let frame = 0;
 	let active = false;
+	let muted = false;
+	let session: Context | undefined;
+	let jobsDir: string | undefined;
+	let observeJob: ((id: string) => void) | undefined;
 	const seen = new Set<string>();
 	let herdr: HerdrPane | undefined;
 	let herdrSeq = Date.now();
@@ -82,6 +94,8 @@ export default function limenWake(pi: PiApi): void {
 			return;
 		}
 		active = true;
+		session = context;
+		jobsDir = jobs;
 		herdr = herdrTarget();
 		for (const id of readdirSync(jobs)) {
 			const state = stateOf(jobs, id);
@@ -104,8 +118,10 @@ export default function limenWake(pi: PiApi): void {
 			if (context.isIdle()) pi.sendUserMessage(message);
 			else pi.sendUserMessage(message, { deliverAs: "steer" });
 		};
+		observeJob = observe;
 		watcher = watch(jobs, { recursive: true }, (_kind, filename) => {
 			try {
+				if (muted) return;
 				const parts = filename?.toString().split(/[\\/]/);
 				const id = parts?.[0];
 				const file = parts?.at(-1);
@@ -130,6 +146,26 @@ export default function limenWake(pi: PiApi): void {
 		watcher?.close();
 		watcher = undefined;
 		clearStatus(context);
+	});
+	if (process.env.LIMEN_JOB === "1") return;
+	pi.registerCommand?.("limen", {
+		description: "Mute or resume limen job display and wakes for this session",
+		getArgumentCompletions(prefix) {
+			const items = ["on", "off"].filter((value) => value.startsWith(prefix)).map((value) => ({ value, label: value }));
+			return items.length ? items : null;
+		},
+		handler(args, commandContext) {
+			const request = args.trim();
+			muted = request === "on" ? false : request === "off" ? true : !muted;
+			if (active && session && jobsDir) {
+				if (muted) clearStatus(session);
+				else {
+					for (const id of readdirSync(jobsDir)) observeJob?.(id);
+					updateStatus(jobsDir, session);
+				}
+			}
+			commandContext.ui.notify(`limen wake ${muted ? "off" : "on"}${active ? "" : " (inactive here)"}`, "info");
+		},
 	});
 }
 

@@ -33,7 +33,8 @@ test("strict TypeScript and templates preserve the capability-judgment line", as
 	const tsconfig = await readFile(join(ROOT, "tsconfig.json"), "utf8");
 	for (const option of ["strict", "noUncheckedIndexedAccess", "exactOptionalPropertyTypes", "erasableSyntaxOnly"]) assert.match(tsconfig, new RegExp(`"${option}": true`));
 	const sourceAndHook = await Promise.all((await filesBelow(join(ROOT, "src"))).concat(await filesBelow(join(ROOT, "hook"))).map((path) => readFile(path, "utf8")));
-	assert.doesNotMatch(sourceAndHook.join("\n"), /registerTool|registerCommand|contentHash|receipt|watchdog|schema/);
+	assert.doesNotMatch(sourceAndHook.join("\n"), /registerTool|contentHash|receipt|watchdog|schema/);
+	assert.doesNotMatch((await Promise.all((await filesBelow(join(ROOT, "src"))).map((path) => readFile(path, "utf8")))).join("\n"), /registerCommand/);
 	const agents = await readFile(join(ROOT, "templates/agents.md"), "utf8");
 	for (const phrase of [
 		"human-owned",

@@ -156,6 +156,56 @@ test("wake stays out of foreign projects and honors LIMEN_WAKE=0", async (contex
 	assert.deepEqual(disabled.statuses, []);
 });
 
+test("/limen off mutes the session and /limen on catches up once", async (context) => {
+	stashEnv(context, "LIMEN_JOB", undefined);
+	stashEnv(context, "LIMEN_HERDR", "0");
+	const root = await import("node:fs/promises").then(({ mkdtemp }) => mkdtemp(join(process.env.TMPDIR ?? "/tmp", "limen-mute-")));
+	context.after(() => import("node:fs/promises").then(({ rm }) => rm(root, { recursive: true, force: true })));
+	await mkdir(join(root, ".agents/limen"), { recursive: true });
+	const jobs = join(root, ".limen/jobs");
+	const handlers = new Map<string, (event: unknown, context: TestContext) => void>();
+	let command: ((args: string, context: { ui: { notify(message: string, level: "info"): void } }) => void) | undefined;
+	const messages: string[] = [];
+	const statuses: Array<string | undefined> = [];
+	limenWake({
+		on(event, handler) {
+			handlers.set(event, handler);
+		},
+		sendUserMessage(content) {
+			messages.push(content);
+		},
+		registerCommand(name, options) {
+			assert.equal(name, "limen");
+			command = options.handler;
+		},
+	});
+	assert.ok(command, "the /limen command must register");
+	const confirmations: string[] = [];
+	const commandUi = { ui: { notify: (message: string) => confirmations.push(message) } };
+	const session = { cwd: root, isIdle: () => true, ui: { notify() {}, setStatus: (_key: string, value: string | undefined) => statuses.push(value) } };
+	handlers.get("session_start")?.({}, session);
+	context.after(() => handlers.get("session_shutdown")?.({}, session));
+	command("off", commandUi);
+	assert.deepEqual(confirmations, ["limen wake off"]);
+	await mkdir(join(jobs, "quiet"), { recursive: true });
+	await writeFile(join(jobs, "quiet/label"), "F002 quiet work\n");
+	await writeFile(join(jobs, "quiet/branch"), "candidate\n");
+	await writeFile(join(jobs, "quiet/state"), "done\n");
+	await new Promise((resolve) => setTimeout(resolve, 150));
+	assert.deepEqual(messages, [], "a muted session must not receive wakes");
+	assert.deepEqual(
+		statuses.filter((value) => value !== undefined),
+		[],
+		"a muted session must not draw the footer",
+	);
+	command("on", commandUi);
+	assert.deepEqual(confirmations, ["limen wake off", "limen wake on"]);
+	await waitUntil(() => messages.length === 1);
+	assert.match(messages[0] ?? "", /F002 quiet work is done \(quiet\)/);
+	command("", commandUi);
+	assert.equal(confirmations.at(-1), "limen wake off", "bare /limen must toggle");
+});
+
 test("herdr pane naming follows running jobs and each terminal state notifies once", async (context) => {
 	stashEnv(context, "LIMEN_JOB", undefined);
 	const root = await import("node:fs/promises").then(({ mkdtemp }) => mkdtemp(join(process.env.TMPDIR ?? "/tmp", "limen-herdr-")));
