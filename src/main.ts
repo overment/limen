@@ -1,4 +1,4 @@
-import { initCommand } from "./commands/init.ts";
+import { initCommand, workspaceCommand } from "./commands/init.ts";
 import { jobsCommand } from "./commands/jobs.ts";
 import { migrateCommand } from "./commands/migrate.ts";
 import { spawnCommand } from "./commands/spawn.ts";
@@ -9,17 +9,20 @@ import { failInternalJob, runInternalJob } from "./proc.ts";
 type Command = (args: readonly string[], cwd: string) => Promise<void>;
 const COMMANDS = {
 	init: initCommand,
+	workspace: workspaceCommand,
 	migrate: migrateCommand,
 	spawn: spawnCommand,
 	stop: stopCommand,
 	wait: waitCommand,
 	jobs: jobsCommand,
-} as const satisfies Record<"init" | "migrate" | "spawn" | "stop" | "wait" | "jobs", Command>;
+} as const satisfies Record<"init" | "workspace" | "migrate" | "spawn" | "stop" | "wait" | "jobs", Command>;
 const HELP = `limen — isolated coding jobs with files and git
 usage:
   limen init
+  limen workspace init
   limen migrate
   limen spawn "Implement FNNN: <outcome>. Start by writing <slice>. Ticket: spec/features/active/FNNN-slug/ticket.md" [--label L] [--model X] [--branch B] [--timeout 20m]
+  limen spawn --repo R "Implement FNNN: <outcome>. Ticket: spec/features/active/FNNN-slug/ticket.md" [--label L] [--model X]
   limen spawn --review --branch B --label L "Review the FNNN candidate against spec/features/active/FNNN-slug/ticket.md"
   limen wait <id|suffix|label>
   limen stop <id|suffix|label> [reason]

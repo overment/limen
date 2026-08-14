@@ -17,6 +17,10 @@ This repository uses plain specifications, Git, and `limen` to coordinate one hu
 
 A useful ticket states the outcome, scope, out-of-scope work, and observable acceptance. Write enough context for one worker to execute without hand-holding. Escalate genuine product ambiguity to the human as a clear question; a blocked worker is not itself a product decision.
 
+## Adjacent-repository workspace
+
+When this non-Git coordinator directory was initialized with `limen workspace init`, `spec/workspace.md` is the human-owned map of its immediate child repositories. Read it to choose the correct target, then run every job from this parent with `--repo <directory>`. One job owns one Git child: branches, worktrees, review, and diffs stay in that repository. Keep the ticket under this parent’s `spec/`; Limen turns a conventional `Ticket: spec/...` pointer into an absolute path for the worker. Do not invent a repository registry or ask one job to coordinate multiple repositories.
+
 ## Default loop
 
 Read the board and ticket, then use judgment proportional to the stakes:

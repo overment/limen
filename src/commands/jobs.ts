@@ -1,9 +1,9 @@
 import { open, readdir, readFile, stat } from "node:fs/promises";
-import { liveDiffstat, repoRoot } from "../git.ts";
+import { limenRoot, liveDiffstat, workspaceRepository } from "../git.ts";
 import { derivePulse, parseJob, renderJob } from "../job.ts";
 import { processGroupAlive } from "../proc.ts";
 export async function jobsCommand(_args: readonly string[], cwd: string): Promise<void> {
-	const root = repoRoot(cwd);
+	const root = limenRoot(cwd);
 	const jobsRoot = `${root}/.limen/jobs`;
 	const entries = await readdir(jobsRoot, { withFileTypes: true }).catch((error: unknown) => {
 		if (typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT") return [];
@@ -22,10 +22,11 @@ export async function jobsCommand(_args: readonly string[], cwd: string): Promis
 }
 async function renderJobDirectory(root: string, jobsRoot: string, id: string): Promise<string> {
 	const jobDir = `${jobsRoot}/${id}`;
-	const [state, label, branch, pid, started, finished, toolCalls, lastTool, activity, taskStat, logStat, log] = await Promise.all([
+	const [state, label, branch, repo, pid, started, finished, toolCalls, lastTool, activity, taskStat, logStat, log] = await Promise.all([
 		text(`${jobDir}/state`),
 		text(`${jobDir}/label`),
 		text(`${jobDir}/branch`),
+		text(`${jobDir}/repo`),
 		text(`${jobDir}/pid`),
 		text(`${jobDir}/started-at`),
 		text(`${jobDir}/finished-at`),
@@ -51,7 +52,7 @@ async function renderJobDirectory(root: string, jobsRoot: string, id: string): P
 		});
 		const observedAt = job.phase === "running" ? Date.now() : recordedDate(finished, new Date(), "finished-at").getTime();
 		const processAlive = job.phase === "running" && job.pid !== undefined && processGroupAlive(job.pid);
-		return renderJob(job, {
+		const rendered = renderJob(job, {
 			elapsedMs: observedAt - startedAt.getTime(),
 			silentMs: observedAt - logStat.mtimeMs,
 			...(toolCalls ? { toolCalls: recordedCount(toolCalls) } : {}),
@@ -66,9 +67,10 @@ async function renderJobDirectory(root: string, jobsRoot: string, id: string): P
 						...(job.pid !== undefined ? { processAlive } : {}),
 					}
 				: {}),
-			diffstat: liveDiffstat(root, branch),
+			diffstat: liveDiffstat(repo ? workspaceRepository(root, repo) : root, branch),
 			logTail: log.tail,
 		});
+		return repo ? `${rendered}\n  repo ${repo}` : rendered;
 	} catch (error: unknown) {
 		return `INVALID ${id} · ${error instanceof Error ? error.message : String(error)}${log.tail ? `\n  log:\n${log.tail}` : ""}`;
 	}

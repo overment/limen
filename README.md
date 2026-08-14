@@ -31,6 +31,39 @@ limen init
 
 `limen init` only creates files that are missing. Existing `AGENTS.md`, preambles, and specs are left untouched. If the shop manual in this repo has changed, copy it by hand. Restart the coordinator or `/reload` so project-local Pi extensions load.
 
+## Coordinate adjacent repositories
+
+For a non-Git parent directory that contains several independent Git repositories, initialize one workspace coordinator instead:
+
+```text
+~/playground/easy/
+  spec/                 shared intent and feature history; intentionally not Git-tracked here
+  .agents/limen/        coordinator, worker, and reviewer prompts
+  .limen/jobs/          runtime records for every child-repository job
+  easy-website/         Git repository
+  easycart/             Git repository
+  easytools-server/     Git repository
+```
+
+Run this from the parent, not a child repository:
+
+```bash
+cd ~/playground/easy
+limen workspace init
+```
+
+It creates the normal specs plus human-owned `spec/workspace.md`, where the coordinator records each adjacent repository's purpose. Limen never parses this map. Select one immediate Git child explicitly for every job:
+
+```bash
+limen spawn --repo easytools-server --label "F073 server slice" \
+  "Implement F073's server slice. Ticket: spec/features/active/F073-checkout/ticket.md"
+
+limen spawn --repo easytools-server --review --branch limen/<id> --label "F073 server review" \
+  "Review F073's server candidate. Ticket: spec/features/active/F073-checkout/ticket.md"
+```
+
+The selected child is the only repository a job owns: branches, worktrees, review, and diffs stay there. The job record names that repository, while the ticket's conventional `Ticket: spec/...` pointer becomes an absolute workspace path for the worker. A workspace has no repository manifest and no multi-repository job; split a cross-repository feature into clear repository slices. Run `jobs`, `wait`, and `stop` from the workspace parent.
+
 ### Migrate from Control
 
 Run `limen migrate` with no arguments in an initialized legacy project. Do not run `limen init`: it refuses legacy artifacts and directs you to migration so duplicate extensions cannot be created.
@@ -201,4 +234,4 @@ npm test
 npm run check
 ```
 
-Zero runtime dependencies. `src/` stays under 1100 lines. Change templates when behavior is wrong; do not add guards for judgment.
+Zero runtime dependencies. `src/` stays under 1200 lines. Change templates when behavior is wrong; do not add guards for judgment.

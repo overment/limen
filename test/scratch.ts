@@ -16,20 +16,30 @@ export async function scratchRepo(fakePi = defaultFakePi): Promise<Scratch> {
 	const parent = await mkdtemp(join(tmpdir(), "limen-test-"));
 	const root = join(parent, "repo");
 	const fakeBin = join(parent, "bin");
-	await mkdir(root);
+	await createRepository(root);
 	await mkdir(fakeBin);
+	await writeFakePi(fakeBin, fakePi);
+	return { root, fakeBin, cleanup: () => rm(parent, { recursive: true, force: true }) };
+}
+export async function scratchWorkspace(fakePi = defaultFakePi): Promise<Scratch & { readonly repositories: Readonly<Record<"api" | "web", string>> }> {
+	const parent = await mkdtemp(join(tmpdir(), "limen-workspace-"));
+	const root = join(parent, "workspace");
+	const fakeBin = join(parent, "bin");
+	const repositories = { api: join(root, "api"), web: join(root, "web") };
+	await mkdir(root);
+	await Promise.all(Object.values(repositories).map(createRepository));
+	await mkdir(fakeBin);
+	await writeFakePi(fakeBin, fakePi);
+	return { root, fakeBin, repositories, cleanup: () => rm(parent, { recursive: true, force: true }) };
+}
+async function createRepository(root: string): Promise<void> {
+	await mkdir(root);
 	git(root, "init", "-b", "main");
 	git(root, "config", "user.email", "limen@example.test");
 	git(root, "config", "user.name", "Limen Test");
 	await writeFile(join(root, "README.md"), "scratch\n");
 	git(root, "add", ".");
 	git(root, "commit", "-m", "initial");
-	await writeFakePi(fakeBin, fakePi);
-	return {
-		root,
-		fakeBin,
-		cleanup: () => rm(parent, { recursive: true, force: true }),
-	};
 }
 
 export function limen(scratch: Scratch, ...args: readonly string[]): { readonly stdout: string; readonly stderr: string; readonly status: number } {

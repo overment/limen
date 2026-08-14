@@ -1,9 +1,26 @@
 import { spawnSync } from "node:child_process";
-import { resolve } from "node:path";
+import { existsSync } from "node:fs";
+import { basename, resolve } from "node:path";
 export type GitWorktree = { readonly path: string; readonly branch?: string; readonly detached: boolean };
 type GitResult = { readonly stdout: string; readonly stderr: string; readonly status: number };
 export function repoRoot(cwd: string): string {
 	return requireGit(cwd, ["rev-parse", "--show-toplevel"]).stdout.trim();
+}
+export function workspaceRoot(cwd: string): string | undefined {
+	const root = resolve(cwd);
+	return existsSync(`${root}/.agents/limen`) && !isGitRepository(root) ? root : undefined;
+}
+export function limenRoot(cwd: string): string {
+	return workspaceRoot(cwd) ?? repoRoot(cwd);
+}
+export function isGitRepository(cwd: string): boolean {
+	return git(cwd, ["rev-parse", "--show-toplevel"]).status === 0;
+}
+export function workspaceRepository(workspace: string, name: string): string {
+	if (!name || basename(name) !== name || name === "." || name === "..") throw new Error("--repo must name one immediate child repository");
+	const repository = resolve(workspace, name);
+	if (repoRoot(repository) !== repository) throw new Error(`--repo ${JSON.stringify(name)} must be a Git repository directly below the workspace`);
+	return repository;
 }
 export function branchExists(cwd: string, branch: string): boolean {
 	requireGit(cwd, ["check-ref-format", "--branch", branch]);

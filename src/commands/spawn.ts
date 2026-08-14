@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { basename, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { addBranchWorktree, addDetachedWorktree, addNewWorktree, branchExists, repoRoot, worktreeForBranch } from "../git.ts";
+import { addBranchWorktree, addDetachedWorktree, addNewWorktree, branchExists, repoRoot, workspaceRepository, workspaceRoot, worktreeForBranch } from "../git.ts";
 import { parseDuration } from "../job.ts";
 import { atomicWrite, finalizeJob, launchWrapper, processGroupAlive, signalProcessGroup, waitForProcessGroup } from "../proc.ts";
 
@@ -10,6 +10,7 @@ type SpawnOptions = {
 	task: string;
 	label: string;
 	branch?: string;
+	repo?: string;
 	model?: string;
 	timeoutMs?: number;
 	review: boolean;
@@ -24,33 +25,40 @@ const HANDSHAKE_MS = 2_000;
 const HANDSHAKE_POLL_MS = 20;
 export async function spawnCommand(args: readonly string[], cwd: string): Promise<void> {
 	const options = parseSpawnArgs(args);
-	const root = repoRoot(cwd);
+	const workspace = workspaceRoot(cwd);
+	const root = workspace ?? repoRoot(cwd);
+	if (workspace && !options.repo) throw new Error("workspace spawn requires --repo <immediate-child>");
+	if (!workspace && options.repo) throw new Error("--repo is available only from a non-Git workspace coordinator");
+	const repository = workspace ? workspaceRepository(root, options.repo ?? "") : root;
+	const task = workspace ? workspaceTask(options.task, root, options.repo ?? "") : options.task;
 	const id = makeJobId(options.label);
 	const jobsRoot = `${root}/.limen/jobs`;
 	await mkdir(jobsRoot, { recursive: true });
 	const running = await countRunning(jobsRoot);
 	if (running > 0) console.log(`note: ${running} job${running === 1 ? "" : "s"} already running; starting another`);
 	const branch = options.branch ?? `limen/${id}`;
-	const worktreeRoot = `${dirname(root)}/.${basename(root)}-limen-worktrees`;
+	const worktreeRoot = `${dirname(repository)}/.${basename(repository)}-limen-worktrees`;
 	const requestedPath = `${worktreeRoot}/${id}`;
 	await mkdir(worktreeRoot, { recursive: true });
 	const worktree = executeWorktree(
-		root,
+		repository,
 		await planWorktree({
-			root,
+			root: repository,
 			requestedPath,
 			branch,
 			review: options.review,
 			jobsRoot,
+			...(workspace ? { repo: options.repo ?? "" } : {}),
 			...(options.branch ? { requestedBranch: options.branch } : {}),
 		}),
 	);
 	const jobDir = `${jobsRoot}/${id}`;
 	await mkdir(jobDir);
 	await Promise.all([
-		writeFile(`${jobDir}/task.md`, `${options.task.trim()}\n`, { flag: "wx", flush: true }),
+		writeFile(`${jobDir}/task.md`, `${task.trim()}\n`, { flag: "wx", flush: true }),
 		writeFile(`${jobDir}/label`, `${options.label}\n`, { flag: "wx", flush: true }),
 		writeFile(`${jobDir}/branch`, `${branch}\n`, { flag: "wx", flush: true }),
+		...(workspace ? [writeFile(`${jobDir}/repo`, `${options.repo}\n`, { flag: "wx", flush: true })] : []),
 		writeFile(`${jobDir}/started-at`, `${new Date().toISOString()}\n`, { flag: "wx", flush: true }),
 		writeFile(`${jobDir}/tool-calls`, "0\n", { flag: "wx", flush: true }),
 		writeFile(`${jobDir}/last-tool`, "", { flag: "wx", flush: true }),
@@ -93,6 +101,7 @@ async function planWorktree(input: {
 	readonly branch: string;
 	readonly review: boolean;
 	readonly requestedBranch?: string;
+	readonly repo?: string;
 	readonly jobsRoot: string;
 }): Promise<WorktreePlan> {
 	const { root, requestedPath: path, branch } = input;
@@ -104,7 +113,7 @@ async function planWorktree(input: {
 	if (!branchExists(root, branch)) return { kind: "add-new", path, branch };
 	const existing = worktreeForBranch(root, branch);
 	if (existing && resolve(existing.path) === resolve(root)) throw new Error(`branch ${branch} is checked out in the primary worktree; isolation is impossible`);
-	if (await liveJobUsesBranch(input.jobsRoot, branch)) throw new Error(`branch ${branch} already has a live job`);
+	if (await liveJobUsesBranch(input.jobsRoot, branch, input.repo)) throw new Error(`branch ${branch} already has a live job`);
 	return existing ? { kind: "reuse", path: existing.path } : { kind: "add-branch", path, branch };
 }
 function executeWorktree(root: string, plan: WorktreePlan): string {
@@ -115,6 +124,7 @@ function executeWorktree(root: string, plan: WorktreePlan): string {
 }
 function parseSpawnArgs(args: readonly string[]): SpawnOptions {
 	let branch: string | undefined;
+	let repo: string | undefined;
 	let label: string | undefined;
 	let model: string | undefined;
 	let timeoutMs: number | undefined;
@@ -126,13 +136,16 @@ function parseSpawnArgs(args: readonly string[]): SpawnOptions {
 		if (!value) continue;
 		if (value === "--") positional = true;
 		else if (!positional && value === "--review") review = true;
-		else if (!positional && (value === "--branch" || value === "--label" || value === "--model" || value === "--timeout")) {
+		else if (!positional && (value === "--branch" || value === "--repo" || value === "--label" || value === "--model" || value === "--timeout")) {
 			const optionValue = args[index + 1];
 			if (!optionValue) throw new Error(`${value} requires a value`);
 			index += 1;
 			if (value === "--branch") {
 				if (branch) throw new Error("--branch may be supplied only once");
 				branch = optionValue;
+			} else if (value === "--repo") {
+				if (repo) throw new Error("--repo may be supplied only once");
+				repo = optionValue;
 			} else if (value === "--label") {
 				if (label) throw new Error("--label may be supplied only once");
 				label = normalizeLabel(optionValue);
@@ -153,9 +166,14 @@ function parseSpawnArgs(args: readonly string[]): SpawnOptions {
 		label: label ?? (taskText.trim().split(/\r?\n/, 1)[0]?.trim().slice(0, 80) || "job"),
 		review,
 		...(branch ? { branch } : {}),
+		...(repo ? { repo } : {}),
 		...(model ? { model } : {}),
 		...(timeoutMs ? { timeoutMs } : {}),
 	};
+}
+function workspaceTask(task: string, root: string, repo: string): string {
+	const pointer = task.replace(/\bTicket: (spec\/\S+)/g, (_all, path: string) => `Ticket: ${root}/${path}`);
+	return `Repository: ${repo}. Work only in this repository.\n\n${pointer}`;
 }
 function normalizeLabel(value: string): string {
 	const label = value.trim();
@@ -172,12 +190,12 @@ async function countRunning(jobsRoot: string): Promise<number> {
 	for (const entry of entries) if (entry.isDirectory() && (await liveJob(`${jobsRoot}/${entry.name}`))) count += 1;
 	return count;
 }
-async function liveJobUsesBranch(jobsRoot: string, branch: string): Promise<boolean> {
+async function liveJobUsesBranch(jobsRoot: string, branch: string, repo?: string): Promise<boolean> {
 	const entries = await readdir(jobsRoot, { withFileTypes: true });
 	for (const entry of entries) {
 		if (!entry.isDirectory()) continue;
 		const jobDir = `${jobsRoot}/${entry.name}`;
-		if ((await text(`${jobDir}/branch`)) === branch && (await liveJob(jobDir))) return true;
+		if ((await text(`${jobDir}/branch`)) === branch && (!repo || (await text(`${jobDir}/repo`)) === repo) && (await liveJob(jobDir))) return true;
 	}
 	return false;
 }

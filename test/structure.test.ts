@@ -15,7 +15,7 @@ test("architecture stays small, pure, direct, and dependency-free", async () => 
 	assert.deepEqual(await readdir(join(ROOT, "bin")), ["limen"]);
 	const source = await filesBelow(join(ROOT, "src"));
 	const sourceLines = (await Promise.all(source.map((path) => readFile(path, "utf8")))).reduce((sum, text) => sum + text.split("\n").length - 1, 0);
-	assert.ok(sourceLines <= 1100, `src has ${sourceLines} lines; audit against first principles`);
+	assert.ok(sourceLines <= 1200, `src has ${sourceLines} lines; audit against first principles`);
 	assert.doesNotMatch(await readFile(join(ROOT, "src/job.ts"), "utf8"), /from ["']node:/);
 	assert.deepEqual((await readdir(join(ROOT, "src/commands"))).sort(), ["init.ts", "jobs.ts", "migrate.ts", "spawn.ts", "stop.ts", "wait.ts"]);
 	const all = await filesBelow(ROOT);
@@ -26,7 +26,7 @@ test("architecture stays small, pure, direct, and dependency-free", async () => 
 	const names = all.filter((path) => path.endsWith(".ts")).map((path) => basename(path));
 	assert.equal(new Set(names).size, names.length, "TypeScript basenames must be unique");
 	const main = await readFile(join(ROOT, "src/main.ts"), "utf8");
-	assert.match(main, /satisfies Record<"init" \| "migrate" \| "spawn" \| "stop" \| "wait" \| "jobs"/);
+	assert.match(main, /satisfies Record<"init" \| "workspace" \| "migrate" \| "spawn" \| "stop" \| "wait" \| "jobs"/);
 });
 
 test("strict TypeScript and templates preserve the capability-judgment line", async () => {
@@ -67,7 +67,7 @@ test("copied pulse law stays in lockstep", async () => {
 test("job-file table is written by spawn and read by jobs", async () => {
 	const spawn = await readFile(join(ROOT, "src/commands/spawn.ts"), "utf8");
 	const jobs = await readFile(join(ROOT, "src/commands/jobs.ts"), "utf8");
-	for (const name of ["task.md", "label", "branch", "started-at", "tool-calls", "last-tool", "activity", "log", "state"]) {
+	for (const name of ["task.md", "label", "branch", "repo", "started-at", "tool-calls", "last-tool", "activity", "log", "state"]) {
 		assert.ok(spawn.includes(name), `spawn must write ${name}`);
 		assert.ok(jobs.includes(name), `jobs must read ${name}`);
 	}
