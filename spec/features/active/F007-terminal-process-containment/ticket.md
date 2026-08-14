@@ -27,11 +27,11 @@ Stopping or timing out a Limen job leaves no silently surviving job-started proc
 - After the fix: `limen stop` and `--timeout` terminate a deliberately escaping child, or the job record contains a cleanup note naming it; the test covers both branches.
 - `limen jobs <id>` shows the cleanup note when present.
 - Existing stop/timeout tests still pass; `npm run check` is green.
-- On macOS, the test proves a PID-reuse collision cannot signal the unrelated replacement process.
+- On macOS, cleanup uses the native microsecond birth identity, rejects an observed PID replacement before signaling it, and writes an advisory warning whenever identity cannot be confirmed. It remains best-effort: macOS exposes no atomic verify-and-signal handle.
 - `templates/reviewer.md` carries the runtime-setup finding rule.
 
 ## Notes
 
 Motivating incident: the F001 Easy review's bounded Pages smoke test launched wrangler/workerd, which escaped the process group; `limen stop` marked the job stopped while workerd survived and the review lost its verdict. Investigation record: agent cf3662de, 2026-08-14.
 
-[2026-08-14] Human decision: narrow F007 to macOS so cleanup can use a trustworthy platform process identity rather than claim portable PID safety.
+[2026-08-14] Human decision: narrow F007 to macOS so cleanup can use a trustworthy platform process identity rather than claim portable PID safety. Survey: `macos-process-identity.md` documents the `proc_pidinfo` birth-identity boundary; this is best-effort, not sandbox-grade containment.
