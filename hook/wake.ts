@@ -55,7 +55,10 @@ export default function limenWake(pi: PiApi): void {
 		if (body === herdrToken && (body === "" || Date.now() - herdrTokenAt < 60_000)) return;
 		herdrToken = body;
 		herdrTokenAt = Date.now();
-		const change = body ? ["--token", `limen=${body}`, "--ttl-ms", "180000"] : ["--clear-token", "limen"];
+		// The idle/done state labels make a backgrounded coordinator read as busy while jobs run.
+		const change = body
+			? ["--token", `limen=${body}`, "--state-label", `idle=${body}`, "--state-label", `done=${body}`, "--ttl-ms", "180000"]
+			: ["--clear-token", "limen", "--clear-state-labels"];
 		herdrCall(["pane", "report-metadata", herdr.pane, "--source", "limen", "--seq", String((herdrSeq += 1)), ...change]);
 	};
 	const clearStatus = (context: Context) => {

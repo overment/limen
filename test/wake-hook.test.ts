@@ -240,7 +240,10 @@ test("herdr pane naming follows running jobs and each terminal state notifies on
 	assert.deepEqual(naming.slice(0, 5), ["pane", "report-metadata", "w1:p1", "--source", "limen"]);
 	const tokenAt = naming.indexOf("limen=1 · F001 starting");
 	assert.equal(naming[tokenAt - 1], "--token");
-	assert.equal(naming[tokenAt + 1], "--ttl-ms");
+	assert.equal(naming[tokenAt + 1], "--state-label");
+	assert.equal(naming[tokenAt + 2], "idle=1 · F001 starting");
+	assert.equal(naming[tokenAt + 4], "done=1 · F001 starting");
+	assert.equal(naming[tokenAt + 5], "--ttl-ms");
 	await writeFile(join(jobs, "new/state"), "done\n");
 	await waitUntilAsync(async () => (await readCalls(calls)).some((call) => call[0] === "notification"));
 	await waitUntilAsync(async () => (await readCalls(calls)).some((call) => call.includes("--clear-token")));
@@ -251,6 +254,7 @@ test("herdr pane naming follows running jobs and each terminal state notifies on
 	assert.ok(clear, "clear-token call expected");
 	assert.deepEqual(clear.slice(0, 5), ["pane", "report-metadata", "w1:p1", "--source", "limen"]);
 	assert.equal(clear[clear.indexOf("--clear-token") + 1], "limen");
+	assert.ok(clear.includes("--clear-state-labels"), "finished jobs must restore the pane's own state label");
 });
 
 function stashEnv(context: { after(fn: () => void): void }, name: string, value: string | undefined): void {
