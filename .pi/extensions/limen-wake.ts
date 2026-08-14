@@ -82,30 +82,55 @@ export default function limenWake(pi: PiApi): void {
 			"--clear-state-labels",
 		]);
 	};
-	const clearStatus = (context: Context, reportHerdr = true) => {
+	const stopTimers = () => {
+		if (statusTimer) clearInterval(statusTimer);
+		statusTimer = undefined;
+		if (sweepTimer) clearInterval(sweepTimer);
+		sweepTimer = undefined;
+		if (changeTimer) clearTimeout(changeTimer);
+		changeTimer = undefined;
+	};
+	const setStatus = (value: string | undefined) => {
+		if (!session) return;
+		try {
+			session.ui.setStatus("limen", value);
+		} catch {
+			// `/reload` and session replacement invalidate the captured ctx; never crash Pi.
+			retire(false);
+		}
+	};
+	const retire = (reportHerdr = true) => {
+		active = false;
+		session = undefined;
+		stopTimers();
+		statusBody = "";
+		frame = 0;
+		if (reportHerdr) herdrReport("", "");
+	};
+	const clearStatus = (reportHerdr = true) => {
 		if (statusTimer) clearInterval(statusTimer);
 		statusTimer = undefined;
 		statusBody = "";
 		frame = 0;
-		context.ui.setStatus("limen", undefined);
+		setStatus(undefined);
 		if (reportHerdr) herdrReport("", "");
 	};
-	const drawStatus = (context: Context) => {
-		if (muted || !statusBody) return;
-		context.ui.setStatus("limen", `${SPINNER[frame]} ${statusBody}`);
+	const drawStatus = () => {
+		if (!active || muted || !statusBody || !session) return;
+		setStatus(`${SPINNER[frame]} ${statusBody}`);
 		frame = (frame + 1) % SPINNER.length;
 	};
-	const updateStatus = (jobs: string, context: Context) => {
+	const updateStatus = (jobs: string) => {
 		const next = runningDisplay(jobs, sessionId);
 		if (!next) {
-			clearStatus(context);
+			clearStatus();
 			return;
 		}
 		statusBody = next.status;
 		herdrReport(next.status.slice("limen ".length), next.title, next.pulses);
-		drawStatus(context);
+		drawStatus();
 		if (!statusTimer) {
-			statusTimer = setInterval(() => drawStatus(context), 120);
+			statusTimer = setInterval(drawStatus, 120);
 			statusTimer.unref();
 		}
 	};
@@ -147,7 +172,13 @@ export default function limenWake(pi: PiApi): void {
 		const label = text(join(job, "label")) || id;
 		const branch = text(join(job, "branch"));
 		if (own && state !== "running" && !deliveryExists(job, sessionId) && !deliveryExists(job, "_fallback")) notifyHerdr(job, id, state, label, branch, sessionId);
-		if (own && state === "running" && !muted && claimMarker(job, "started", sessionId)) session.ui.notify(`limen: ${label} started (${id})`, "info");
+		if (own && state === "running" && !muted && claimMarker(job, "started", sessionId)) {
+			try {
+				session.ui.notify(`limen: ${label} started (${id})`, "info");
+			} catch {
+				retire(false);
+			}
+		}
 		if (state === "running" || muted) return;
 		if (own) sendCompletion(jobs, id, state, false);
 		else if (oldEnoughForFallback(job)) sendCompletion(jobs, id, state, true);
@@ -160,7 +191,7 @@ export default function limenWake(pi: PiApi): void {
 				if (stateOf(jobsDir, id) === "running" && !routable(job)) enrollLegacyRunning(job);
 				observe(jobsDir, id);
 			}
-			updateStatus(jobsDir, session);
+			updateStatus(jobsDir);
 		} catch {
 			// Display and delivery are advisory; durable state remains on disk.
 		}
@@ -176,6 +207,7 @@ export default function limenWake(pi: PiApi): void {
 	pi.on("session_start", (_event, context) => {
 		if (process.env.LIMEN_JOB === "1" || process.env.LIMEN_WAKE === "0") return;
 		if (!existsSync(join(context.cwd, ".agents", "limen"))) return;
+		stopTimers();
 		const id = context.sessionManager.getSessionId();
 		if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(id)) return;
 		const jobs = join(context.cwd, ".limen", "jobs");
@@ -198,23 +230,18 @@ export default function limenWake(pi: PiApi): void {
 		watcher.unref();
 		watcher.on("error", () => {
 			watcher?.close();
-			clearStatus(context);
+			clearStatus();
 		});
 		sweepTimer = setInterval(sweep, 500);
 		sweepTimer.unref();
 		sweep();
 	});
 	pi.on("agent_settled", sweep);
-	pi.on("session_shutdown", (_event, context) => {
-		if (!active) return;
-		active = false;
+	pi.on("session_shutdown", () => {
+		if (!active && !statusTimer && !sweepTimer) return;
 		watcher?.close();
 		watcher = undefined;
-		if (sweepTimer) clearInterval(sweepTimer);
-		sweepTimer = undefined;
-		if (changeTimer) clearTimeout(changeTimer);
-		changeTimer = undefined;
-		clearStatus(context, false);
+		retire(false);
 		releaseHerdr();
 	});
 	if (process.env.LIMEN_JOB === "1") return;
@@ -228,7 +255,7 @@ export default function limenWake(pi: PiApi): void {
 			const request = args.trim();
 			muted = request === "on" ? false : request === "off" ? true : !muted;
 			if (active && session && jobsDir) {
-				if (muted) session.ui.setStatus("limen", undefined);
+				if (muted) setStatus(undefined);
 				else sweep();
 			}
 			commandContext.ui.notify(`limen wake ${muted ? "off" : "on"}${active ? "" : " (inactive here)"}`, "info");

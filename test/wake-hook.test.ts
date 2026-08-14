@@ -542,6 +542,42 @@ test("herdr surfaces stay live while the conversation is muted", async (context)
 	assert.equal((await readCalls(calls)).filter((call) => call[0] === "notification").length, 1, "unmute must not repeat the herdr notification");
 });
 
+test("wake does not crash Pi after a stale reload context", async (context) => {
+	stashEnv(context, "LIMEN_JOB", undefined);
+	stashEnv(context, "LIMEN_HERDR", "0");
+	const root = await import("node:fs/promises").then(({ mkdtemp }) => mkdtemp(join(process.env.TMPDIR ?? "/tmp", "limen-wake-stale-")));
+	context.after(() => import("node:fs/promises").then(({ rm }) => rm(root, { recursive: true, force: true })));
+	await mkdir(join(root, ".agents/limen"), { recursive: true });
+	const jobs = join(root, ".limen/jobs");
+	const handlers = new Map<string, (event: unknown, context: TestContext) => void>();
+	limenWake({
+		on(event, handler) {
+			handlers.set(event, handler);
+		},
+		sendUserMessage() {},
+	});
+	const session = {
+		cwd: root,
+		isIdle: () => true,
+		sessionManager: sessionManager("coordinator-a"),
+		ui: {
+			notify() {},
+			setStatus() {
+				throw new Error("This extension ctx is stale after session replacement or reload.");
+			},
+		},
+	};
+	handlers.get("session_start")?.({}, session);
+	context.after(() => handlers.get("session_shutdown")?.({}, session));
+	await mkdir(join(jobs, "new"), { recursive: true });
+	await writeFile(join(jobs, "new/label"), "F001 implementation\n");
+	await writeFile(join(jobs, "new/branch"), "candidate\n");
+	await subscribe(jobs, "new", "coordinator-a");
+	await writeFile(join(jobs, "new/state"), "running\n");
+	await new Promise((resolve) => setTimeout(resolve, 250));
+	handlers.get("session_shutdown")?.({}, session);
+});
+
 function sessionManager(id: string): { getSessionId(): string } {
 	return { getSessionId: () => id };
 }
