@@ -26,7 +26,11 @@ proc_pidinfo = Fiddle::Function.new(
 )
 buffer = "\0".b * PROC_BSDINFO_SIZE
 size = proc_pidinfo.call(pid, PROC_PIDTBSDINFO, 0, buffer, buffer.bytesize)
-exit 1 if size < PROC_BSDINFO_SIZE
+if size < PROC_BSDINFO_SIZE
+  absent = size.zero? && Fiddle.last_error == Errno::ESRCH::Errno
+  puts JSON.generate({ status: "absent" }) if absent
+  exit(absent ? 0 : 1)
+end
 
 actual_pid = buffer.byteslice(12, 4).unpack1("L<")
 exit 1 unless actual_pid == pid

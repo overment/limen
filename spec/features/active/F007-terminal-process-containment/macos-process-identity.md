@@ -43,13 +43,15 @@ observational only and must never be part of the identity comparison.
    `src/proc.ts` can be replaced by the helper's `ppid`/`pgid` data; this also
    removes format-sensitive `ps` parsing.
 2. Just before **each** `SIGTERM` and `SIGKILL`, query that exact PID again.
-   Signal only when `{ pid, born }` equals the captured identity. A missing,
-   malformed, changed, timed-out, or permission-denied query is *unconfirmed*:
-   do not signal it and record the captured PID, birth identity, and last known
-   command in `cleanup`.
+   The query has three outcomes: the present identity, confirmed absence, or
+   unavailable (including malformed, timed-out, and permission-denied helper
+   results). Signal only when `{ pid, born }` exactly matches the captured
+   identity. Before a signal, a changed or unavailable result records the
+   captured process in `cleanup`; confirmed absence needs no signal or warning.
 3. Re-query after each grace period. A matching identity still present becomes
-   a durable survivor; a changed or absent identity is not a survivor owned by
-   this job.
+   a durable survivor. Confirmed absence or a changed identity proves the
+   captured process is gone and writes no cleanup warning; unavailable remains
+   cleanup-worthy.
 
 The two queries and `kill(2)` are necessarily separate ordinary-user system
 calls. macOS has no public pidfd-style, race-free signal handle usable here;
@@ -63,9 +65,10 @@ Discovery and cleanup remain advisory, but attribution must finish while the
 wrapper's parent chain is intact. Await the bounded pre-TERM process snapshot,
 including captured birth identities, before sending the process-group TERM.
 A failed or timed-out snapshot writes `cleanup`; after that short bound,
-termination and terminal-state finalization proceed normally. Each process
-query remains bounded (currently at one second) and its own detached process
-group is killed on expiry.
+termination and terminal-state finalization proceed normally. The `ps` scan
+and all birth-identity captures share one aggregate one-second deadline. Every
+bounded subprocess receives that deadline, and its detached process group is
+killed when the remaining time expires.
 
 Only the ownership snapshot sits on the stop/timeout path. After TERM, identity
 rechecks, escaped-process TERM/KILL grace periods, and survivor recording
@@ -87,7 +90,9 @@ the discovery failure rather than broadening cleanup into a pattern kill.
    sent to B and `cleanup` records an unconfirmed replacement.
 4. Make process discovery sleep past its bound for both `limen stop` and
    `--timeout`. Assert each path waits no longer than that short bound, writes a
-   cleanup warning, and then reaches its terminal state.
+   cleanup warning, and then reaches its terminal state. Also delay `ps` by
+   900ms and assert TERM follows within the aggregate one-second query bound
+   plus a small scheduling tolerance.
 5. On a real macOS runner, repeat the detached-child stop/timeout test and
    assert the captured identity matches before the child receives KILL. Run
    `npm run check`.

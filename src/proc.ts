@@ -16,9 +16,10 @@ const toolCallCap = (): number => Number(process.env.LIMEN_MAX_TOOL_CALLS) || MA
 export type ProcessIdentity = { readonly pid: number; readonly born: string };
 export type JobProcess = ProcessIdentity & { readonly pgid: number; readonly command: string };
 type ProcessInfo = JobProcess & { readonly ppid: number };
+export type ProcessQueryOutcome = { readonly kind: "present"; readonly process: ProcessInfo } | { readonly kind: "absent" } | { readonly kind: "unavailable" };
 type ProcessTableRow = { readonly pid: number; readonly ppid: number; readonly pgid: number; readonly state: string };
 type ContainmentDependencies = {
-	readonly query?: (pid: number) => Promise<ProcessIdentity | undefined>;
+	readonly query?: (pid: number) => Promise<ProcessQueryOutcome>;
 	readonly signal?: (pid: number, signal: NodeJS.Signals) => "sent" | "missing" | "denied";
 };
 export async function atomicWrite(path: string, content: string): Promise<void> {
@@ -62,7 +63,8 @@ export function processAlive(pid: number): boolean {
 }
 // Snapshot ancestry before the wrapper group dies; proc_pidinfo supplies the identity used to signal.
 export async function listEscapedDescendants(rootPid: number): Promise<readonly JobProcess[]> {
-	const table = await processTable();
+	const deadline = Date.now() + PROCESS_QUERY_TIMEOUT_MS;
+	const table = await processTable(deadline);
 	const root = table.find((row) => row.pid === rootPid);
 	if (!root || root.state.startsWith("Z")) throw new Error(`root process ${rootPid} was missing or terminal in process snapshot`);
 	const escaped: Array<{ pid: number; pgid: number }> = [],
@@ -77,10 +79,15 @@ export async function listEscapedDescendants(rootPid: number): Promise<readonly 
 			if (!row.state.startsWith("Z")) liveJobDescendant = true;
 			if (row.pgid !== rootPid) escaped.push(row);
 		}
-	// The wrapper has a live Pi child until the ownership chain is useful. An empty
-	// post-TERM tree is attribution loss, not proof that no detached child escaped.
+	// The wrapper needs a live Pi child: an empty post-TERM tree is attribution loss, not proof that no detached child escaped.
 	if (!liveJobDescendant) throw new Error(`root process ${rootPid} was missing or terminal in process snapshot`);
-	return Promise.all(escaped.map(async (row) => (await processInfo(row.pid)) ?? { ...row, born: "identity-unavailable", command: "identity unavailable" }));
+	const captured = await Promise.all(
+		escaped.map(async (row): Promise<JobProcess | undefined> => {
+			const outcome = await processInfo(row.pid, deadline);
+			return outcome.kind === "present" ? outcome.process : outcome.kind === "unavailable" ? { ...row, born: "identity-unavailable", command: "identity unavailable" } : undefined;
+		}),
+	);
+	return captured.filter((process): process is JobProcess => process !== undefined);
 }
 // Discovery failure is advisory but durable; callers await only this bounded pre-TERM snapshot.
 export async function discoverEscapedDescendants(jobDir: string, rootPid: number, context: string): Promise<readonly JobProcess[]> {
@@ -92,36 +99,34 @@ export async function discoverEscapedDescendants(jobDir: string, rootPid: number
 		return [];
 	}
 }
-// Each individual signal gets a fresh birth check. A failure is an advisory warning, never a guess.
+// Each individual signal gets a fresh birth check. Only an exact present identity may be signaled.
 export async function containEscapedDescendants(jobDir: string, escaped: readonly JobProcess[], context: string, dependencies: ContainmentDependencies = {}): Promise<void> {
 	if (escaped.length === 0) return;
 	const query = dependencies.query ?? processInfo,
 		signal = dependencies.signal ?? signalTarget,
 		warned: JobProcess[] = [];
-	const verify = async (process: JobProcess) => {
-		const current = await query(process.pid);
-		if (current?.pid === process.pid && current.born === process.born) return true;
-		// A missing, malformed, timed-out, or denied recheck is not proof of exit.
-		// Retain the captured identity for advisory cleanup rather than guessing.
-		warned.push(process);
+	const check = async (process: JobProcess): Promise<"same" | "changed" | "absent" | "unavailable"> => {
+		const outcome = await query(process.pid);
+		if (outcome.kind !== "present") return outcome.kind;
+		return outcome.process.pid === process.pid && outcome.process.born === process.born ? "same" : "changed";
+	};
+	const signalIfPresent = async (process: JobProcess, signalName: NodeJS.Signals, recordChanged: boolean) => {
+		const outcome = await check(process);
+		if (outcome === "same") {
+			signal(process.pid, signalName);
+			return true;
+		}
+		if (outcome === "unavailable" || (recordChanged && outcome === "changed")) warned.push(process);
 		return false;
 	};
 	await appendLimenLog(jobDir, `terminating ${escaped.length} escaped job process(es): ${escaped.map((p) => p.pid).join(", ")}`);
 	const termed: JobProcess[] = [];
-	for (const process of escaped)
-		if (await verify(process)) {
-			signal(process.pid, "SIGTERM");
-			termed.push(process);
-		}
+	for (const process of escaped) if (await signalIfPresent(process, "SIGTERM", true)) termed.push(process);
 	if (termed.length) await delay(ESCAPED_TERM_GRACE_MS);
 	const killed: JobProcess[] = [];
-	for (const process of termed)
-		if (await verify(process)) {
-			signal(process.pid, "SIGKILL");
-			killed.push(process);
-		}
+	for (const process of termed) if (await signalIfPresent(process, "SIGKILL", false)) killed.push(process);
 	if (killed.length) await delay(ESCAPED_KILL_GRACE_MS);
-	for (const process of killed) if (await verify(process)) warned.push(process);
+	for (const process of killed) if (["same", "unavailable"].includes(await check(process))) warned.push(process);
 	const unique = [...new Map(warned.map((process) => [`${process.pid}:${process.born}`, process])).values()];
 	if (unique.length) await recordCleanup(jobDir, unique, context);
 }
@@ -130,19 +135,20 @@ export async function recordCleanup(jobDir: string, processes: readonly JobProce
 	await atomicWrite(`${jobDir}/cleanup`, `${[header, ...processes.map((p) => `${p.pid} ${p.born} ${p.command}`)].join("\n")}\n`);
 	await appendLimenLog(jobDir, `cleanup note written: unconfirmed pid(s) ${processes.map((p) => p.pid).join(", ")}`);
 }
-export async function processInfo(pid: number): Promise<ProcessInfo | undefined> {
-	if (!Number.isSafeInteger(pid) || pid <= 0) return undefined;
+export async function processInfo(pid: number, deadline = Date.now() + PROCESS_QUERY_TIMEOUT_MS): Promise<ProcessQueryOutcome> {
+	if (!Number.isSafeInteger(pid) || pid <= 0) return { kind: "unavailable" };
 	try {
-		const value: unknown = JSON.parse(await runBounded("/usr/bin/ruby", [PIDINFO_HELPER, String(pid)], "proc_pidinfo"));
-		if (!isProcessInfo(value, pid)) return undefined;
-		return value;
+		const value: unknown = JSON.parse(await runBounded("/usr/bin/ruby", [PIDINFO_HELPER, String(pid)], "proc_pidinfo", deadline));
+		if (isProcessInfo(value, pid)) return { kind: "present", process: value };
+		if (typeof value === "object" && value !== null && (value as Record<string, unknown>).status === "absent") return { kind: "absent" };
+		return { kind: "unavailable" };
 	} catch {
-		return undefined;
+		return { kind: "unavailable" };
 	}
 }
-async function processTable(): Promise<readonly ProcessTableRow[]> {
+async function processTable(deadline: number): Promise<readonly ProcessTableRow[]> {
 	let scannerPid: number | undefined;
-	const output = await runBounded("ps", ["-Ao", "pid=,pgid=,ppid=,stat="], "ps discovery", (pid) => {
+	const output = await runBounded("ps", ["-Ao", "pid=,pgid=,ppid=,stat="], "ps discovery", deadline, (pid) => {
 		scannerPid = pid;
 	});
 	return output.split("\n").flatMap((line) => {
@@ -151,8 +157,10 @@ async function processTable(): Promise<readonly ProcessTableRow[]> {
 		return [{ pid: Number(match[1]), pgid: Number(match[2]), ppid: Number(match[3]), state: match[4] }];
 	});
 }
-async function runBounded(command: string, args: readonly string[], description: string, onSpawn?: (pid: number) => void): Promise<string> {
+async function runBounded(command: string, args: readonly string[], description: string, deadline: number, onSpawn?: (pid: number) => void): Promise<string> {
 	return new Promise((resolve, reject) => {
+		const remaining = deadline - Date.now();
+		if (remaining <= 0) return reject(new Error(`${description} exceeded the process-query deadline`));
 		const child = spawn(command, args, { detached: true, stdio: ["ignore", "pipe", "ignore"] });
 		if (child.pid) onSpawn?.(child.pid);
 		let stdout = "",
@@ -169,8 +177,8 @@ async function runBounded(command: string, args: readonly string[], description:
 		};
 		const timeout = setTimeout(() => {
 			terminate();
-			finish(new Error(`${description} timed out after ${PROCESS_QUERY_TIMEOUT_MS}ms`));
-		}, PROCESS_QUERY_TIMEOUT_MS);
+			finish(new Error(`${description} exceeded the process-query deadline`));
+		}, remaining);
 		child.stdout?.on("data", (chunk: Buffer | string) => {
 			stdout += chunk.toString();
 			if (Buffer.byteLength(stdout) > PROCESS_QUERY_MAX_BYTES) {
