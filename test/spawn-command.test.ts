@@ -8,6 +8,15 @@ test("spawn creates isolated branch, canonical record, runs pi, and resumes its 
 	const scratch = await scratchRepo();
 	context.after(scratch.cleanup);
 	assert.equal(limen(scratch, "init").status, 0);
+	const inheritedHerdr = { HERDR_ENV: process.env.HERDR_ENV, HERDR_PANE_ID: process.env.HERDR_PANE_ID };
+	process.env.HERDR_ENV = "1";
+	process.env.HERDR_PANE_ID = "w0:p0";
+	context.after(() => {
+		for (const [name, value] of Object.entries(inheritedHerdr)) {
+			if (value === undefined) delete process.env[name];
+			else process.env[name] = value;
+		}
+	});
 	const launched = limen(scratch, "spawn", "--label", "F001 implementation", "make commit");
 	assert.equal(launched.status, 0, launched.stderr);
 	assert.match(launched.stdout, /started F001 implementation/);
@@ -31,8 +40,9 @@ test("spawn creates isolated branch, canonical record, runs pi, and resumes its 
 		job?: string;
 		id?: string;
 		label?: string;
+		herdr?: string[];
 	};
-	assert.deepEqual(childEnvironment, { job: "1", id, label: "F001 implementation" });
+	assert.deepEqual(childEnvironment, { job: "1", id, label: "F001 implementation", herdr: [] });
 	const argv = JSON.parse(await readFile(join(worktree, "pi-args.json"), "utf8")) as string[];
 	assert.equal(argv[argv.indexOf("--mode") + 1], "json");
 	assert.match(argv[argv.indexOf("--session-dir") + 1] ?? "", /\.limen\/jobs\/[^/]+\/session$/);

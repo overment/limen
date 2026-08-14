@@ -1,3 +1,4 @@
+import { execFile } from "node:child_process";
 import { existsSync, type FSWatcher, mkdirSync, readdirSync, readFileSync, watch } from "node:fs";
 import { join } from "node:path";
 
@@ -15,6 +16,7 @@ type PiApi = {
 };
 
 const SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"] as const;
+type HerdrPane = { readonly binary: string; readonly pane: string };
 
 export default function limenWake(pi: PiApi): void {
 	let watcher: FSWatcher | undefined;
@@ -23,12 +25,33 @@ export default function limenWake(pi: PiApi): void {
 	let frame = 0;
 	let active = false;
 	const seen = new Set<string>();
+	let herdr: HerdrPane | undefined;
+	let herdrSeq = Date.now();
+	let herdrToken = "";
+	let herdrTokenAt = 0;
+	const herdrCall = (args: readonly string[]) => {
+		if (!herdr) return;
+		try {
+			execFile(herdr.binary, args, { timeout: 2_000 }, () => {}).unref();
+		} catch {
+			// Herdr reporting is advisory; durable state remains on disk.
+		}
+	};
+	const herdrReportToken = (body: string) => {
+		if (!herdr) return;
+		if (body === herdrToken && (body === "" || Date.now() - herdrTokenAt < 60_000)) return;
+		herdrToken = body;
+		herdrTokenAt = Date.now();
+		const change = body ? ["--token", `limen=${body}`, "--ttl-ms", "180000"] : ["--clear-token", "limen"];
+		herdrCall(["pane", "report-metadata", herdr.pane, "--source", "limen", "--seq", String((herdrSeq += 1)), ...change]);
+	};
 	const clearStatus = (context: Context) => {
 		if (statusTimer) clearInterval(statusTimer);
 		statusTimer = undefined;
 		statusBody = "";
 		frame = 0;
 		context.ui.setStatus("limen", undefined);
+		herdrReportToken("");
 	};
 	const updateStatus = (jobs: string, context: Context) => {
 		const draw = () => {
@@ -38,6 +61,7 @@ export default function limenWake(pi: PiApi): void {
 				return;
 			}
 			statusBody = next;
+			herdrReportToken(next.slice("limen ".length));
 			context.ui.setStatus("limen", `${SPINNER[frame]} ${statusBody}`);
 			frame = (frame + 1) % SPINNER.length;
 		};
@@ -56,6 +80,7 @@ export default function limenWake(pi: PiApi): void {
 			return;
 		}
 		active = true;
+		herdr = herdrTarget();
 		for (const id of readdirSync(jobs)) {
 			const state = stateOf(jobs, id);
 			if (isObservable(state)) seen.add(observationKey(id, state));
@@ -73,6 +98,7 @@ export default function limenWake(pi: PiApi): void {
 			}
 			const branch = text(join(jobs, id, "branch"));
 			const message = `limen: ${label} is ${state} (${id}); inspect .limen/jobs/${id}/ and branch ${branch}.`;
+			herdrCall(["notification", "show", `limen: ${label} is ${state}`, "--body", `job ${id} · branch ${branch}`, "--sound", state === "done" ? "done" : "request"]);
 			if (context.isIdle()) pi.sendUserMessage(message);
 			else pi.sendUserMessage(message, { deliverAs: "steer" });
 		};
@@ -103,6 +129,13 @@ export default function limenWake(pi: PiApi): void {
 		watcher = undefined;
 		clearStatus(context);
 	});
+}
+
+function herdrTarget(): HerdrPane | undefined {
+	const binary = process.env.LIMEN_HERDR || "herdr";
+	const pane = process.env.HERDR_PANE_ID;
+	if (binary === "0" || process.env.HERDR_ENV !== "1" || !pane) return undefined;
+	return { binary, pane };
 }
 
 function runningStatus(jobs: string): string {

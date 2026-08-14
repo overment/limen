@@ -100,7 +100,7 @@ const promptIndex = args.findIndex((value) => value.startsWith("@"));
 const task = promptIndex >= 0 ? readFileSync(args[promptIndex].slice(1), "utf8") : "";
 writeFileSync("pi-args.json", JSON.stringify(args));
 writeFileSync("pi-task.txt", task);
-writeFileSync("pi-env.json", JSON.stringify({ internal: process.env.LIMEN_INTERNAL_RUN, job: process.env.LIMEN_JOB, id: process.env.LIMEN_JOB_ID, label: process.env.LIMEN_JOB_LABEL }));
+writeFileSync("pi-env.json", JSON.stringify({ internal: process.env.LIMEN_INTERNAL_RUN, job: process.env.LIMEN_JOB, id: process.env.LIMEN_JOB_ID, label: process.env.LIMEN_JOB_LABEL, herdr: Object.keys(process.env).filter((key) => key.startsWith("HERDR_")) }));
 console.log(JSON.stringify({ type: "agent_start" }));
 console.log(JSON.stringify({ type: "tool_execution_start", toolName: "bash", args: { command: "git status" } }));
 console.log(JSON.stringify({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text: "fake pi completed" }] } }));

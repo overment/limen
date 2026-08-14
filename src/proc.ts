@@ -85,6 +85,8 @@ export async function runInternalJob(): Promise<void> {
 	for (const name of ["LIMEN_INTERNAL_RUN", "LIMEN_JOB_DIR", "LIMEN_WORKTREE", "LIMEN_TASK_FILE", "LIMEN_PREAMBLE", "LIMEN_TIMEOUT_MS", "LIMEN_MODEL", "LIMEN_LABEL"]) {
 		delete childEnvironment[name];
 	}
+	// A job is a detached process, not a Herdr pane; inherited Herdr context would misreport the coordinator's pane.
+	for (const name of Object.keys(childEnvironment)) if (name.startsWith("HERDR_")) delete childEnvironment[name];
 	const parser = createStreamParser();
 	const seen = { activity: "" };
 	const failLog = (error: unknown) => appendLimenLog(jobDir, `log write failed: ${error instanceof Error ? error.message : String(error)}`).catch(() => {});
