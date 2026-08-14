@@ -21,5 +21,8 @@
 
 - Current human request and accepted ticket define scope.
 - Vision resolves durable intent; style never invents product decisions.
+- Calibrate depth to risk: deep where a mistake is expensive, fast where it is reversible.
+- Independent review is earned by blast radius, not by habit.
+- Exploration leaves residue: learning becomes files, not memories.
 - Reversible engineering decisions proceed; genuine ambiguity, authority, risk, or irreversibility escalates.
 - Board drift informs reconciliation; it never blocks progress.

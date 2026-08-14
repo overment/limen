@@ -23,4 +23,7 @@
 - Current human request and accepted ticket set scope; surface conflicts with durable intent.
 - Smallest coherent change; no invented product decisions.
 - Ask only for genuine ambiguity, authority, risk, or irreversible choice.
+- Calibrate depth to risk: deep where a mistake is expensive, fast where it is reversible.
+- Independent review is earned by blast radius, not by habit.
+- Exploration leaves residue: learning becomes files, not memories.
 - Prefer ordinary text unless a visual or interactive explainer materially improves understanding.
