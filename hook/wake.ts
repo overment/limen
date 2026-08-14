@@ -42,8 +42,8 @@ export default function limenWake(pi: PiApi): void {
 	let sessionId = "";
 	let herdr: HerdrPane | undefined;
 	let herdrSeq = Date.now();
-	let herdrToken = "";
-	let herdrTokenAt = 0;
+	let herdrMetadata: string | undefined;
+	let herdrMetadataAt = 0;
 	const herdrCall = (args: readonly string[]) => {
 		if (!herdr) return;
 		try {
@@ -52,33 +52,51 @@ export default function limenWake(pi: PiApi): void {
 			// Herdr reporting is advisory; durable state remains on disk.
 		}
 	};
-	const herdrReportToken = (body: string) => {
+	const herdrReport = (body: string, title: string) => {
 		if (!herdr) return;
-		if (body === herdrToken && (body === "" || Date.now() - herdrTokenAt < 60_000)) return;
-		herdrToken = body;
-		herdrTokenAt = Date.now();
+		const signature = `${title}\0${body}`;
+		if (signature === herdrMetadata && Date.now() - herdrMetadataAt < 60_000) return;
+		herdrMetadata = signature;
+		herdrMetadataAt = Date.now();
 		const change = body
-			? ["--token", `limen=${body}`, "--state-label", `idle=${body}`, "--state-label", `done=${body}`, "--ttl-ms", "180000"]
-			: ["--clear-token", "limen", "--clear-state-labels"];
-		herdrCall(["pane", "report-metadata", herdr.pane, "--source", "limen", "--seq", String((herdrSeq += 1)), ...change]);
+			? ["--title", title, "--display-agent", "Limen coordinator", "--token", `limen=${body}`, "--state-label", `idle=${body}`, "--state-label", `done=${body}`]
+			: ["--clear-title", "--display-agent", "Limen coordinator", "--clear-token", "limen", "--clear-state-labels"];
+		herdrCall(["pane", "report-metadata", herdr.pane, "--source", "limen", "--seq", String((herdrSeq += 1)), ...change, "--ttl-ms", "180000"]);
 	};
-	const clearStatus = (context: Context) => {
+	const releaseHerdr = () => {
+		if (!herdr) return;
+		herdrCall([
+			"pane",
+			"report-metadata",
+			herdr.pane,
+			"--source",
+			"limen",
+			"--seq",
+			String((herdrSeq += 1)),
+			"--clear-title",
+			"--clear-display-agent",
+			"--clear-token",
+			"limen",
+			"--clear-state-labels",
+		]);
+	};
+	const clearStatus = (context: Context, reportHerdr = true) => {
 		if (statusTimer) clearInterval(statusTimer);
 		statusTimer = undefined;
 		statusBody = "";
 		frame = 0;
 		context.ui.setStatus("limen", undefined);
-		herdrReportToken("");
+		if (reportHerdr) herdrReport("", "");
 	};
 	const updateStatus = (jobs: string, context: Context) => {
 		const draw = () => {
-			const next = runningStatus(jobs, sessionId);
+			const next = runningDisplay(jobs, sessionId);
 			if (!next) {
 				clearStatus(context);
 				return;
 			}
-			statusBody = next;
-			herdrReportToken(next.slice("limen ".length));
+			statusBody = next.status;
+			herdrReport(next.status.slice("limen ".length), next.title);
 			if (muted) return;
 			context.ui.setStatus("limen", `${SPINNER[frame]} ${statusBody}`);
 			frame = (frame + 1) % SPINNER.length;
@@ -183,7 +201,8 @@ export default function limenWake(pi: PiApi): void {
 		watcher = undefined;
 		if (sweepTimer) clearInterval(sweepTimer);
 		sweepTimer = undefined;
-		clearStatus(context);
+		clearStatus(context, false);
+		releaseHerdr();
 	});
 	if (process.env.LIMEN_JOB === "1") return;
 	pi.registerCommand?.("limen", {
@@ -204,18 +223,29 @@ export default function limenWake(pi: PiApi): void {
 	});
 }
 
-function runningStatus(jobs: string, session: string): string {
+function runningDisplay(jobs: string, session: string): { readonly status: string; readonly title: string } | undefined {
 	const running = readdirSync(jobs)
 		.sort()
 		.filter((id) => stateOf(jobs, id) === "running" && subscribed(join(jobs, id), session))
 		.map((id) => {
-			const name = shortLabel(text(join(jobs, id, "label")) || id);
+			const label = text(join(jobs, id, "label")) || id;
 			const pulse = pulseOf(jobs, id);
 			const tool = text(join(jobs, id, "last-tool"));
-			return `${name} ${pulse === "tool" && tool ? `${pulse}:${tool}` : pulse}`;
+			return { label, status: `${shortLabel(label)} ${pulse === "tool" && tool ? `${pulse}:${tool}` : pulse}` };
 		});
-	if (running.length === 0) return "";
-	return `limen ${running.length} · ${running.slice(0, 3).join(" ")}${running.length > 3 ? ` +${running.length - 3}` : ""}`;
+	if (running.length === 0) return undefined;
+	const summary = `${running
+		.slice(0, 3)
+		.map(({ status }) => status)
+		.join(" ")}${running.length > 3 ? ` +${running.length - 3}` : ""}`;
+	const title =
+		running.length === 1
+			? `Limen · ${running[0]?.label}`
+			: `Limen · ${running.length} jobs · ${running
+					.slice(0, 3)
+					.map(({ label }) => shortLabel(label))
+					.join(" ")}`;
+	return { status: `limen ${running.length} · ${summary}`, title };
 }
 function pulseOf(jobs: string, id: string): string {
 	// Copied into the project as a standalone extension; keep identical to src/job.ts derivePulse.

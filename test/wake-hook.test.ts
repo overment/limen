@@ -390,12 +390,15 @@ test("herdr pane naming follows running jobs and each terminal state notifies on
 	const naming = (await readCalls(calls)).find((call) => call.includes("limen=1 · F001 starting"));
 	assert.ok(naming, "pane metadata call expected");
 	assert.deepEqual(naming.slice(0, 5), ["pane", "report-metadata", "w1:p1", "--source", "limen"]);
+	const titleAt = naming.indexOf("--title");
+	assert.equal(naming[titleAt + 1], "Limen · F001 implementation");
+	assert.equal(naming[naming.indexOf("--display-agent") + 1], "Limen coordinator");
 	const tokenAt = naming.indexOf("limen=1 · F001 starting");
 	assert.equal(naming[tokenAt - 1], "--token");
 	assert.equal(naming[tokenAt + 1], "--state-label");
 	assert.equal(naming[tokenAt + 2], "idle=1 · F001 starting");
 	assert.equal(naming[tokenAt + 4], "done=1 · F001 starting");
-	assert.equal(naming[tokenAt + 5], "--ttl-ms");
+	assert.equal(naming[naming.indexOf("--ttl-ms") + 1], "180000");
 	await writeFile(join(jobs, "new/state"), "done\n");
 	await waitUntilAsync(async () => (await readCalls(calls)).some((call) => call[0] === "notification"));
 	await waitUntilAsync(async () => (await readCalls(calls)).some((call) => call.includes("--clear-token")));
@@ -406,7 +409,12 @@ test("herdr pane naming follows running jobs and each terminal state notifies on
 	assert.ok(clear, "clear-token call expected");
 	assert.deepEqual(clear.slice(0, 5), ["pane", "report-metadata", "w1:p1", "--source", "limen"]);
 	assert.equal(clear[clear.indexOf("--clear-token") + 1], "limen");
+	assert.ok(clear.includes("--clear-title"), "finished jobs must restore the pane's own title");
+	assert.equal(clear[clear.indexOf("--display-agent") + 1], "Limen coordinator");
 	assert.ok(clear.includes("--clear-state-labels"), "finished jobs must restore the pane's own state label");
+	assert.equal(clear[clear.indexOf("--ttl-ms") + 1], "180000");
+	handlers.get("session_shutdown")?.({}, session);
+	await waitUntilAsync(async () => (await readCalls(calls)).some((call) => call.includes("--clear-display-agent")));
 });
 
 function stashEnv(context: { after(fn: () => void): void }, name: string, value: string | undefined): void {
