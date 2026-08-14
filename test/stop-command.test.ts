@@ -55,16 +55,6 @@ function pidAlive(pid: number): boolean {
 		return false;
 	}
 }
-async function waitForFile(path: string, timeoutMs = 2_000): Promise<string> {
-	const deadline = Date.now() + timeoutMs;
-	while (Date.now() < deadline) {
-		const content = await readFile(path, "utf8").catch(() => "");
-		if (content) return content;
-		await new Promise((resolve) => setTimeout(resolve, 25));
-	}
-	throw new Error(`timed out waiting for ${path}`);
-}
-
 async function waitForContainment(jobDir: string, pid: number, timeoutMs = 5_000): Promise<"exited" | "recorded"> {
 	const deadline = Date.now() + timeoutMs;
 	while (Date.now() < deadline) {
