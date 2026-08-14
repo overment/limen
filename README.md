@@ -97,6 +97,17 @@ limen spawn --label "F001 auth implementation" \
 
 The last line is the durable id. `jobs`, `wait`, and `stop` also accept a unique suffix (`7a2f`) or the label.
 
+### Model policy
+
+Set routine stage defaults in the coordinator environment — for example, an `.envrc`:
+
+```bash
+export LIMEN_WORKER_MODEL="your-worker-model"
+export LIMEN_REVIEWER_MODEL="your-reviewer-model"
+```
+
+Ordinary jobs use `LIMEN_WORKER_MODEL`; `spawn --review` uses `LIMEN_REVIEWER_MODEL`. An explicit `--model MODEL` always wins for that job. With neither a stage default nor `--model`, limen leaves model selection to Pi. This is local policy, not a Limen recommendation: a different reviewer model may give genuinely independent priors, while a particular risky ticket may warrant your strongest model.
+
 That spawn creates branch `limen/<id>` and a worktree next to the repo. Commit the feature folder first, or the worktree will not see it. Several jobs may run at once; a note on the second start is not a cap.
 
 ```text

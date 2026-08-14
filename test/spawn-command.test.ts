@@ -99,6 +99,46 @@ test("review gets fresh detached worktree and reviewer birth text", async (conte
 	assert.equal(git(reviewPath, "rev-parse", "HEAD"), git(scratch.root, "rev-parse", branch));
 });
 
+test("stage model defaults respect review roles and explicit overrides", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	assert.equal(limen(scratch, "init").status, 0);
+	const inherited = { worker: process.env.LIMEN_WORKER_MODEL, reviewer: process.env.LIMEN_REVIEWER_MODEL };
+	delete process.env.LIMEN_WORKER_MODEL;
+	delete process.env.LIMEN_REVIEWER_MODEL;
+	context.after(() => {
+		if (inherited.worker === undefined) delete process.env.LIMEN_WORKER_MODEL;
+		else process.env.LIMEN_WORKER_MODEL = inherited.worker;
+		if (inherited.reviewer === undefined) delete process.env.LIMEN_REVIEWER_MODEL;
+		else process.env.LIMEN_REVIEWER_MODEL = inherited.reviewer;
+	});
+	const noDefault = onlyJobId(limen(scratch, "spawn", "no model default").stdout);
+	await waitForState(scratch.root, noDefault, "done");
+	assert.equal(await modelForJob(scratch.root, noDefault), undefined);
+	process.env.LIMEN_WORKER_MODEL = "worker-default";
+	process.env.LIMEN_REVIEWER_MODEL = "reviewer-default";
+	const worker = onlyJobId(limen(scratch, "spawn", "worker model default").stdout);
+	await waitForState(scratch.root, worker, "done");
+	assert.equal(await modelForJob(scratch.root, worker), "worker-default");
+	const review = onlyJobId(limen(scratch, "spawn", "--review", "--branch", `limen/${worker}`, "reviewer model default").stdout);
+	await waitForState(scratch.root, review, "done");
+	assert.equal(await modelForJob(scratch.root, review), "reviewer-default");
+	const explicit = onlyJobId(limen(scratch, "spawn", "--model", "ticket-specific", "explicit model").stdout);
+	await waitForState(scratch.root, explicit, "done");
+	assert.equal(await modelForJob(scratch.root, explicit), "ticket-specific");
+});
+
+async function modelForJob(root: string, id: string): Promise<string | undefined> {
+	const worktree = git(root, "worktree", "list", "--porcelain")
+		.split("\n")
+		.find((line) => line.includes(id))
+		?.slice("worktree ".length);
+	assert.ok(worktree, `worktree for ${id} expected`);
+	const args = JSON.parse(await readFile(join(worktree, "pi-args.json"), "utf8")) as string[];
+	const index = args.indexOf("--model");
+	return index < 0 ? undefined : args[index + 1];
+}
+
 test("independent jobs can run concurrently and are merely announced", async (context) => {
 	const fakePi = `#!/usr/bin/env node\nsetTimeout(() => { console.log("done") }, 400);\n`;
 	const scratch = await scratchRepo(fakePi);

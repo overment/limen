@@ -72,7 +72,8 @@ export async function spawnCommand(args: readonly string[], cwd: string): Promis
 		LIMEN_JOB_ID: id,
 		LIMEN_LABEL: options.label,
 	};
-	if (options.model) environment.LIMEN_MODEL = options.model;
+	const model = options.model ?? (process.env[options.review ? "LIMEN_REVIEWER_MODEL" : "LIMEN_WORKER_MODEL"]?.trim() || undefined);
+	if (model) environment.LIMEN_MODEL = model;
 	if (options.timeoutMs) environment.LIMEN_TIMEOUT_MS = String(options.timeoutMs);
 	let wrapperPid: number;
 	try {
@@ -102,9 +103,7 @@ async function planWorktree(input: {
 	}
 	if (!branchExists(root, branch)) return { kind: "add-new", path, branch };
 	const existing = worktreeForBranch(root, branch);
-	if (existing && resolve(existing.path) === resolve(root)) {
-		throw new Error(`branch ${branch} is checked out in the primary worktree; isolation is impossible`);
-	}
+	if (existing && resolve(existing.path) === resolve(root)) throw new Error(`branch ${branch} is checked out in the primary worktree; isolation is impossible`);
 	if (await liveJobUsesBranch(input.jobsRoot, branch)) throw new Error(`branch ${branch} already has a live job`);
 	return existing ? { kind: "reuse", path: existing.path } : { kind: "add-branch", path, branch };
 }
