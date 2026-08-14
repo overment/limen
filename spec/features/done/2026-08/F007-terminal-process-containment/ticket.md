@@ -1,6 +1,6 @@
 # F007-terminal-process-containment · Truthful terminal cleanup for escaped job processes
 
-[2026-08-14] [🟠] [ACTIVE] [COORDINATOR] ACTIVE · F007-terminal-process-containment
+[2026-08-14] [🟢] [PROVEN] [COORDINATOR] PROVEN · F007-terminal-process-containment
 
 ## Outcome
 

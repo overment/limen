@@ -6,7 +6,6 @@
 
 ## NOW
 
-- `F007-terminal-process-containment` (ACTIVE): reproduce escaped-descendant survival at stop/timeout, then best-effort cleanup with a durable note when termination is unconfirmed.
 - `F006-interactive-managed-updates` (ACTIVE): shape an interactive, advisory-first update experience and the agent response settings before implementation.
 
 ## NEXT
@@ -15,6 +14,7 @@
 
 ## PROVEN
 
+- `F007-terminal-process-containment` (PROVEN): bounded macOS process-identity snapshots, PID-safe escaped-descendant cleanup, and durable warnings when termination cannot be confirmed.
 - `F005-active-job-visibility` (PROVEN): bounded live-job snapshots and passive cross-session visibility; independently reviewed and checked.
 - `F002-stage-model-defaults` (PROVEN): stage defaults with explicit per-job override.
 - `F003-workspace-coordinator` (PROVEN): one workspace coordinator; one selected repository per job.
