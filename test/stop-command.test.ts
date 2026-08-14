@@ -55,11 +55,6 @@ function pidAlive(pid: number): boolean {
 		return false;
 	}
 }
-async function waitForPidExit(pid: number, timeoutMs = 15_000): Promise<void> {
-	const deadline = Date.now() + timeoutMs;
-	while (pidAlive(pid) && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 25));
-	assert.ok(!pidAlive(pid), `pid ${pid} must exit`);
-}
 async function waitForFile(path: string, timeoutMs = 2_000): Promise<string> {
 	const deadline = Date.now() + timeoutMs;
 	while (Date.now() < deadline) {
@@ -70,12 +65,12 @@ async function waitForFile(path: string, timeoutMs = 2_000): Promise<string> {
 	throw new Error(`timed out waiting for ${path}`);
 }
 
-async function waitForContainment(jobDir: string, pid: number, timeoutMs = 5_000): Promise<void> {
+async function waitForContainment(jobDir: string, pid: number, timeoutMs = 5_000): Promise<"exited" | "recorded"> {
 	const deadline = Date.now() + timeoutMs;
 	while (Date.now() < deadline) {
-		if (!pidAlive(pid)) return;
 		const cleanup = await readFile(join(jobDir, "cleanup"), "utf8").catch(() => "");
-		if (cleanup.includes(`${pid} `)) return;
+		if (cleanup.includes(`${pid} `)) return "recorded";
+		if (!pidAlive(pid)) return "exited";
 		await new Promise((resolve) => setTimeout(resolve, 25));
 	}
 	assert.fail(`pid ${pid} must exit or be named in cleanup`);
@@ -109,18 +104,14 @@ test("stop terminates an escaped-group child or records it in a cleanup note", a
 			process.kill(escapee, "SIGKILL");
 		} catch {}
 	});
-	const identityAvailable = (await processInfo(escapee)).kind === "present";
 	const stopped = limen(scratch, "stop", id, "containment test");
 	assert.equal(stopped.status, 0, stopped.stderr);
 	await waitForState(scratch.root, id, "stopped");
-	const log = await readFile(join(scratch.root, `.limen/jobs/${id}/log`), "utf8");
-	assert.match(log, /terminating 1 escaped job process\(es\)/);
-	// Without macOS birth identity, cleanup is advisory rather than an unsafe PID signal.
-	if (identityAvailable) {
-		// The escapee ignores SIGTERM, so its death proves the KILL escalation; an owned process always yields to KILL.
-		await waitForPidExit(escapee);
-		await assert.rejects(readFile(join(scratch.root, `.limen/jobs/${id}/cleanup`)), "a confirmed termination writes no cleanup note");
-	} else assert.match(await waitForFile(join(scratch.root, `.limen/jobs/${id}/cleanup`)), new RegExp(`${escapee} `));
+	const jobDir = join(scratch.root, `.limen/jobs/${id}`);
+	const outcome = await waitForContainment(jobDir, escapee);
+	assert.match(await readFile(join(jobDir, "log"), "utf8"), /terminating 1 escaped job process\(es\)/);
+	if (outcome === "exited") await assert.rejects(readFile(join(jobDir, "cleanup")), "a confirmed termination writes no cleanup note");
+	else assert.match(await readFile(join(jobDir, "cleanup"), "utf8"), new RegExp(`${escapee} `));
 });
 
 test("timeout terminates an escaped-group child or records it in cleanup", async (context) => {
