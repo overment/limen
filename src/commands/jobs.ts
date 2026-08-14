@@ -55,6 +55,7 @@ async function renderJobDirectory(root: string, jobsRoot: string, id: string, de
 		"state label branch repo pid started-at finished-at tool-calls last-tool activity".split(" ").map((field) => text(`${jobDir}/${field}`)),
 	);
 	const [taskStat, logStat] = await Promise.all([optionalStat(`${jobDir}/task.md`), optionalStat(`${jobDir}/log`)]);
+	const cleanup = detailed ? await text(`${jobDir}/cleanup`) : "";
 	if (!taskStat || !logStat) return `INVALID ${id} · missing task.md or log`;
 	const log = detailed ? await readLog(`${jobDir}/log`) : { tail: "", detail: "" };
 	const display = (value: string) => (detailed || value.length <= 160 ? value : `${value.slice(0, 159)}…`);
@@ -77,7 +78,16 @@ async function renderJobDirectory(root: string, jobsRoot: string, id: string, de
 			diffstat: detailed ? liveDiffstat(repo ? workspaceRepository(root, repo) : root, branch) : "",
 			logTail: log.tail,
 		});
-		return repo ? `${rendered}\n  repo ${display(repo)}` : rendered;
+		const blocks = [rendered];
+		if (repo) blocks.push(`  repo ${display(repo)}`);
+		if (cleanup)
+			blocks.push(
+				`  cleanup:\n${cleanup
+					.split("\n")
+					.map((line) => `    ${line}`)
+					.join("\n")}`,
+			);
+		return blocks.join("\n");
 	} catch (error: unknown) {
 		return `INVALID ${id} · ${error instanceof Error ? error.message : String(error)}${log.tail ? `\n  log:\n${log.tail}` : ""}`;
 	}

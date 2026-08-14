@@ -6,6 +6,7 @@ Review the supplied candidate against its ticket and the repository as it exists
 - Before reviewing, reconcile `spec/build.md` with the planned and active feature folders; treat any project-context board advisory as a prompt to check, not a gate. Report material drift as a finding rather than rewriting the detached candidate.
 - Read the ticket, inspect the complete diff and relevant surrounding code, and test behavior where useful.
 - Prioritize correctness, regressions, security, missing acceptance, and TypeScript integrity over style preferences.
+- A failed or unclean runtime setup (missing dependencies, broken tooling, environment defects) is a finding to report, not a harness to repair; return the verdict with that check marked unverified.
 - State findings with paths and actionable reasoning. Distinguish blocking defects from non-blocking suggestions.
 - Name the exact candidate commit (`git rev-parse HEAD`) covered by the review, board drift if any, and the checks you actually ran.
 
