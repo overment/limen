@@ -33,6 +33,7 @@ export default function limenWake(pi: PiApi): void {
 	let watcher: FSWatcher | undefined;
 	let statusTimer: NodeJS.Timeout | undefined;
 	let sweepTimer: NodeJS.Timeout | undefined;
+	let changeTimer: NodeJS.Timeout | undefined;
 	let statusBody = "";
 	let frame = 0;
 	let active = false;
@@ -88,22 +89,22 @@ export default function limenWake(pi: PiApi): void {
 		context.ui.setStatus("limen", undefined);
 		if (reportHerdr) herdrReport("", "");
 	};
+	const drawStatus = (context: Context) => {
+		if (muted || !statusBody) return;
+		context.ui.setStatus("limen", `${SPINNER[frame]} ${statusBody}`);
+		frame = (frame + 1) % SPINNER.length;
+	};
 	const updateStatus = (jobs: string, context: Context) => {
-		const draw = () => {
-			const next = runningDisplay(jobs, sessionId);
-			if (!next) {
-				clearStatus(context);
-				return;
-			}
-			statusBody = next.status;
-			herdrReport(next.status.slice("limen ".length), next.title);
-			if (muted) return;
-			context.ui.setStatus("limen", `${SPINNER[frame]} ${statusBody}`);
-			frame = (frame + 1) % SPINNER.length;
-		};
-		draw();
-		if (statusBody && !statusTimer) {
-			statusTimer = setInterval(draw, 120);
+		const next = runningDisplay(jobs, sessionId);
+		if (!next) {
+			clearStatus(context);
+			return;
+		}
+		statusBody = next.status;
+		herdrReport(next.status.slice("limen ".length), next.title);
+		drawStatus(context);
+		if (!statusTimer) {
+			statusTimer = setInterval(() => drawStatus(context), 120);
 			statusTimer.unref();
 		}
 	};
@@ -162,6 +163,14 @@ export default function limenWake(pi: PiApi): void {
 			// Display and delivery are advisory; durable state remains on disk.
 		}
 	};
+	const scheduleSweep = () => {
+		if (!active || changeTimer) return;
+		changeTimer = setTimeout(() => {
+			changeTimer = undefined;
+			sweep();
+		}, 50);
+		changeTimer.unref();
+	};
 	pi.on("session_start", (_event, context) => {
 		if (process.env.LIMEN_JOB === "1" || process.env.LIMEN_WAKE === "0") return;
 		if (!existsSync(join(context.cwd, ".agents", "limen"))) return;
@@ -183,13 +192,13 @@ export default function limenWake(pi: PiApi): void {
 			if (stateOf(jobs, jobId) === "running" && !routable(job)) enrollLegacyRunning(job);
 			if (subscribed(job, id) && stateOf(jobs, jobId) === "running") claimMarker(job, "started", id);
 		}
-		watcher = watch(jobs, { recursive: true }, sweep);
+		watcher = watch(jobs, { recursive: true }, scheduleSweep);
 		watcher.unref();
 		watcher.on("error", () => {
 			watcher?.close();
 			clearStatus(context);
 		});
-		sweepTimer = setInterval(sweep, 250);
+		sweepTimer = setInterval(sweep, 500);
 		sweepTimer.unref();
 		sweep();
 	});
@@ -201,6 +210,8 @@ export default function limenWake(pi: PiApi): void {
 		watcher = undefined;
 		if (sweepTimer) clearInterval(sweepTimer);
 		sweepTimer = undefined;
+		if (changeTimer) clearTimeout(changeTimer);
+		changeTimer = undefined;
 		clearStatus(context, false);
 		releaseHerdr();
 	});
