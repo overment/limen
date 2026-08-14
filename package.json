@@ -1,10 +1,10 @@
 {
-	"name": "@overment/control",
+	"name": "@overment/limen",
 	"version": "0.1.0",
 	"description": "A minimal one-human-many-agents harness built from files, git, and one CLI.",
 	"type": "module",
 	"bin": {
-		"control": "bin/control"
+		"limen": "bin/limen"
 	},
 	"files": [
 		"bin",
@@ -34,13 +34,13 @@
 	],
 	"license": "MIT",
 	"author": "Adam Gospodarczyk <adam@overment.com>",
-	"homepage": "https://github.com/overment/control#readme",
+	"homepage": "https://github.com/overment/limen#readme",
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/overment/control.git"
+		"url": "git+https://github.com/overment/limen.git"
 	},
 	"bugs": {
-		"url": "https://github.com/overment/control/issues"
+		"url": "https://github.com/overment/limen/issues"
 	},
 	"dependencies": {},
 	"devDependencies": {

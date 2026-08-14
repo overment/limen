@@ -3,7 +3,7 @@ import { spawn } from "node:child_process";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import test from "node:test";
-import { control, onlyJobId, scratchRepo, waitForState } from "./scratch.ts";
+import { limen, onlyJobId, scratchRepo, waitForState } from "./scratch.ts";
 
 const stubbornPi = `#!/usr/bin/env node
 process.on("SIGTERM", () => {});
@@ -14,16 +14,14 @@ setInterval(() => {}, 1000);
 test("stop interrupts a process group and is idempotent", async (context) => {
 	const scratch = await scratchRepo(stubbornPi);
 	context.after(scratch.cleanup);
-	control(scratch, "init");
-	const id = onlyJobId(control(scratch, "spawn", "wait").stdout);
-	const stopped = control(scratch, "stop", id, "test stop");
+	limen(scratch, "init");
+	const id = onlyJobId(limen(scratch, "spawn", "wait").stdout);
+	const stopped = limen(scratch, "stop", id, "test stop");
 	assert.equal(stopped.status, 0, stopped.stderr);
 	await waitForState(scratch.root, id, "stopped");
-	assert.ok(
-		Number.isFinite(Date.parse((await readFile(join(scratch.root, `.control/jobs/${id}/finished-at`), "utf8")).trim())),
-	);
-	await assert.rejects(readFile(join(scratch.root, `.control/jobs/${id}/pid`)));
-	const again = control(scratch, "stop", id);
+	assert.ok(Number.isFinite(Date.parse((await readFile(join(scratch.root, `.limen/jobs/${id}/finished-at`), "utf8")).trim())));
+	await assert.rejects(readFile(join(scratch.root, `.limen/jobs/${id}/pid`)));
+	const again = limen(scratch, "stop", id);
 	assert.equal(again.status, 0, again.stderr);
 	assert.match(again.stdout, /already stopped/);
 });
@@ -31,22 +29,20 @@ test("stop interrupts a process group and is idempotent", async (context) => {
 test("timeout is portable and leaves failed durable truth", async (context) => {
 	const scratch = await scratchRepo(stubbornPi);
 	context.after(scratch.cleanup);
-	control(scratch, "init");
-	const id = onlyJobId(control(scratch, "spawn", "--timeout", "100ms", "wait").stdout);
+	limen(scratch, "init");
+	const id = onlyJobId(limen(scratch, "spawn", "--timeout", "100ms", "wait").stdout);
 	await waitForState(scratch.root, id, "failed", 8_000);
-	const log = await readFile(join(scratch.root, `.control/jobs/${id}/log`), "utf8");
+	const log = await readFile(join(scratch.root, `.limen/jobs/${id}/log`), "utf8");
 	assert.match(log, /timeout after 100ms/);
-	assert.ok(
-		Number.isFinite(Date.parse((await readFile(join(scratch.root, `.control/jobs/${id}/finished-at`), "utf8")).trim())),
-	);
+	assert.ok(Number.isFinite(Date.parse((await readFile(join(scratch.root, `.limen/jobs/${id}/finished-at`), "utf8")).trim())));
 });
 
 test("stop preserves terminal truth written while interruption settles", async (context) => {
 	const scratch = await scratchRepo();
 	context.after(scratch.cleanup);
-	control(scratch, "init");
+	limen(scratch, "init");
 	const id = "manual-race";
-	const job = join(scratch.root, ".control/jobs", id);
+	const job = join(scratch.root, ".limen/jobs", id);
 	await mkdir(job);
 	await writeFile(join(job, "state"), "running\n");
 	await writeFile(join(job, "branch"), "main\n");
@@ -82,7 +78,7 @@ setInterval(() => {}, 1000);`,
 			break;
 		await new Promise((resolve) => setTimeout(resolve, 10));
 	}
-	const stopped = control(scratch, "stop", id, "late stop");
+	const stopped = limen(scratch, "stop", id, "late stop");
 	assert.equal(stopped.status, 0, stopped.stderr);
 	assert.match(stopped.stdout, /already done/);
 	assert.equal(await readFile(join(job, "state"), "utf8"), "done\n");

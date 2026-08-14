@@ -2,7 +2,7 @@
 
 The coordinator keeps this useful as a narrative board. Staleness is ordinary documentation debt, never a runtime gate.
 
-Status marks are prose only: 🟠 ACTIVE · 🔴 PLANNED · 🟢 PROVEN · ⚪ DROPPED. Nothing in `control` parses them.
+Status marks are prose only: 🟠 ACTIVE · 🔴 PLANNED · 🟢 PROVEN · ⚪ DROPPED. Nothing in `limen` parses them.
 
 ## TRACK
 

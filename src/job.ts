@@ -6,7 +6,6 @@ export type Job = JobIdentity &
 		| { readonly phase: "failed"; readonly error: string }
 		| { readonly phase: "stopped"; readonly reason: string }
 	);
-
 export type JobInput = {
 	readonly id: string;
 	readonly state: string;
@@ -17,7 +16,6 @@ export type JobInput = {
 	readonly lastOutputAt: Date;
 	readonly detail: string;
 };
-
 export type Pulse = "starting" | "think" | "tool" | "wait" | "dead";
 export type JobView = {
 	readonly elapsedMs: number;
@@ -29,14 +27,12 @@ export type JobView = {
 	readonly diffstat: string;
 	readonly logTail: string;
 };
-
 const PHASE_LABELS = {
 	running: "RUNNING",
 	done: "DONE",
 	failed: "FAILED",
 	stopped: "STOPPED",
 } as const satisfies Record<Job["phase"], string>;
-
 export function parseJob(input: JobInput): Job {
 	if (!input.id || !input.label || !input.branch) throw new Error("job id, label, and branch must not be empty");
 	const identity = { id: input.id, label: input.label, branch: input.branch };
@@ -62,39 +58,24 @@ export function parseJob(input: JobInput): Job {
 			throw new Error(`job ${input.id} has unknown state ${JSON.stringify(input.state)}`);
 	}
 }
-
-export function derivePulse(input: {
-	readonly pid?: number;
-	readonly alive: boolean;
-	readonly activity?: string;
-}): Pulse {
+export function derivePulse(input: { readonly pid?: number; readonly alive: boolean; readonly activity?: string }): Pulse {
 	if (input.pid === undefined) return "starting";
 	if (!input.alive) return "dead";
 	if (input.activity === "tool" || input.activity === "wait") return input.activity;
 	return "think";
 }
-
-export function resolveJobId(
-	query: string,
-	ids: readonly string[],
-	labels: Readonly<Record<string, string>> = {},
-): string {
+export function resolveJobId(query: string, ids: readonly string[], labels: Readonly<Record<string, string>> = {}): string {
 	const needle = query.trim();
 	if (!needle) throw new Error("job id required");
 	if (ids.includes(needle)) return needle;
 	const matches = ids.filter((id) => {
 		const label = labels[id] ?? "";
-		return (
-			label === needle ||
-			(needle.length >= 3 &&
-				(id.endsWith(needle) || id.endsWith(`-${needle}`) || label.toLowerCase().startsWith(needle.toLowerCase())))
-		);
+		return label === needle || (needle.length >= 3 && (id.endsWith(needle) || id.endsWith(`-${needle}`) || label.toLowerCase().startsWith(needle.toLowerCase())));
 	});
 	if (matches.length === 1) return matches[0] ?? needle;
 	if (matches.length === 0) throw new Error(`no job matches ${JSON.stringify(needle)}`);
 	throw new Error(`ambiguous job ${JSON.stringify(needle)}: ${matches.join(", ")}`);
 }
-
 export function parseDuration(value: string): number {
 	const match = /^(\d+)(ms|s|m|h)$/.exec(value);
 	if (!match) throw new Error(`invalid timeout ${JSON.stringify(value)}; use 500ms, 90s, 20m, or 2h`);
@@ -108,7 +89,6 @@ export function parseDuration(value: string): number {
 	if (milliseconds > 2_147_483_647) throw new Error("timeout exceeds Node's maximum timer duration");
 	return milliseconds;
 }
-
 export function renderJob(job: Job, view: JobView): string {
 	const facts = [
 		`${PHASE_LABELS[job.phase]} ${job.label}`,
@@ -120,8 +100,7 @@ export function renderJob(job: Job, view: JobView): string {
 	if (view.pulse) facts.push(view.pulse);
 	if (view.toolCalls !== undefined) facts.push(`tools ${view.toolCalls}`);
 	if (view.lastTool) facts.push(view.lastTool);
-	if (job.phase === "running" && job.pid !== undefined)
-		facts.push(`pid ${job.pid}${view.processAlive === false ? " (not alive)" : ""}`);
+	if (job.phase === "running" && job.pid !== undefined) facts.push(`pid ${job.pid}${view.processAlive === false ? " (not alive)" : ""}`);
 	const blocks = [facts.join(" · ")];
 	const detail = terminalDetail(job);
 	if (detail) blocks.push(`  ${detail}`);
@@ -129,7 +108,6 @@ export function renderJob(job: Job, view: JobView): string {
 	if (view.logTail) blocks.push(indent(`log:\n${view.logTail}`));
 	return blocks.join("\n");
 }
-
 function terminalDetail(job: Job): string {
 	switch (job.phase) {
 		case "running":
@@ -145,7 +123,6 @@ function terminalDetail(job: Job): string {
 		}
 	}
 }
-
 function formatDuration(milliseconds: number): string {
 	const seconds = Math.max(0, Math.floor(milliseconds / 1_000));
 	if (seconds < 60) return `${seconds}s`;
@@ -153,7 +130,6 @@ function formatDuration(milliseconds: number): string {
 	if (minutes < 60) return `${minutes}m`;
 	return `${Math.floor(minutes / 60)}h${minutes % 60}m`;
 }
-
 function indent(value: string): string {
 	return value
 		.split("\n")

@@ -1,160 +1,182 @@
-# control
+# limen
 
-A minimal harness for one human working through one coordinator with many coding sessions. It fills only the physical capability gap a model has: start a sibling session, wait for or observe it, interrupt its process tree, and receive best-effort start/completion notices.
+`limen` is a small CLI for one person working with several coding sessions at once.
 
-Everything involving judgment—what to build, ticket quality, whether review is sufficient, what should merge, and whether a board is tidy—stays in prompts and plain specifications. The API is the filesystem, Git, and one small CLI. There are no registered model tools, configuration files, gates, receipts, role state, watchdogs, daemons, or runtime dependencies.
+You stay in one coordinator conversation. When something needs a focused implementer or a fresh reviewer, you start a job. That job is a real [`pi`](https://pi.dev) process in its own Git worktree. When it finishes, you still have the branch, the log, and the session — not a hidden transcript.
 
-## Trust boundary
+It does not decide what to build, whether a review is enough, or what should merge. Those stay in prompts, tickets, and ordinary Git.
 
-`control spawn` launches [`pi`](https://pi.dev) with `--approve` in a sibling worktree as the current user. Isolation is a process tree and a Git worktree, not a sandbox. Workers inherit your permissions, environment, and credentials. Review candidate diffs before merging. Use a real sandbox when executing untrusted code. PID and process-group control target POSIX systems; Windows is unsupported. See [SECURITY.md](SECURITY.md).
+> **Experimental.** This project is in an early phase. Expect bugs, rough edges, and changes to commands and prompts.
+
+Requires macOS or Linux, Node.js 24+, Git, and `pi` on `PATH`. Windows is unsupported.
+
+## Trust
+
+`limen spawn` runs `pi --approve` as you. Isolation is a process tree and a worktree, not a sandbox. The worker can do anything you can. Review diffs before you merge. See [SECURITY.md](SECURITY.md).
 
 ## Install
 
-Requires macOS or Linux, Node.js 24+, Git, and the [`pi`](https://pi.dev) CLI on `PATH`.
-
 ```bash
-git clone https://github.com/overment/control.git
-cd control
+git clone https://github.com/overment/limen.git
+cd limen
 npm install
-npm link                 # exposes `control` on PATH
+npm link
 cd /path/to/your-project
-control init
+limen init
 ```
 
-From a published release, `npm install -g @overment/control` is the same binary.
+`npm install -g @overment/limen` is the same binary once published.
 
-`control init` fills gaps only. It creates missing `AGENTS.md`, worker/reviewer preambles, the numbered `spec/` filing skeleton, optional Pi wake extension, and `.control/jobs/`; existing targets remain byte-for-byte untouched. It appends `/.control/` to `.gitignore` only when no equivalent line exists. If a project already has `AGENTS.md`, merge the shop-manual template manually if desired—the command will not guess.
+`limen init` only creates files that are missing. Existing `AGENTS.md`, preambles, and specs are left untouched. If the shop manual in this repo has changed, copy it by hand. Restart the coordinator or `/reload` so project-local Pi extensions load.
 
-Project-local Pi extensions load only for a trusted project. After init, restart the coordinator or `/reload` so the optional wake extension loads.
+### Migrate from Control
 
-## Commands
+Run `limen migrate` with no arguments in an initialized legacy project. Do not run `limen init`: it refuses legacy artifacts and directs you to migration so duplicate extensions cannot be created.
+
+Migration performs a complete read-only preflight, refuses active or handshaking legacy jobs and path conflicts, then moves `.control` to `.limen` and `.agents/control` to `.agents/limen`. It preserves the whole agent directory, replaces installed legacy extension pairs with the packaged Limen extensions, narrowly patches an existing `AGENTS.md`, and updates legacy `.control` entries in an existing `.gitignore`. It creates neither missing prompts nor missing extension pairs. Re-running it is safe and prints no-op/kept actions.
+
+Git branches and registered worktrees are intentionally untouched. Historical branches and paths remain valid; resume one with `limen spawn --branch control/<id>`. Newly created jobs use `limen/<id>` and sibling `.<repo>-limen-worktrees`. Historical `[control ...]` log terminal lines remain readable. Restart the coordinator or run `/reload` after migration.
+
+## Roles
+
+These are conventions and birth text, not stored identity. `limen` does not remember who is who.
+
+| Role | Who | What they do |
+|---|---|---|
+| Coordinator | The session talking to you | Reads the board, writes tickets, starts and stops jobs, inspects diffs, merges or resumes. Full Git authority. |
+| Worker | `limen spawn` | Implements one short instruction in an isolated worktree. |
+| Reviewer | `limen spawn --review` | Fresh process at the candidate tip. Reads, runs checks, writes a verdict. Does not rewrite the candidate. |
+
+You talk only to the coordinator. Workers and reviewers never join that conversation.
+
+## What `init` puts in the project
+
+### Specs
+
+A filing cabinet. Nothing in `limen` parses or gates these paths.
 
 ```text
-control init
-control spawn "task text" [--label L] [--model X] [--branch B] [--timeout 500ms|90s|20m|2h]
-control spawn --review --branch B --label L "review task"
-control wait <id|suffix|label>
-control stop <id|suffix|label> [reason]
-control jobs
+spec/
+  vision.md                 why the project exists (human-owned)
+  build.md                  TRACK / NOW / NEXT / PROVEN board
+  features/
+    _template/              ticket.md and outcome.md
+    planned/FNNN-slug/      accepted backlog
+    active/FNNN-slug/       work being pursued
+    done/YYYY-MM/FNNN-slug/ landed, with outcome.md
+    dropped/YYYY-MM/FNNN-slug/
 ```
 
-### Start implementation
+Allocate the next `FNNN` and never reuse it. Status marks on the board and ticket (🔴 PLANNED · 🟠 ACTIVE · 🟢 PROVEN · ⚪ DROPPED) are prose. The usual loop is: write a ticket, spawn a short instruction, inspect, review, merge or resume, update the board.
 
-```bash
-control spawn --label "F001 auth implementation" \
-  "$(cat spec/features/active/F001-auth/ticket.md)"
-# → started F001 auth implementation
-# → 2026-08-13-f001-auth-implementation-7a2f
+### Prompts
+
+```text
+AGENTS.md                              shop manual for the coordinator
+.agents/limen/worker.md              birth text for spawn
+.agents/limen/reviewer.md            birth text for spawn --review
+.agents/limen/communication.md       how every session should write
+.pi/extensions/limen-wake.ts         footer, start notice, completion wake
+.pi/extensions/limen-communication.ts injects communication.md into the coordinator
 ```
 
-A new launch creates branch `control/<job-id>` and an external linked worktree next to the primary repository. `--label` supplies readable status, notification, and Pi session names; the final output line remains the durable ID for scripts. Without it, the first task line becomes the label. The footer shortens feature labels to `FNNN` and other labels to their first word, then appends a live pulse (`starting`, `think`, `tool`, `wait`, or `dead`) and the latest tool when one exists. The wrapper invokes ephemeral Pi JSON mode, writes a human log plus `last-tool` as events arrive, and atomically changes `state` on exit. Multiple independent jobs run concurrently; an informational note never enforces a cap.
+`worker.md` and `reviewer.md` are appended as the job’s system prompt. `AGENTS.md` loads in the coordinator (and in workers, now that spawn no longer passes `--no-context-files`). `communication.md` is injected only into the coordinator thread; workers skip it. Edit those files to change behavior. `init` will not overwrite them.
 
-### Watch and inspect
+## How a job starts
+
+Give the worker a short instruction and a pointer to the ticket. Do not dump the ticket as the prompt.
 
 ```bash
-control jobs                      # health check; or type !control jobs inside Pi
-tail -f .control/jobs/<id>/log    # think / tool / wait lines plus assistant text
-ls .control/jobs/*/state
-git worktree list
+limen spawn --label "F001 auth implementation" \
+  "Implement F001: users can sign in. Start by writing the session handler. Ticket: spec/features/active/F001-auth/ticket.md"
+# started F001 auth implementation
+# 2026-08-13-f001-auth-implementation-7a2f
+```
+
+The last line is the durable id. `jobs`, `wait`, and `stop` also accept a unique suffix (`7a2f`) or the label.
+
+That spawn creates branch `limen/<id>` and a worktree next to the repo. Commit the feature folder first, or the worktree will not see it. Several jobs may run at once; a note on the second start is not a cap.
+
+```text
+limen init
+limen spawn "Implement FNNN: <outcome>. Start by writing <slice>. Ticket: spec/features/active/FNNN-slug/ticket.md"
+limen spawn --review --branch B --label L "Review the FNNN candidate against spec/features/active/FNNN-slug/ticket.md"
+limen jobs
+limen stop <id|suffix|label> [reason]
+limen wait <id|suffix|label>    # scripts only
+```
+
+## While it runs
+
+Stay in the coordinator. The footer and one completion wake are how you hear back. Do not `limen wait` in that session — it blocks conversation. Do not poll with `sleep`.
+
+```bash
+limen jobs                      # or !limen jobs inside Pi
+tail -f .limen/jobs/<id>/log
 git diff HEAD...<branch>
-control wait 7a2f                 # scripts only; unique suffix, label, or full id
 ```
 
-Stay available after `spawn`. The footer and one completion wake are the loop. `control jobs` is the health check: labels, elapsed time, pulse, last tool, liveness, silence, tail, and diffstat. It never stores “stalled” or repairs malformed records. Pulse is derived on read from pid liveness and the last observed activity: `starting`, `think`, `tool`, `wait`, or `dead`. There is no silence timer. A human can run `!control jobs` in interactive Pi.
+`limen jobs` lists running jobs first, then newest `started-at`. Pulse is observed, not stored: `starting`, `think`, `tool`, `wait`, `dead`. The log is tool names plus a path or command, then assistant text. The full transcript is `.limen/jobs/<id>/session/`.
 
-Do not poll with `sleep`. Do not `control wait` in a coordinator session — that blocks conversation. Scripts may wait: it watches the job directory and keeps a one-second portable fallback check.
+`done` is `pi` exiting 0. Look at the branch before you treat the ticket as finished.
 
-Worker logs are a thin human stream. The wrapper writes a start line, then think/wait as the pulse changes, each tool name as it starts, and final assistant text — not the raw JSON event dump.
+## Review, stop, resume
 
-### Review
+Review is the same kind of job, in a detached worktree at the candidate tip, with reviewer birth text. It can run tests. Nothing stores a reviewer identity. You merge with ordinary Git.
 
 ```bash
-control spawn --review --branch control/<job-id> --label "F001 auth review" \
-  "Read spec/features/active/F001-auth/ticket.md; review the candidate and name the commit covered."
+limen spawn --review --branch limen/<id> --label "F001 auth review" \
+  "Review the F001 candidate against spec/features/active/F001-auth/ticket.md. Name the commit reviewed."
+
+limen stop 7a2f "silent after investigation"
+limen spawn --branch limen/<id> --label "F001 auth follow-up" \
+  "Resume: the UUID helper is committed; add the registry op next. Do not remap."
 ```
 
-Review uses the exact same process and tools as implementation but starts fresh in a detached worktree at the candidate branch tip with reviewer birth text. It can run tests and is not fenced read-only. No role or reviewer identity is persisted. The coordinator reads the result and live diff, then lands acceptable work with ordinary Git.
+Stop sends TERM, waits five seconds, then KILL if needed. Stopping a finished job is harmless. Resume reuses that branch’s worktree. A branch checked out in the primary tree, or already used by a live job, cannot be isolated.
 
-### Stop and resume
+`--timeout` uses the same stop and records `failed`.
 
-```bash
-control stop 7a2f "silent after investigation"
-control spawn --branch control/<id> --label "F001 auth follow-up" \
-  "Resume with this clarified requirement: ..."
-```
-
-Stop sends TERM to the recorded process group, waits five seconds, then uses KILL only if necessary. Stopping an already-terminal job is harmless. Resume reuses the branch's existing worktree when available, preserving committed and uncommitted work. A branch checked out in the primary tree or already used by a live job cannot be isolated, so spawn reports the mechanical impossibility.
-
-`--timeout` uses the same process-tree mechanics and records `failed`; it does not depend on GNU `timeout`.
-
-## Durable state
+## What a job leaves behind
 
 ```text
-.control/jobs/<id>/
-  task.md        exact task text
-  label          human-readable job name
+.limen/jobs/<id>/
+  task.md        instruction text
+  label          human-readable name
   state          running | done | failed | stopped
-  pid            wrapper process-group id while running
-  branch         worker branch (candidate branch for review)
-  started-at     ISO timestamp written before launch
-  finished-at    ISO timestamp written before terminal state
-  tool-calls     informational count from Pi tool-start events
-  last-tool      latest tool name, if any
-  activity       latest observed think/tool/wait hint
-  log            append-only human worker and control output
+  pid            wrapper process group while running
+  branch         worker branch (candidate, for review)
+  started-at     ISO, written before launch
+  finished-at    ISO, written before terminal state
+  tool-calls     count of Pi tool-start events
+  last-tool      latest tool name
+  activity       think | tool | wait
+  log            think/tool/wait, targets, assistant text
+  session/       Pi session for this job
 ```
 
-One fact per file. Mutable state and PID writes use same-directory temporary files and atomic rename. Terminal state is written before PID removal. The records are not harness property: inspect or correct them with ordinary tools after a wrapper crash. Worktrees deliberately remain for inspection and resume; clean them with `git worktree remove`, `git worktree prune`, and normal branch deletion.
+One fact per file. Mutable writes use a temp file and rename. Terminal `state` is written before `pid` is removed. After a crash, inspect or edit these files yourself. Worktrees stay until you `git worktree remove` and delete the branch.
 
-The optional `.pi/extensions/control-wake.ts` watches new state changes during a coordinator session. Its footer uses a small Braille spinner and short names for running jobs, for example `⠹ ctl 1 · F003 tool:bash`; animation stops and the footer clears when none remain. Pulse words are observations: `starting` (handshake), `think` (model), `tool` (executing), `wait` (between tools), `dead` (process gone). It also shows one start notice and sends one terminal message. When the coordinator is busy, terminal delivery uses Pi's `steer` queue so it is handled after the active tool call instead of waiting for the whole turn to end. Display and progress data are advisory. The extension stores no acknowledgement, enforces nothing, and performs no retry. If watching or delivery fails—or the coordinator is gone—the job state and branch still survive.
+The optional wake extension shows a footer (`⠹ limen 1 · F003 tool:bash`), one start notice, and one terminal message. If the coordinator is busy, that message is steered. Display is advisory. If you miss it, the job files and branch are still there.
 
-## Specs and operating model
+The optional communication extension injects `.agents/limen/communication.md` into the coordinator thread. Workers skip it. Edit or delete that file to change or disable it.
 
-- `spec/vision.md`: human-owned why; Product principles and Current direction. The coordinator proposes changes rather than inventing intent.
-- `spec/build.md`: coordinator-maintained TRACK / NOW / NEXT / PROVEN narrative. Status marks 🟠🔴🟢⚪ are prose only.
-- `spec/features/planned/FNNN-slug/`: accepted numbered backlog.
-- `spec/features/active/FNNN-slug/`: numbered work currently being pursued.
-- `spec/features/done/YYYY-MM/FNNN-slug/`: landed history with `outcome.md`.
-- `spec/features/dropped/YYYY-MM/FNNN-slug/`: stopped history with `outcome.md`.
-- `spec/features/_template/`: ticket and outcome templates.
+## When something goes wrong
 
-Feature numbers are allocated in ascending order, stay attached for life, and are never reused. Month partitions keep terminal history bounded. These paths are a filing convention, not a state machine: no code parses, validates, or gates them. Moving a folder and updating the narrative board are ordinary file edits.
-
-The standing `AGENTS.md` teaches the default loop: write/read a useful ticket → spawn isolated implementation → inspect → spawn a fresh reviewer → read review and diff → merge or resume with findings → update the board. It is a default, not a ritual. The coordinator remains the only session talking directly to the human and has full authority to merge, revert, stop, clean up, and make proportional small edits. Genuine product ambiguity is escalated distinctly from a process failure.
-
-Checks are whatever the project itself defines. Review independence comes from a fresh process. Isolation comes from worktree birth. Git history is the audit trail. Cosmetic spec drift never blocks an action.
-
-## Recovery
-
-| Failure | Native recovery |
+| What happened | What to do |
 |---|---|
-| silent or rambling job | inspect `control jobs` first; stop on `dead`, or after checking the worktree, then resume |
-| worker asks a real question | read its committed partial work/question file, answer, resume `--branch` |
-| dead wrapper with stale `running` | check PID, edit `state`, inspect branch/worktree, resume |
-| junk candidate | do not merge; remove its worktree and branch |
-| branch conflict | rebase it or start from fresh HEAD |
-| coordinator died or wake was missed | start another coordinator; read `.control/jobs/` and Git |
-| bad merge | use `git log`, `reflog`, revert/reset as appropriate |
-| stale board | edit the Markdown; nothing latches |
+| Quiet or rambling job | `limen jobs`, then the worktree. Stop on `dead`, or after you have looked. Resume with a sharper instruction. |
+| Worker asked a real question | Read the file it wrote, answer, resume `--branch`. |
+| Wrapper dead, `state` still `running` | `kill -0` the pid, edit `state`, resume. |
+| Bad candidate | Do not merge. Remove the worktree and branch. |
+| Missed wake or dead coordinator | Read `.limen/jobs/` and Git. |
+| Bad merge or stale board | Ordinary `git`, or edit the Markdown. |
 
-There is deliberately no channel into a running job. Redirect by stop → amend task → resume branch. There is no destructive cleanup command, because Git already expresses cleanup and recovery transparently.
-
-## Architecture and requirement trace
-
-`src/job.ts` is the pure domain core and owns the sole discriminated union. `src/git.ts` and `src/proc.ts` are impure edges; `src/commands/*` only compose them, including the small filesystem-backed wait; `src/main.ts` is the only entry point and catch. Source uses erasable TypeScript, direct Node execution, semantic private helpers, checked tables, and no barrels, shared type pool, enums, namespaces, or parameter properties.
-
-The twenty mover requirements map directly:
-
-1–3. The coordinator convention, ambiguity signal, and human-owned vision are taught in `agents.md`.
-4–6. Full coordinator Git authority, fresh-process review, and worktree isolation are construction plus prompt.
-7–9. The loop, ticket craft, and project-native checks are prose rather than gates.
-10–12. Init seeds the numbered planned/active/monthly-history filing convention non-destructively; folders and `ls` remain the index.
-13–15. Job files, Git, independent concurrent worktrees, stop, and branch resume provide observation and recovery.
-16–20. There is no hygiene block, stored identity, per-turn evaluator, policy refusal, or open-ended governance surface. Only impossible mechanics error; everything else informs.
+There is no channel into a running job. Stop it, change the instruction, resume the branch. There is no cleanup command.
 
 ## Develop
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the source budget and the capability/judgment line. CI runs `npm run check` on Linux and macOS.
+See [CONTRIBUTING.md](CONTRIBUTING.md). CI runs `npm run check` on Linux and macOS.
 
 ```bash
 npm run typecheck
@@ -162,4 +184,4 @@ npm test
 npm run check
 ```
 
-Tests use `node:test`, fake Pi executables, and real temporary Git repositories. Runtime dependencies are zero. The source budget is checked to keep mechanism small; behavior incidents should normally change templates, not add guards.
+Zero runtime dependencies. `src/` stays under 1100 lines. Change templates when behavior is wrong; do not add guards for judgment.

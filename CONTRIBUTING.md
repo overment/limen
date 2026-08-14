@@ -18,8 +18,8 @@ That is typecheck, Biome format check, and the real-Git test suite. Each test ha
 - Operating advice belongs in `templates/`
 - Behavior incidents should normally change templates, not add guards
 
-Only impossible mechanics should error. Everything else informs.
+Only impossible mechanics should error. Everything else informs. Migration is the exception where safety requires a complete read-only preflight: any legacy live job, handshake, type mismatch, or old/new path conflict must fail before the first write.
 
 ## Formatter
 
-Biome formats; the linter preset is intentionally `none`. Do not enable a rule pack to clean up the tree.
+Biome formats. The linter preset stays `none` except `nursery.noFloatingPromises`. Do not enable a style pack to clean up the tree. `limen init` never overwrites existing project templates and refuses legacy artifacts; use `limen migrate` for Control projects. Copy `templates/` by hand when the shop manual or birth text changes.

@@ -2,7 +2,7 @@
 
 This tool is process/worktree isolation, not a hostile-code sandbox.
 
-`control spawn` launches `pi --approve` as the calling user. A worker can run the same commands you can, read the same environment, and write wherever you can write. Review candidate diffs before merging. Do not point `control` at an untrusted repository if that would expose credentials.
+`limen spawn` launches `pi --approve` as the calling user. A worker can run the same commands you can, read the same environment, and write wherever you can write. Review candidate diffs before merging. Do not point `limen` at an untrusted repository if that would expose credentials.
 
 Windows is unsupported. PID and process-group signals are POSIX-only.
 

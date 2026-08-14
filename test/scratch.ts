@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-export const CONTROL = fileURLToPath(new URL("../bin/control", import.meta.url));
+export const LIMEN = fileURLToPath(new URL("../bin/limen", import.meta.url));
 
 export type Scratch = {
 	readonly root: string;
@@ -13,14 +13,14 @@ export type Scratch = {
 };
 
 export async function scratchRepo(fakePi = defaultFakePi): Promise<Scratch> {
-	const parent = await mkdtemp(join(tmpdir(), "control-test-"));
+	const parent = await mkdtemp(join(tmpdir(), "limen-test-"));
 	const root = join(parent, "repo");
 	const fakeBin = join(parent, "bin");
 	await mkdir(root);
 	await mkdir(fakeBin);
 	git(root, "init", "-b", "main");
-	git(root, "config", "user.email", "control@example.test");
-	git(root, "config", "user.name", "Control Test");
+	git(root, "config", "user.email", "limen@example.test");
+	git(root, "config", "user.name", "Limen Test");
 	await writeFile(join(root, "README.md"), "scratch\n");
 	git(root, "add", ".");
 	git(root, "commit", "-m", "initial");
@@ -32,30 +32,27 @@ export async function scratchRepo(fakePi = defaultFakePi): Promise<Scratch> {
 	};
 }
 
-export function control(
-	scratch: Scratch,
-	...args: readonly string[]
-): { readonly stdout: string; readonly stderr: string; readonly status: number } {
+export function limen(scratch: Scratch, ...args: readonly string[]): { readonly stdout: string; readonly stderr: string; readonly status: number } {
 	const environment: NodeJS.ProcessEnv = {
 		...process.env,
 		PATH: `${scratch.fakeBin}:${process.env.PATH}`,
-		CONTROL_PI: "pi",
+		LIMEN_PI: "pi",
 	};
 	for (const name of [
-		"CONTROL_INTERNAL_RUN",
-		"CONTROL_JOB",
-		"CONTROL_JOB_ID",
-		"CONTROL_JOB_DIR",
-		"CONTROL_WORKTREE",
-		"CONTROL_TASK_FILE",
-		"CONTROL_PREAMBLE",
-		"CONTROL_TIMEOUT_MS",
-		"CONTROL_MODEL",
-		"CONTROL_LABEL",
-		"CONTROL_JOB_LABEL",
+		"LIMEN_INTERNAL_RUN",
+		"LIMEN_JOB",
+		"LIMEN_JOB_ID",
+		"LIMEN_JOB_DIR",
+		"LIMEN_WORKTREE",
+		"LIMEN_TASK_FILE",
+		"LIMEN_PREAMBLE",
+		"LIMEN_TIMEOUT_MS",
+		"LIMEN_MODEL",
+		"LIMEN_LABEL",
+		"LIMEN_JOB_LABEL",
 	])
 		delete environment[name];
-	const result = spawnSync(process.execPath, [CONTROL, ...args], {
+	const result = spawnSync(process.execPath, [LIMEN, ...args], {
 		cwd: scratch.root,
 		encoding: "utf8",
 		env: environment,
@@ -65,7 +62,7 @@ export function control(
 }
 
 export async function waitForState(root: string, id: string, expected: string, timeoutMs = 10_000): Promise<void> {
-	const path = join(root, ".control", "jobs", id, "state");
+	const path = join(root, ".limen", "jobs", id, "state");
 	const deadline = Date.now() + timeoutMs;
 	while (Date.now() < deadline) {
 		const state = await readFile(path, "utf8").then(
@@ -103,9 +100,9 @@ const promptIndex = args.findIndex((value) => value.startsWith("@"));
 const task = promptIndex >= 0 ? readFileSync(args[promptIndex].slice(1), "utf8") : "";
 writeFileSync("pi-args.json", JSON.stringify(args));
 writeFileSync("pi-task.txt", task);
-writeFileSync("pi-env.json", JSON.stringify({ internal: process.env.CONTROL_INTERNAL_RUN, job: process.env.CONTROL_JOB, id: process.env.CONTROL_JOB_ID, label: process.env.CONTROL_JOB_LABEL }));
+writeFileSync("pi-env.json", JSON.stringify({ internal: process.env.LIMEN_INTERNAL_RUN, job: process.env.LIMEN_JOB, id: process.env.LIMEN_JOB_ID, label: process.env.LIMEN_JOB_LABEL }));
 console.log(JSON.stringify({ type: "agent_start" }));
-console.log(JSON.stringify({ type: "tool_execution_start", toolName: "bash" }));
+console.log(JSON.stringify({ type: "tool_execution_start", toolName: "bash", args: { command: "git status" } }));
 console.log(JSON.stringify({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text: "fake pi completed" }] } }));
 if (task.includes("make commit")) {
   writeFileSync("candidate.txt", "candidate\\n");

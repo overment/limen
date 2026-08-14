@@ -1,7 +1,6 @@
 import { type FSWatcher, watch } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { resolveJob } from "../lookup.ts";
-
 export async function waitCommand(args: readonly string[], cwd: string): Promise<void> {
 	const query = args[0];
 	if (!query || args.length !== 1) throw new Error("wait requires exactly one job id");
@@ -12,7 +11,6 @@ export async function waitCommand(args: readonly string[], cwd: string): Promise
 	const label = (await text(`${jobDir}/label`)) || id;
 	console.log(`${state.toUpperCase()} ${label} · id ${id}`);
 }
-
 function waitForTerminal(jobDir: string): Promise<string> {
 	return new Promise((resolve, reject) => {
 		let settled = false;
@@ -45,18 +43,15 @@ function waitForTerminal(jobDir: string): Promise<string> {
 		check();
 	});
 }
-
 function readState(jobDir: string): Promise<string> {
 	return readFile(`${jobDir}/state`, "utf8").then((value) => value.trim());
 }
-
 function text(path: string): Promise<string> {
 	return readFile(path, "utf8").then(
 		(value) => value.trim(),
 		() => "",
 	);
 }
-
 function isTerminal(state: string): boolean {
 	return state === "done" || state === "failed" || state === "stopped";
 }

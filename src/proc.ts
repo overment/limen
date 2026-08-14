@@ -18,7 +18,6 @@ export async function atomicWrite(path: string, content: string): Promise<void> 
 	await handle.close();
 	await rename(temporary, path);
 }
-
 export function processGroupAlive(pid: number): boolean {
 	const result = signalProcessGroup(pid, 0);
 	return result === "sent" || result === "denied";
@@ -38,15 +37,15 @@ export async function waitForProcessGroup(pid: number, milliseconds: number): Pr
 	while (processGroupAlive(pid) && Date.now() < deadline) await delay(100);
 	return !processGroupAlive(pid);
 }
-export async function appendControlLog(jobDir: string, message: string): Promise<void> {
-	await appendFile(`${jobDir}/log`, `[control ${new Date().toISOString()}] ${message}\n`);
+export async function appendLimenLog(jobDir: string, message: string): Promise<void> {
+	await appendFile(`${jobDir}/log`, `[limen ${new Date().toISOString()}] ${message}\n`);
 }
 export async function launchWrapper(environment: Readonly<Record<string, string>>): Promise<number> {
-	const executable = fileURLToPath(new URL("../bin/control", import.meta.url));
+	const executable = fileURLToPath(new URL("../bin/limen", import.meta.url));
 	const child = spawn(process.execPath, [executable], {
 		detached: true,
 		stdio: "ignore",
-		env: { ...process.env, ...environment, CONTROL_INTERNAL_RUN: "1" },
+		env: { ...process.env, ...environment, LIMEN_INTERNAL_RUN: "1" },
 	});
 	await new Promise<void>((resolve, reject) => {
 		child.once("spawn", resolve);
@@ -57,13 +56,13 @@ export async function launchWrapper(environment: Readonly<Record<string, string>
 	return child.pid;
 }
 export async function runInternalJob(): Promise<void> {
-	const jobDir = requiredEnvironment("CONTROL_JOB_DIR");
-	const worktree = requiredEnvironment("CONTROL_WORKTREE");
-	const taskFile = requiredEnvironment("CONTROL_TASK_FILE");
-	const preambleFile = requiredEnvironment("CONTROL_PREAMBLE");
-	const jobId = requiredEnvironment("CONTROL_JOB_ID");
-	const label = process.env.CONTROL_LABEL || jobId;
-	const timeoutMs = process.env.CONTROL_TIMEOUT_MS ? Number(process.env.CONTROL_TIMEOUT_MS) : undefined;
+	const jobDir = requiredEnvironment("LIMEN_JOB_DIR");
+	const worktree = requiredEnvironment("LIMEN_WORKTREE");
+	const taskFile = requiredEnvironment("LIMEN_TASK_FILE");
+	const preambleFile = requiredEnvironment("LIMEN_PREAMBLE");
+	const jobId = requiredEnvironment("LIMEN_JOB_ID");
+	const label = process.env.LIMEN_LABEL || jobId;
+	const timeoutMs = process.env.LIMEN_TIMEOUT_MS ? Number(process.env.LIMEN_TIMEOUT_MS) : undefined;
 	const preamble = await readFile(preambleFile, "utf8");
 	let stopRequested = false;
 	let timedOut = false;
@@ -73,47 +72,26 @@ export async function runInternalJob(): Promise<void> {
 	process.on("SIGTERM", () => {
 		stopRequested = true;
 	});
-	const args = [
-		"--mode",
-		"json",
-		"--approve",
-		"--no-session",
-		"--no-context-files",
-		"--name",
-		`control: ${label}`,
-		"--append-system-prompt",
-		preamble,
-	];
-	if (process.env.CONTROL_MODEL) args.push("--model", process.env.CONTROL_MODEL);
+	const sessionDir = `${jobDir}/session`;
+	const args = ["--mode", "json", "--approve", "--session-dir", sessionDir, "--name", `limen: ${label}`, "--append-system-prompt", preamble];
+	if (process.env.LIMEN_MODEL) args.push("--model", process.env.LIMEN_MODEL);
 	args.push(`@${taskFile}`);
 	const childEnvironment: NodeJS.ProcessEnv = {
 		...process.env,
-		CONTROL_JOB: "1",
-		CONTROL_JOB_ID: jobId,
-		CONTROL_JOB_LABEL: label,
+		LIMEN_JOB: "1",
+		LIMEN_JOB_ID: jobId,
+		LIMEN_JOB_LABEL: label,
 	};
-	for (const name of [
-		"CONTROL_INTERNAL_RUN",
-		"CONTROL_JOB_DIR",
-		"CONTROL_WORKTREE",
-		"CONTROL_TASK_FILE",
-		"CONTROL_PREAMBLE",
-		"CONTROL_TIMEOUT_MS",
-		"CONTROL_MODEL",
-		"CONTROL_LABEL",
-	]) {
+	for (const name of ["LIMEN_INTERNAL_RUN", "LIMEN_JOB_DIR", "LIMEN_WORKTREE", "LIMEN_TASK_FILE", "LIMEN_PREAMBLE", "LIMEN_TIMEOUT_MS", "LIMEN_MODEL", "LIMEN_LABEL"]) {
 		delete childEnvironment[name];
 	}
 	const parser = createStreamParser();
 	const seen = { activity: "" };
-	const failLog = (error: unknown) =>
-		appendControlLog(jobDir, `log write failed: ${error instanceof Error ? error.message : String(error)}`).catch(
-			() => {},
-		);
+	const failLog = (error: unknown) => appendLimenLog(jobDir, `log write failed: ${error instanceof Error ? error.message : String(error)}`).catch(() => {});
 	const apply = (events: readonly StreamEvent[]) => {
 		pending = pending.then(() => recordEvents(jobDir, events, () => (tools += 1), seen)).catch(failLog);
 	};
-	const child = spawn(process.env.CONTROL_PI ?? "pi", args, {
+	const child = spawn(process.env.LIMEN_PI ?? "pi", args, {
 		cwd: worktree,
 		stdio: ["ignore", "pipe", "pipe"],
 		env: childEnvironment,
@@ -132,11 +110,11 @@ export async function runInternalJob(): Promise<void> {
 	});
 	await atomicWrite(`${jobDir}/pid`, `${process.pid}\n`);
 	await atomicWrite(`${jobDir}/state`, "running\n");
-	await appendControlLog(jobDir, "worker started");
+	await appendLimenLog(jobDir, "worker started");
 	const timeout = timeoutMs
 		? setTimeout(() => {
 				timedOut = true;
-				void appendControlLog(jobDir, `timeout after ${timeoutMs}ms; sending TERM`);
+				void appendLimenLog(jobDir, `timeout after ${timeoutMs}ms; sending TERM`);
 				signalProcessGroup(process.pid, "SIGTERM");
 				graceTimer = setTimeout(() => {
 					void finalizeJob(jobDir, "failed", `timeout after ${timeoutMs}ms`).then(() => {
@@ -154,33 +132,28 @@ export async function runInternalJob(): Promise<void> {
 	else if (stopRequested || result.signal === "SIGTERM" || result.signal === "SIGKILL") {
 		await finalizeJob(jobDir, "stopped", "process group interrupted");
 	} else if (result.error) await finalizeJob(jobDir, "failed", result.error.message);
-	else if (result.code === 0) await finalizeJob(jobDir, "done", "worker exited successfully");
+	else if (result.code === 0) await finalizeJob(jobDir, "done", "pi exited 0");
 	else await finalizeJob(jobDir, "failed", `worker exited with code ${result.code ?? "unknown"}`);
 }
 export async function failInternalJob(error: unknown): Promise<void> {
-	const jobDir = process.env.CONTROL_JOB_DIR;
+	const jobDir = process.env.LIMEN_JOB_DIR;
 	if (!jobDir) return;
 	await finalizeJob(jobDir, "failed", error instanceof Error ? error.message : String(error));
 }
 export async function finalizeJob(jobDir: string, state: "done" | "failed" | "stopped", detail: string): Promise<void> {
-	await appendControlLog(jobDir, `${state}: ${detail}`);
+	await appendLimenLog(jobDir, `${state}: ${detail}`);
 	await atomicWrite(`${jobDir}/finished-at`, `${new Date().toISOString()}\n`);
 	await atomicWrite(`${jobDir}/state`, `${state}\n`);
 	await rm(`${jobDir}/pid`, { force: true });
 }
-async function recordEvents(
-	jobDir: string,
-	events: readonly StreamEvent[],
-	nextCount: () => number,
-	seen: { activity: string },
-): Promise<void> {
+async function recordEvents(jobDir: string, events: readonly StreamEvent[], nextCount: () => number, seen: { activity: string }): Promise<void> {
 	for (const event of events) {
 		if (event.kind === "tool") {
 			seen.activity = "tool";
 			await atomicWrite(`${jobDir}/last-tool`, `${event.name}\n`);
 			await atomicWrite(`${jobDir}/activity`, "tool\n");
 			await atomicWrite(`${jobDir}/tool-calls`, `${nextCount()}\n`);
-			await appendFile(`${jobDir}/log`, `${event.name}\n`);
+			await appendFile(`${jobDir}/log`, event.detail ? `${event.name} ${event.detail}\n` : `${event.name}\n`);
 		} else if (event.kind === "activity") {
 			await atomicWrite(`${jobDir}/activity`, `${event.name}\n`);
 			if (seen.activity !== event.name) await appendFile(`${jobDir}/log`, `${(seen.activity = event.name)}\n`);

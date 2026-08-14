@@ -4,7 +4,7 @@
 
 [YYYY-MM-DD] [🔴] [STATUS] [COORDINATOR] PLANNED · FNNN-slug
 
-Status marks are prose: 🔴 PLANNED · 🟠 ACTIVE · 🟢 PROVEN · ⚪ DROPPED. Update the line when the folder moves. Nothing in `control` parses it.
+Status marks are prose: 🔴 PLANNED · 🟠 ACTIVE · 🟢 PROVEN · ⚪ DROPPED. Update the line when the folder moves. Nothing in `limen` parses it.
 
 ## Outcome
 

@@ -18,7 +18,7 @@ test("jobs use one discriminated union and derived display facts", () => {
 		id: "x",
 		state: "running",
 		label: "F001 implementation",
-		branch: "control/x",
+		branch: "limen/x",
 		pid: "42",
 		startedAt: now,
 		lastOutputAt: now,
@@ -58,7 +58,6 @@ test("pulse is observed activity and liveness, never a timer", () => {
 	assert.equal(derivePulse({ pid: 1, alive: false, activity: "tool" }), "dead");
 	assert.equal(derivePulse({ pid: 1, alive: true, activity: "tool" }), "tool");
 	assert.equal(derivePulse({ pid: 1, alive: true, activity: "wait" }), "wait");
-	// Thresholds 20_000 / 45_000 / 120_000 must match hook/wake.ts.
 	assert.equal(derivePulse({ pid: 1, alive: true }), "think");
 });
 
@@ -68,21 +67,15 @@ test("a running job with no pid is the handshake, not invalid", () => {
 		id: "x",
 		state: "running",
 		label: "F001 implementation",
-		branch: "control/x",
+		branch: "limen/x",
 		startedAt: now,
 		lastOutputAt: now,
 		detail: "",
 	});
 	assert.equal(job.phase, "running");
 	assert.equal(job.pid, undefined);
-	assert.match(
-		renderJob(job, { elapsedMs: 400, silentMs: 0, pulse: "starting", diffstat: "", logTail: "" }),
-		/starting/,
-	);
-	assert.doesNotMatch(
-		renderJob(job, { elapsedMs: 400, silentMs: 0, pulse: "starting", diffstat: "", logTail: "" }),
-		/pid /,
-	);
+	assert.match(renderJob(job, { elapsedMs: 400, silentMs: 0, pulse: "starting", diffstat: "", logTail: "" }), /starting/);
+	assert.doesNotMatch(renderJob(job, { elapsedMs: 400, silentMs: 0, pulse: "starting", diffstat: "", logTail: "" }), /pid /);
 });
 
 test("job ids resolve uniquely by suffix or label", () => {

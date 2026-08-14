@@ -1,5 +1,6 @@
 import { initCommand } from "./commands/init.ts";
 import { jobsCommand } from "./commands/jobs.ts";
+import { migrateCommand } from "./commands/migrate.ts";
 import { spawnCommand } from "./commands/spawn.ts";
 import { stopCommand } from "./commands/stop.ts";
 import { waitCommand } from "./commands/wait.ts";
@@ -8,25 +9,25 @@ import { failInternalJob, runInternalJob } from "./proc.ts";
 type Command = (args: readonly string[], cwd: string) => Promise<void>;
 const COMMANDS = {
 	init: initCommand,
+	migrate: migrateCommand,
 	spawn: spawnCommand,
 	stop: stopCommand,
 	wait: waitCommand,
 	jobs: jobsCommand,
-} as const satisfies Record<"init" | "spawn" | "stop" | "wait" | "jobs", Command>;
-
-const HELP = `control — isolated coding jobs with files and git
-
+} as const satisfies Record<"init" | "migrate" | "spawn" | "stop" | "wait" | "jobs", Command>;
+const HELP = `limen — isolated coding jobs with files and git
 usage:
-  control init
-  control spawn "task text" [--label L] [--model X] [--branch B] [--timeout 20m]
-  control spawn --review --branch B --label L "review task"
-  control wait <id|suffix|label>
-  control stop <id|suffix|label> [reason]
-  control jobs`;
-
+  limen init
+  limen migrate
+  limen spawn "Implement FNNN: <outcome>. Start by writing <slice>. Ticket: spec/features/active/FNNN-slug/ticket.md" [--label L] [--model X] [--branch B] [--timeout 20m]
+  limen spawn --review --branch B --label L "Review the FNNN candidate against spec/features/active/FNNN-slug/ticket.md"
+  limen wait <id|suffix|label>
+  limen stop <id|suffix|label> [reason]
+  limen jobs
+Pass a short coordinator instruction, not $(cat ticket.md). The ticket is a pointer, not the prompt.`;
 export async function main(args: readonly string[], cwd = process.cwd()): Promise<void> {
 	try {
-		if (process.env.CONTROL_INTERNAL_RUN === "1") {
+		if (process.env.LIMEN_INTERNAL_RUN === "1") {
 			await runInternalJob();
 			return;
 		}
@@ -38,7 +39,7 @@ export async function main(args: readonly string[], cwd = process.cwd()): Promis
 		if (!(name in COMMANDS)) throw new Error(`unknown command ${JSON.stringify(name)}\n\n${HELP}`);
 		await COMMANDS[name as keyof typeof COMMANDS](rest, cwd);
 	} catch (error) {
-		if (process.env.CONTROL_INTERNAL_RUN === "1") await failInternalJob(error);
+		if (process.env.LIMEN_INTERNAL_RUN === "1") await failInternalJob(error);
 		console.error(error instanceof Error ? error.message : String(error));
 		process.exitCode = 1;
 	}

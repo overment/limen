@@ -16,7 +16,7 @@ type PiApi = {
 
 const SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"] as const;
 
-export default function controlWake(pi: PiApi): void {
+export default function limenWake(pi: PiApi): void {
 	let watcher: FSWatcher | undefined;
 	let statusTimer: NodeJS.Timeout | undefined;
 	let statusBody = "";
@@ -28,7 +28,7 @@ export default function controlWake(pi: PiApi): void {
 		statusTimer = undefined;
 		statusBody = "";
 		frame = 0;
-		context.ui.setStatus("control", undefined);
+		context.ui.setStatus("limen", undefined);
 	};
 	const updateStatus = (jobs: string, context: Context) => {
 		const draw = () => {
@@ -38,7 +38,7 @@ export default function controlWake(pi: PiApi): void {
 				return;
 			}
 			statusBody = next;
-			context.ui.setStatus("control", `${SPINNER[frame]} ${statusBody}`);
+			context.ui.setStatus("limen", `${SPINNER[frame]} ${statusBody}`);
 			frame = (frame + 1) % SPINNER.length;
 		};
 		draw();
@@ -48,8 +48,8 @@ export default function controlWake(pi: PiApi): void {
 		}
 	};
 	pi.on("session_start", (_event, context) => {
-		if (process.env.CONTROL_JOB === "1") return;
-		const jobs = join(context.cwd, ".control", "jobs");
+		if (process.env.LIMEN_JOB === "1") return;
+		const jobs = join(context.cwd, ".limen", "jobs");
 		try {
 			mkdirSync(jobs, { recursive: true });
 		} catch {
@@ -68,11 +68,11 @@ export default function controlWake(pi: PiApi): void {
 			seen.add(key);
 			const label = text(join(jobs, id, "label")) || id;
 			if (state === "running") {
-				context.ui.notify(`control: ${label} started (${id})`, "info");
+				context.ui.notify(`limen: ${label} started (${id})`, "info");
 				return;
 			}
 			const branch = text(join(jobs, id, "branch"));
-			const message = `control: ${label} is ${state} (${id}); inspect .control/jobs/${id}/ and branch ${branch}.`;
+			const message = `limen: ${label} is ${state} (${id}); inspect .limen/jobs/${id}/ and branch ${branch}.`;
 			if (context.isIdle()) pi.sendUserMessage(message);
 			else pi.sendUserMessage(message, { deliverAs: "steer" });
 		};
@@ -119,7 +119,7 @@ function runningStatus(jobs: string): string {
 	if (running.length === 0) return "";
 	const visible = running.slice(0, 3).join(" ");
 	const more = running.length > 3 ? ` +${running.length - 3}` : "";
-	return `ctl ${running.length} · ${visible}${more}`;
+	return `limen ${running.length} · ${visible}${more}`;
 }
 
 function pulseOf(jobs: string, id: string): string {
