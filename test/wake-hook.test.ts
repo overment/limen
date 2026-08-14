@@ -38,7 +38,9 @@ test("wake ignores history, announces start, and steers once on terminal change"
 	});
 	const session = {
 		cwd: root,
-		isIdle: () => false,
+		// Wake delivery must still be explicitly steered if this check says idle:
+		// the agent may begin another prompt before the extension hands it to Pi.
+		isIdle: () => true,
 		sessionManager: sessionManager("coordinator-a"),
 		ui: {
 			notify: (message: string) => notifications.push(message),
@@ -430,7 +432,7 @@ test("herdr pane naming follows running jobs and each terminal state notifies on
 	assert.deepEqual(naming.slice(0, 5), ["pane", "report-metadata", "w1:p1", "--source", "limen"]);
 	const titleAt = naming.indexOf("--title");
 	assert.equal(naming[titleAt + 1], "Limen · F001 implementation");
-	assert.equal(naming[naming.indexOf("--display-agent") + 1], "Limen coordinator");
+	assert.equal(naming[naming.indexOf("--display-agent") + 1], "✦ Limen · 1 waking");
 	const tokenAt = naming.indexOf("limen=1 · F001 starting");
 	assert.equal(naming[tokenAt - 1], "--token");
 	assert.equal(naming[tokenAt + 1], "--state-label");

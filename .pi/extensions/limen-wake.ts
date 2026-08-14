@@ -28,6 +28,7 @@ const SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", 
 const FALLBACK_GRACE_MS = 2_000;
 const CLAIM_STALE_MS = 30_000;
 type HerdrPane = { readonly binary: string; readonly pane: string };
+type Pulse = "starting" | "think" | "tool" | "wait" | "dead";
 
 export default function limenWake(pi: PiApi): void {
 	let watcher: FSWatcher | undefined;
@@ -53,14 +54,14 @@ export default function limenWake(pi: PiApi): void {
 			// Herdr reporting is advisory; durable state remains on disk.
 		}
 	};
-	const herdrReport = (body: string, title: string) => {
+	const herdrReport = (body: string, title: string, pulses: readonly Pulse[] = []) => {
 		if (!herdr) return;
 		const signature = `${title}\0${body}`;
 		if (signature === herdrMetadata && Date.now() - herdrMetadataAt < 60_000) return;
 		herdrMetadata = signature;
 		herdrMetadataAt = Date.now();
 		const change = body
-			? ["--title", title, "--display-agent", "Limen coordinator", "--token", `limen=${body}`, "--state-label", `idle=${body}`, "--state-label", `done=${body}`]
+			? ["--title", title, "--display-agent", herdrDisplayAgent(pulses), "--token", `limen=${body}`, "--state-label", `idle=${body}`, "--state-label", `done=${body}`]
 			: ["--clear-title", "--display-agent", "Limen coordinator", "--clear-token", "limen", "--clear-state-labels"];
 		herdrCall(["pane", "report-metadata", herdr.pane, "--source", "limen", "--seq", String((herdrSeq += 1)), ...change, "--ttl-ms", "180000"]);
 	};
@@ -101,7 +102,7 @@ export default function limenWake(pi: PiApi): void {
 			return;
 		}
 		statusBody = next.status;
-		herdrReport(next.status.slice("limen ".length), next.title);
+		herdrReport(next.status.slice("limen ".length), next.title, next.pulses);
 		drawStatus(context);
 		if (!statusTimer) {
 			statusTimer = setInterval(() => drawStatus(context), 120);
@@ -130,8 +131,9 @@ export default function limenWake(pi: PiApi): void {
 			const route = fallback ? " This completion was routed here because no subscribed coordinator received it." : "";
 			const location = repo ? ` in repository ${repo}` : "";
 			const message = `Limen job ${JSON.stringify(label)} is ${state} (${id}) on branch ${branch}${location}.${route} Inspect the job record, branch diff and commits, log/session, and relevant checks. Use the accepted ticket intent to take the next safe step: merge acceptable reviewed work, or resume focused fixes and re-review. Keep the user informed; ask only when genuine product ambiguity, a scope or risk tradeoff, or an irreversible action needs a human decision.`;
-			if (session?.isIdle()) pi.sendUserMessage(message);
-			else pi.sendUserMessage(message, { deliverAs: "steer" });
+			// `isIdle()` can change between this callback and delivery. Explicit steering is safe
+			// both while idle and while streaming; an unqualified send can race and throw.
+			pi.sendUserMessage(message, { deliverAs: "steer" });
 		});
 		if (routed) notifyHerdr(job, id, state, label, branch, slot);
 		return routed;
@@ -234,15 +236,16 @@ export default function limenWake(pi: PiApi): void {
 	});
 }
 
-function runningDisplay(jobs: string, session: string): { readonly status: string; readonly title: string } | undefined {
+function runningDisplay(jobs: string, session: string): { readonly status: string; readonly title: string; readonly pulses: readonly Pulse[] } | undefined {
 	const running = readdirSync(jobs)
 		.sort()
-		.filter((id) => stateOf(jobs, id) === "running" && subscribed(join(jobs, id), session))
+		.filter((id) => stateOf(jobs, id) === "running")
 		.map((id) => {
 			const label = text(join(jobs, id, "label")) || id;
 			const pulse = pulseOf(jobs, id);
 			const tool = text(join(jobs, id, "last-tool"));
-			return { label, status: `${shortLabel(label)} ${pulse === "tool" && tool ? `${pulse}:${tool}` : pulse}` };
+			const watching = subscribed(join(jobs, id), session);
+			return { label, pulse, status: `${shortLabel(label)} ${pulse === "tool" && tool ? `${pulse}:${tool}` : pulse}${watching ? "" : " (unwatched)"}` };
 		});
 	if (running.length === 0) return undefined;
 	const summary = `${running
@@ -256,9 +259,9 @@ function runningDisplay(jobs: string, session: string): { readonly status: strin
 					.slice(0, 3)
 					.map(({ label }) => shortLabel(label))
 					.join(" ")}`;
-	return { status: `limen ${running.length} · ${summary}`, title };
+	return { status: `limen ${running.length} · ${summary}`, title, pulses: running.map(({ pulse }) => pulse) };
 }
-function pulseOf(jobs: string, id: string): string {
+function pulseOf(jobs: string, id: string): Pulse {
 	// Copied into the project as a standalone extension; keep identical to src/job.ts derivePulse.
 	const pid = Number(text(join(jobs, id, "pid")));
 	const recorded = Number.isSafeInteger(pid) && pid > 0 ? pid : undefined;
@@ -372,6 +375,16 @@ function herdrTarget(): HerdrPane | undefined {
 	const pane = process.env.HERDR_PANE_ID;
 	if (binary === "0" || process.env.HERDR_ENV !== "1" || !pane) return undefined;
 	return { binary, pane };
+}
+function herdrDisplayAgent(pulses: readonly Pulse[]): string {
+	if (!pulses.length) return "Limen coordinator";
+	if (pulses.includes("dead")) return `⚠ Limen · ${pulses.length} needs attention`;
+	const states = [...new Set(pulses)];
+	const glyph = (pulse: Pulse): string => ({ starting: "✦", think: "◌", tool: "⚙", wait: "◴", dead: "⚠" })[pulse];
+	if (states.length > 1) return `${states.map(glyph).join("")} Limen · ${pulses.length} active`;
+	const state = states[0] as Pulse;
+	const description: Record<Pulse, string> = { starting: "waking", think: "thinking", tool: "working", wait: "waiting", dead: "needs attention" };
+	return `${glyph(state)} Limen · ${pulses.length} ${description[state]}`;
 }
 function shortLabel(label: string): string {
 	return /\bF\d{3,}\b/i.exec(label)?.[0]?.toUpperCase() ?? label.split(/\s+/, 1)[0]?.slice(0, 12) ?? "job";
