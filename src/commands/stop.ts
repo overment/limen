@@ -14,12 +14,12 @@ export async function stopCommand(args: readonly string[], cwd: string): Promise
 	if (!Number.isSafeInteger(pid) || pid <= 0) throw new Error(`running job ${id} has no valid pid`);
 	const reason = args.slice(1).join(" ").trim() || "stopped by request";
 	await appendLimenLog(jobDir, `stop requested: ${reason}`);
-	// Snapshot before TERM, then leave identity checks and escalation detached from terminal truth.
-	const escaped = discoverEscapedDescendants(jobDir, pid, "during stop");
+	// Complete the bounded ownership snapshot while the parent chain is intact, then signal.
+	const escaped = await discoverEscapedDescendants(jobDir, pid, "during stop");
 	const result = signalProcessGroup(pid, "SIGTERM");
-	void escaped
-		.then((processes) => containEscapedDescendants(jobDir, processes, "after stop"))
-		.catch((error: unknown) => appendLimenLog(jobDir, `escaped cleanup unconfirmed after stop: ${error instanceof Error ? error.message : String(error)}`));
+	void containEscapedDescendants(jobDir, escaped, "after stop").catch((error: unknown) =>
+		appendLimenLog(jobDir, `escaped cleanup unconfirmed after stop: ${error instanceof Error ? error.message : String(error)}`),
+	);
 	void (async () => {
 		if (result !== "missing" && !(await waitForProcessGroup(pid, 5_000))) {
 			await appendLimenLog(jobDir, "TERM grace elapsed; sending KILL");

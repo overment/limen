@@ -82,7 +82,7 @@ export async function listEscapedDescendants(rootPid: number): Promise<readonly 
 	if (!liveJobDescendant) throw new Error(`root process ${rootPid} was missing or terminal in process snapshot`);
 	return Promise.all(escaped.map(async (row) => (await processInfo(row.pid)) ?? { ...row, born: "identity-unavailable", command: "identity unavailable" }));
 }
-// Discovery failure is advisory but durable; a terminal state must never wait for it.
+// Discovery failure is advisory but durable; callers await only this bounded pre-TERM snapshot.
 export async function discoverEscapedDescendants(jobDir: string, rootPid: number, context: string): Promise<readonly JobProcess[]> {
 	try {
 		return await listEscapedDescendants(rootPid);
@@ -237,17 +237,19 @@ export async function runInternalJob(): Promise<void> {
 	process.on("SIGTERM", () => {
 		stopRequested = true;
 	});
-	let escapedAtExhaust: Promise<readonly JobProcess[]> = Promise.resolve([]);
+	let exhaustionTermination = Promise.resolve();
 	const exhaust = (reason: string) => {
 		if (exhausted || stopRequested) return;
 		exhausted = reason;
-		// Snapshot descendants before TERM; helper work remains detached from terminal truth.
-		escapedAtExhaust = discoverEscapedDescendants(jobDir, process.pid, "during exhaustion");
-		void escapedAtExhaust.then((processes) => containEscapedDescendants(jobDir, processes, "after exhaustion")).catch(() => {});
-		void appendLimenLog(jobDir, `${reason}; sending TERM`).catch(() => {});
-		signalProcessGroup(process.pid, "SIGTERM");
-		void finalizeJob(jobDir, "failed", reason).catch(() => {});
-		graceTimer = setTimeout(() => signalProcessGroup(process.pid, "SIGKILL"), STOP_GRACE_MS);
+		exhaustionTermination = (async () => {
+			// Complete the bounded ownership snapshot while the parent chain is intact, then signal.
+			const escaped = await discoverEscapedDescendants(jobDir, process.pid, "during exhaustion");
+			await appendLimenLog(jobDir, `${reason}; sending TERM`).catch(() => {});
+			signalProcessGroup(process.pid, "SIGTERM");
+			graceTimer = setTimeout(() => signalProcessGroup(process.pid, "SIGKILL"), STOP_GRACE_MS);
+			void containEscapedDescendants(jobDir, escaped, "after exhaustion").catch(() => {});
+			await finalizeJob(jobDir, "failed", reason);
+		})();
 	};
 	const sessionDir = `${jobDir}/session`;
 	const args = ["--mode", "json", "--approve", "--session-dir", sessionDir, "--name", `limen: ${label}`, "--append-system-prompt", preamble];
@@ -310,7 +312,8 @@ export async function runInternalJob(): Promise<void> {
 	apply(parser.flush());
 	await pending;
 	if (exhausted) {
-		// exhaust() already wrote durable failure and started detached containment.
+		// Keep the wrapper alive through its pre-TERM snapshot and durable failure write.
+		await exhaustionTermination;
 	} else if (stopRequested || result.signal === "SIGTERM" || result.signal === "SIGKILL") {
 		await finalizeJob(jobDir, "stopped", "process group interrupted");
 	} else if (result.error) await finalizeJob(jobDir, "failed", result.error.message);

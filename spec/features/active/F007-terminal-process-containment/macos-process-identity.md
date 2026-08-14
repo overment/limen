@@ -59,20 +59,21 @@ best-effort scope and never claim sandbox-grade containment.
 
 ## Terminal-state boundary
 
-Discovery and cleanup remain advisory. Start the pre-TERM discovery promise,
-then immediately send the process-group TERM and continue the existing
-stop/timeout state machine. Do not await discovery, the helper timeout,
-identity rechecks, TERM grace, or KILL grace before writing `stopped` or
-`failed`. Once terminal truth is written, continue cleanup in a detached,
-error-contained task; any discovery or verification failure writes a cleanup
-warning. Bound each helper run (the repair branch currently uses one second
-for process discovery) and kill its own detached group on expiry.
+Discovery and cleanup remain advisory, but attribution must finish while the
+wrapper's parent chain is intact. Await the bounded pre-TERM process snapshot,
+including captured birth identities, before sending the process-group TERM.
+A failed or timed-out snapshot writes `cleanup`; after that short bound,
+termination and terminal-state finalization proceed normally. Each process
+query remains bounded (currently at one second) and its own detached process
+group is killed on expiry.
 
-This preserves the repair branch's important property: a hung process query
-cannot delay `stop` or timeout. It does not solve the separate attribution race
-where a descendant detaches and exits its parent before any snapshot observes
-it; that limitation must also be reported as unconfirmed rather than broadened
-into a pattern kill.
+Only the ownership snapshot sits on the stop/timeout path. After TERM, identity
+rechecks, escaped-process TERM/KILL grace periods, and survivor recording
+continue in an error-contained task and do not delay `stopped` or `failed`.
+This avoids losing attribution when Pi exits immediately on TERM while keeping
+a hung process query bounded. A descendant that detaches and exits its parent
+before the pre-TERM snapshot begins still cannot be attributed safely; record
+the discovery failure rather than broadening cleanup into a pattern kill.
 
 ## Small proof plan
 
@@ -84,9 +85,9 @@ into a pattern kill.
 3. Keep F007's mocked PID-reuse seam, but capture identity A and make the
    recheck return identity B for the same PID. Assert neither TERM nor KILL is
    sent to B and `cleanup` records an unconfirmed replacement.
-4. Make the helper sleep past its bound for both `limen stop` and `--timeout`.
-   Assert the terminal state appears without waiting and a cleanup warning is
-   eventually written.
+4. Make process discovery sleep past its bound for both `limen stop` and
+   `--timeout`. Assert each path waits no longer than that short bound, writes a
+   cleanup warning, and then reaches its terminal state.
 5. On a real macOS runner, repeat the detached-child stop/timeout test and
    assert the captured identity matches before the child receives KILL. Run
    `npm run check`.

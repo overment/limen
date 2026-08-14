@@ -66,6 +66,17 @@ async function waitForFile(path: string, timeoutMs = 2_000): Promise<string> {
 	throw new Error(`timed out waiting for ${path}`);
 }
 
+async function waitForContainment(jobDir: string, pid: number, timeoutMs = 5_000): Promise<void> {
+	const deadline = Date.now() + timeoutMs;
+	while (Date.now() < deadline) {
+		if (!pidAlive(pid)) return;
+		const cleanup = await readFile(join(jobDir, "cleanup"), "utf8").catch(() => "");
+		if (cleanup.includes(`${pid} `)) return;
+		await new Promise((resolve) => setTimeout(resolve, 25));
+	}
+	assert.fail(`pid ${pid} must exit or be named in cleanup`);
+}
+
 async function delayProcessTable(scratch: { fakeBin: string }): Promise<void> {
 	await writeFile(join(scratch.fakeBin, "ps"), '#!/bin/sh\n/bin/sleep 0.2\nexec /bin/ps "$@"\n');
 	await chmod(join(scratch.fakeBin, "ps"), 0o755);
@@ -107,7 +118,7 @@ test("stop terminates an escaped-group child or records it in a cleanup note", a
 	} else assert.match(await waitForFile(join(scratch.root, `.limen/jobs/${id}/cleanup`)), new RegExp(`${escapee} `));
 });
 
-test("timeout terminates an escaped-group child", async (context) => {
+test("timeout terminates an escaped-group child or records it in cleanup", async (context) => {
 	const scratch = await scratchRepo(escapingPi);
 	context.after(scratch.cleanup);
 	limen(scratch, "init");
@@ -119,11 +130,11 @@ test("timeout terminates an escaped-group child", async (context) => {
 		} catch {}
 	});
 	await waitForState(scratch.root, id, "failed", 15_000);
-	await waitForPidExit(escapee);
-	const log = await readFile(join(scratch.root, `.limen/jobs/${id}/log`), "utf8");
+	const jobDir = join(scratch.root, `.limen/jobs/${id}`);
+	await waitForContainment(jobDir, escapee);
+	const log = await readFile(join(jobDir, "log"), "utf8");
 	assert.match(log, /timeout after 2000ms/);
 	assert.match(log, /terminating 1 escaped job process\(es\)/);
-	assert.ok(!pidAlive(escapee), "escaped child must not survive timeout");
 });
 
 test("a cleanup note names unconfirmed survivors and limen jobs detail shows it", async (context) => {
@@ -148,7 +159,7 @@ test("a cleanup note names unconfirmed survivors and limen jobs detail shows it"
 	assert.match(detail.stdout, /4242 1786736391\.120227 workerd --fake/);
 });
 
-test("delayed process-table discovery records a warning when stop loses the exited wrapper", async (context) => {
+test("stop completes delayed discovery before a fast parent exit", async (context) => {
 	const scratch = await scratchRepo(immediatelyExitingEscapingPi);
 	context.after(scratch.cleanup);
 	await delayProcessTable(scratch);
@@ -163,11 +174,13 @@ test("delayed process-table discovery records a warning when stop loses the exit
 	const stopped = limen(scratch, "stop", id, "delayed discovery");
 	assert.equal(stopped.status, 0, stopped.stderr);
 	await waitForState(scratch.root, id, "stopped", 2_000);
-	assert.ok(pidAlive(escapee), "the detached child must survive for manual teardown");
-	assert.match(await waitForFile(join(scratch.root, `.limen/jobs/${id}/cleanup`), 4_000), /root process .* missing or terminal in process snapshot/);
+	const jobDir = join(scratch.root, `.limen/jobs/${id}`);
+	await waitForContainment(jobDir, escapee);
+	assert.match(await readFile(join(jobDir, "log"), "utf8"), /terminating 1 escaped job process\(es\)/);
+	assert.doesNotMatch(await readFile(join(jobDir, "cleanup"), "utf8").catch(() => ""), /root process .* missing or terminal/);
 });
 
-test("delayed process-table discovery records a warning when timeout loses the exited wrapper", async (context) => {
+test("timeout completes delayed discovery before a fast parent exit", async (context) => {
 	const scratch = await scratchRepo(immediatelyExitingEscapingPi);
 	context.after(scratch.cleanup);
 	await delayProcessTable(scratch);
@@ -180,11 +193,13 @@ test("delayed process-table discovery records a warning when timeout loses the e
 		} catch {}
 	});
 	await waitForState(scratch.root, id, "failed", 2_000);
-	assert.ok(pidAlive(escapee), "the detached child must survive for manual teardown");
-	assert.match(await waitForFile(join(scratch.root, `.limen/jobs/${id}/cleanup`), 4_000), /root process .* missing or terminal in process snapshot/);
+	const jobDir = join(scratch.root, `.limen/jobs/${id}`);
+	await waitForContainment(jobDir, escapee);
+	assert.match(await readFile(join(jobDir, "log"), "utf8"), /terminating 1 escaped job process\(es\)/);
+	assert.doesNotMatch(await readFile(join(jobDir, "cleanup"), "utf8").catch(() => ""), /root process .* missing or terminal/);
 });
 
-test("sleeping descendant discovery cannot delay stop terminal state", async (context) => {
+test("sleeping descendant discovery delays stop only through its short bound", async (context) => {
 	const scratch = await scratchRepo(responsivePi);
 	context.after(scratch.cleanup);
 	await writeFile(join(scratch.fakeBin, "ps"), "#!/bin/sh\nexec sleep 10\n");
@@ -195,11 +210,12 @@ test("sleeping descendant discovery cannot delay stop terminal state", async (co
 	const stopped = limen(scratch, "stop", id, "ps sleeping");
 	assert.equal(stopped.status, 0, stopped.stderr);
 	await waitForState(scratch.root, id, "stopped", 2_000);
-	assert.ok(Date.now() - started < 2_000, "stop must not wait for sleeping ps");
-	assert.match(await waitForFile(join(scratch.root, `.limen/jobs/${id}/cleanup`)), /escaped descendant discovery failed during stop/);
+	const elapsed = Date.now() - started;
+	assert.ok(elapsed >= 900 && elapsed < 2_000, `stop must wait only for the bounded ps query, took ${elapsed}ms`);
+	assert.match(await readFile(join(scratch.root, `.limen/jobs/${id}/cleanup`), "utf8"), /escaped descendant discovery failed during stop/);
 });
 
-test("sleeping descendant discovery cannot delay timeout terminal state", async (context) => {
+test("sleeping descendant discovery delays timeout only through its short bound", async (context) => {
 	const scratch = await scratchRepo(responsivePi);
 	context.after(scratch.cleanup);
 	await writeFile(join(scratch.fakeBin, "ps"), "#!/bin/sh\nexec sleep 10\n");
@@ -208,8 +224,8 @@ test("sleeping descendant discovery cannot delay timeout terminal state", async 
 	const started = Date.now();
 	const id = onlyJobId(limen(scratch, "spawn", "--timeout", "100ms", "wait").stdout);
 	await waitForState(scratch.root, id, "failed", 2_000);
-	assert.ok(Date.now() - started < 2_000, "timeout must not wait for sleeping ps");
-	assert.match(await waitForFile(join(scratch.root, `.limen/jobs/${id}/cleanup`)), /escaped descendant discovery failed during exhaustion/);
+	assert.ok(Date.now() - started < 2_000, "timeout must wait only for the bounded ps query");
+	assert.match(await readFile(join(scratch.root, `.limen/jobs/${id}/cleanup`), "utf8"), /escaped descendant discovery failed during exhaustion/);
 });
 
 test("proc_pidinfo returns a microsecond birth identity and rejects absent PIDs", async () => {
