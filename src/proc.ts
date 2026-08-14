@@ -16,6 +16,7 @@ const toolCallCap = (): number => Number(process.env.LIMEN_MAX_TOOL_CALLS) || MA
 export type ProcessIdentity = { readonly pid: number; readonly born: string };
 export type JobProcess = ProcessIdentity & { readonly pgid: number; readonly command: string };
 type ProcessInfo = JobProcess & { readonly ppid: number };
+type ProcessTableRow = { readonly pid: number; readonly ppid: number; readonly pgid: number; readonly state: string };
 type ContainmentDependencies = {
 	readonly query?: (pid: number) => Promise<ProcessIdentity | undefined>;
 	readonly signal?: (pid: number, signal: NodeJS.Signals) => "sent" | "missing" | "denied";
@@ -62,16 +63,23 @@ export function processAlive(pid: number): boolean {
 // Snapshot ancestry before the wrapper group dies; proc_pidinfo supplies the identity used to signal.
 export async function listEscapedDescendants(rootPid: number): Promise<readonly JobProcess[]> {
 	const table = await processTable();
+	const root = table.find((row) => row.pid === rootPid);
+	if (!root || root.state.startsWith("Z")) throw new Error(`root process ${rootPid} was missing or terminal in process snapshot`);
 	const escaped: Array<{ pid: number; pgid: number }> = [],
 		seen = new Set([rootPid]),
 		queue = [rootPid];
+	let liveJobDescendant = false;
 	for (let parent = queue.shift(); parent !== undefined; parent = queue.shift())
 		for (const row of table) {
 			if (row.ppid !== parent || seen.has(row.pid)) continue;
 			seen.add(row.pid);
 			queue.push(row.pid);
+			if (!row.state.startsWith("Z")) liveJobDescendant = true;
 			if (row.pgid !== rootPid) escaped.push(row);
 		}
+	// The wrapper has a live Pi child until the ownership chain is useful. An empty
+	// post-TERM tree is attribution loss, not proof that no detached child escaped.
+	if (!liveJobDescendant) throw new Error(`root process ${rootPid} was missing or terminal in process snapshot`);
 	return Promise.all(escaped.map(async (row) => (await processInfo(row.pid)) ?? { ...row, born: "identity-unavailable", command: "identity unavailable" }));
 }
 // Discovery failure is advisory but durable; a terminal state must never wait for it.
@@ -132,14 +140,15 @@ export async function processInfo(pid: number): Promise<ProcessInfo | undefined>
 		return undefined;
 	}
 }
-async function processTable(): Promise<ReadonlyArray<{ pid: number; ppid: number; pgid: number }>> {
+async function processTable(): Promise<readonly ProcessTableRow[]> {
 	let scannerPid: number | undefined;
-	const output = await runBounded("ps", ["-Ao", "pid=,pgid=,ppid="], "ps discovery", (pid) => {
+	const output = await runBounded("ps", ["-Ao", "pid=,pgid=,ppid=,stat="], "ps discovery", (pid) => {
 		scannerPid = pid;
 	});
 	return output.split("\n").flatMap((line) => {
-		const match = /^\s*(\d+)\s+(\d+)\s+(\d+)\s*$/.exec(line);
-		return match && Number(match[1]) !== scannerPid ? [{ pid: Number(match[1]), pgid: Number(match[2]), ppid: Number(match[3]) }] : [];
+		const match = /^\s*(\d+)\s+(\d+)\s+(\d+)\s+(\S+)\s*$/.exec(line);
+		if (!match || Number(match[1]) === scannerPid || !match[4]) return [];
+		return [{ pid: Number(match[1]), pgid: Number(match[2]), ppid: Number(match[3]), state: match[4] }];
 	});
 }
 async function runBounded(command: string, args: readonly string[], description: string, onSpawn?: (pid: number) => void): Promise<string> {

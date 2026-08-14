@@ -30,6 +30,9 @@ console.log("escapee started");
 setInterval(() => {}, 1000);
 `;
 
+// The parent exits as soon as its process group receives TERM, while its detached child survives.
+const immediatelyExitingEscapingPi = escapingPi.replace("setTimeout(() => process.exit(0), 500)", "process.exit(0)");
+
 // A pi that keeps calling tools forever; the wrapper must bound it.
 const busyPi = `#!/usr/bin/env node
 process.on("SIGTERM", () => {});
@@ -61,6 +64,11 @@ async function waitForFile(path: string, timeoutMs = 2_000): Promise<string> {
 		await new Promise((resolve) => setTimeout(resolve, 25));
 	}
 	throw new Error(`timed out waiting for ${path}`);
+}
+
+async function delayProcessTable(scratch: { fakeBin: string }): Promise<void> {
+	await writeFile(join(scratch.fakeBin, "ps"), '#!/bin/sh\n/bin/sleep 0.2\nexec /bin/ps "$@"\n');
+	await chmod(join(scratch.fakeBin, "ps"), 0o755);
 }
 
 async function readEscapeePid(scratch: { root: string }, id: string): Promise<number> {
@@ -138,6 +146,42 @@ test("a cleanup note names unconfirmed survivors and limen jobs detail shows it"
 	assert.equal(detail.status, 0, detail.stderr);
 	assert.match(detail.stdout, /cleanup:/);
 	assert.match(detail.stdout, /4242 1786736391\.120227 workerd --fake/);
+});
+
+test("delayed process-table discovery records a warning when stop loses the exited wrapper", async (context) => {
+	const scratch = await scratchRepo(immediatelyExitingEscapingPi);
+	context.after(scratch.cleanup);
+	await delayProcessTable(scratch);
+	limen(scratch, "init");
+	const id = onlyJobId(limen(scratch, "spawn", "escape").stdout);
+	const escapee = await readEscapeePid(scratch, id);
+	context.after(() => {
+		try {
+			process.kill(escapee, "SIGKILL");
+		} catch {}
+	});
+	const stopped = limen(scratch, "stop", id, "delayed discovery");
+	assert.equal(stopped.status, 0, stopped.stderr);
+	await waitForState(scratch.root, id, "stopped", 2_000);
+	assert.ok(pidAlive(escapee), "the detached child must survive for manual teardown");
+	assert.match(await waitForFile(join(scratch.root, `.limen/jobs/${id}/cleanup`), 4_000), /root process .* missing or terminal in process snapshot/);
+});
+
+test("delayed process-table discovery records a warning when timeout loses the exited wrapper", async (context) => {
+	const scratch = await scratchRepo(immediatelyExitingEscapingPi);
+	context.after(scratch.cleanup);
+	await delayProcessTable(scratch);
+	limen(scratch, "init");
+	const id = onlyJobId(limen(scratch, "spawn", "--timeout", "1s", "escape").stdout);
+	const escapee = await readEscapeePid(scratch, id);
+	context.after(() => {
+		try {
+			process.kill(escapee, "SIGKILL");
+		} catch {}
+	});
+	await waitForState(scratch.root, id, "failed", 2_000);
+	assert.ok(pidAlive(escapee), "the detached child must survive for manual teardown");
+	assert.match(await waitForFile(join(scratch.root, `.limen/jobs/${id}/cleanup`), 4_000), /root process .* missing or terminal in process snapshot/);
 });
 
 test("sleeping descendant discovery cannot delay stop terminal state", async (context) => {
@@ -246,6 +290,8 @@ test("stop interrupts a process group and is idempotent", async (context) => {
 	await waitForState(scratch.root, id, "stopped");
 	assert.ok(Number.isFinite(Date.parse((await readFile(join(scratch.root, `.limen/jobs/${id}/finished-at`), "utf8")).trim())));
 	await assert.rejects(readFile(join(scratch.root, `.limen/jobs/${id}/pid`)));
+	await new Promise((resolve) => setTimeout(resolve, 1_100));
+	await assert.rejects(readFile(join(scratch.root, `.limen/jobs/${id}/cleanup`)), "an ordinary in-group worker needs no cleanup warning");
 	const again = limen(scratch, "stop", id);
 	assert.equal(again.status, 0, again.stderr);
 	assert.match(again.stdout, /already stopped/);
