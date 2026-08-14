@@ -2,7 +2,16 @@ import assert from "node:assert/strict";
 import { access, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import test from "node:test";
-import { limen, scratchRepo } from "./scratch.ts";
+import { limen, scratchRepo, scratchWorkspace } from "./scratch.ts";
+
+test("init refuses a non-Git directory with guidance", async (context) => {
+	const workspace = await scratchWorkspace();
+	context.after(workspace.cleanup);
+	const result = limen(workspace, "init");
+	assert.equal(result.status, 1);
+	assert.match(result.stderr, /requires a Git repository/);
+	assert.match(result.stderr, /limen workspace init/);
+});
 
 test("init fills gaps, preserves existing bytes, and ignores runtime state once", async (context) => {
 	const scratch = await scratchRepo();
