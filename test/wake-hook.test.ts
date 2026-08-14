@@ -18,6 +18,7 @@ test("wake ignores history, announces start, and steers once on terminal change"
 	stashEnv(context, "LIMEN_HERDR", "0");
 	const root = await import("node:fs/promises").then(({ mkdtemp }) => mkdtemp(join(process.env.TMPDIR ?? "/tmp", "limen-wake-")));
 	context.after(() => import("node:fs/promises").then(({ rm }) => rm(root, { recursive: true, force: true })));
+	await mkdir(join(root, ".agents/limen"), { recursive: true });
 	const jobs = join(root, ".limen/jobs");
 	await mkdir(join(jobs, "old"), { recursive: true });
 	await writeFile(join(jobs, "old/state"), "done\n");
@@ -76,6 +77,7 @@ test("wake recreates the ignored jobs directory on session start", async (contex
 	stashEnv(context, "LIMEN_HERDR", "0");
 	const root = await import("node:fs/promises").then(({ mkdtemp }) => mkdtemp(join(process.env.TMPDIR ?? "/tmp", "limen-wake-empty-")));
 	context.after(() => import("node:fs/promises").then(({ rm }) => rm(root, { recursive: true, force: true })));
+	await mkdir(join(root, ".agents/limen"), { recursive: true });
 	const handlers = new Map<string, (event: unknown, context: TestContext) => void>();
 	limenWake({
 		on(event, handler) {
@@ -117,6 +119,43 @@ test("wake remains inert inside workers", () => {
 	}
 });
 
+test("wake stays out of foreign projects and honors LIMEN_WAKE=0", async (context) => {
+	stashEnv(context, "LIMEN_JOB", undefined);
+	stashEnv(context, "LIMEN_HERDR", "0");
+	const start = async (prepare: (root: string) => Promise<unknown>) => {
+		const root = await import("node:fs/promises").then(({ mkdtemp }) => mkdtemp(join(process.env.TMPDIR ?? "/tmp", "limen-wake-inert-")));
+		context.after(() => import("node:fs/promises").then(({ rm }) => rm(root, { recursive: true, force: true })));
+		await prepare(root);
+		const handlers = new Map<string, (event: unknown, context: TestContext) => void>();
+		const statuses: Array<string | undefined> = [];
+		limenWake({
+			on(event, handler) {
+				handlers.set(event, handler);
+			},
+			sendUserMessage() {
+				assert.fail("an inert session must not receive wakes");
+			},
+		});
+		const session = { cwd: root, isIdle: () => true, ui: { notify() {}, setStatus: (_key: string, value: string | undefined) => statuses.push(value) } };
+		handlers.get("session_start")?.({}, session);
+		context.after(() => handlers.get("session_shutdown")?.({}, session));
+		return { root, statuses };
+	};
+	const foreign = await start(async () => {});
+	await assert.rejects(
+		import("node:fs/promises").then(({ access }) => access(join(foreign.root, ".limen"))),
+		"a project without .agents/limen must stay untouched",
+	);
+	assert.deepEqual(foreign.statuses, []);
+	stashEnv(context, "LIMEN_WAKE", "0");
+	const disabled = await start((root) => mkdir(join(root, ".agents/limen"), { recursive: true }));
+	await assert.rejects(
+		import("node:fs/promises").then(({ access }) => access(join(disabled.root, ".limen"))),
+		"LIMEN_WAKE=0 must keep the session silent",
+	);
+	assert.deepEqual(disabled.statuses, []);
+});
+
 test("herdr pane naming follows running jobs and each terminal state notifies once", async (context) => {
 	stashEnv(context, "LIMEN_JOB", undefined);
 	const root = await import("node:fs/promises").then(({ mkdtemp }) => mkdtemp(join(process.env.TMPDIR ?? "/tmp", "limen-herdr-")));
@@ -129,6 +168,7 @@ test("herdr pane naming follows running jobs and each terminal state notifies on
 	stashEnv(context, "LIMEN_HERDR", fake);
 	stashEnv(context, "HERDR_ENV", "1");
 	stashEnv(context, "HERDR_PANE_ID", "w1:p1");
+	await mkdir(join(root, ".agents/limen"), { recursive: true });
 	const jobs = join(root, ".limen/jobs");
 	const handlers = new Map<string, (event: unknown, context: TestContext) => void>();
 	limenWake({

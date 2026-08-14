@@ -72,7 +72,9 @@ export default function limenWake(pi: PiApi): void {
 		}
 	};
 	pi.on("session_start", (_event, context) => {
-		if (process.env.LIMEN_JOB === "1") return;
+		if (process.env.LIMEN_JOB === "1" || process.env.LIMEN_WAKE === "0") return;
+		// Only wake inside limen projects, so a global install stays inert and creates nothing elsewhere.
+		if (!existsSync(join(context.cwd, ".agents", "limen"))) return;
 		const jobs = join(context.cwd, ".limen", "jobs");
 		try {
 			mkdirSync(jobs, { recursive: true });
