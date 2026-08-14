@@ -36,6 +36,8 @@ test("init fills gaps, preserves existing bytes, and ignores runtime state once"
 	const wake = await readFile(join(scratch.root, ".pi/extensions/limen-wake.ts"), "utf8");
 	assert.match(wake, /sendUserMessage/);
 	assert.match(wake, /deliverAs: "steer"/);
+	assert.match(wake, /getSessionId/);
+	assert.match(wake, /claimDelivery/);
 	const communication = await readFile(join(scratch.root, ".pi/extensions/limen-communication.ts"), "utf8");
 	assert.match(communication, /before_agent_start/);
 	assert.match(communication, /buildContextEntries/);

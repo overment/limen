@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
-import { readFile, writeFile } from "node:fs/promises";
+import { access, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import test from "node:test";
-import { git, limen, onlyJobId, scratchRepo, waitForState } from "./scratch.ts";
+import { git, limen, limenWithSession, onlyJobId, scratchRepo, waitForState } from "./scratch.ts";
 
 test("spawn creates isolated branch, canonical record, runs pi, and resumes its worktree", async (context) => {
 	const scratch = await scratchRepo();
@@ -17,15 +17,19 @@ test("spawn creates isolated branch, canonical record, runs pi, and resumes its 
 			else process.env[name] = value;
 		}
 	});
-	const launched = limen(scratch, "spawn", "--label", "F001 implementation", "make commit");
+	const launched = limenWithSession(scratch, "coordinator-a", "spawn", "--label", "F001 implementation", "make commit");
 	assert.equal(launched.status, 0, launched.stderr);
 	assert.match(launched.stdout, /started F001 implementation/);
 	const id = onlyJobId(launched.stdout);
+	assert.match(id, /^\d{4}-\d{2}-\d{2}-f001-implementation-[0-9a-f]{8}$/);
 	await waitForState(scratch.root, id, "done");
 	const job = join(scratch.root, ".limen/jobs", id);
 	assert.equal(await readFile(join(job, "branch"), "utf8"), `limen/${id}\n`);
 	assert.equal(await readFile(join(job, "task.md"), "utf8"), "make commit\n");
 	assert.equal(await readFile(join(job, "label"), "utf8"), "F001 implementation\n");
+	assert.equal(await readFile(join(job, "origin-session"), "utf8"), "coordinator-a\n");
+	await access(join(job, "notify/subscribers/coordinator-a"));
+	assert.equal(await readFile(join(job, "notify/ready"), "utf8"), "1\n");
 	assert.ok(Number.isFinite(Date.parse((await readFile(join(job, "started-at"), "utf8")).trim())));
 	assert.ok(Number.isFinite(Date.parse((await readFile(join(job, "finished-at"), "utf8")).trim())));
 	await assert.rejects(readFile(join(job, "pid")));
@@ -41,8 +45,9 @@ test("spawn creates isolated branch, canonical record, runs pi, and resumes its 
 		id?: string;
 		label?: string;
 		herdr?: string[];
+		pi?: string[];
 	};
-	assert.deepEqual(childEnvironment, { job: "1", id, label: "F001 implementation", herdr: [] });
+	assert.deepEqual(childEnvironment, { job: "1", id, label: "F001 implementation", herdr: [], pi: [] });
 	const argv = JSON.parse(await readFile(join(worktree, "pi-args.json"), "utf8")) as string[];
 	assert.equal(argv[argv.indexOf("--mode") + 1], "json");
 	assert.match(argv[argv.indexOf("--session-dir") + 1] ?? "", /\.limen\/jobs\/[^/]+\/session$/);

@@ -25,6 +25,7 @@ const HANDSHAKE_MS = 2_000;
 const HANDSHAKE_POLL_MS = 20;
 export async function spawnCommand(args: readonly string[], cwd: string): Promise<void> {
 	const options = parseSpawnArgs(args);
+	const notificationSession = currentNotificationSession();
 	const workspace = workspaceRoot(cwd);
 	const root = workspace ?? repoRoot(cwd);
 	if (workspace && !options.repo) throw new Error("workspace spawn requires --repo <immediate-child>");
@@ -54,6 +55,7 @@ export async function spawnCommand(args: readonly string[], cwd: string): Promis
 	);
 	const jobDir = `${jobsRoot}/${id}`;
 	await mkdir(jobDir);
+	await mkdir(`${jobDir}/notify/subscribers`, { recursive: true });
 	await Promise.all([
 		writeFile(`${jobDir}/task.md`, `${task.trim()}\n`, { flag: "wx", flush: true }),
 		writeFile(`${jobDir}/label`, `${options.label}\n`, { flag: "wx", flush: true }),
@@ -64,7 +66,14 @@ export async function spawnCommand(args: readonly string[], cwd: string): Promis
 		writeFile(`${jobDir}/last-tool`, "", { flag: "wx", flush: true }),
 		writeFile(`${jobDir}/activity`, "think\n", { flag: "wx", flush: true }),
 		writeFile(`${jobDir}/log`, "", { flag: "wx", flush: true }),
+		...(notificationSession
+			? [
+					writeFile(`${jobDir}/origin-session`, `${notificationSession}\n`, { flag: "wx", flush: true }),
+					writeFile(`${jobDir}/notify/subscribers/${notificationSession}`, `${new Date().toISOString()}\n`, { flag: "wx", flush: true }),
+				]
+			: []),
 	]);
+	await writeFile(`${jobDir}/notify/ready`, "1\n", { flag: "wx", flush: true });
 	await atomicWrite(`${jobDir}/state`, "running\n");
 	const role = options.review ? "reviewer" : "worker";
 	const localPreamble = `${root}/.agents/limen/${role}.md`;
@@ -182,7 +191,12 @@ function normalizeLabel(value: string): string {
 }
 function makeJobId(label: string): string {
 	const slug = label.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-	return `${new Date().toISOString().slice(0, 10)}-${slug.replace(/^-|-$/g, "").slice(0, 32) || "job"}-${randomBytes(2).toString("hex")}`;
+	return `${new Date().toISOString().slice(0, 10)}-${slug.replace(/^-|-$/g, "").slice(0, 32) || "job"}-${randomBytes(4).toString("hex")}`;
+}
+function currentNotificationSession(): string | undefined {
+	const value = process.env.PI_SESSION_ID?.trim();
+	if (value && !/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(value)) throw new Error("PI_SESSION_ID is not safe for notification routing");
+	return value || undefined;
 }
 async function countRunning(jobsRoot: string): Promise<number> {
 	const entries = await readdir(jobsRoot, { withFileTypes: true });

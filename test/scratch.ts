@@ -43,6 +43,12 @@ async function createRepository(root: string): Promise<void> {
 }
 
 export function limen(scratch: Scratch, ...args: readonly string[]): { readonly stdout: string; readonly stderr: string; readonly status: number } {
+	return runLimen(scratch, {}, args);
+}
+export function limenWithSession(scratch: Scratch, session: string, ...args: readonly string[]): { readonly stdout: string; readonly stderr: string; readonly status: number } {
+	return runLimen(scratch, { PI_SESSION_ID: session, PI_SESSION_FILE: `/sessions/${session}.jsonl` }, args);
+}
+function runLimen(scratch: Scratch, addedEnvironment: NodeJS.ProcessEnv, args: readonly string[]): { readonly stdout: string; readonly stderr: string; readonly status: number } {
 	const environment: NodeJS.ProcessEnv = {
 		...process.env,
 		PATH: `${scratch.fakeBin}:${process.env.PATH}`,
@@ -60,8 +66,14 @@ export function limen(scratch: Scratch, ...args: readonly string[]): { readonly 
 		"LIMEN_MODEL",
 		"LIMEN_LABEL",
 		"LIMEN_JOB_LABEL",
+		"PI_SESSION_ID",
+		"PI_SESSION_FILE",
+		"PI_PROVIDER",
+		"PI_MODEL",
+		"PI_REASONING_LEVEL",
 	])
 		delete environment[name];
+	Object.assign(environment, addedEnvironment);
 	const result = spawnSync(process.execPath, [LIMEN, ...args], {
 		cwd: scratch.root,
 		encoding: "utf8",
@@ -110,7 +122,7 @@ const promptIndex = args.findIndex((value) => value.startsWith("@"));
 const task = promptIndex >= 0 ? readFileSync(args[promptIndex].slice(1), "utf8") : "";
 writeFileSync("pi-args.json", JSON.stringify(args));
 writeFileSync("pi-task.txt", task);
-writeFileSync("pi-env.json", JSON.stringify({ internal: process.env.LIMEN_INTERNAL_RUN, job: process.env.LIMEN_JOB, id: process.env.LIMEN_JOB_ID, label: process.env.LIMEN_JOB_LABEL, herdr: Object.keys(process.env).filter((key) => key.startsWith("HERDR_")) }));
+writeFileSync("pi-env.json", JSON.stringify({ internal: process.env.LIMEN_INTERNAL_RUN, job: process.env.LIMEN_JOB, id: process.env.LIMEN_JOB_ID, label: process.env.LIMEN_JOB_LABEL, herdr: Object.keys(process.env).filter((key) => key.startsWith("HERDR_")), pi: Object.keys(process.env).filter((key) => key.startsWith("PI_SESSION_") || key === "PI_PROVIDER" || key === "PI_MODEL" || key === "PI_REASONING_LEVEL") }));
 console.log(JSON.stringify({ type: "agent_start" }));
 console.log(JSON.stringify({ type: "tool_execution_start", toolName: "bash", args: { command: "git status" } }));
 console.log(JSON.stringify({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text: "fake pi completed" }] } }));

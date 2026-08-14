@@ -109,19 +109,9 @@ export function renderJob(job: Job, view: JobView): string {
 	return blocks.join("\n");
 }
 function terminalDetail(job: Job): string {
-	switch (job.phase) {
-		case "running":
-		case "done":
-			return "";
-		case "failed":
-			return job.error;
-		case "stopped":
-			return job.reason;
-		default: {
-			const exhaustive: never = job;
-			return exhaustive;
-		}
-	}
+	if (job.phase === "failed") return job.error;
+	if (job.phase === "stopped") return job.reason;
+	return "";
 }
 function formatDuration(milliseconds: number): string {
 	const seconds = Math.max(0, Math.floor(milliseconds / 1_000));

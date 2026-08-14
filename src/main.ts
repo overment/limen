@@ -4,6 +4,7 @@ import { migrateCommand } from "./commands/migrate.ts";
 import { spawnCommand } from "./commands/spawn.ts";
 import { stopCommand } from "./commands/stop.ts";
 import { waitCommand } from "./commands/wait.ts";
+import { unwatchCommand, watchCommand } from "./commands/watch.ts";
 import { failInternalJob, runInternalJob } from "./proc.ts";
 
 type Command = (args: readonly string[], cwd: string) => Promise<void>;
@@ -15,7 +16,9 @@ const COMMANDS = {
 	stop: stopCommand,
 	wait: waitCommand,
 	jobs: jobsCommand,
-} as const satisfies Record<"init" | "workspace" | "migrate" | "spawn" | "stop" | "wait" | "jobs", Command>;
+	watch: watchCommand,
+	unwatch: unwatchCommand,
+} as const satisfies Record<"init" | "workspace" | "migrate" | "spawn" | "stop" | "wait" | "jobs" | "watch" | "unwatch", Command>;
 const HELP = `limen — isolated coding jobs with files and git
 usage:
   limen init
@@ -27,6 +30,8 @@ usage:
   limen wait <id|suffix|label>
   limen stop <id|suffix|label> [reason]
   limen jobs
+  limen watch <id|suffix|label> | --running
+  limen unwatch <id|suffix|label> | --all
 Pass a short coordinator instruction, not $(cat ticket.md). The ticket is a pointer, not the prompt.`;
 export async function main(args: readonly string[], cwd = process.cwd()): Promise<void> {
 	try {

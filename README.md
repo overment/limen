@@ -29,7 +29,7 @@ limen init
 
 `npm install -g @overment/limen` is the same binary once published.
 
-`limen init` only creates files that are missing. Existing `AGENTS.md`, preambles, and specs are left untouched. If the shop manual in this repo has changed, copy it by hand. Restart the coordinator or `/reload` so project-local Pi extensions load.
+`limen init` only creates files that are missing. Existing `AGENTS.md`, preambles, extensions, and specs are left untouched. When upgrading an initialized project, copy changed shop-manual or extension files deliberately; notification routing requires the current `hook/wake.ts` at `.pi/extensions/limen-wake.ts`. Restart the coordinator or `/reload` after replacing an extension.
 
 ## Coordinate adjacent repositories
 
@@ -63,14 +63,6 @@ limen spawn --repo easytools-server --review --branch limen/<id> --label "F073 s
 ```
 
 The selected child is the only repository a job owns: branches, worktrees, review, and diffs stay there. The job record names that repository, while the ticket's conventional `Ticket: spec/...` pointer becomes an absolute workspace path for the worker. A workspace has no repository manifest and no multi-repository job; split a cross-repository feature into clear repository slices. Run `jobs`, `wait`, and `stop` from the workspace parent.
-
-### Migrate from Control
-
-Run `limen migrate` with no arguments in an initialized legacy project. Do not run `limen init`: it refuses legacy artifacts and directs you to migration so duplicate extensions cannot be created.
-
-Migration performs a complete read-only preflight, refuses active or handshaking legacy jobs and path conflicts, then moves `.control` to `.limen` and `.agents/control` to `.agents/limen`. It preserves the whole agent directory, replaces installed legacy extension pairs with the packaged Limen extensions, narrowly patches an existing `AGENTS.md`, and updates legacy `.control` entries in an existing `.gitignore`. It creates neither missing prompts nor missing extension pairs. Re-running it is safe and prints no-op/kept actions.
-
-Git branches and registered worktrees are intentionally untouched. Historical branches and paths remain valid; resume one with `limen spawn --branch control/<id>`. Newly created jobs use `limen/<id>` and sibling `.<repo>-limen-worktrees`. Historical `[control ...]` log terminal lines remain readable. Restart the coordinator or run `/reload` after migration.
 
 ## Roles
 
@@ -125,7 +117,7 @@ Give the worker a short instruction and a pointer to the ticket. Do not dump the
 limen spawn --label "F001 auth implementation" \
   "Implement F001: users can sign in. Start by writing the session handler. Ticket: spec/features/active/F001-auth/ticket.md"
 # started F001 auth implementation
-# 2026-08-13-f001-auth-implementation-7a2f
+# 2026-08-13-f001-auth-implementation-3c8d7a2f
 ```
 
 The last line is the durable id. `jobs`, `wait`, and `stop` also accept a unique suffix (`7a2f`) or the label.
@@ -148,6 +140,9 @@ limen init
 limen spawn "Implement FNNN: <outcome>. Start by writing <slice>. Ticket: spec/features/active/FNNN-slug/ticket.md"
 limen spawn --review --branch B --label L "Review the FNNN candidate against spec/features/active/FNNN-slug/ticket.md"
 limen jobs
+limen watch <id|suffix|label>   # agent subscribes this conversation
+limen watch --running
+limen unwatch <id|suffix|label>
 limen stop <id|suffix|label> [reason]
 limen wait <id|suffix|label>    # scripts only
 ```
@@ -163,6 +158,8 @@ git diff HEAD...<branch>
 ```
 
 `limen jobs` lists running jobs first, then newest `started-at`. Pulse is observed, not stored: `starting`, `think`, `tool`, `wait`, `dead`. The log is tool names plus a path or command, then assistant text. The full transcript is `.limen/jobs/<id>/session/`.
+
+The conversation that spawns a job is subscribed automatically. In another coordinator conversation, say “watch F001 here” or “watch the running jobs here”; the coordinator runs `limen watch` through its Bash tool, which carries Pi's session ID. You do not need to type the command. `!limen watch` cannot identify the conversation and is intentionally rejected. Available explicit subscribers receive their own deduplicated wake; unrelated windows stay quiet. If no subscriber receives a completion, one idle coordinator gets a durable fallback handoff after a short grace period. If every coordinator is closed, the next one opened receives it.
 
 `done` is `pi` exiting 0. Look at the branch before you treat the ticket as finished.
 
@@ -199,13 +196,15 @@ Stop sends TERM, waits five seconds, then KILL if needed. Stopping a finished jo
   activity       think | tool | wait
   log            think/tool/wait, targets, assistant text
   session/       Pi session for this job
+  origin-session spawning Pi conversation, when available
+  notify/        conversation subscriptions and delivery receipts
 ```
 
 One fact per file. Mutable writes use a temp file and rename. Terminal `state` is written before `pid` is removed. After a crash, inspect or edit these files yourself. Worktrees stay until you `git worktree remove` and delete the branch.
 
-The optional wake extension shows a footer (`⠹ limen 1 · F003 tool:bash`), one start notice, and one terminal message. If the coordinator is busy, that message is steered. Display is advisory. If you miss it, the job files and branch are still there.
+The optional wake extension shows subscribed jobs in the footer (`⠹ limen 1 · F003 tool:bash`), one start notice, and one durable terminal handoff per subscribed conversation. The handoff tells the coordinator to inspect evidence and take the next safe step autonomously—merge acceptable reviewed work, or resume focused corrections and re-review—asking you only for genuine product ambiguity, scope/risk tradeoffs, or irreversible actions. If the coordinator is busy, the handoff is steered. Job files and Git remain canonical.
 
-The wake extension activates only in projects that contain `.agents/limen/`, so it may instead live globally at `~/.pi/agent/extensions/limen-wake.ts` and stay inert everywhere else. Keep one copy — global or project — or every wake arrives twice. `/limen off` mutes the conversation surface (footer, start notices, wake messages); `/limen on` resumes and delivers anything missed once; bare `/limen` toggles. Herdr's pane status and notifications are ambient rather than conversational, so they stay live while muted. `LIMEN_WAKE=0 pi` starts a session silent.
+The wake extension activates only in projects that contain `.agents/limen/`, so it may instead live globally at `~/.pi/agent/extensions/limen-wake.ts` and stay inert everywhere else. Keep one copy — global or project — or explicitly subscribed conversations may still duplicate displays. `/limen off` temporarily mutes that conversation without removing subscriptions; `/limen on` catches up unless another coordinator already received the fallback handoff; bare `/limen` toggles. Herdr's subscribed pane status remains ambient while muted. `LIMEN_WAKE=0 pi` starts a session silent.
 
 When the coordinator runs inside a [Herdr](https://herdr.dev) pane (`HERDR_ENV=1`), the same extension mirrors that footer as a `limen` status token on the pane and relabels the pane's idle state, so a backgrounded tab both names the running jobs and reads as busy, and raises one Herdr notification per terminal state (your Herdr notification settings decide whether it is shown). Set `LIMEN_HERDR=0` to opt out. Jobs are detached processes, not panes: spawn strips `HERDR_*` from the job environment so nothing inside a worker can misreport the coordinator's pane.
 
@@ -219,7 +218,7 @@ The optional communication extension injects `.agents/limen/communication.md` in
 | Worker asked a real question | Read the file it wrote, answer, resume `--branch`. |
 | Wrapper dead, `state` still `running` | `kill -0` the pid, edit `state`, resume. |
 | Bad candidate | Do not merge. Remove the worktree and branch. |
-| Missed wake or dead coordinator | Read `.limen/jobs/` and Git. |
+| Missed wake or dead coordinator | Open any coordinator; pending completion falls back once, and `.limen/jobs/` plus Git remain canonical. |
 | Bad merge or stale board | Ordinary `git`, or edit the Markdown. |
 
 There is no channel into a running job. Stop it, change the instruction, resume the branch. There is no cleanup command.
