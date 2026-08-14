@@ -6,11 +6,11 @@
 
 ## NOW
 
-- No active feature.
+- `F006-interactive-managed-updates` (ACTIVE): shape an interactive, advisory-first update experience and the agent response settings before implementation.
 
 ## NEXT
 
-- No selected feature.
+- Decide F006’s update brief, autonomy boundary, and discussion triggers from the feature-shaping survey.
 
 ## PROVEN
 
