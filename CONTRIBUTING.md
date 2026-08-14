@@ -17,6 +17,7 @@ That is typecheck, Biome format check, and the real-Git test suite. Each test ha
 - Capability — start, wait, stop, observe — belongs in `src/`
 - Operating advice belongs in `templates/`
 - Behavior incidents should normally change templates, not add guards
+- Project context belongs in the standalone copied extension: load actual project files, bound injected text, and report board drift as an advisory rather than deciding workflow
 
 Only impossible mechanics should error. Everything else informs. Migration is the exception where safety requires a complete read-only preflight: any legacy live job, handshake, type mismatch, or old/new path conflict must fail before the first write.
 

@@ -1,11 +1,13 @@
 # Vision
 
-> Human-owned. Describe why this project exists, for whom, and the principles that should outlive individual features. The coordinator may propose changes but does not invent or rewrite this intent unprompted.
+> Human-owned durable intent for every role. Keep this file at or below 1000 lines. The injected copy is capped at 1000 lines; keep each item high-signal and move supporting history to feature notes. The coordinator may propose changes but does not invent or rewrite this intent unprompted.
 
 ## Product principles
 
-- <!-- Durable product principle. -->
+- <!-- Durable principle: user, value, boundary, or tradeoff. -->
+- <!-- One compact, decision-useful fragment per line. -->
 
 ## Current direction
 
-<!-- What the next stretch of work is for, in one short paragraph. -->
+- <!-- Current stretch: outcome, why now, and material constraint. -->
+- <!-- Near-term priority or sequencing rule, if needed. -->

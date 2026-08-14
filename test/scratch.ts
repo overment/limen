@@ -66,6 +66,7 @@ function runLimen(scratch: Scratch, addedEnvironment: NodeJS.ProcessEnv, args: r
 		"LIMEN_MODEL",
 		"LIMEN_LABEL",
 		"LIMEN_JOB_LABEL",
+		"LIMEN_CONTEXT_ROOT",
 		"PI_SESSION_ID",
 		"PI_SESSION_FILE",
 		"PI_PROVIDER",
@@ -122,7 +123,7 @@ const promptIndex = args.findIndex((value) => value.startsWith("@"));
 const task = promptIndex >= 0 ? readFileSync(args[promptIndex].slice(1), "utf8") : "";
 writeFileSync("pi-args.json", JSON.stringify(args));
 writeFileSync("pi-task.txt", task);
-writeFileSync("pi-env.json", JSON.stringify({ internal: process.env.LIMEN_INTERNAL_RUN, job: process.env.LIMEN_JOB, id: process.env.LIMEN_JOB_ID, label: process.env.LIMEN_JOB_LABEL, herdr: Object.keys(process.env).filter((key) => key.startsWith("HERDR_")), pi: Object.keys(process.env).filter((key) => key.startsWith("PI_SESSION_") || key === "PI_PROVIDER" || key === "PI_MODEL" || key === "PI_REASONING_LEVEL") }));
+writeFileSync("pi-env.json", JSON.stringify({ internal: process.env.LIMEN_INTERNAL_RUN, job: process.env.LIMEN_JOB, id: process.env.LIMEN_JOB_ID, label: process.env.LIMEN_JOB_LABEL, ...(process.env.LIMEN_CONTEXT_ROOT ? { contextRoot: process.env.LIMEN_CONTEXT_ROOT } : {}), herdr: Object.keys(process.env).filter((key) => key.startsWith("HERDR_")), pi: Object.keys(process.env).filter((key) => key.startsWith("PI_SESSION_") || key === "PI_PROVIDER" || key === "PI_MODEL" || key === "PI_REASONING_LEVEL") }));
 console.log(JSON.stringify({ type: "agent_start" }));
 console.log(JSON.stringify({ type: "tool_execution_start", toolName: "bash", args: { command: "git status" } }));
 console.log(JSON.stringify({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text: "fake pi completed" }] } }));

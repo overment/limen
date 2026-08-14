@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { access, readFile } from "node:fs/promises";
+import { access, readFile, realpath } from "node:fs/promises";
 import { join } from "node:path";
 import test from "node:test";
 import { git, limen, onlyJobId, scratchWorkspace, waitForState } from "./scratch.ts";
@@ -30,8 +30,16 @@ test("workspace coordinates explicit child repositories while its specs stay out
 	const apiWorktrees = git(workspace.repositories.api, "worktree", "list", "--porcelain");
 	assert.match(apiWorktrees, new RegExp(`worktree .*${worker}`));
 	assert.match(apiWorktrees, new RegExp(`branch refs/heads/limen/${worker}`));
+	const workerWorktree = apiWorktrees
+		.split("\n\n")
+		.find((entry) => entry.includes(worker))
+		?.split("\n")[0]
+		?.slice("worktree ".length);
+	assert.ok(workerWorktree);
+	const workerEnvironment = JSON.parse(await readFile(join(workerWorktree, "pi-env.json"), "utf8")) as { readonly contextRoot?: string };
+	assert.equal(workerEnvironment.contextRoot, await realpath(workspace.root));
 	assert.doesNotMatch(git(workspace.repositories.web, "worktree", "list", "--porcelain"), new RegExp(worker));
-	const jobs = limen(workspace, "jobs");
+	const jobs = limen(workspace, "jobs", "--all");
 	assert.equal(jobs.status, 0, jobs.stderr);
 	assert.match(jobs.stdout, /repo api/);
 	assert.match(jobs.stdout, /candidate.txt/);

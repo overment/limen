@@ -29,7 +29,7 @@ usage:
   limen spawn --review --branch B --label L "Review the FNNN candidate against spec/features/active/FNNN-slug/ticket.md"
   limen wait <id|suffix|label>
   limen stop <id|suffix|label> [reason]
-  limen jobs
+  limen jobs [--running|--active|--all|<id|suffix|label>]
   limen watch <id|suffix|label> | --running
   limen unwatch <id|suffix|label> | --all
 Pass a short coordinator instruction, not $(cat ticket.md). The ticket is a pointer, not the prompt.`;

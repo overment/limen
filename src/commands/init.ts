@@ -24,7 +24,7 @@ async function initialize(root: string, repository: boolean): Promise<void> {
 		[`${ROOT}/templates/agents.md`, `${root}/AGENTS.md`],
 		[`${ROOT}/templates/worker.md`, `${root}/.agents/limen/worker.md`],
 		[`${ROOT}/templates/reviewer.md`, `${root}/.agents/limen/reviewer.md`],
-		[`${ROOT}/templates/communication.md`, `${root}/.agents/limen/communication.md`],
+		[`${ROOT}/templates/styleguide.md`, `${root}/.agents/limen/styleguide.md`],
 		[`${ROOT}/templates/spec/vision.md`, `${root}/spec/vision.md`],
 		[`${ROOT}/templates/spec/build.md`, `${root}/spec/build.md`],
 		...(repository ? [] : ([[`${ROOT}/templates/spec/workspace.md`, `${root}/spec/workspace.md`]] as const)),

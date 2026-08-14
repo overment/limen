@@ -21,8 +21,7 @@ type WorktreePlan =
 	| { readonly kind: "add-branch"; readonly path: string; readonly branch: string }
 	| { readonly kind: "add-new"; readonly path: string; readonly branch: string };
 const TEMPLATE_ROOT = fileURLToPath(new URL("../../templates", import.meta.url));
-const HANDSHAKE_MS = 2_000;
-const HANDSHAKE_POLL_MS = 20;
+const [HANDSHAKE_MS, HANDSHAKE_POLL_MS] = [2_000, 20];
 export async function spawnCommand(args: readonly string[], cwd: string): Promise<void> {
 	const options = parseSpawnArgs(args);
 	const notificationSession = currentNotificationSession();
@@ -88,6 +87,7 @@ export async function spawnCommand(args: readonly string[], cwd: string): Promis
 		LIMEN_PREAMBLE: preamble,
 		LIMEN_JOB_ID: id,
 		LIMEN_LABEL: options.label,
+		LIMEN_CONTEXT_ROOT: root,
 	};
 	const model = options.model ?? (process.env[options.review ? "LIMEN_REVIEWER_MODEL" : "LIMEN_WORKER_MODEL"]?.trim() || undefined);
 	if (model) environment.LIMEN_MODEL = model;

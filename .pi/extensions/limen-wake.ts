@@ -237,13 +237,12 @@ export default function limenWake(pi: PiApi): void {
 function runningDisplay(jobs: string, session: string): { readonly status: string; readonly title: string } | undefined {
 	const running = readdirSync(jobs)
 		.sort()
-		.filter((id) => stateOf(jobs, id) === "running")
+		.filter((id) => stateOf(jobs, id) === "running" && subscribed(join(jobs, id), session))
 		.map((id) => {
 			const label = text(join(jobs, id, "label")) || id;
 			const pulse = pulseOf(jobs, id);
 			const tool = text(join(jobs, id, "last-tool"));
-			const watching = subscribed(join(jobs, id), session);
-			return { label, status: `${shortLabel(label)} ${pulse === "tool" && tool ? `${pulse}:${tool}` : pulse}${watching ? "" : " (unwatched)"}` };
+			return { label, status: `${shortLabel(label)} ${pulse === "tool" && tool ? `${pulse}:${tool}` : pulse}` };
 		});
 	if (running.length === 0) return undefined;
 	const summary = `${running

@@ -29,7 +29,7 @@ limen init
 
 `npm install -g @overment/limen` is the same binary once published.
 
-`limen init` only creates files that are missing. Existing `AGENTS.md`, preambles, extensions, and specs are left untouched. When upgrading an initialized project, copy changed shop-manual or extension files deliberately; notification routing requires the current `hook/wake.ts` at `.pi/extensions/limen-wake.ts`. Restart the coordinator or `/reload` after replacing an extension.
+`limen init` only creates files that are missing. Existing `AGENTS.md`, preambles, extensions, and specs are left untouched. When upgrading an initialized project, copy changed shop-manual or extension files deliberately; notification routing requires the current `hook/wake.ts` at `.pi/extensions/limen-wake.ts`. To adopt project context, rename or copy `.agents/limen/communication.md` to `.agents/limen/styleguide.md` and replace `.pi/extensions/limen-communication.ts` with the current `hook/communication.ts`. Restart the coordinator or `/reload` after replacing an extension.
 
 ## Coordinate adjacent repositories
 
@@ -80,7 +80,7 @@ You talk only to the coordinator. Workers and reviewers never join that conversa
 
 ### Specs
 
-A filing cabinet. Nothing in `limen` parses or gates these paths.
+A filing cabinet. Nothing in `limen` gates these paths. The project-context extension may surface an advisory when a planned or active feature folder is absent from the build board; it never changes workflow state or blocks work.
 
 ```text
 spec/
@@ -94,7 +94,7 @@ spec/
     dropped/YYYY-MM/FNNN-slug/
 ```
 
-Allocate the next `FNNN` and never reuse it. Status marks on the board and ticket (🔴 PLANNED · 🟠 ACTIVE · 🟢 PROVEN · ⚪ DROPPED) are prose. The usual loop is: write a ticket, spawn a short instruction, inspect, review, merge or resume, update the board.
+Allocate the next `FNNN` and never reuse it. Status marks on the board and ticket (🔴 PLANNED · 🟠 ACTIVE · 🟢 PROVEN · ⚪ DROPPED) are prose. Reconcile the board with planned and active feature folders before work, then write a ticket, spawn a short instruction, inspect, review, merge or resume, and update the board with each feature-state change.
 
 ### Prompts
 
@@ -102,12 +102,12 @@ Allocate the next `FNNN` and never reuse it. Status marks on the board and ticke
 AGENTS.md                              shop manual for the coordinator
 .agents/limen/worker.md              birth text for spawn
 .agents/limen/reviewer.md            birth text for spawn --review
-.agents/limen/communication.md       how every session should write
+.agents/limen/styleguide.md          concise working and communication style
 .pi/extensions/limen-wake.ts         footer, start notice, completion wake
-.pi/extensions/limen-communication.ts injects communication.md into the coordinator
+.pi/extensions/limen-communication.ts appends project context to every role
 ```
 
-`worker.md` and `reviewer.md` are appended as the job’s system prompt. `AGENTS.md` loads in the coordinator (and in workers, now that spawn no longer passes `--no-context-files`). `communication.md` is injected only into the coordinator thread; workers skip it. Edit those files to change behavior. `init` will not overwrite them.
+`worker.md` and `reviewer.md` are appended as the job’s system prompt. `AGENTS.md` loads in the coordinator (and in workers, now that spawn no longer passes `--no-context-files`). After every user message and before the model starts, the context extension attaches a hidden project-context message containing the actual `spec/vision.md`, `spec/build.md`, and `.agents/limen/styleguide.md`. Each job reads these from its coordinator project root; a workspace job therefore uses its workspace parent even though its tools run in a selected child worktree. Each source is trimmed to 1000 lines; a truncation notice tells the model to read the canonical file for the remainder. The extension also gives a non-blocking build-board drift advisory. Edit those files to change behavior. `init` will not overwrite them.
 
 ## How a job starts
 
@@ -139,7 +139,9 @@ That spawn creates branch `limen/<id>` and a worktree next to the repo. Commit t
 limen init
 limen spawn "Implement FNNN: <outcome>. Start by writing <slice>. Ticket: spec/features/active/FNNN-slug/ticket.md"
 limen spawn --review --branch B --label L "Review the FNNN candidate against spec/features/active/FNNN-slug/ticket.md"
-limen jobs
+limen jobs                              # bounded live-job snapshot
+limen jobs --all                        # historical diagnostics
+limen jobs <id|suffix|label>            # one detailed record
 limen watch <id|suffix|label>   # agent subscribes this conversation
 limen watch --running
 limen unwatch <id|suffix|label>
@@ -152,12 +154,13 @@ limen wait <id|suffix|label>    # scripts only
 Stay in the coordinator. The footer and one completion wake are how you hear back. Do not `limen wait` in that session — it blocks conversation. Do not poll with `sleep`.
 
 ```bash
-limen jobs                      # or !limen jobs inside Pi
+limen jobs                      # bounded live snapshot; or !limen jobs inside Pi
+limen jobs <id>                 # diffstat and recent human log for one job
 tail -f .limen/jobs/<id>/log
 git diff HEAD...<branch>
 ```
 
-`limen jobs` lists running jobs first, then newest `started-at`. Pulse is observed, not stored: `starting`, `think`, `tool`, `wait`, `dead`. The log is tool names plus a path or command, then assistant text. The full transcript is `.limen/jobs/<id>/session/`.
+`limen jobs` is a bounded active snapshot: it lists every running record first and summarizes terminal history without opening logs or Git. `limen jobs --running` (also `--active`) is the active-only form; `limen jobs --all` restores historical detailed diagnostics, while `limen jobs <id|suffix|label>` shows one record's diffstat and recent log. Pulse is observed, not stored: `starting`, `think`, `tool`, `wait`, `dead`. The log is tool names plus a path or command, then assistant text. The full transcript is `.limen/jobs/<id>/session/`.
 
 The conversation that spawns a job is subscribed automatically. In another coordinator conversation, say “watch F001 here” or “watch the running jobs here”; the coordinator runs `limen watch` through its Bash tool, which carries Pi's session ID. You do not need to type the command. `!limen watch` cannot identify the conversation and is intentionally rejected. Available explicit subscribers receive their own deduplicated wake; unrelated windows stay quiet. If no subscriber receives a completion, one idle coordinator gets a durable fallback handoff after a short grace period. If every coordinator is closed, the next one opened receives it.
 
@@ -202,13 +205,13 @@ Stop sends TERM, waits five seconds, then KILL if needed. Stopping a finished jo
 
 One fact per file. Mutable writes use a temp file and rename. Terminal `state` is written before `pid` is removed. After a crash, inspect or edit these files yourself. Worktrees stay until you `git worktree remove` and delete the branch.
 
-The optional wake extension shows subscribed jobs in the footer (`⠹ limen 1 · F003 tool:bash`), one start notice, and one durable terminal handoff per subscribed conversation. The handoff tells the coordinator to inspect evidence and take the next safe step autonomously—merge acceptable reviewed work, or resume focused corrections and re-review—asking you only for genuine product ambiguity, scope/risk tradeoffs, or irreversible actions. If the coordinator is busy, the handoff is steered. Job files and Git remain canonical.
+The optional wake extension shows every local running job in the footer (`⠹ limen 1 · F003 tool:bash`); a job this conversation has not subscribed to is marked `unwatched`. Passive visibility never changes ownership: only subscribers receive start notices and durable terminal handoffs, with the existing fallback election when no subscriber receives one. The handoff tells the coordinator to inspect evidence and take the next safe step autonomously—merge acceptable reviewed work, or resume focused corrections and re-review—asking you only for genuine product ambiguity, scope/risk tradeoffs, or irreversible actions. If the coordinator is busy, the handoff is steered. Job files and Git remain canonical.
 
 The wake extension activates only in projects that contain `.agents/limen/`, so it may instead live globally at `~/.pi/agent/extensions/limen-wake.ts` and stay inert everywhere else. Keep one copy — global or project — or explicitly subscribed conversations may still duplicate displays. `/limen off` temporarily mutes that conversation without removing subscriptions; `/limen on` catches up unless another coordinator already received the fallback handoff; bare `/limen` toggles. Herdr's subscribed pane status remains ambient while muted. `LIMEN_WAKE=0 pi` starts a session silent.
 
-When the coordinator runs inside a [Herdr](https://herdr.dev) pane (`HERDR_ENV=1`), the same extension describes the agent as `Limen coordinator`, titles the pane from its subscribed running jobs, mirrors the footer as a `limen` status token, and relabels the pane's idle state. A backgrounded tab therefore names the work, reads as busy, and raises one Herdr notification per terminal state (your Herdr notification settings decide whether it is shown). Limen publishes reversible pane metadata rather than overwriting persistent Herdr tab or agent names, and clears it on shutdown. Set `LIMEN_HERDR=0` to opt out. Jobs are detached processes, not panes: spawn strips `HERDR_*` from the job environment so nothing inside a worker can misreport the coordinator's pane.
+When the coordinator runs inside a [Herdr](https://herdr.dev) pane (`HERDR_ENV=1`), the same extension describes the agent as `Limen coordinator`, titles the pane from all local running jobs, mirrors the footer as a `limen` status token, and relabels the pane's idle state. A backgrounded tab therefore names the work, reads as busy, and raises one Herdr notification per terminal state (your Herdr notification settings decide whether it is shown). Limen publishes reversible pane metadata rather than overwriting persistent Herdr tab or agent names, and clears it on shutdown. Set `LIMEN_HERDR=0` to opt out. Jobs are detached processes, not panes: spawn strips `HERDR_*` from the job environment so nothing inside a worker can misreport the coordinator's pane.
 
-The optional communication extension injects `.agents/limen/communication.md` into the coordinator thread. Workers skip it. Edit or delete that file to change or disable it.
+The optional project-context extension attaches `spec/vision.md`, `spec/build.md`, and `.agents/limen/styleguide.md` as a hidden message immediately after every user message and before every role starts work. Workers and reviewers receive it too. Keep all three files concise, bullet-led, and within 1000 lines; if a source is longer, the model receives a notice to read its canonical file. The extension also reports missing build boards or planned/active feature folders absent from the board as an advisory, not a gate. Delete a source file to omit it from context.
 
 ## When something goes wrong
 

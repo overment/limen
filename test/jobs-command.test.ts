@@ -14,7 +14,7 @@ test("malformed records are informational and do not get rewritten", async (cont
 	await writeFile(join(job, "state"), "mystery\n");
 	await writeFile(join(job, "branch"), "main\n");
 	await writeFile(join(job, "log"), "plain log\n");
-	const result = limen(scratch, "jobs");
+	const result = limen(scratch, "jobs", "--all");
 	assert.equal(result.status, 0, result.stderr);
 	assert.match(result.stdout, /INVALID manual.*unknown state "mystery"/);
 	assert.equal(await import("node:fs/promises").then(({ readFile }) => readFile(join(job, "state"), "utf8")), "mystery\n");
@@ -51,7 +51,7 @@ test("jobs tails a rambling log and recognizes historical Control terminal lines
 	await writeFile(join(job, "branch"), "main\n");
 	const noise = Array.from({ length: 400 }, (_, i) => `noise-${i}-${"x".repeat(40)}`).join("\n");
 	await writeFile(join(job, "log"), `${noise}\n[limen 2026-08-13T00:00:00.000Z] start\n[control 2026-08-13T00:00:01.000Z] failed: rambling\nlast line\n`);
-	const result = limen(scratch, "jobs");
+	const result = limen(scratch, "jobs", "ramble");
 	assert.equal(result.status, 0, result.stderr);
 	assert.match(result.stdout, /FAILED ramble/);
 	assert.match(result.stdout, /failed: rambling/);
@@ -78,10 +78,75 @@ test("jobs lists running first, then newest started-at", async (context) => {
 		await writeFile(join(dir, "started-at"), `${job.started}\n`);
 		await writeFile(join(dir, "log"), "");
 	}
-	const result = limen(scratch, "jobs");
+	const result = limen(scratch, "jobs", "--all");
 	assert.equal(result.status, 0, result.stderr);
 	const labels = [...result.stdout.matchAll(/^(?:RUNNING|DONE|STOPPED|FAILED) (.+?) ·/gm)].map((match) => match[1]);
 	assert.deepEqual(labels, ["new run", "mid stop", "old done"]);
+});
+
+test("the default jobs snapshot stays compact and exposes every live job", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	limen(scratch, "init");
+	const root = join(scratch.root, ".limen/jobs");
+	for (let index = 0; index < 40; index += 1) {
+		const dir = join(root, `archived-${index}`);
+		await mkdir(dir);
+		await writeFile(join(dir, "task.md"), "x\n");
+		await writeFile(join(dir, "state"), "done\n");
+		await writeFile(join(dir, "label"), `archived-${index}\n`);
+		await writeFile(join(dir, "branch"), "main\n");
+		await writeFile(join(dir, "log"), `archive-${index}-${"x".repeat(8_192)}\n`);
+	}
+	const running = join(root, "live");
+	await mkdir(running);
+	await writeFile(join(running, "task.md"), "x\n");
+	await writeFile(join(running, "state"), "running\n");
+	await writeFile(join(running, "label"), `F005 live review ${"x".repeat(8_192)}\n`);
+	await writeFile(join(running, "branch"), "limen/live\n");
+	await writeFile(join(running, "activity"), "tool\n");
+	await writeFile(join(running, "last-tool"), `${"tool".repeat(4_096)}\n`);
+	await writeFile(join(running, "log"), "live log\n");
+	for (const option of [undefined, "--running", "--active"] as const) {
+		const result = option ? limen(scratch, "jobs", option) : limen(scratch, "jobs");
+		assert.equal(result.status, 0, result.stderr);
+		assert.match(result.stdout, /RUNNING F005 live review/);
+		assert.match(result.stdout, /…/);
+		assert.doesNotMatch(result.stdout, /archive-\d+/);
+		assert.ok(Buffer.byteLength(result.stdout) < 1_024, "live snapshot must stay below tool-output limits");
+		if (option) assert.doesNotMatch(result.stdout, /terminal jobs hidden/);
+		else assert.match(result.stdout, /40 terminal jobs hidden/);
+	}
+});
+
+test("compact snapshots cap malformed live diagnostics", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	limen(scratch, "init");
+	const job = join(scratch.root, ".limen/jobs/malformed-live");
+	await mkdir(job);
+	await writeFile(join(job, "task.md"), "x\n");
+	await writeFile(join(job, "state"), "running\n");
+	await writeFile(join(job, "label"), "F005 malformed live\n");
+	await writeFile(join(job, "branch"), "limen/malformed\n");
+	await writeFile(join(job, "tool-calls"), `${"x".repeat(8_192)}\n`);
+	await writeFile(join(job, "log"), "x\n");
+	const result = limen(scratch, "jobs");
+	assert.equal(result.status, 0, result.stderr);
+	assert.match(result.stdout, /INVALID malformed-live · invalid tool-calls/);
+	assert.doesNotMatch(result.stdout, /x{200}/);
+	assert.ok(Buffer.byteLength(result.stdout) < 1_024);
+});
+
+test("jobs rejects ambiguous option shapes", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	limen(scratch, "init");
+	for (const args of [["--missing"], ["--running", "extra"]]) {
+		const result = limen(scratch, "jobs", ...args);
+		assert.equal(result.status, 1);
+		assert.match(result.stderr, /jobs/);
+	}
 });
 
 test("jobs reports an empty set before init", async (context) => {

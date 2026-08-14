@@ -71,6 +71,44 @@ test("wake ignores history, announces start, and steers once on terminal change"
 	assert.deepEqual((await import("node:fs/promises").then(({ readdir }) => readdir(join(jobs, "new")))).sort(), ["activity", "branch", "label", "last-tool", "notify", "state"]);
 });
 
+test("wake shows existing unwatched jobs without claiming their notifications", async (context) => {
+	stashEnv(context, "LIMEN_JOB", undefined);
+	stashEnv(context, "LIMEN_HERDR", "0");
+	const root = await import("node:fs/promises").then(({ mkdtemp }) => mkdtemp(join(process.env.TMPDIR ?? "/tmp", "limen-wake-unwatched-")));
+	context.after(() => import("node:fs/promises").then(({ rm }) => rm(root, { recursive: true, force: true })));
+	await mkdir(join(root, ".agents/limen"), { recursive: true });
+	const jobs = join(root, ".limen/jobs");
+	const job = join(jobs, "existing");
+	await mkdir(job, { recursive: true });
+	await writeFile(join(job, "label"), "F005 existing review\n");
+	await writeFile(join(job, "branch"), "candidate\n");
+	await writeFile(join(job, "state"), "running\n");
+	const handlers = new Map<string, (event: unknown, context: TestContext) => void>();
+	const notices: string[] = [];
+	const statuses: Array<string | undefined> = [];
+	const messages: string[] = [];
+	limenWake({
+		on(event, handler) {
+			handlers.set(event, handler);
+		},
+		sendUserMessage(content) {
+			messages.push(content);
+		},
+	});
+	const session = {
+		cwd: root,
+		isIdle: () => true,
+		sessionManager: sessionManager("coordinator-b"),
+		ui: { notify: (message: string) => notices.push(message), setStatus: (_key: string, value: string | undefined) => statuses.push(value) },
+	};
+	handlers.get("session_start")?.({}, session);
+	context.after(() => handlers.get("session_shutdown")?.({}, session));
+	await waitUntil(() => statuses.some((status) => status?.includes("limen 1 · F005 starting (unwatched)")) ?? false);
+	assert.deepEqual(notices, []);
+	assert.deepEqual(messages, []);
+	await assert.rejects(import("node:fs/promises").then(({ access }) => access(join(job, "notify/subscribers/coordinator-b"))));
+});
+
 test("wake recreates the ignored jobs directory on session start", async (context) => {
 	stashEnv(context, "LIMEN_JOB", undefined);
 	stashEnv(context, "LIMEN_HERDR", "0");

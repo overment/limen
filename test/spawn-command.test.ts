@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { access, readFile, writeFile } from "node:fs/promises";
+import { access, readFile, realpath, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import test from "node:test";
 import { git, limen, limenWithSession, onlyJobId, scratchRepo, waitForState } from "./scratch.ts";
@@ -44,10 +44,11 @@ test("spawn creates isolated branch, canonical record, runs pi, and resumes its 
 		job?: string;
 		id?: string;
 		label?: string;
+		contextRoot?: string;
 		herdr?: string[];
 		pi?: string[];
 	};
-	assert.deepEqual(childEnvironment, { job: "1", id, label: "F001 implementation", herdr: [], pi: [] });
+	assert.deepEqual(childEnvironment, { job: "1", id, label: "F001 implementation", contextRoot: await realpath(scratch.root), herdr: [], pi: [] });
 	const argv = JSON.parse(await readFile(join(worktree, "pi-args.json"), "utf8")) as string[];
 	assert.equal(argv[argv.indexOf("--mode") + 1], "json");
 	assert.match(argv[argv.indexOf("--session-dir") + 1] ?? "", /\.limen\/jobs\/[^/]+\/session$/);
@@ -68,13 +69,13 @@ test("spawn creates isolated branch, canonical record, runs pi, and resumes its 
 	assert.equal(await readFile(join(worktree, "uncommitted.txt"), "utf8"), "keep me\n");
 });
 
-test("failure is durable and jobs renders live facts", async (context) => {
+test("failure is durable and detailed jobs render facts", async (context) => {
 	const scratch = await scratchRepo();
 	context.after(scratch.cleanup);
 	limen(scratch, "init");
 	const id = onlyJobId(limen(scratch, "spawn", "fail now").stdout);
 	await waitForState(scratch.root, id, "failed");
-	const jobs = limen(scratch, "jobs");
+	const jobs = limen(scratch, "jobs", "--all");
 	assert.equal(jobs.status, 0, jobs.stderr);
 	assert.match(jobs.stdout, new RegExp(`FAILED fail now · id ${id}`));
 	assert.match(jobs.stdout, /tools 1 · bash/);

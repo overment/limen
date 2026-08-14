@@ -1,10 +1,13 @@
 import { open, readdir, readFile, stat } from "node:fs/promises";
 import { limenRoot, liveDiffstat, workspaceRepository } from "../git.ts";
 import { derivePulse, parseJob, renderJob } from "../job.ts";
+import { resolveJob } from "../lookup.ts";
 import { processGroupAlive } from "../proc.ts";
-export async function jobsCommand(_args: readonly string[], cwd: string): Promise<void> {
-	const root = limenRoot(cwd);
-	const jobsRoot = `${root}/.limen/jobs`;
+
+export async function jobsCommand(args: readonly string[], cwd: string): Promise<void> {
+	const selection = select(args);
+	const root = limenRoot(cwd),
+		jobsRoot = `${root}/.limen/jobs`;
 	const entries = await readdir(jobsRoot, { withFileTypes: true }).catch((error: unknown) => {
 		if (typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT") return [];
 		throw error;
@@ -14,88 +17,88 @@ export async function jobsCommand(_args: readonly string[], cwd: string): Promis
 		console.log("no jobs");
 		return;
 	}
-	const order = await Promise.all(ids.map(async (id) => [id, await text(`${jobsRoot}/${id}/state`), (await text(`${jobsRoot}/${id}/started-at`)) || id] as const));
-	order.sort((a, b) => Number(b[1] === "running") - Number(a[1] === "running") || b[2].localeCompare(a[2]));
-	const rendered = [];
-	for (const [id] of order) rendered.push(await renderJobDirectory(root, jobsRoot, id));
-	console.log(rendered.join("\n\n"));
+	if (typeof selection === "object") {
+		const { id } = await resolveJob(cwd, selection.detail);
+		console.log(await renderJobDirectory(root, jobsRoot, id, true));
+		return;
+	}
+	const order = await orderedJobs(ids, jobsRoot);
+	if (selection === "all") {
+		console.log((await Promise.all(order.map(([id]) => renderJobDirectory(root, jobsRoot, id, true)))).join("\n\n"));
+		return;
+	}
+	const running = order.filter(([, state]) => state === "running");
+	const rendered = await Promise.all(running.map(([id]) => renderJobDirectory(root, jobsRoot, id, false)));
+	const summary = rendered.length ? rendered.join("\n") : "no running jobs";
+	console.log(
+		selection === "snapshot" && order.length > running.length
+			? `${summary}\n${order.length - running.length} terminal ${order.length - running.length === 1 ? "job" : "jobs"} hidden · use limen jobs --all or limen jobs <id> for detail`
+			: summary,
+	);
 }
-async function renderJobDirectory(root: string, jobsRoot: string, id: string): Promise<string> {
+function select(args: readonly string[]) {
+	if (args.length > 1) throw new Error("jobs accepts no argument, --running, --active, --all, or one job id, suffix, or label");
+	const arg = args[0];
+	if (!arg) return "snapshot";
+	if (arg === "--running" || arg === "--active") return "running";
+	if (arg === "--all") return "all";
+	if (arg.startsWith("--")) throw new Error(`unknown jobs option ${JSON.stringify(arg)}`);
+	return { detail: arg };
+}
+async function orderedJobs(ids: readonly string[], jobsRoot: string): Promise<ReadonlyArray<readonly [string, string, string]>> {
+	const order = await Promise.all(ids.map(async (id) => [id, await text(`${jobsRoot}/${id}/state`), (await text(`${jobsRoot}/${id}/started-at`)) || id] as const));
+	return order.sort((a, b) => Number(b[1] === "running") - Number(a[1] === "running") || b[2].localeCompare(a[2]));
+}
+async function renderJobDirectory(root: string, jobsRoot: string, id: string, detailed: boolean): Promise<string> {
 	const jobDir = `${jobsRoot}/${id}`;
-	const [state, label, branch, repo, pid, started, finished, toolCalls, lastTool, activity, taskStat, logStat, log] = await Promise.all([
-		text(`${jobDir}/state`),
-		text(`${jobDir}/label`),
-		text(`${jobDir}/branch`),
-		text(`${jobDir}/repo`),
-		text(`${jobDir}/pid`),
-		text(`${jobDir}/started-at`),
-		text(`${jobDir}/finished-at`),
-		text(`${jobDir}/tool-calls`),
-		text(`${jobDir}/last-tool`),
-		text(`${jobDir}/activity`),
-		optionalStat(`${jobDir}/task.md`),
-		optionalStat(`${jobDir}/log`),
-		readLog(`${jobDir}/log`),
-	]);
+	const [state = "", label = "", branch = "", repo = "", pid, started = "", finished = "", toolCalls, lastTool, activity] = await Promise.all(
+		"state label branch repo pid started-at finished-at tool-calls last-tool activity".split(" ").map((field) => text(`${jobDir}/${field}`)),
+	);
+	const [taskStat, logStat] = await Promise.all([optionalStat(`${jobDir}/task.md`), optionalStat(`${jobDir}/log`)]);
 	if (!taskStat || !logStat) return `INVALID ${id} · missing task.md or log`;
+	const log = detailed ? await readLog(`${jobDir}/log`) : { tail: "", detail: "" };
+	const display = (value: string) => (detailed || value.length <= 160 ? value : `${value.slice(0, 159)}…`);
 	try {
 		const startedAt = recordedDate(started, taskStat.mtime, "started-at");
-		const job = parseJob({
-			id,
-			state,
-			label: label || id,
-			branch,
-			...(pid ? { pid } : {}),
-			startedAt,
-			lastOutputAt: logStat.mtime,
-			detail: log.detail,
-		});
+		const job = parseJob({ id, state, label: display(label || id), branch: display(branch), ...(pid ? { pid } : {}), startedAt, lastOutputAt: logStat.mtime, detail: log.detail });
 		const observedAt = job.phase === "running" ? Date.now() : recordedDate(finished, new Date(), "finished-at").getTime();
 		const processAlive = job.phase === "running" && job.pid !== undefined && processGroupAlive(job.pid);
 		const rendered = renderJob(job, {
 			elapsedMs: observedAt - startedAt.getTime(),
 			silentMs: observedAt - logStat.mtimeMs,
 			...(toolCalls ? { toolCalls: recordedCount(toolCalls) } : {}),
-			...(lastTool ? { lastTool } : {}),
+			...(lastTool ? { lastTool: display(lastTool) } : {}),
 			...(job.phase === "running"
 				? {
-						pulse: derivePulse({
-							alive: processAlive,
-							...(job.pid !== undefined ? { pid: job.pid } : {}),
-							...(activity ? { activity } : {}),
-						}),
+						pulse: derivePulse({ alive: processAlive, ...(job.pid !== undefined ? { pid: job.pid } : {}), ...(activity ? { activity } : {}) }),
 						...(job.pid !== undefined ? { processAlive } : {}),
 					}
 				: {}),
-			diffstat: liveDiffstat(repo ? workspaceRepository(root, repo) : root, branch),
+			diffstat: detailed ? liveDiffstat(repo ? workspaceRepository(root, repo) : root, branch) : "",
 			logTail: log.tail,
 		});
-		return repo ? `${rendered}\n  repo ${repo}` : rendered;
+		return repo ? `${rendered}\n  repo ${display(repo)}` : rendered;
 	} catch (error: unknown) {
 		return `INVALID ${id} · ${error instanceof Error ? error.message : String(error)}${log.tail ? `\n  log:\n${log.tail}` : ""}`;
 	}
 }
 function text(path: string): Promise<string> {
-	return readFile(path, "utf8").then(
-		(value) => value.trim(),
-		() => "",
-	);
+	return readFile(path, "utf8")
+		.then((value) => value.trim())
+		.catch(() => "");
 }
 function optionalStat(path: string) {
-	return stat(path).then(
-		(value) => value,
-		() => undefined,
-	);
+	return stat(path).catch(() => undefined);
 }
 function recordedDate(value: string, fallback: Date, name: string): Date {
 	if (!value) return fallback;
 	const date = new Date(value);
-	if (Number.isNaN(date.getTime())) throw new Error(`invalid ${name} ${JSON.stringify(value)}`);
+	if (Number.isNaN(date.getTime())) throw new Error(`invalid ${name} ${JSON.stringify(value.slice(0, 160))}`);
 	return date;
 }
 function recordedCount(value: string): number {
 	const count = Number(value);
-	if (!Number.isSafeInteger(count) || count < 0) throw new Error(`invalid tool-calls ${JSON.stringify(value)}`);
+	if (!Number.isSafeInteger(count) || count < 0) throw new Error(`invalid tool-calls ${JSON.stringify(value.slice(0, 160))}`);
 	return count;
 }
 async function readLog(path: string): Promise<{ tail: string; detail: string }> {
@@ -111,10 +114,7 @@ async function readLog(path: string): Promise<{ tail: string; detail: string }> 
 			const overflow = bytes.byteLength > 4_096;
 			const slice = overflow ? bytes.subarray(bytes.byteLength - 4_096) : bytes;
 			const tail = overflow ? slice.toString("utf8").replace(/^[^\n]*\n?/, "…\n") : slice.toString();
-			return {
-				tail,
-				detail: lines.findLast((line) => line.startsWith("[limen ") || line.startsWith("[control ")) ?? "",
-			};
+			return { tail, detail: lines.findLast((line) => line.startsWith("[limen ") || line.startsWith("[control ")) ?? "" };
 		} finally {
 			await handle.close();
 		}
