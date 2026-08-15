@@ -158,6 +158,35 @@ test("independent jobs can run concurrently and are merely announced", async (co
 	assert.notEqual(await readFile(join(scratch.root, `.limen/jobs/${first}/branch`), "utf8"), await readFile(join(scratch.root, `.limen/jobs/${second}/branch`), "utf8"));
 });
 
+test("prune drops a finished worktree and spawn keeps a resumed one", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	limen(scratch, "init");
+	const first = onlyJobId(limen(scratch, "spawn", "--label", "keep later", "make commit").stdout);
+	await waitForState(scratch.root, first, "done");
+	const worktree = git(scratch.root, "worktree", "list", "--porcelain")
+		.split("\n")
+		.find((line) => line.includes(first))
+		?.slice("worktree ".length);
+	assert.ok(worktree);
+	await writeFile(join(worktree, "uncommitted.txt"), "keep me\n");
+	const second = onlyJobId(limen(scratch, "spawn", "make commit").stdout);
+	await waitForState(scratch.root, second, "done");
+	assert.doesNotMatch(git(scratch.root, "worktree", "list", "--porcelain"), new RegExp(first));
+	const resumed = limen(scratch, "spawn", "continue work", "--branch", `limen/${first}`);
+	assert.equal(resumed.status, 0, resumed.stderr);
+	const resumedId = onlyJobId(resumed.stdout);
+	await waitForState(scratch.root, resumedId, "done");
+	const kept = git(scratch.root, "worktree", "list", "--porcelain")
+		.split("\n")
+		.find((line) => line.includes(resumedId || first));
+	assert.ok(kept);
+	const pruned = limen(scratch, "prune");
+	assert.equal(pruned.status, 0, pruned.stderr);
+	assert.match(pruned.stdout, /pruned /);
+	assert.doesNotMatch(git(scratch.root, "worktree", "list", "--porcelain"), /limen-worktrees/);
+});
+
 test("spawn opens a named Herdr tab when a fake herdr is on PATH", async (context) => {
 	const scratch = await scratchRepo();
 	context.after(scratch.cleanup);

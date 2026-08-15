@@ -6,6 +6,7 @@ import { addBranchWorktree, addDetachedWorktree, addNewWorktree, branchExists, r
 import { openWatchTab } from "../herdr.ts";
 import { parseDuration } from "../job.ts";
 import { atomicWrite, finalizeJob, launchWrapper, processGroupAlive, signalProcessGroup, waitForProcessGroup } from "../proc.ts";
+import { pruneFinishedWorktrees } from "./prune.ts";
 
 type SpawnOptions = {
 	task: string;
@@ -53,6 +54,7 @@ export async function spawnCommand(args: readonly string[], cwd: string): Promis
 			...(options.branch ? { requestedBranch: options.branch } : {}),
 		}),
 	);
+	await pruneFinishedWorktrees(root, [worktree]).catch(() => {});
 	const jobDir = `${jobsRoot}/${id}`;
 	await mkdir(jobDir);
 	await mkdir(`${jobDir}/notify/subscribers`, { recursive: true });

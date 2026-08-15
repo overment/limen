@@ -129,6 +129,8 @@ A running job picks a steer up between tool calls. Delivered steers stay in `.li
 
 Stop sends TERM, then escalates if needed. Resume reuses the branch and its existing worktree, including uncommitted files. Inspect that state before resuming. Stop and resume remain the path when the process itself must be replaced.
 
+Finished jobs keep their files under `.limen/jobs/`. Their extra checkouts do not stay: the next `limen spawn` drops finished worktrees, and `limen prune` does the same on demand. Resume with `--branch` keeps that checkout.
+
 Every job is bounded by:
 
 - 90 minutes by default; override with `--timeout 20m`;
@@ -213,8 +215,6 @@ Job files and Git remain canonical if a notification is missed.
 | Completion wake was missed | Inspect `.limen/jobs/` and Git. |
 | Merge or board is wrong | Repair it with ordinary Git and Markdown edits. |
 
-Limen has no cleanup command. Worktrees and branches remain until you remove them with Git.
-
 ## Command reference
 
 ```text
@@ -225,11 +225,14 @@ limen spawn "instruction" [--label L] [--model M] [--branch B] [--timeout 20m]
 limen spawn --repo R "instruction" [--label L] [--model M]
 limen spawn --review --branch B --label L "instruction"
 limen jobs [--running|--active|--all|<id|suffix|label>]
+limen prune
 limen steer <id|suffix|label> "correction"
 limen stop <id|suffix|label> [reason]
 limen wait <id|suffix|label>
 limen watch <id|suffix|label> | --running
 limen unwatch <id|suffix|label> | --all
+limen open <id|suffix|label>
+limen close <FNNN>
 ```
 
 IDs, unique suffixes, and unique labels are interchangeable where shown.

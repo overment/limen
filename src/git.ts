@@ -60,6 +60,12 @@ export function addBranchWorktree(cwd: string, path: string, branch: string): vo
 export function addDetachedWorktree(cwd: string, path: string, ref: string): void {
 	requireGit(cwd, ["worktree", "add", "--detach", path, ref]);
 }
+export function removeWorktree(cwd: string, path: string): void {
+	requireGit(cwd, ["worktree", "remove", "--force", path]);
+}
+export function pruneWorktrees(cwd: string): void {
+	requireGit(cwd, ["worktree", "prune"]);
+}
 export function liveDiffstat(cwd: string, branch: string): string {
 	const result = git(cwd, ["diff", "--stat", `HEAD...${branch}`]);
 	return result.status === 0 ? result.stdout.trim() : `(unavailable: ${result.stderr.trim() || "git diff failed"})`;

@@ -3,6 +3,7 @@ import { initCommand, workspaceCommand } from "./commands/init.ts";
 import { jobsCommand } from "./commands/jobs.ts";
 import { migrateCommand } from "./commands/migrate.ts";
 import { openCommand } from "./commands/open.ts";
+import { pruneCommand } from "./commands/prune.ts";
 import { spawnCommand } from "./commands/spawn.ts";
 import { steerCommand } from "./commands/steer.ts";
 import { stopCommand } from "./commands/stop.ts";
@@ -20,11 +21,12 @@ const COMMANDS = {
 	stop: stopCommand,
 	wait: waitCommand,
 	jobs: jobsCommand,
+	prune: pruneCommand,
 	watch: watchCommand,
 	unwatch: unwatchCommand,
 	open: openCommand,
 	close: closeCommand,
-} as const satisfies Record<"init" | "workspace" | "migrate" | "spawn" | "steer" | "stop" | "wait" | "jobs" | "watch" | "unwatch" | "open" | "close", Command>;
+} as const satisfies Record<"init" | "workspace" | "migrate" | "spawn" | "steer" | "stop" | "wait" | "jobs" | "prune" | "watch" | "unwatch" | "open" | "close", Command>;
 const HELP = `limen — isolated coding jobs with files and git
 usage:
   limen init
@@ -37,6 +39,7 @@ usage:
   limen wait <id|suffix|label>
   limen stop <id|suffix|label> [reason]
   limen jobs [--running|--active|--all|<id|suffix|label>]
+  limen prune
   limen watch <id|suffix|label> | --running
   limen unwatch <id|suffix|label> | --all
   limen open <id|suffix|label>
