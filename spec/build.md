@@ -12,6 +12,7 @@
 ## NEXT
 
 - Decide F006’s update brief, autonomy boundary, and discussion triggers from the feature-shaping survey.
+- `F011-empty-job-advisory` (PLANNED): a job that produced nothing should say so instead of reading DONE. Observed, not theorised.
 - `F010-pane-hosted-jobs` (PLANNED): opt-in Herdr-hosted job you can attach to and drive by hand. Blocked on a human decision — it makes Herdr load-bearing and sets F007's containment aside for that mode.
 
 ## PROVEN
