@@ -6,7 +6,6 @@
 
 ## NOW
 
-- `F010-pane-hosted-jobs` (ACTIVE): `limen spawn --tab` runs interactive pi in the job tab; try it, then prove.
 - `F006-interactive-managed-updates` (ACTIVE): shape an interactive, advisory-first update experience and the agent response settings before implementation.
 
 ## NEXT
@@ -16,6 +15,7 @@
 
 ## PROVEN
 
+- `F010-pane-hosted-jobs` (PROVEN): `limen spawn --tab` runs interactive pi in the job tab; live-tried at `2026-08-15-f010-try-ce97a91f` (`7947b2f`, `755d762`).
 - `F012-herdr-job-spaces` (PROVEN): named Herdr tab per job; `limen open` reopens a closed one; `limen close FNNN` after the feature is proven. Coordinator-checked at `a65584e`.
 - `F009-running-job-supervision` (PROVEN): `limen steer` writes an inbox file; the worker delivers it once between tool calls. Independently reviewed at `57f6c96`.
 - `F008-guidance-register-split` (PROVEN): coding practice attached per user message; speech registers restacked before every LLM call with a named audience.

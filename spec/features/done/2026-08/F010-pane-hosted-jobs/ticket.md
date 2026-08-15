@@ -1,6 +1,6 @@
 # F010-pane-hosted-jobs · An opt-in job you can attach to and take over
 
-[2026-08-15] [🟠] [ACTIVE] [COORDINATOR] ACTIVE · F010-pane-hosted-jobs — `limen spawn --tab` implemented; try under real Herdr before PROVEN
+[2026-08-15] [🟢] [PROVEN] [COORDINATOR] PROVEN · F010-pane-hosted-jobs
 
 ## Outcome
 
