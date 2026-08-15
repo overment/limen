@@ -3,6 +3,7 @@ import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { basename, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { addBranchWorktree, addDetachedWorktree, addNewWorktree, branchExists, repoRoot, workspaceRepository, workspaceRoot, worktreeForBranch } from "../git.ts";
+import { openWatchTab } from "../herdr.ts";
 import { parseDuration } from "../job.ts";
 import { atomicWrite, finalizeJob, launchWrapper, processGroupAlive, signalProcessGroup, waitForProcessGroup } from "../proc.ts";
 
@@ -74,6 +75,7 @@ export async function spawnCommand(args: readonly string[], cwd: string): Promis
 	]);
 	await writeFile(`${jobDir}/notify/ready`, "1\n", { flag: "wx", flush: true });
 	await atomicWrite(`${jobDir}/state`, "running\n");
+	await openWatchTab({ jobDir, label: options.label, cwd: root, logPath: `${jobDir}/log` });
 	const role = options.review ? "reviewer" : "worker";
 	const localPreamble = `${root}/.agents/limen/${role}.md`;
 	const preamble = await readFile(localPreamble).then(

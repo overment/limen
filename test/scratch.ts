@@ -74,13 +74,19 @@ function runLimen(scratch: Scratch, addedEnvironment: NodeJS.ProcessEnv, args: r
 		"LIMEN_LABEL",
 		"LIMEN_JOB_LABEL",
 		"LIMEN_CONTEXT_ROOT",
+		"LIMEN_HERDR",
 		"PI_SESSION_ID",
 		"PI_SESSION_FILE",
 		"PI_PROVIDER",
 		"PI_MODEL",
 		"PI_REASONING_LEVEL",
+		"HERDR_ENV",
+		"HERDR_PANE_ID",
+		"HERDR_TAB_ID",
+		"HERDR_WORKSPACE_ID",
 	])
 		delete environment[name];
+	environment.LIMEN_HERDR = "0";
 	Object.assign(environment, addedEnvironment);
 	const result = spawnSync(process.execPath, [LIMEN, ...args], {
 		cwd: scratch.root,

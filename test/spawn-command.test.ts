@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
-import { access, readFile, realpath, writeFile } from "node:fs/promises";
+import { access, chmod, readFile, realpath, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import test from "node:test";
-import { git, limen, limenWithSession, onlyJobId, scratchRepo, waitForState } from "./scratch.ts";
+import { git, limen, limenWithEnv, limenWithSession, onlyJobId, scratchRepo, waitForState } from "./scratch.ts";
 
 test("spawn creates isolated branch, canonical record, runs pi, and resumes its worktree", async (context) => {
 	const scratch = await scratchRepo();
@@ -156,4 +156,39 @@ test("independent jobs can run concurrently and are merely announced", async (co
 	const second = onlyJobId(secondLaunch.stdout);
 	await Promise.all([waitForState(scratch.root, first, "done"), waitForState(scratch.root, second, "done")]);
 	assert.notEqual(await readFile(join(scratch.root, `.limen/jobs/${first}/branch`), "utf8"), await readFile(join(scratch.root, `.limen/jobs/${second}/branch`), "utf8"));
+});
+
+test("spawn opens a named Herdr tab when a fake herdr is on PATH", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	assert.equal(limen(scratch, "init").status, 0);
+	const calls = join(scratch.root, "herdr-calls.log");
+	await writeFile(
+		join(scratch.fakeBin, "herdr"),
+		`#!/usr/bin/env node
+const { appendFileSync } = require("node:fs");
+const args = process.argv.slice(2);
+appendFileSync(${JSON.stringify(calls)}, args.join(" ") + "\\n");
+const label = args.includes("--label") ? args[args.indexOf("--label") + 1] : "";
+if (args[0] === "workspace" && args[1] === "list") {
+  console.log(JSON.stringify({ result: { type: "workspace_list", workspaces: [] } }));
+} else if (args[0] === "workspace" && args[1] === "create") {
+  console.log(JSON.stringify({ result: { type: "workspace_created", workspace: { workspace_id: "w1" }, tab: { tab_id: "w1:t1" }, root_pane: { pane_id: "w1:p1" } } }));
+} else if (args[0] === "tab" && args[1] === "create") {
+  console.log(JSON.stringify({ result: { type: "tab_created", tab: { tab_id: "w1:t2", label }, root_pane: { pane_id: "w1:p2" } } }));
+}
+`,
+	);
+	await chmod(join(scratch.fakeBin, "herdr"), 0o755);
+	const launched = limenWithEnv(scratch, { HERDR_ENV: "1", LIMEN_HERDR: join(scratch.fakeBin, "herdr") }, "spawn", "--label", "F012 spaces", "make commit");
+	assert.equal(launched.status, 0, launched.stderr);
+	const id = onlyJobId(launched.stdout);
+	await waitForState(scratch.root, id, "done");
+	const recorded = await readFile(calls, "utf8");
+	assert.match(recorded, /tab create /);
+	assert.match(recorded, /--label F012 spaces/);
+	assert.match(recorded, /--no-focus/);
+	const job = join(scratch.root, ".limen/jobs", id);
+	assert.equal(await readFile(join(job, "herdr/tab"), "utf8"), "w1:t2\n");
+	assert.equal(await readFile(join(job, "herdr/mode"), "utf8"), "watch\n");
 });
