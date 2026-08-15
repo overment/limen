@@ -1,6 +1,6 @@
 # F009-running-job-supervision · Watch and redirect a job without restarting it
 
-[2026-08-15] [🔴] [PLANNED] [COORDINATOR] PLANNED · F009-running-job-supervision
+[2026-08-15] [🟢] [PROVEN] [COORDINATOR] PROVEN · F009-running-job-supervision
 
 ## Outcome
 
