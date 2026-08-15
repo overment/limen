@@ -6,7 +6,6 @@
 
 ## NOW
 
-- `F012-herdr-job-spaces` (ACTIVE): named Herdr tab per job, rename on finish, `limen open` to reopen, close leftover tabs when the feature is proven.
 - `F006-interactive-managed-updates` (ACTIVE): shape an interactive, advisory-first update experience and the agent response settings before implementation.
 
 ## NEXT
@@ -17,6 +16,7 @@
 
 ## PROVEN
 
+- `F012-herdr-job-spaces` (PROVEN): named Herdr tab per job; `limen open` reopens a closed one; `limen close FNNN` after the feature is proven. Coordinator-checked at `a65584e`.
 - `F009-running-job-supervision` (PROVEN): `limen steer` writes an inbox file; the worker delivers it once between tool calls. Independently reviewed at `57f6c96`.
 - `F008-guidance-register-split` (PROVEN): coding practice attached per user message; speech registers restacked before every LLM call with a named audience.
 - `F007-terminal-process-containment` (PROVEN): bounded macOS process-identity snapshots, PID-safe escaped-descendant cleanup, and durable warnings when termination cannot be confirmed.
