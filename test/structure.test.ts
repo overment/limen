@@ -17,7 +17,18 @@ test("architecture stays small, pure, direct, and dependency-free", async () => 
 	const sourceLines = (await Promise.all(source.map((path) => readFile(path, "utf8")))).reduce((sum, text) => sum + text.split("\n").length - 1, 0);
 	assert.ok(sourceLines <= 1750, `src has ${sourceLines} lines; audit against first principles`);
 	assert.doesNotMatch(await readFile(join(ROOT, "src/job.ts"), "utf8"), /from ["']node:/);
-	assert.deepEqual((await readdir(join(ROOT, "src/commands"))).sort(), ["close.ts", "init.ts", "jobs.ts", "migrate.ts", "open.ts", "spawn.ts", "steer.ts", "stop.ts", "wait.ts", "watch.ts"]);
+	assert.deepEqual((await readdir(join(ROOT, "src/commands"))).sort(), [
+		"close.ts",
+		"init.ts",
+		"jobs.ts",
+		"migrate.ts",
+		"open.ts",
+		"spawn.ts",
+		"steer.ts",
+		"stop.ts",
+		"wait.ts",
+		"watch.ts",
+	]);
 	const all = await filesBelow(ROOT);
 	assert.equal(
 		all.some((path) => /\/(index|types|utils)\.ts$/.test(path)),
