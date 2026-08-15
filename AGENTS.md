@@ -55,7 +55,7 @@ Run the repository's own tests, lint, and build commands. Raw output and the liv
 
 All runtime truth is inspectable under `.limen/jobs/` and in Git.
 
-- Silent or rambling job: inspect `limen jobs <id>` and the log tail first. `think`, `tool`, or `wait` with a live process is not a hang, and silent is not stuck — native builds and test suites run for minutes without output. Stop only on evidence (`dead` pulse, circular reads, goal drift) with `limen stop <id> <reason>`, and write that evidence into the reason — it becomes durable history. A nearly-done worker is usually a finish resume, not a discard.
+- Silent or rambling job: inspect `limen jobs <id>` and the log tail first. `think`, `tool`, or `wait` with a live process is not a hang, and silent is not stuck — native builds and test suites run for minutes without output. Redirect a live worker that is widening or on the wrong seam with `limen steer <id> "correction"` instead of restarting it. Stop only on evidence (`dead` pulse, circular reads, a correction that cannot land) with `limen stop <id> <reason>`, and write that evidence into the reason — it becomes durable history. A nearly-done worker is usually a finish resume, not a discard.
 - Resuming a branch: `limen spawn --branch <branch>` reuses that branch's existing worktree, uncommitted files included. Inspect that state first and state in the task whether it is the intended base (finish shape) or must be set aside.
 - Genuine ambiguity: the worker commits useful partial work, writes a plain question in its worktree, and exits. Answer it, then resume the branch.
 - Dead wrapper: check the recorded PID with `kill -0`, correct the plain `state` file if needed, and resume. The branch and worktree survive.

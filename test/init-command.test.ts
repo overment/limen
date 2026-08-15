@@ -45,6 +45,10 @@ test("init fills gaps, preserves existing bytes, and ignores runtime state once"
 	assert.match(communication, /styleguide\.md/);
 	assert.match(communication, /communication\.md/);
 	assert.match(communication, /spec\/build\.md/);
+	const steering = await readFile(join(scratch.root, ".pi/extensions/limen-steering.ts"), "utf8");
+	assert.match(steering, /LIMEN_JOB/);
+	assert.match(steering, /deliverAs: "steer"/);
+	assert.match(steering, /"steer", "inbox"/);
 	const styleguide = await readFile(join(scratch.root, ".agents/limen/styleguide.md"), "utf8");
 	assert.match(styleguide, /coding practice/);
 	assert.match(styleguide, /1000 lines/);

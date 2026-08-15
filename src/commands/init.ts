@@ -31,6 +31,7 @@ async function initialize(root: string, repository: boolean): Promise<void> {
 		...(["planned", "active", "done", "dropped"] as const).map((lane) => [`${ROOT}/templates/spec/features/${lane}/.gitkeep`, `${root}/spec/features/${lane}/.gitkeep`] as const),
 		[`${ROOT}/hook/wake.ts`, `${root}/.pi/extensions/limen-wake.ts`],
 		[`${ROOT}/hook/communication.ts`, `${root}/.pi/extensions/limen-communication.ts`],
+		[`${ROOT}/hook/steering.ts`, `${root}/.pi/extensions/limen-steering.ts`],
 	] as const;
 	for (const [source, target] of copies) {
 		await mkdir(dirname(target), { recursive: true });

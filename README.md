@@ -120,11 +120,14 @@ If investigation cannot produce the first artifact, write the finding or questio
 ## Stop, resume, and bounds
 
 ```bash
+limen steer <id|suffix|label> "stay on the session test; do not widen"
 limen stop <id|suffix|label> "reason"
 limen spawn --branch limen/<job-id> "Focused resume instruction"
 ```
 
-Stop sends TERM, then escalates if needed. Resume reuses the branch and its existing worktree, including uncommitted files. Inspect that state before resuming.
+A running job picks a steer up between tool calls. Delivered steers stay in `.limen/jobs/<id>/steer/delivered/` and are named in the job log. A finished job, or a worker whose extension is missing, is refused and nothing is written.
+
+Stop sends TERM, then escalates if needed. Resume reuses the branch and its existing worktree, including uncommitted files. Inspect that state before resuming. Stop and resume remain the path when the process itself must be replaced.
 
 Every job is bounded by:
 
@@ -132,8 +135,6 @@ Every job is bounded by:
 - 900 Pi tool-start events; override with `LIMEN_MAX_TOOL_CALLS`.
 
 A bound records `failed` with its reason. It limits damage; it does not repair a vague handoff.
-
-There is no channel for steering a running job. Stop it, sharpen the instruction, and resume its branch.
 
 ## Models
 
@@ -176,6 +177,7 @@ AGENTS.md                              coordinator shop manual
 .agents/limen/communication.md        human and agent speech registers
 .pi/extensions/limen-wake.ts          live status and completion handoffs
 .pi/extensions/limen-communication.ts project context and mid-flight speech
+.pi/extensions/limen-steering.ts      in-place correction of a running job
 spec/vision.md                        durable product intent
 spec/build.md                         TRACK / NOW / NEXT / PROVEN
 spec/features/                        planned, active, done, and dropped work
@@ -223,6 +225,7 @@ limen spawn "instruction" [--label L] [--model M] [--branch B] [--timeout 20m]
 limen spawn --repo R "instruction" [--label L] [--model M]
 limen spawn --review --branch B --label L "instruction"
 limen jobs [--running|--active|--all|<id|suffix|label>]
+limen steer <id|suffix|label> "correction"
 limen stop <id|suffix|label> [reason]
 limen wait <id|suffix|label>
 limen watch <id|suffix|label> | --running

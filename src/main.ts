@@ -2,6 +2,7 @@ import { initCommand, workspaceCommand } from "./commands/init.ts";
 import { jobsCommand } from "./commands/jobs.ts";
 import { migrateCommand } from "./commands/migrate.ts";
 import { spawnCommand } from "./commands/spawn.ts";
+import { steerCommand } from "./commands/steer.ts";
 import { stopCommand } from "./commands/stop.ts";
 import { waitCommand } from "./commands/wait.ts";
 import { unwatchCommand, watchCommand } from "./commands/watch.ts";
@@ -13,12 +14,13 @@ const COMMANDS = {
 	workspace: workspaceCommand,
 	migrate: migrateCommand,
 	spawn: spawnCommand,
+	steer: steerCommand,
 	stop: stopCommand,
 	wait: waitCommand,
 	jobs: jobsCommand,
 	watch: watchCommand,
 	unwatch: unwatchCommand,
-} as const satisfies Record<"init" | "workspace" | "migrate" | "spawn" | "stop" | "wait" | "jobs" | "watch" | "unwatch", Command>;
+} as const satisfies Record<"init" | "workspace" | "migrate" | "spawn" | "steer" | "stop" | "wait" | "jobs" | "watch" | "unwatch", Command>;
 const HELP = `limen — isolated coding jobs with files and git
 usage:
   limen init
@@ -27,6 +29,7 @@ usage:
   limen spawn "Implement FNNN: <outcome>. Start by writing <slice>. Ticket: spec/features/active/FNNN-slug/ticket.md" [--label L] [--model X] [--branch B] [--timeout 20m; default 90m]
   limen spawn --repo R "Implement FNNN: <outcome>. Ticket: spec/features/active/FNNN-slug/ticket.md" [--label L] [--model X]
   limen spawn --review --branch B --label L "Review the FNNN candidate against spec/features/active/FNNN-slug/ticket.md"
+  limen steer <id|suffix|label> "correction"
   limen wait <id|suffix|label>
   limen stop <id|suffix|label> [reason]
   limen jobs [--running|--active|--all|<id|suffix|label>]
