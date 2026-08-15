@@ -1,6 +1,6 @@
 # F012-herdr-job-spaces · Named Herdr places for every job, including reopen
 
-[2026-08-15] [🔴] [PLANNED] [COORDINATOR] PLANNED · F012-herdr-job-spaces
+[2026-08-15] [🟠] [ACTIVE] [COORDINATOR] ACTIVE · F012-herdr-job-spaces
 
 ## Outcome
 

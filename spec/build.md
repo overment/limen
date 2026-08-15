@@ -6,12 +6,12 @@
 
 ## NOW
 
+- `F012-herdr-job-spaces` (ACTIVE): named Herdr tab per job, rename on finish, `limen open` to reopen, close leftover tabs when the feature is proven.
 - `F006-interactive-managed-updates` (ACTIVE): shape an interactive, advisory-first update experience and the agent response settings before implementation.
 
 ## NEXT
 
 - Decide F006’s update brief, autonomy boundary, and discussion triggers from the feature-shaping survey.
-- `F012-herdr-job-spaces` (PLANNED): workspace / tab / pane meaning, named spawn tabs, rename on finish, close when the feature is proven, `limen open` to reopen a closed tab.
 - `F010-pane-hosted-jobs` (PLANNED): opt-in: the worker itself runs in the F012 tab so you can type into it. Sequenced after F012. Drops F007 containment for that mode only.
 - `F011-empty-job-advisory` (PLANNED): a job that produced nothing should say so instead of reading DONE. Observed, not theorised.
 
