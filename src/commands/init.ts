@@ -22,9 +22,7 @@ export async function workspaceCommand(args: readonly string[], cwd: string): Pr
 async function initialize(root: string, repository: boolean): Promise<void> {
 	const copies = [
 		[`${ROOT}/templates/agents.md`, `${root}/AGENTS.md`],
-		[`${ROOT}/templates/worker.md`, `${root}/.agents/limen/worker.md`],
-		[`${ROOT}/templates/reviewer.md`, `${root}/.agents/limen/reviewer.md`],
-		[`${ROOT}/templates/styleguide.md`, `${root}/.agents/limen/styleguide.md`],
+		...(["worker", "reviewer", "styleguide", "communication"] as const).map((name) => [`${ROOT}/templates/${name}.md`, `${root}/.agents/limen/${name}.md`] as const),
 		[`${ROOT}/templates/spec/vision.md`, `${root}/spec/vision.md`],
 		[`${ROOT}/templates/spec/build.md`, `${root}/spec/build.md`],
 		...(repository ? [] : ([[`${ROOT}/templates/spec/workspace.md`, `${root}/spec/workspace.md`]] as const)),

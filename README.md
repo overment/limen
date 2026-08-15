@@ -172,16 +172,17 @@ The ticket stays under the workspace parent. Branches, worktrees, diffs, and rev
 AGENTS.md                              coordinator shop manual
 .agents/limen/worker.md               worker birth prompt
 .agents/limen/reviewer.md             reviewer birth prompt
-.agents/limen/styleguide.md           shared working style
+.agents/limen/styleguide.md           project coding practice
+.agents/limen/communication.md        human and agent speech registers
 .pi/extensions/limen-wake.ts          live status and completion handoffs
-.pi/extensions/limen-communication.ts project context injection
+.pi/extensions/limen-communication.ts project context and mid-flight speech
 spec/vision.md                        durable product intent
 spec/build.md                         TRACK / NOW / NEXT / PROVEN
 spec/features/                        planned, active, done, and dropped work
 .limen/jobs/<id>/                     runtime evidence
 ```
 
-The project-context extension attaches the current vision, board, and styleguide to coordinator, worker, and reviewer turns. These are ordinary project-owned Markdown files; edit them to change guidance.
+The project-context extension attaches the current vision, board, and styleguide after each user message. Before every LLM call it restacks `.agents/limen/communication.md` and names the audience: human for coordinators, agent for spawned jobs. These are ordinary project-owned Markdown files; edit them to change guidance.
 
 Project updates are currently deliberate and manual: `init` preserves existing files. Compare new templates and extensions before copying them, preserve local policy, and run `/reload` or restart Pi after replacing an extension. `limen migrate` handles legacy Control project layouts; it is not a general updater.
 

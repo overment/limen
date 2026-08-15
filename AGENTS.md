@@ -5,7 +5,8 @@ This repository uses plain specifications, Git, and `limen` to coordinate one hu
 ## Durable intent
 
 - `spec/vision.md` explains durable intent. It is human-owned: propose a change and ask before rewriting it. Keep compact, decision-useful bullets under **Product principles** and **Current direction**; the project-context extension supplies it to every role.
-- `.agents/limen/styleguide.md` defines concise, durable working and communication style. Keep it compact, bullet-led, and within its 1000-line injected limit; it governs expression and process, never product scope.
+- `.agents/limen/styleguide.md` defines concise, durable coding practice. Keep it compact, bullet-led, and within its 1000-line injected limit; it governs how code is written and organized here, never product scope or speech.
+- `.agents/limen/communication.md` defines human and agent registers. The project-context extension restacks it before every LLM call and names the audience for that reply.
 - `spec/build.md` is the coordinator-maintained TRACK / NOW / NEXT / PROVEN board. Before selecting, starting, resuming, reviewing, merging, proving, or dropping work, reconcile it with the planned and active feature folders. Update it in the same coherent change that changes feature state. Each drift advisory never blocks work. Status marks are 🟠 ACTIVE, 🔴 PLANNED, 🟢 PROVEN, ⚪ DROPPED.
 - `spec/features/` is a numbered filing cabinet:
   - `planned/FNNN-slug/` — accepted backlog

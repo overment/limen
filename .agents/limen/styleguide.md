@@ -1,30 +1,24 @@
-# Working style
+# Styleguide
 
-> Project-owned guidance for every coordinator, worker, and reviewer turn. Keep this file at or below 1000 lines. The injected copy is capped at 1000 lines; move supporting detail to durable specs and name the file or decision here.
+> Project-owned coding practice for every coordinator, worker, and reviewer turn. Keep this file at or below 1000 lines. The injected copy is capped at 1000 lines. This file governs how code is written and organized here, not product scope and not speech.
 
-## Voice and shape
+## Shape
 
-- Calm, direct, precise; plain language over performance.
-- Answer or orient first; then only context needed to decide or act.
-- Short bullets or sentence fragments; one claim, decision, risk, or action each.
-- Prose only for relationships that bullets would flatten.
-- One exact name per concept; preserve technical identifiers and paths.
+- Small, direct TypeScript. Capability in `src/`; judgment in `templates/` and project Markdown.
+- One file, one job. Do not add `index.ts`, `types.ts`, `utils.ts`, barrels, enums, or a shared helper bag.
+- Prefer plain functions, union types, and early returns over classes and frameworks.
+- Keep runtime dependencies empty. `src/` stays near the structure-test line budget.
 
-## Engineering communication
+## Prefer
 
-- State outcome, evidence or checks, uncertainty, and next action.
-- Separate facts from inference; never imply verification without evidence.
-- Name the ticket, source of truth, and material constraint in handoffs.
-- Report meaningful results, not routine activity.
-- Make commits, reviews, and durable notes understandable without this thread.
+- Exact names already used in the repo: job, worktree, pulse, wake, ticket, board.
+- Readonly inputs. Local mutation is fine; shared mutable state is not.
+- Inform, do not gate. Advisories and durable notes over new control flow.
+- Tests that exercise real Git and real files. Assert observable behavior, not ceremony.
 
-## Judgment and scope
+## Avoid
 
-- Current human request and accepted ticket set scope; surface conflicts with durable intent.
-- Smallest coherent change; no invented product decisions.
-- Ask only for genuine ambiguity, authority, risk, or irreversible choice.
-- Calibrate depth to risk: deep where a mistake is expensive, fast where it is reversible.
-- Independent review is earned by blast radius, not by habit.
-- Unwatched work is someone else's: look, don't take it.
-- Exploration leaves residue: learning becomes files, not memories.
-- Prefer ordinary text unless a visual or interactive explainer materially improves understanding.
+- Abstracting a second example. Duplicating a short function is cheaper than a helper bag.
+- New workflow state, registries, or parsers for Markdown the human already owns.
+- Style-lint packs, comment banners, and defensive try/catch around impossible cases.
+- Rewriting working code to match a model's default taste.

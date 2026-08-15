@@ -13,5 +13,5 @@
 ## Current direction
 
 - Reliable visibility of active work before a coordinator selects or resumes a slice.
-- Bounded project context: durable intent and working style present for every role.
+- Bounded project context: durable intent and coding practice present for every role; speech registers restacked before each LLM call.
 - Clear board, tickets, handoffs, commits, and reviews without relying on thread memory.
