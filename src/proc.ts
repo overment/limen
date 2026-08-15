@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { appendFile, open, readFile, rename, rm } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
+import { renameJobTab } from "./herdr.ts";
 import { createStreamParser, type StreamEvent } from "./stream.ts";
 
 const STOP_GRACE_MS = 5_000;
@@ -335,6 +336,7 @@ export async function failInternalJob(error: unknown): Promise<void> {
 }
 export async function finalizeJob(jobDir: string, state: "done" | "failed" | "stopped", detail: string): Promise<void> {
 	await appendLimenLog(jobDir, `${state}: ${detail}`);
+	await renameJobTab(jobDir, state);
 	await atomicWrite(`${jobDir}/finished-at`, `${new Date().toISOString()}\n`);
 	await atomicWrite(`${jobDir}/state`, `${state}\n`);
 	await rm(`${jobDir}/pid`, { force: true });

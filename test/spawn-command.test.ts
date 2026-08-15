@@ -188,6 +188,7 @@ if (args[0] === "workspace" && args[1] === "list") {
 	assert.match(recorded, /tab create /);
 	assert.match(recorded, /--label F012 spaces/);
 	assert.match(recorded, /--no-focus/);
+	assert.match(recorded, /tab rename w1:t2 F012 spaces · done/);
 	const job = join(scratch.root, ".limen/jobs", id);
 	assert.equal(await readFile(join(job, "herdr/tab"), "utf8"), "w1:t2\n");
 	assert.equal(await readFile(join(job, "herdr/mode"), "utf8"), "watch\n");

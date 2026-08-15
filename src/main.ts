@@ -1,6 +1,8 @@
+import { closeCommand } from "./commands/close.ts";
 import { initCommand, workspaceCommand } from "./commands/init.ts";
 import { jobsCommand } from "./commands/jobs.ts";
 import { migrateCommand } from "./commands/migrate.ts";
+import { openCommand } from "./commands/open.ts";
 import { spawnCommand } from "./commands/spawn.ts";
 import { steerCommand } from "./commands/steer.ts";
 import { stopCommand } from "./commands/stop.ts";
@@ -20,7 +22,9 @@ const COMMANDS = {
 	jobs: jobsCommand,
 	watch: watchCommand,
 	unwatch: unwatchCommand,
-} as const satisfies Record<"init" | "workspace" | "migrate" | "spawn" | "steer" | "stop" | "wait" | "jobs" | "watch" | "unwatch", Command>;
+	open: openCommand,
+	close: closeCommand,
+} as const satisfies Record<"init" | "workspace" | "migrate" | "spawn" | "steer" | "stop" | "wait" | "jobs" | "watch" | "unwatch" | "open" | "close", Command>;
 const HELP = `limen — isolated coding jobs with files and git
 usage:
   limen init
@@ -35,6 +39,8 @@ usage:
   limen jobs [--running|--active|--all|<id|suffix|label>]
   limen watch <id|suffix|label> | --running
   limen unwatch <id|suffix|label> | --all
+  limen open <id|suffix|label>
+  limen close <FNNN>
 Pass a short coordinator instruction, not $(cat ticket.md). The ticket is a pointer, not the prompt.`;
 export async function main(args: readonly string[], cwd = process.cwd()): Promise<void> {
 	try {
