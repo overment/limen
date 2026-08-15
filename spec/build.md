@@ -6,12 +6,12 @@
 
 ## NOW
 
+- `F009-running-job-supervision` (ACTIVE): give a running job a steer channel built from ordinary files, so a drifting worker is corrected instead of restarted.
 - `F006-interactive-managed-updates` (ACTIVE): shape an interactive, advisory-first update experience and the agent response settings before implementation.
 
 ## NEXT
 
 - Decide F006’s update brief, autonomy boundary, and discussion triggers from the feature-shaping survey.
-- `F009-running-job-supervision` (PLANNED): steer a running job through ordinary files, and open a window onto its log; job model unchanged.
 - `F010-pane-hosted-jobs` (PLANNED): opt-in Herdr-hosted job you can attach to and drive by hand. Blocked on a human decision — it makes Herdr load-bearing and sets F007's containment aside for that mode.
 
 ## PROVEN
