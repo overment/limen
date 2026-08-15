@@ -19,6 +19,7 @@ export async function openHostedTab(input: {
 	readonly jobDir: string;
 	readonly label: string;
 	readonly cwd: string;
+	readonly workspaceCwd?: string;
 	readonly env: Readonly<Record<string, string>>;
 }): Promise<HerdrPlace> {
 	if (!herdrAvailable()) throw new Error("hosted spawn requires Herdr (HERDR_ENV=1); use an ordinary job instead");
@@ -26,6 +27,7 @@ export async function openHostedTab(input: {
 		jobDir: input.jobDir,
 		label: input.label,
 		cwd: input.cwd,
+		workspaceCwd: input.workspaceCwd ?? input.cwd,
 		logPath: `${input.jobDir}/log`,
 		mode: "hosted",
 		follow: false,
@@ -39,6 +41,7 @@ export async function openHostedTab(input: {
 
 export function startHostedPi(input: { readonly place: HerdrPlace; readonly name: string; readonly args: readonly string[]; readonly timeoutMs?: number }): string {
 	const herdr = requireHerdr();
+	waitForShell(herdr, input.place.pane, input.timeoutMs ?? 30_000);
 	const started = call(herdr, [
 		"agent",
 		"start",
@@ -54,6 +57,26 @@ export function startHostedPi(input: { readonly place: HerdrPlace; readonly name
 	]);
 	const target = agentTarget(started) || input.place.pane;
 	return target;
+}
+
+const SHELL_NAMES = new Set(["zsh", "bash", "sh", "fish", "nu", "pwsh", "powershell"]);
+/** Pane must be at an interactive shell before `agent start`; new tabs often still run prompt hooks. */
+function waitForShell(herdr: string, pane: string, timeoutMs: number): void {
+	const deadline = Date.now() + timeoutMs;
+	let last = "";
+	while (Date.now() < deadline) {
+		try {
+			const info = asRecord(asRecord(call(herdr, ["pane", "process-info", "--pane", pane])).process_info);
+			const foreground = Array.isArray(info.foreground_processes) ? info.foreground_processes : [];
+			const names = foreground.map((row) => String(asRecord(row).name ?? ""));
+			last = names.join(",") || "none";
+			if (foreground.length === 1 && SHELL_NAMES.has(names[0] ?? "")) return;
+		} catch (error) {
+			last = error instanceof Error ? error.message : String(error);
+		}
+		spawnSync("sleep", ["0.2"], { stdio: "ignore" });
+	}
+	throw new Error(`hosted pane ${pane} did not become an idle shell (last: ${last})`);
 }
 
 export function hostedAgentStatus(target: string): HostedAgentStatus {
@@ -150,6 +173,7 @@ async function createTab(input: {
 	readonly jobDir: string;
 	readonly label: string;
 	readonly cwd: string;
+	readonly workspaceCwd?: string;
 	readonly logPath: string;
 	readonly mode: HerdrPlace["mode"];
 	readonly follow: boolean;
@@ -164,7 +188,7 @@ async function createTab(input: {
 		return;
 	}
 	try {
-		const workspace = ensureWorkspace(herdr, input.cwd);
+		const workspace = ensureWorkspace(herdr, input.workspaceCwd ?? input.cwd);
 		const envArgs = Object.entries(input.env ?? {}).flatMap(([key, value]) => ["--env", `${key}=${value}`]);
 		const created = call(herdr, [
 			"tab",
@@ -228,7 +252,16 @@ function tabExists(herdr: string, tab: string): boolean {
 function call(herdr: string, args: readonly string[]): unknown {
 	const result = spawnSync(herdr, args, { encoding: "utf8", timeout: 90_000 });
 	if (result.error) throw result.error;
-	if (result.status !== 0) throw new Error(result.stderr.trim() || result.stdout.trim() || `herdr ${args[0]} failed`);
+	if (result.status !== 0) {
+		const raw = result.stderr.trim() || result.stdout.trim() || `herdr ${args[0]} failed`;
+		try {
+			const err = asRecord(asRecord(JSON.parse(raw)).error).message;
+			if (typeof err === "string" && err) throw new Error(err);
+		} catch (error) {
+			if (error instanceof Error && error.message !== raw) throw error;
+		}
+		throw new Error(raw);
+	}
 	const parsed: unknown = JSON.parse(result.stdout || "{}");
 	return asRecord(parsed).result ?? parsed;
 }
@@ -241,14 +274,13 @@ function id(result: unknown, object: string, field: string): string {
 
 function agentTarget(result: unknown): string | undefined {
 	const row = asRecord(result);
-	for (const key of ["pane_id", "agent_id", "target"] as const) {
-		const direct = row[key];
-		if (typeof direct === "string" && direct) return direct;
+	const agent = asRecord(row.agent);
+	for (const key of ["pane_id", "name", "agent_id", "target"] as const) {
+		const value = agent[key] ?? row[key];
+		if (typeof value === "string" && value) return value;
 	}
 	const pane = asRecord(row.pane).pane_id;
 	if (typeof pane === "string" && pane) return pane;
-	const agent = asRecord(row.agent).pane_id ?? asRecord(row.agent).agent_id;
-	if (typeof agent === "string" && agent) return agent;
 }
 
 function asRecord(value: unknown): Record<string, unknown> {

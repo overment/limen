@@ -141,7 +141,7 @@ async function startHosted(input: {
 	};
 	let place;
 	try {
-		place = await openHostedTab({ jobDir: input.jobDir, label: input.label, cwd: input.worktree, env: paneEnv });
+		place = await openHostedTab({ jobDir: input.jobDir, label: input.label, cwd: input.worktree, workspaceCwd: input.root, env: paneEnv });
 		const extensions = [`${PACKAGE_ROOT}/hook/hosted.ts`, `${PACKAGE_ROOT}/hook/steering.ts`, `${PACKAGE_ROOT}/hook/communication.ts`].flatMap((path) =>
 			existsSync(path) ? ["--extension", path] : [],
 		);
@@ -157,7 +157,7 @@ async function startHosted(input: {
 			...(input.model ? ["--model", input.model] : []),
 			`@${input.taskFile}`,
 		];
-		const target = startHostedPi({ place, name: `limen: ${input.label}`, args: piArgs });
+		const target = startHostedPi({ place, name: hostedAgentName(input.id), args: piArgs });
 		await writeFile(`${input.jobDir}/herdr/agent`, `${target}\n`);
 		const supervisorPid = await launchHostedSupervisor({
 			LIMEN_JOB_DIR: input.jobDir,
@@ -264,6 +264,11 @@ function normalizeLabel(value: string): string {
 function makeJobId(label: string): string {
 	const slug = label.toLowerCase().replace(/[^a-z0-9]+/g, "-");
 	return `${new Date().toISOString().slice(0, 10)}-${slug.replace(/^-|-$/g, "").slice(0, 32) || "job"}-${randomBytes(4).toString("hex")}`;
+}
+/** Herdr agent names: lowercase letter start, [a-z0-9_-], max 32. */
+function hostedAgentName(jobId: string): string {
+	const slug = jobId.toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^[^a-z]+/, "") || "job";
+	return `limen-${slug}`.slice(0, 32);
 }
 function currentNotificationSession(): string | undefined {
 	const value = process.env.PI_SESSION_ID?.trim();

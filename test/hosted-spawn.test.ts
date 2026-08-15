@@ -82,6 +82,8 @@ if (args[0] === "workspace" && args[1] === "list") {
   ok({ type: "tab_closed" });
 } else if (args[0] === "pane" && args[1] === "run") {
   ok({ type: "pane_ran" });
+} else if (args[0] === "pane" && args[1] === "process-info") {
+  ok({ type: "pane_process_info", process_info: { foreground_processes: [{ name: "zsh" }] } });
 } else if (args[0] === "agent" && args[1] === "start") {
   const pane = args[args.indexOf("--pane") + 1];
   state.agents[pane] = { status: "working", ticks: 0 };
