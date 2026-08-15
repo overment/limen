@@ -9,7 +9,7 @@ import { steerCommand } from "./commands/steer.ts";
 import { stopCommand } from "./commands/stop.ts";
 import { waitCommand } from "./commands/wait.ts";
 import { unwatchCommand, watchCommand } from "./commands/watch.ts";
-import { failInternalJob, runInternalJob } from "./proc.ts";
+import { failInternalJob, runHostedSupervisor, runInternalJob } from "./proc.ts";
 
 type Command = (args: readonly string[], cwd: string) => Promise<void>;
 const COMMANDS = {
@@ -33,6 +33,7 @@ usage:
   limen workspace init
   limen migrate
   limen spawn "Implement FNNN: <outcome>. Start by writing <slice>. Ticket: spec/features/active/FNNN-slug/ticket.md" [--label L] [--model X] [--branch B] [--timeout 20m; default 90m]
+  limen spawn --tab "…" [--label L] [--model X]   # interactive pi in the Herdr job tab (weaker guarantees)
   limen spawn --repo R "Implement FNNN: <outcome>. Ticket: spec/features/active/FNNN-slug/ticket.md" [--label L] [--model X]
   limen spawn --review --branch B --label L "Review the FNNN candidate against spec/features/active/FNNN-slug/ticket.md"
   limen steer <id|suffix|label> "correction"
@@ -51,6 +52,10 @@ export async function main(args: readonly string[], cwd = process.cwd()): Promis
 			await runInternalJob();
 			return;
 		}
+		if (process.env.LIMEN_INTERNAL_HOSTED === "1") {
+			await runHostedSupervisor();
+			return;
+		}
 		const [name, ...rest] = args;
 		if (!name || name === "--help" || name === "-h" || name === "help") {
 			console.log(HELP);
@@ -59,7 +64,7 @@ export async function main(args: readonly string[], cwd = process.cwd()): Promis
 		if (!(name in COMMANDS)) throw new Error(`unknown command ${JSON.stringify(name)}\n\n${HELP}`);
 		await COMMANDS[name as keyof typeof COMMANDS](rest, cwd);
 	} catch (error) {
-		if (process.env.LIMEN_INTERNAL_RUN === "1") await failInternalJob(error);
+		if (process.env.LIMEN_INTERNAL_RUN === "1" || process.env.LIMEN_INTERNAL_HOSTED === "1") await failInternalJob(error);
 		console.error(error instanceof Error ? error.message : String(error));
 		process.exitCode = 1;
 	}

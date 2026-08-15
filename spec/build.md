@@ -6,12 +6,12 @@
 
 ## NOW
 
+- `F010-pane-hosted-jobs` (ACTIVE): `limen spawn --tab` runs interactive pi in the job tab; try it, then prove.
 - `F006-interactive-managed-updates` (ACTIVE): shape an interactive, advisory-first update experience and the agent response settings before implementation.
 
 ## NEXT
 
 - Decide F006’s update brief, autonomy boundary, and discussion triggers from the feature-shaping survey.
-- `F010-pane-hosted-jobs` (PLANNED): opt-in: the worker itself runs in the F012 tab so you can type into it. Sequenced after F012. Drops F007 containment for that mode only.
 - `F011-empty-job-advisory` (PLANNED): a job that produced nothing should say so instead of reading DONE. Observed, not theorised.
 
 ## PROVEN

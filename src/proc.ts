@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { appendFile, open, readFile, rename, rm } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { renameJobTab } from "./herdr.ts";
+import { hostedAgentStatus, renameJobTab } from "./herdr.ts";
 import { createStreamParser, type StreamEvent } from "./stream.ts";
 
 const STOP_GRACE_MS = 5_000;
@@ -215,11 +215,17 @@ export async function appendLimenLog(jobDir: string, message: string): Promise<v
 	await appendFile(`${jobDir}/log`, `[limen ${new Date().toISOString()}] ${message}\n`);
 }
 export async function launchWrapper(environment: Readonly<Record<string, string>>): Promise<number> {
+	return launchDetached({ ...environment, LIMEN_INTERNAL_RUN: "1" });
+}
+export async function launchHostedSupervisor(environment: Readonly<Record<string, string>>): Promise<number> {
+	return launchDetached({ ...environment, LIMEN_INTERNAL_HOSTED: "1" });
+}
+async function launchDetached(environment: Readonly<Record<string, string>>): Promise<number> {
 	const executable = fileURLToPath(new URL("../bin/limen", import.meta.url));
 	const child = spawn(process.execPath, [executable], {
 		detached: true,
 		stdio: "ignore",
-		env: { ...process.env, ...environment, LIMEN_INTERNAL_RUN: "1" },
+		env: { ...process.env, ...environment },
 	});
 	await new Promise<void>((resolve, reject) => {
 		child.once("spawn", resolve);
@@ -228,6 +234,29 @@ export async function launchWrapper(environment: Readonly<Record<string, string>
 	if (!child.pid) throw new Error("could not start the detached job wrapper");
 	child.unref();
 	return child.pid;
+}
+/** Watch a Herdr-hosted agent and publish terminal state when it ends. No timeout or containment. */
+export async function runHostedSupervisor(): Promise<void> {
+	const jobDir = requiredEnvironment("LIMEN_JOB_DIR");
+	const target = requiredEnvironment("LIMEN_HOSTED_TARGET");
+	await atomicWrite(`${jobDir}/pid`, `${process.pid}\n`);
+	await atomicWrite(`${jobDir}/state`, "running\n");
+	await appendLimenLog(jobDir, "hosted supervisor started (weaker guarantees: no timeout, no tool-call cap, no process containment)");
+	let stopRequested = false;
+	process.on("SIGTERM", () => {
+		stopRequested = true;
+	});
+	while (!stopRequested) {
+		const status = hostedAgentStatus(target);
+		if (status === "missing" || status === "done") {
+			await finalizeJob(jobDir, "done", status === "done" ? "hosted agent done" : "hosted agent ended");
+			return;
+		}
+		const activity = status === "working" ? "think" : "wait";
+		await atomicWrite(`${jobDir}/activity`, `${activity}\n`).catch(() => {});
+		await delay(1_000);
+	}
+	await finalizeJob(jobDir, "stopped", "hosted supervisor interrupted");
 }
 export async function runInternalJob(): Promise<void> {
 	const jobDir = requiredEnvironment("LIMEN_JOB_DIR");

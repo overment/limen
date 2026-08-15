@@ -1,11 +1,12 @@
 import { randomBytes } from "node:crypto";
+import { existsSync } from "node:fs";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { basename, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { addBranchWorktree, addDetachedWorktree, addNewWorktree, branchExists, repoRoot, workspaceRepository, workspaceRoot, worktreeForBranch } from "../git.ts";
-import { openWatchTab } from "../herdr.ts";
+import { herdrAvailable, hostedAgentStatus, openHostedTab, openWatchTab, startHostedPi } from "../herdr.ts";
 import { parseDuration } from "../job.ts";
-import { atomicWrite, finalizeJob, launchWrapper, processGroupAlive, signalProcessGroup, waitForProcessGroup } from "../proc.ts";
+import { atomicWrite, finalizeJob, launchHostedSupervisor, launchWrapper, processGroupAlive, signalProcessGroup, waitForProcessGroup } from "../proc.ts";
 import { pruneFinishedWorktrees } from "./prune.ts";
 
 type SpawnOptions = {
@@ -16,7 +17,11 @@ type SpawnOptions = {
 	model?: string;
 	timeoutMs?: number;
 	review: boolean;
+	tab: boolean;
 };
+const PACKAGE_ROOT = fileURLToPath(new URL("../..", import.meta.url));
+const HOSTED_NOTE =
+	"Hosted job: weaker guarantees. No 90-minute timeout, no tool-call cap, no F007 process containment. Herdr owns the process tree. Closing the tab ends the worker.\n";
 type WorktreePlan =
 	| { readonly kind: "detach"; readonly path: string; readonly ref: string }
 	| { readonly kind: "reuse"; readonly path: string }
@@ -26,6 +31,8 @@ const TEMPLATE_ROOT = fileURLToPath(new URL("../../templates", import.meta.url))
 const [HANDSHAKE_MS, HANDSHAKE_POLL_MS] = [2_000, 20];
 export async function spawnCommand(args: readonly string[], cwd: string): Promise<void> {
 	const options = parseSpawnArgs(args);
+	if (options.tab && options.review) throw new Error("--tab does not support --review yet");
+	if (options.tab && !herdrAvailable()) throw new Error("hosted spawn requires Herdr (HERDR_ENV=1); use an ordinary job instead");
 	const notificationSession = currentNotificationSession();
 	const workspace = workspaceRoot(cwd);
 	const root = workspace ?? repoRoot(cwd);
@@ -68,6 +75,7 @@ export async function spawnCommand(args: readonly string[], cwd: string): Promis
 		writeFile(`${jobDir}/last-tool`, "", { flag: "wx", flush: true }),
 		writeFile(`${jobDir}/activity`, "think\n", { flag: "wx", flush: true }),
 		writeFile(`${jobDir}/log`, "", { flag: "wx", flush: true }),
+		...(options.tab ? [writeFile(`${jobDir}/hosted`, HOSTED_NOTE, { flag: "wx", flush: true })] : []),
 		...(notificationSession
 			? [
 					writeFile(`${jobDir}/origin-session`, `${notificationSession}\n`, { flag: "wx", flush: true }),
@@ -77,13 +85,20 @@ export async function spawnCommand(args: readonly string[], cwd: string): Promis
 	]);
 	await writeFile(`${jobDir}/notify/ready`, "1\n", { flag: "wx", flush: true });
 	await atomicWrite(`${jobDir}/state`, "running\n");
-	await openWatchTab({ jobDir, label: options.label, cwd: root, logPath: `${jobDir}/log` });
 	const role = options.review ? "reviewer" : "worker";
 	const localPreamble = `${root}/.agents/limen/${role}.md`;
 	const preamble = await readFile(localPreamble).then(
 		() => localPreamble,
 		() => `${TEMPLATE_ROOT}/${role}.md`,
 	);
+	const model = options.model ?? (process.env[options.review ? "LIMEN_REVIEWER_MODEL" : "LIMEN_WORKER_MODEL"]?.trim() || undefined);
+	if (options.tab) {
+		await startHosted({ jobDir, id, label: options.label, root, worktree, preamble, taskFile: `${jobDir}/task.md`, ...(model ? { model } : {}) });
+		console.log(`started ${options.label} (hosted)`);
+		console.log(id);
+		return;
+	}
+	await openWatchTab({ jobDir, label: options.label, cwd: root, logPath: `${jobDir}/log` });
 	const environment: Record<string, string> = {
 		LIMEN_JOB_DIR: jobDir,
 		LIMEN_WORKTREE: worktree,
@@ -93,7 +108,6 @@ export async function spawnCommand(args: readonly string[], cwd: string): Promis
 		LIMEN_LABEL: options.label,
 		LIMEN_CONTEXT_ROOT: root,
 	};
-	const model = options.model ?? (process.env[options.review ? "LIMEN_REVIEWER_MODEL" : "LIMEN_WORKER_MODEL"]?.trim() || undefined);
 	if (model) environment.LIMEN_MODEL = model;
 	if (options.timeoutMs) environment.LIMEN_TIMEOUT_MS = String(options.timeoutMs);
 	let wrapperPid: number;
@@ -107,6 +121,57 @@ export async function spawnCommand(args: readonly string[], cwd: string): Promis
 	await waitForHandshake(jobDir, wrapperPid);
 	console.log(`started ${options.label}`);
 	console.log(id);
+}
+async function startHosted(input: {
+	readonly jobDir: string;
+	readonly id: string;
+	readonly label: string;
+	readonly root: string;
+	readonly worktree: string;
+	readonly preamble: string;
+	readonly taskFile: string;
+	readonly model?: string;
+}): Promise<void> {
+	const paneEnv = {
+		LIMEN_JOB: "1",
+		LIMEN_HOSTED: "1",
+		LIMEN_JOB_ID: input.id,
+		LIMEN_JOB_LABEL: input.label,
+		LIMEN_CONTEXT_ROOT: input.root,
+	};
+	let place;
+	try {
+		place = await openHostedTab({ jobDir: input.jobDir, label: input.label, cwd: input.worktree, env: paneEnv });
+		const extensions = [`${PACKAGE_ROOT}/hook/hosted.ts`, `${PACKAGE_ROOT}/hook/steering.ts`, `${PACKAGE_ROOT}/hook/communication.ts`].flatMap((path) =>
+			existsSync(path) ? ["--extension", path] : [],
+		);
+		const piArgs = [
+			"--approve",
+			"--session-dir",
+			`${input.jobDir}/session`,
+			"--name",
+			`limen: ${input.label}`,
+			"--append-system-prompt",
+			input.preamble,
+			...extensions,
+			...(input.model ? ["--model", input.model] : []),
+			`@${input.taskFile}`,
+		];
+		const target = startHostedPi({ place, name: `limen: ${input.label}`, args: piArgs });
+		await writeFile(`${input.jobDir}/herdr/agent`, `${target}\n`);
+		const supervisorPid = await launchHostedSupervisor({
+			LIMEN_JOB_DIR: input.jobDir,
+			LIMEN_HOSTED_TARGET: target,
+			LIMEN_JOB_ID: input.id,
+			LIMEN_LABEL: input.label,
+			LIMEN_CONTEXT_ROOT: input.root,
+		});
+		await waitForHandshake(input.jobDir, supervisorPid);
+	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error);
+		await finalizeJob(input.jobDir, "failed", `hosted start failed: ${message}`);
+		throw error;
+	}
 }
 async function planWorktree(input: {
 	readonly root: string;
@@ -142,6 +207,7 @@ function parseSpawnArgs(args: readonly string[]): SpawnOptions {
 	let model: string | undefined;
 	let timeoutMs: number | undefined;
 	let review = false;
+	let tab = false;
 	let positional = false;
 	const task: string[] = [];
 	for (let index = 0; index < args.length; index += 1) {
@@ -149,6 +215,7 @@ function parseSpawnArgs(args: readonly string[]): SpawnOptions {
 		if (!value) continue;
 		if (value === "--") positional = true;
 		else if (!positional && value === "--review") review = true;
+		else if (!positional && value === "--tab") tab = true;
 		else if (!positional && (value === "--branch" || value === "--repo" || value === "--label" || value === "--model" || value === "--timeout")) {
 			const optionValue = args[index + 1];
 			if (!optionValue) throw new Error(`${value} requires a value`);
@@ -178,6 +245,7 @@ function parseSpawnArgs(args: readonly string[]): SpawnOptions {
 		task: taskText,
 		label: label ?? (taskText.trim().split(/\r?\n/, 1)[0]?.trim().slice(0, 80) || "job"),
 		review,
+		tab,
 		...(branch ? { branch } : {}),
 		...(repo ? { repo } : {}),
 		...(model ? { model } : {}),
@@ -220,7 +288,11 @@ async function liveJobUsesBranch(jobsRoot: string, branch: string, repo?: string
 async function liveJob(jobDir: string): Promise<boolean> {
 	if ((await text(`${jobDir}/state`)) !== "running") return false;
 	const pid = Number(await text(`${jobDir}/pid`));
-	return Number.isSafeInteger(pid) && pid > 0 && processGroupAlive(pid);
+	if (Number.isSafeInteger(pid) && pid > 0 && processGroupAlive(pid)) return true;
+	const agent = await text(`${jobDir}/herdr/agent`);
+	if (!(await text(`${jobDir}/hosted`)) || !agent) return false;
+	const status = hostedAgentStatus(agent);
+	return status !== "missing" && status !== "done";
 }
 async function text(path: string): Promise<string> {
 	return readFile(path, "utf8").then(

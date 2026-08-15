@@ -1,6 +1,7 @@
 import { open, readdir, readFile, stat } from "node:fs/promises";
 import { limenRoot, liveDiffstat, workspaceRepository } from "../git.ts";
-import { derivePulse, parseJob, renderJob } from "../job.ts";
+import { hostedAgentStatus } from "../herdr.ts";
+import { derivePulse, parseJob, renderJob, type Pulse } from "../job.ts";
 import { resolveJob } from "../lookup.ts";
 import { processGroupAlive } from "../proc.ts";
 
@@ -51,9 +52,10 @@ async function orderedJobs(ids: readonly string[], jobsRoot: string): Promise<Re
 }
 async function renderJobDirectory(root: string, jobsRoot: string, id: string, detailed: boolean): Promise<string> {
 	const jobDir = `${jobsRoot}/${id}`;
-	const [state = "", label = "", branch = "", repo = "", pid, started = "", finished = "", toolCalls, lastTool, activity] = await Promise.all(
-		"state label branch repo pid started-at finished-at tool-calls last-tool activity".split(" ").map((field) => text(`${jobDir}/${field}`)),
+	const [state = "", label = "", branch = "", repo = "", pid, started = "", finished = "", toolCalls, lastTool, activity, hosted] = await Promise.all(
+		"state label branch repo pid started-at finished-at tool-calls last-tool activity hosted".split(" ").map((field) => text(`${jobDir}/${field}`)),
 	);
+	const agent = await text(`${jobDir}/herdr/agent`);
 	const [taskStat, logStat] = await Promise.all([optionalStat(`${jobDir}/task.md`), optionalStat(`${jobDir}/log`)]);
 	const cleanup = detailed ? await text(`${jobDir}/cleanup`) : "";
 	if (!taskStat || !logStat) return `INVALID ${id} · missing task.md or log`;
@@ -64,22 +66,33 @@ async function renderJobDirectory(root: string, jobsRoot: string, id: string, de
 		const job = parseJob({ id, state, label: display(label || id), branch: display(branch), ...(pid ? { pid } : {}), startedAt, lastOutputAt: logStat.mtime, detail: log.detail });
 		const observedAt = job.phase === "running" ? Date.now() : recordedDate(finished, new Date(), "finished-at").getTime();
 		const processAlive = job.phase === "running" && job.pid !== undefined && processGroupAlive(job.pid);
+		const agentStatus = job.phase === "running" && hosted && agent ? hostedAgentStatus(agent) : undefined;
+		const hostedAlive = agentStatus !== undefined && agentStatus !== "missing" && agentStatus !== "done";
+		const alive = hosted ? hostedAlive || processAlive : processAlive;
+		const pulse: Pulse | undefined =
+			job.phase === "running"
+				? hosted
+					? !alive
+						? "dead"
+						: activity === "tool" || activity === "wait"
+							? activity
+							: agentStatus === "working"
+								? "think"
+								: "wait"
+					: derivePulse({ alive: processAlive, ...(job.pid !== undefined ? { pid: job.pid } : {}), ...(activity ? { activity } : {}) })
+				: undefined;
 		const rendered = renderJob(job, {
 			elapsedMs: observedAt - startedAt.getTime(),
 			silentMs: observedAt - logStat.mtimeMs,
 			...(toolCalls ? { toolCalls: recordedCount(toolCalls) } : {}),
 			...(lastTool ? { lastTool: display(lastTool) } : {}),
-			...(job.phase === "running"
-				? {
-						pulse: derivePulse({ alive: processAlive, ...(job.pid !== undefined ? { pid: job.pid } : {}), ...(activity ? { activity } : {}) }),
-						...(job.pid !== undefined ? { processAlive } : {}),
-					}
-				: {}),
+			...(job.phase === "running" && pulse ? { pulse, processAlive: alive } : {}),
 			diffstat: detailed ? liveDiffstat(repo ? workspaceRepository(root, repo) : root, branch) : "",
 			logTail: log.tail,
 		});
 		const blocks = [rendered];
 		if (repo) blocks.push(`  repo ${display(repo)}`);
+		if (hosted) blocks.push("  hosted (weaker guarantees)");
 		if (cleanup)
 			blocks.push(
 				`  cleanup:\n${cleanup

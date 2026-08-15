@@ -3,11 +3,79 @@ import { existsSync } from "node:fs";
 import { appendFile, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { basename } from "node:path";
 
-export type HerdrPlace = { readonly workspace: string; readonly tab: string; readonly pane: string; readonly mode: "watch" | "log" };
+export type HerdrPlace = { readonly workspace: string; readonly tab: string; readonly pane: string; readonly mode: "watch" | "log" | "hosted" };
+export type HostedAgentStatus = "idle" | "working" | "blocked" | "done" | "unknown" | "missing";
+
+export function herdrAvailable(): boolean {
+	return process.env.HERDR_ENV === "1" && Boolean(herdrBinary());
+}
 
 export async function openWatchTab(input: { readonly jobDir: string; readonly label: string; readonly cwd: string; readonly logPath: string }): Promise<HerdrPlace | undefined> {
 	if (process.env.HERDR_ENV !== "1") return;
 	return createTab({ ...input, mode: "watch", follow: true, focus: false });
+}
+
+export async function openHostedTab(input: {
+	readonly jobDir: string;
+	readonly label: string;
+	readonly cwd: string;
+	readonly env: Readonly<Record<string, string>>;
+}): Promise<HerdrPlace> {
+	if (!herdrAvailable()) throw new Error("hosted spawn requires Herdr (HERDR_ENV=1); use an ordinary job instead");
+	const place = await createTab({
+		jobDir: input.jobDir,
+		label: input.label,
+		cwd: input.cwd,
+		logPath: `${input.jobDir}/log`,
+		mode: "hosted",
+		follow: false,
+		focus: true,
+		env: input.env,
+		shellOnly: true,
+	});
+	if (!place) throw new Error("herdr skipped opening the hosted tab");
+	return place;
+}
+
+export function startHostedPi(input: { readonly place: HerdrPlace; readonly name: string; readonly args: readonly string[]; readonly timeoutMs?: number }): string {
+	const herdr = requireHerdr();
+	const started = call(herdr, [
+		"agent",
+		"start",
+		input.name,
+		"--kind",
+		"pi",
+		"--pane",
+		input.place.pane,
+		"--timeout",
+		String(input.timeoutMs ?? 60_000),
+		"--",
+		...input.args,
+	]);
+	const target = agentTarget(started) || input.place.pane;
+	return target;
+}
+
+export function hostedAgentStatus(target: string): HostedAgentStatus {
+	const herdr = herdrBinary();
+	if (!herdr) return "missing";
+	try {
+		const status = asRecord(call(herdr, ["agent", "get", target])).agent_status;
+		if (status === "idle" || status === "working" || status === "blocked" || status === "done" || status === "unknown") return status;
+		return "unknown";
+	} catch {
+		return "missing";
+	}
+}
+
+export function stopHostedAgent(target: string): void {
+	const herdr = herdrBinary();
+	if (!herdr) return;
+	try {
+		call(herdr, ["agent", "send-keys", target, "C-c"]);
+	} catch {
+		// Best-effort; supervisor finalizes when the agent disappears.
+	}
 }
 
 export async function renameJobTab(jobDir: string, state: "done" | "failed" | "stopped"): Promise<void> {
@@ -27,6 +95,7 @@ export async function openJobPlace(input: { readonly jobDir: string; readonly cw
 	if (!herdr) throw new Error("herdr is not available");
 	const label = (await text(`${input.jobDir}/label`)) || basename(input.jobDir);
 	const recorded = await readPlace(input.jobDir);
+	const hosted = Boolean(await text(`${input.jobDir}/hosted`));
 	try {
 		if (recorded && tabExists(herdr, recorded.tab)) {
 			call(herdr, ["tab", "focus", recorded.tab]);
@@ -35,14 +104,16 @@ export async function openJobPlace(input: { readonly jobDir: string; readonly cw
 	} catch (error) {
 		await skip(input.jobDir, error instanceof Error ? error.message : String(error));
 	}
+	// Hosted agents die with their tab; reopen is always a log view, never a resurrection.
 	const state = (await text(`${input.jobDir}/state`)) || "done";
+	const watch = input.running && !hosted;
 	const place = await createTab({
 		jobDir: input.jobDir,
 		label: input.running ? label : `${label} · ${state}`,
 		cwd: input.cwd,
 		logPath: `${input.jobDir}/log`,
-		mode: input.running ? "watch" : "log",
-		follow: input.running,
+		mode: watch ? "watch" : "log",
+		follow: watch,
 		focus: true,
 		herdr,
 	});
@@ -84,6 +155,8 @@ async function createTab(input: {
 	readonly follow: boolean;
 	readonly focus: boolean;
 	readonly herdr?: string;
+	readonly env?: Readonly<Record<string, string>>;
+	readonly shellOnly?: boolean;
 }): Promise<HerdrPlace | undefined> {
 	const herdr = input.herdr ?? herdrBinary();
 	if (!herdr) {
@@ -92,10 +165,24 @@ async function createTab(input: {
 	}
 	try {
 		const workspace = ensureWorkspace(herdr, input.cwd);
-		const created = call(herdr, ["tab", "create", "--workspace", workspace, "--label", input.label, "--cwd", input.cwd, input.focus ? "--focus" : "--no-focus"]);
+		const envArgs = Object.entries(input.env ?? {}).flatMap(([key, value]) => ["--env", `${key}=${value}`]);
+		const created = call(herdr, [
+			"tab",
+			"create",
+			"--workspace",
+			workspace,
+			"--label",
+			input.label,
+			"--cwd",
+			input.cwd,
+			...envArgs,
+			input.focus ? "--focus" : "--no-focus",
+		]);
 		const place: HerdrPlace = { workspace, tab: id(created, "tab", "tab_id"), pane: id(created, "root_pane", "pane_id"), mode: input.mode };
 		await recordPlace(input.jobDir, place);
-		call(herdr, input.follow ? ["pane", "run", place.pane, "tail", "-f", input.logPath] : ["pane", "run", place.pane, "tail", "-n", "+1", input.logPath]);
+		if (!input.shellOnly) {
+			call(herdr, input.follow ? ["pane", "run", place.pane, "tail", "-f", input.logPath] : ["pane", "run", place.pane, "tail", "-n", "+1", input.logPath]);
+		}
 		return place;
 	} catch (error) {
 		await skip(input.jobDir, error instanceof Error ? error.message : String(error));
@@ -110,6 +197,12 @@ function herdrBinary(): string | undefined {
 		const candidate = `${dir}/herdr`;
 		if (dir && existsSync(candidate)) return candidate;
 	}
+}
+
+function requireHerdr(): string {
+	const herdr = herdrBinary();
+	if (!herdr) throw new Error("herdr is not available");
+	return herdr;
 }
 
 function ensureWorkspace(herdr: string, cwd: string): string {
@@ -133,7 +226,7 @@ function tabExists(herdr: string, tab: string): boolean {
 }
 
 function call(herdr: string, args: readonly string[]): unknown {
-	const result = spawnSync(herdr, args, { encoding: "utf8", timeout: 5_000 });
+	const result = spawnSync(herdr, args, { encoding: "utf8", timeout: 90_000 });
 	if (result.error) throw result.error;
 	if (result.status !== 0) throw new Error(result.stderr.trim() || result.stdout.trim() || `herdr ${args[0]} failed`);
 	const parsed: unknown = JSON.parse(result.stdout || "{}");
@@ -144,6 +237,18 @@ function id(result: unknown, object: string, field: string): string {
 	const value = asRecord(asRecord(result)[object])[field];
 	if (typeof value !== "string" || !value) throw new Error(`herdr response missing ${object}.${field}`);
 	return value;
+}
+
+function agentTarget(result: unknown): string | undefined {
+	const row = asRecord(result);
+	for (const key of ["pane_id", "agent_id", "target"] as const) {
+		const direct = row[key];
+		if (typeof direct === "string" && direct) return direct;
+	}
+	const pane = asRecord(row.pane).pane_id;
+	if (typeof pane === "string" && pane) return pane;
+	const agent = asRecord(row.agent).pane_id ?? asRecord(row.agent).agent_id;
+	if (typeof agent === "string" && agent) return agent;
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -157,7 +262,7 @@ async function recordPlace(jobDir: string, place: HerdrPlace): Promise<void> {
 
 async function readPlace(jobDir: string): Promise<HerdrPlace | undefined> {
 	const [workspace, tab, pane, mode] = await Promise.all((["workspace", "tab", "pane", "mode"] as const).map((name) => text(`${jobDir}/herdr/${name}`)));
-	if (!workspace || !tab || !pane || (mode !== "watch" && mode !== "log")) return;
+	if (!workspace || !tab || !pane || (mode !== "watch" && mode !== "log" && mode !== "hosted")) return;
 	return { workspace, tab, pane, mode };
 }
 
