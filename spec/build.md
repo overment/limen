@@ -2,7 +2,7 @@
 
 ## TRACK
 
-- Reliable visibility and in-place control of in-flight Limen work; bounded, durable guidance for every role.
+- Reliable visibility and in-place control of in-flight Limen work; a named Herdr place per job; bounded, durable guidance for every role.
 
 ## NOW
 
@@ -11,8 +11,9 @@
 ## NEXT
 
 - Decide F006’s update brief, autonomy boundary, and discussion triggers from the feature-shaping survey.
+- `F012-herdr-job-spaces` (PLANNED): workspace / tab / pane meaning, named spawn tabs, rename on finish, close when the feature is proven, `limen open` to reopen a closed tab.
+- `F010-pane-hosted-jobs` (PLANNED): opt-in: the worker itself runs in the F012 tab so you can type into it. Sequenced after F012. Drops F007 containment for that mode only.
 - `F011-empty-job-advisory` (PLANNED): a job that produced nothing should say so instead of reading DONE. Observed, not theorised.
-- `F010-pane-hosted-jobs` (PLANNED): opt-in Herdr-hosted job you can attach to and drive by hand. Blocked on a human decision — it makes Herdr load-bearing and sets F007's containment aside for that mode.
 
 ## PROVEN
 
