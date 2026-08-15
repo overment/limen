@@ -4,9 +4,9 @@ import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { basename, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { addBranchWorktree, addDetachedWorktree, addNewWorktree, branchExists, repoRoot, workspaceRepository, workspaceRoot, worktreeForBranch } from "../git.ts";
-import { herdrAvailable, hostedAgentStatus, openHostedTab, openWatchTab, startHostedPi } from "../herdr.ts";
+import { herdrAvailable, hostedAgentAlive, hostedAgentStatus, openHostedTab, openWatchTab, startHostedPi } from "../herdr.ts";
 import { parseDuration } from "../job.ts";
-import { atomicWrite, finalizeJob, launchHostedSupervisor, launchWrapper, processGroupAlive, signalProcessGroup, waitForProcessGroup } from "../proc.ts";
+import { appendLimenLog, atomicWrite, finalizeJob, launchHostedSupervisor, launchWrapper, processGroupAlive, signalProcessGroup, waitForProcessGroup } from "../proc.ts";
 import { pruneFinishedWorktrees } from "./prune.ts";
 
 type SpawnOptions = {
@@ -139,12 +139,14 @@ async function startHosted(input: {
 		LIMEN_JOB_LABEL: input.label,
 		LIMEN_CONTEXT_ROOT: input.root,
 	};
-	let place;
+	let place: Awaited<ReturnType<typeof openHostedTab>> | undefined;
+	let target = "";
 	try {
 		place = await openHostedTab({ jobDir: input.jobDir, label: input.label, cwd: input.worktree, workspaceCwd: input.root, env: paneEnv });
 		const extensions = [`${PACKAGE_ROOT}/hook/hosted.ts`, `${PACKAGE_ROOT}/hook/steering.ts`, `${PACKAGE_ROOT}/hook/communication.ts`].flatMap((path) =>
 			existsSync(path) ? ["--extension", path] : [],
 		);
+		const agentName = hostedAgentName(input.id);
 		const piArgs = [
 			"--approve",
 			"--session-dir",
@@ -157,7 +159,7 @@ async function startHosted(input: {
 			...(input.model ? ["--model", input.model] : []),
 			`@${input.taskFile}`,
 		];
-		const target = startHostedPi({ place, name: hostedAgentName(input.id), args: piArgs });
+		target = startHostedPi({ place, name: agentName, args: piArgs });
 		await writeFile(`${input.jobDir}/herdr/agent`, `${target}\n`);
 		const supervisorPid = await launchHostedSupervisor({
 			LIMEN_JOB_DIR: input.jobDir,
@@ -166,9 +168,26 @@ async function startHosted(input: {
 			LIMEN_LABEL: input.label,
 			LIMEN_CONTEXT_ROOT: input.root,
 		});
-		await waitForHandshake(input.jobDir, supervisorPid);
+		// Known at launch — never run the detached handshake killer against a live hosted agent.
+		await atomicWrite(`${input.jobDir}/pid`, `${supervisorPid}\n`);
+		await atomicWrite(`${input.jobDir}/state`, "running\n");
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);
+		const recovered = [target, place?.pane, place ? hostedAgentName(input.id) : ""].find((value) => value && hostedAgentAlive(value));
+		if (recovered) {
+			await writeFile(`${input.jobDir}/herdr/agent`, `${recovered}\n`);
+			const supervisorPid = await launchHostedSupervisor({
+				LIMEN_JOB_DIR: input.jobDir,
+				LIMEN_HOSTED_TARGET: recovered,
+				LIMEN_JOB_ID: input.id,
+				LIMEN_LABEL: input.label,
+				LIMEN_CONTEXT_ROOT: input.root,
+			});
+			await atomicWrite(`${input.jobDir}/pid`, `${supervisorPid}\n`);
+			await atomicWrite(`${input.jobDir}/state`, "running\n");
+			await appendLimenLog(input.jobDir, `hosted agent ready after start warning: ${message}`);
+			return;
+		}
 		await finalizeJob(input.jobDir, "failed", `hosted start failed: ${message}`);
 		throw error;
 	}

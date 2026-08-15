@@ -41,22 +41,66 @@ export async function openHostedTab(input: {
 
 export function startHostedPi(input: { readonly place: HerdrPlace; readonly name: string; readonly args: readonly string[]; readonly timeoutMs?: number }): string {
 	const herdr = requireHerdr();
-	waitForShell(herdr, input.place.pane, input.timeoutMs ?? 30_000);
-	const started = call(herdr, [
-		"agent",
-		"start",
-		input.name,
-		"--kind",
-		"pi",
-		"--pane",
-		input.place.pane,
-		"--timeout",
-		String(input.timeoutMs ?? 60_000),
-		"--",
-		...input.args,
-	]);
-	const target = agentTarget(started) || input.place.pane;
-	return target;
+	const readyMs = input.timeoutMs ?? 120_000;
+	waitForShell(herdr, input.place.pane, Math.min(readyMs, 60_000));
+	try {
+		const started = call(herdr, [
+			"agent",
+			"start",
+			input.name,
+			"--kind",
+			"pi",
+			"--pane",
+			input.place.pane,
+			"--timeout",
+			String(readyMs),
+			"--",
+			...input.args,
+		]);
+		return agentTarget(started) || input.place.pane;
+	} catch (error) {
+		// Readiness can time out after pi is already interactive (slow model, outdated herdr-pi hook).
+		const live = liveHostedTarget(input.place.pane, input.name);
+		if (live) return live;
+		throw error;
+	}
+}
+
+/** True when a hosted agent is still present on the pane or under the given name. */
+export function hostedAgentAlive(target: string): boolean {
+	const status = hostedAgentStatus(target);
+	return status !== "missing" && status !== "done";
+}
+
+function liveHostedTarget(pane: string, name: string): string | undefined {
+	for (const target of [pane, name]) {
+		const status = hostedAgentStatus(target);
+		if (status !== "missing") return target;
+	}
+	const herdr = herdrBinary();
+	if (!herdr) return;
+	try {
+		const agents = asRecord(call(herdr, ["agent", "list"])).agents;
+		if (Array.isArray(agents)) {
+			for (const row of agents) {
+				const agent = asRecord(row);
+				if (agent.pane_id === pane || agent.name === name || agent.tab_id === pane) {
+					return typeof agent.pane_id === "string" ? agent.pane_id : pane;
+				}
+			}
+		}
+	} catch {
+		// Fall through to process probe.
+	}
+	try {
+		const info = asRecord(asRecord(call(herdr, ["pane", "process-info", "--pane", pane])).process_info);
+		const foreground = Array.isArray(info.foreground_processes) ? info.foreground_processes : [];
+		const names = foreground.map((row) => String(asRecord(row).name ?? "").toLowerCase());
+		// pi is often argv0 "node" or "pi"; treat non-shell foreground after a start attempt as live.
+		if (names.some((n) => n === "pi" || n.includes("node") || n.includes("pi"))) return pane;
+	} catch {
+		// Missing.
+	}
 }
 
 const SHELL_NAMES = new Set(["zsh", "bash", "sh", "fish", "nu", "pwsh", "powershell"]);
@@ -250,7 +294,7 @@ function tabExists(herdr: string, tab: string): boolean {
 }
 
 function call(herdr: string, args: readonly string[]): unknown {
-	const result = spawnSync(herdr, args, { encoding: "utf8", timeout: 90_000 });
+	const result = spawnSync(herdr, args, { encoding: "utf8", timeout: 180_000 });
 	if (result.error) throw result.error;
 	if (result.status !== 0) {
 		const raw = result.stderr.trim() || result.stdout.trim() || `herdr ${args[0]} failed`;
