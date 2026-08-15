@@ -4,7 +4,7 @@ import { join } from "node:path";
 import test from "node:test";
 import limenSteering from "../hook/steering.ts";
 
-type Handlers = Map<string, () => void>;
+type Handlers = Map<string, (event?: unknown, context?: unknown) => void>;
 
 test("worker extension delivers inbox files once as steer messages", async (context) => {
 	const root = await mkdtemp(join(process.env.TMPDIR ?? "/tmp", "limen-steer-"));
