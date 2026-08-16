@@ -10,6 +10,8 @@ A coordinator starts workers and fresh reviewers as real Pi processes in isolate
 
 Requires macOS or Linux, Node.js 24+, Git, and `pi` on `PATH`. Windows is unsupported.
 
+Jobs can live on an always-on **seat** (a VPS on Tailscale) while your laptop is only a window. See [docs/remote.md](docs/remote.md).
+
 ## Trust boundary
 
 `limen spawn` runs `pi --approve` as you. A worktree and process group provide separation, not a security sandbox. A worker can do anything your account can do. Inspect its branch before merging. See [SECURITY.md](SECURITY.md).

@@ -2,7 +2,7 @@
 
 ## TRACK
 
-- Reliable visibility and in-place control of in-flight Limen work; a named Herdr place per job; bounded, durable guidance for every role.
+- Reliable in-flight control on one seat; a laptop is a window; GitHub may ring the doorbell later.
 
 ## NOW
 
@@ -12,6 +12,8 @@
 
 - Decide F006’s update brief, autonomy boundary, and discussion triggers from the feature-shaping survey.
 - `F011-empty-job-advisory` (PLANNED): a job that produced nothing should say so instead of reading DONE. Observed, not theorised.
+- `F013-remote-seat` (PLANNED): one disk, attach don’t clone; docs and seat-shaped guarantees. Before F014.
+- `F014-github-doorbell` (PLANNED): mention or label starts a job on the seat; comment back evidence; merge stays human.
 
 ## PROVEN
 
