@@ -48,15 +48,13 @@ export default function limenHosted(pi: PiApi): void {
 		log(name);
 	});
 	pi.on("turn_end", () => {
+		// A turn end is not job completion — hosted jobs are multi-turn.
 		write("activity", "wait");
-		// Signal the supervisor: initial task turn finished even if interactive pi stays open.
-		write("turn-complete", new Date().toISOString());
 		log("wait");
-		log(`[limen ${new Date().toISOString()}] hosted turn complete`);
 	});
 	pi.on("session_shutdown", () => {
 		write("activity", "wait");
-		write("turn-complete", new Date().toISOString());
+		write("session-ended", new Date().toISOString());
 		log(`[limen ${new Date().toISOString()}] hosted session shutdown`);
 	});
 }

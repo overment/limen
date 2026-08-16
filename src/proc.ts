@@ -235,7 +235,9 @@ async function launchDetached(environment: Readonly<Record<string, string>>): Pr
 	child.unref();
 	return child.pid;
 }
-/** Watch a Herdr-hosted agent and publish terminal state when it ends. No timeout or containment. */
+/** Idle this long after tools before treating an abandoned interactive session as done. */
+const HOSTED_IDLE_DONE_MS = 90_000;
+/** Watch a Herdr-hosted agent and publish terminal state when the session really ends. */
 export async function runHostedSupervisor(): Promise<void> {
 	const jobDir = requiredEnvironment("LIMEN_JOB_DIR");
 	const target = requiredEnvironment("LIMEN_HOSTED_TARGET");
@@ -243,23 +245,28 @@ export async function runHostedSupervisor(): Promise<void> {
 	await atomicWrite(`${jobDir}/state`, "running\n");
 	await appendLimenLog(jobDir, "hosted supervisor started (weaker guarantees: no timeout, no tool-call cap, no process containment)");
 	let stopRequested = false;
-	let sawWork = false;
+	let idleMs = 0;
 	process.on("SIGTERM", () => {
 		stopRequested = true;
 	});
 	while (!stopRequested) {
 		const status = hostedAgentStatus(target);
-		if (status === "working" || status === "blocked") sawWork = true;
-		const turnComplete = await textFile(`${jobDir}/turn-complete`);
-		const tools = await textFile(`${jobDir}/tool-calls`);
-		if (Number(tools) > 0) sawWork = true;
-		// Interactive pi stays open at idle after the task; that is still job completion.
-		if (status === "missing" || status === "done" || (sawWork && status === "idle") || (turnComplete && (status === "idle" || status === "unknown"))) {
-			const detail =
-				status === "missing" ? "hosted agent ended" : status === "done" ? "hosted agent done" : turnComplete ? "hosted turn complete" : "hosted agent idle after work";
+		const tools = Number(await textFile(`${jobDir}/tool-calls`)) || 0;
+		const sessionEnded = Boolean(await textFile(`${jobDir}/session-ended`));
+		// Per-turn idle is normal. Complete only when the session ends, the agent vanishes, or it idles a long time after real tools.
+		if (status === "missing" || status === "done" || sessionEnded) {
+			const detail = sessionEnded ? "hosted session ended" : status === "done" ? "hosted agent done" : "hosted agent ended";
 			await finalizeJob(jobDir, "done", detail);
 			return;
 		}
+		if (status === "working" || status === "blocked") idleMs = 0;
+		else if (tools > 0 && (status === "idle" || status === "unknown")) {
+			idleMs += 1_000;
+			if (idleMs >= HOSTED_IDLE_DONE_MS) {
+				await finalizeJob(jobDir, "done", `hosted idle ${HOSTED_IDLE_DONE_MS / 1000}s after tools`);
+				return;
+			}
+		} else idleMs = 0;
 		const activity = status === "working" ? "think" : status === "blocked" ? "wait" : "wait";
 		await atomicWrite(`${jobDir}/activity`, `${activity}\n`).catch(() => {});
 		await delay(1_000);
