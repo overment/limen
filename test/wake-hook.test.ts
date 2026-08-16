@@ -64,8 +64,10 @@ test("wake ignores history, announces start, and steers once on terminal change"
 	await writeFile(join(jobs, "new/state"), "done\n");
 	await waitUntil(() => messages.length === 1);
 	assert.equal(statuses.at(-1), undefined);
-	assert.equal(messages[0]?.deliverAs, "steer");
+	// Idle coordinators get a normal user message (visible turn), not a buried steer.
+	assert.equal(messages[0]?.deliverAs, undefined);
 	assert.match(messages[0]?.content ?? "", /Limen job "F001 implementation" is done \(new\).*take the next safe step.*ask only when genuine product ambiguity/);
+	assert.ok(notifications.some((value) => value.includes("is done (new)")));
 	await writeFile(join(jobs, "new/state"), "failed\n");
 	await new Promise((resolve) => setTimeout(resolve, 100));
 	assert.equal(messages.length, 1, "a corrected terminal state must not send another wake");

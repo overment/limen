@@ -156,9 +156,16 @@ export default function limenWake(pi: PiApi): void {
 			const route = fallback ? " This completion was routed here because no subscribed coordinator received it." : "";
 			const location = repo ? ` in repository ${repo}` : "";
 			const message = `Limen job ${JSON.stringify(label)} is ${state} (${id}) on branch ${branch}${location}.${route} Inspect the job record, branch diff and commits, log/session, and relevant checks. Use the accepted ticket intent to take the next safe step: merge acceptable reviewed work, or resume focused fixes and re-review. Keep the user informed; ask only when genuine product ambiguity, a scope or risk tradeoff, or an irreversible action needs a human decision.`;
-			// `isIdle()` can change between this callback and delivery. Explicit steering is safe
-			// both while idle and while streaming; an unqualified send can race and throw.
-			pi.sendUserMessage(message, { deliverAs: "steer" });
+			// Toast always — steers alone are easy to miss on a busy coordinator, and workers' steer inbox is not this session.
+			try {
+				session?.ui.notify(`limen: ${label} is ${state} (${id})`, "info");
+			} catch {
+				retire(false);
+			}
+			// Prefer a normal user message when idle so the coordinator turn actually runs. Steer only while streaming
+			// (unqualified send can race and throw).
+			if (session?.isIdle()) pi.sendUserMessage(message);
+			else pi.sendUserMessage(message, { deliverAs: "steer" });
 		});
 		if (routed) notifyHerdr(job, id, state, label, branch, slot);
 		return routed;
