@@ -31,7 +31,7 @@ export async function openHostedTab(input: {
 		logPath: `${input.jobDir}/log`,
 		mode: "hosted",
 		follow: false,
-		focus: true,
+		focus: false,
 		env: input.env,
 		shellOnly: true,
 	});

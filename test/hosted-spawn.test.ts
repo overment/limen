@@ -30,6 +30,8 @@ test("spawn --tab starts a hosted agent in a shell tab", async (context) => {
 	assert.equal(await readFile(join(job, "herdr/agent"), "utf8"), "w1:p1\n");
 	const calls = await readFile(herdr.calls, "utf8");
 	assert.match(calls, /tab create /);
+	assert.match(calls, /--no-focus/);
+	assert.doesNotMatch(calls, /tab create .*--focus/);
 	assert.match(calls, /agent start /);
 	assert.match(calls, /--kind pi/);
 	assert.doesNotMatch(calls, /pane run .*tail/);
