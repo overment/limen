@@ -243,20 +243,34 @@ export async function runHostedSupervisor(): Promise<void> {
 	await atomicWrite(`${jobDir}/state`, "running\n");
 	await appendLimenLog(jobDir, "hosted supervisor started (weaker guarantees: no timeout, no tool-call cap, no process containment)");
 	let stopRequested = false;
+	let sawWork = false;
 	process.on("SIGTERM", () => {
 		stopRequested = true;
 	});
 	while (!stopRequested) {
 		const status = hostedAgentStatus(target);
-		if (status === "missing" || status === "done") {
-			await finalizeJob(jobDir, "done", status === "done" ? "hosted agent done" : "hosted agent ended");
+		if (status === "working" || status === "blocked") sawWork = true;
+		const turnComplete = await textFile(`${jobDir}/turn-complete`);
+		const tools = await textFile(`${jobDir}/tool-calls`);
+		if (Number(tools) > 0) sawWork = true;
+		// Interactive pi stays open at idle after the task; that is still job completion.
+		if (status === "missing" || status === "done" || (sawWork && status === "idle") || (turnComplete && (status === "idle" || status === "unknown"))) {
+			const detail =
+				status === "missing" ? "hosted agent ended" : status === "done" ? "hosted agent done" : turnComplete ? "hosted turn complete" : "hosted agent idle after work";
+			await finalizeJob(jobDir, "done", detail);
 			return;
 		}
-		const activity = status === "working" ? "think" : "wait";
+		const activity = status === "working" ? "think" : status === "blocked" ? "wait" : "wait";
 		await atomicWrite(`${jobDir}/activity`, `${activity}\n`).catch(() => {});
 		await delay(1_000);
 	}
 	await finalizeJob(jobDir, "stopped", "hosted supervisor interrupted");
+}
+async function textFile(path: string): Promise<string> {
+	return readFile(path, "utf8").then(
+		(value) => value.trim(),
+		() => "",
+	);
 }
 export async function runInternalJob(): Promise<void> {
 	const jobDir = requiredEnvironment("LIMEN_JOB_DIR");
