@@ -13,7 +13,7 @@ type Context = {
 };
 type PiApi = {
 	on(event: "session_start" | "session_shutdown" | "agent_settled", handler: (event: unknown, context: Context) => void): void;
-	sendUserMessage(content: string, options?: { readonly deliverAs: "steer" }): void;
+	sendUserMessage(content: string, options?: { readonly deliverAs: "steer" | "followUp" }): void;
 	registerCommand?(
 		name: string,
 		options: {
@@ -162,10 +162,9 @@ export default function limenWake(pi: PiApi): void {
 			} catch {
 				retire(false);
 			}
-			// Prefer a normal user message when idle so the coordinator turn actually runs. Steer only while streaming
-			// (unqualified send can race and throw).
+			// Idle: real user turn. Streaming: followUp waits until tools finish (steer interrupts mid-turn and is easy to miss).
 			if (session?.isIdle()) pi.sendUserMessage(message);
-			else pi.sendUserMessage(message, { deliverAs: "steer" });
+			else pi.sendUserMessage(message, { deliverAs: "followUp" });
 		});
 		if (routed) notifyHerdr(job, id, state, label, branch, slot);
 		return routed;

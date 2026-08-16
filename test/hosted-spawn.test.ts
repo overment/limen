@@ -96,7 +96,11 @@ if (args[0] === "workspace" && args[1] === "list") {
   const agent = state.agents[target];
   if (!agent) fail("agent_not_found", "missing");
   agent.ticks = (agent.ticks || 0) + 1;
-  if (agent.ticks >= 2) agent.status = "done";
+  if (agent.ticks >= 2) {
+    delete state.agents[target];
+    writeFileSync(path, JSON.stringify(state));
+    fail("agent_not_found", "missing");
+  }
   writeFileSync(path, JSON.stringify(state));
   ok({ type: "agent_info", agent_status: agent.status, pane_id: target });
 } else if (args[0] === "agent" && args[1] === "send-keys") {

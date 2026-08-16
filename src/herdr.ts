@@ -68,8 +68,8 @@ export function startHostedPi(input: { readonly place: HerdrPlace; readonly name
 
 /** True when a hosted agent is still present on the pane or under the given name. */
 export function hostedAgentAlive(target: string): boolean {
-	const status = hostedAgentStatus(target);
-	return status !== "missing" && status !== "done";
+	// Herdr `done` is unseen idle (tab never focused), not process exit. Only missing is gone.
+	return hostedAgentStatus(target) !== "missing";
 }
 
 function liveHostedTarget(pane: string, name: string): string | undefined {

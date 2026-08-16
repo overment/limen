@@ -4,7 +4,7 @@ import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { basename, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { addBranchWorktree, addDetachedWorktree, addNewWorktree, branchExists, repoRoot, workspaceRepository, workspaceRoot, worktreeForBranch } from "../git.ts";
-import { herdrAvailable, hostedAgentAlive, hostedAgentStatus, openHostedTab, openWatchTab, startHostedPi } from "../herdr.ts";
+import { herdrAvailable, hostedAgentAlive, openHostedTab, openWatchTab, startHostedPi } from "../herdr.ts";
 import { parseDuration } from "../job.ts";
 import { appendLimenLog, atomicWrite, finalizeJob, launchHostedSupervisor, launchWrapper, processGroupAlive, signalProcessGroup, waitForProcessGroup } from "../proc.ts";
 import { pruneFinishedWorktrees } from "./prune.ts";
@@ -323,8 +323,7 @@ async function liveJob(jobDir: string): Promise<boolean> {
 	if (Number.isSafeInteger(pid) && pid > 0 && processGroupAlive(pid)) return true;
 	const agent = await text(`${jobDir}/herdr/agent`);
 	if (!(await text(`${jobDir}/hosted`)) || !agent) return false;
-	const status = hostedAgentStatus(agent);
-	return status !== "missing" && status !== "done";
+	return hostedAgentAlive(agent);
 }
 async function text(path: string): Promise<string> {
 	return readFile(path, "utf8").then(

@@ -253,10 +253,9 @@ export async function runHostedSupervisor(): Promise<void> {
 		const status = hostedAgentStatus(target);
 		const tools = Number(await textFile(`${jobDir}/tool-calls`)) || 0;
 		const sessionEnded = Boolean(await textFile(`${jobDir}/session-ended`));
-		// Per-turn idle is normal. Complete only when the session ends, the agent vanishes, or it idles a long time after real tools.
-		if (status === "missing" || status === "done" || sessionEnded) {
-			const detail = sessionEnded ? "hosted session ended" : status === "done" ? "hosted agent done" : "hosted agent ended";
-			await finalizeJob(jobDir, "done", detail);
+		// Herdr `done` = unseen idle (background tab). Not job completion. Complete on session file, vanished agent, or long idle after tools.
+		if (status === "missing" || sessionEnded) {
+			await finalizeJob(jobDir, "done", sessionEnded ? "hosted session ended" : "hosted agent ended");
 			return;
 		}
 		if (status === "working" || status === "blocked") idleMs = 0;

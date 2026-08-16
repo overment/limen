@@ -67,7 +67,7 @@ async function renderJobDirectory(root: string, jobsRoot: string, id: string, de
 		const observedAt = job.phase === "running" ? Date.now() : recordedDate(finished, new Date(), "finished-at").getTime();
 		const processAlive = job.phase === "running" && job.pid !== undefined && processGroupAlive(job.pid);
 		const agentStatus = job.phase === "running" && hosted && agent ? hostedAgentStatus(agent) : undefined;
-		const hostedAlive = agentStatus !== undefined && agentStatus !== "missing" && agentStatus !== "done";
+		const hostedAlive = agentStatus !== undefined && agentStatus !== "missing";
 		const alive = hosted ? hostedAlive || processAlive : processAlive;
 		const pulse: Pulse | undefined =
 			job.phase === "running"
