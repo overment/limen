@@ -209,7 +209,7 @@ if (args[0] === "workspace" && args[1] === "list") {
 `,
 	);
 	await chmod(join(scratch.fakeBin, "herdr"), 0o755);
-	const launched = limenWithEnv(scratch, { HERDR_ENV: "1", LIMEN_HERDR: join(scratch.fakeBin, "herdr") }, "spawn", "--label", "F012 spaces", "make commit");
+	const launched = limenWithEnv(scratch, { HERDR_ENV: "1", LIMEN_HERDR: join(scratch.fakeBin, "herdr") }, "spawn", "--detached", "--label", "F012 spaces", "make commit");
 	assert.equal(launched.status, 0, launched.stderr);
 	const id = onlyJobId(launched.stdout);
 	await waitForState(scratch.root, id, "done");

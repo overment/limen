@@ -33,7 +33,9 @@ usage:
   limen workspace init
   limen migrate
   limen spawn "Implement FNNN: <outcome>. Start by writing <slice>. Ticket: spec/features/active/FNNN-slug/ticket.md" [--label L] [--model X] [--branch B] [--timeout 20m; default 90m]
-  limen spawn --tab "…" [--label L] [--model X]   # interactive pi in the Herdr job tab (weaker guarantees)
+  limen spawn "…" [--label L] [--model X]          # in Herdr: hosted interactive tab; else detached
+  limen spawn --tab "…"                            # force hosted (requires Herdr)
+  limen spawn --detached "…"                       # force background worker + log-tail tab
   limen spawn --repo R "Implement FNNN: <outcome>. Ticket: spec/features/active/FNNN-slug/ticket.md" [--label L] [--model X]
   limen spawn --review --branch B --label L "Review the FNNN candidate against spec/features/active/FNNN-slug/ticket.md"
   limen steer <id|suffix|label> "correction"

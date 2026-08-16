@@ -14,13 +14,13 @@ test("spawn --tab refuses without Herdr and leaves no job record", async (contex
 	assert.deepEqual(await readdir(join(scratch.root, ".limen/jobs")), []);
 });
 
-test("spawn --tab starts a hosted agent in a shell tab", async (context) => {
+test("spawn in Herdr is hosted without --tab; --detached keeps a watch tab", async (context) => {
 	const scratch = await scratchRepo();
 	context.after(scratch.cleanup);
 	assert.equal(limen(scratch, "init").status, 0);
 	const herdr = await installHostedFakeHerdr(scratch.root, scratch.fakeBin);
 	const env = { HERDR_ENV: "1", LIMEN_HERDR: herdr.bin, FAKE_HERDR_STATE: herdr.dir };
-	const launched = limenWithEnv(scratch, env, "spawn", "--tab", "--label", "F010 hosted", "make a tiny commit");
+	const launched = limenWithEnv(scratch, env, "spawn", "--label", "F010 hosted", "make a tiny commit");
 	assert.equal(launched.status, 0, launched.stderr);
 	assert.match(launched.stdout, /started F010 hosted \(hosted\)/);
 	const id = onlyJobId(launched.stdout);

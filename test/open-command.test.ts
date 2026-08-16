@@ -10,7 +10,7 @@ test("open focuses a recorded tab and recreates a log tab after it is gone", asy
 	assert.equal(limen(scratch, "init").status, 0);
 	const herdr = await installFakeHerdr(scratch.root, scratch.fakeBin);
 	const env = herdrEnv(herdr);
-	const launched = limenWithEnv(scratch, env, "spawn", "--label", "F012 spaces", "make commit");
+	const launched = limenWithEnv(scratch, env, "spawn", "--detached", "--label", "F012 spaces", "make commit");
 	assert.equal(launched.status, 0, launched.stderr);
 	const id = onlyJobId(launched.stdout);
 	await waitForState(scratch.root, id, "done");
@@ -55,7 +55,7 @@ setInterval(() => {}, 1000);
 	limen(scratch, "init");
 	const herdr = await installFakeHerdr(scratch.root, scratch.fakeBin);
 	const env = herdrEnv(herdr);
-	const id = onlyJobId(limenWithEnv(scratch, env, "spawn", "--label", "F012 watch", "long work").stdout);
+	const id = onlyJobId(limenWithEnv(scratch, env, "spawn", "--detached", "--label", "F012 watch", "long work").stdout);
 	assert.equal(await readFile(join(scratch.root, ".limen/jobs", id, "herdr/tab"), "utf8"), "w1:t1\n");
 	await closeFakeTab(herdr, "w1:t1");
 	const reopened = limenWithEnv(scratch, env, "open", id);
@@ -77,8 +77,8 @@ test("close leftover tabs for a proven feature and leaves job files", async (con
 	limen(scratch, "init");
 	const herdr = await installFakeHerdr(scratch.root, scratch.fakeBin);
 	const env = { ...herdrEnv(herdr), HERDR_TAB_ID: "coord:tab" };
-	const keep = onlyJobId(limenWithEnv(scratch, env, "spawn", "--label", "F012 spaces", "make commit").stdout);
-	const other = onlyJobId(limenWithEnv(scratch, env, "spawn", "--label", "F010 other", "make commit").stdout);
+	const keep = onlyJobId(limenWithEnv(scratch, env, "spawn", "--detached", "--label", "F012 spaces", "make commit").stdout);
+	const other = onlyJobId(limenWithEnv(scratch, env, "spawn", "--detached", "--label", "F010 other", "make commit").stdout);
 	await Promise.all([waitForState(scratch.root, keep, "done"), waitForState(scratch.root, other, "done")]);
 	const active = limenWithEnv(scratch, env, "close", "F012");
 	assert.equal(active.status, 1);

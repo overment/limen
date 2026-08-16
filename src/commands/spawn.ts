@@ -18,6 +18,7 @@ type SpawnOptions = {
 	timeoutMs?: number;
 	review: boolean;
 	tab: boolean;
+	detached: boolean;
 };
 const PACKAGE_ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const HOSTED_NOTE =
@@ -30,9 +31,13 @@ type WorktreePlan =
 const TEMPLATE_ROOT = fileURLToPath(new URL("../../templates", import.meta.url));
 const [HANDSHAKE_MS, HANDSHAKE_POLL_MS] = [2_000, 20];
 export async function spawnCommand(args: readonly string[], cwd: string): Promise<void> {
-	const options = parseSpawnArgs(args);
-	if (options.tab && options.review) throw new Error("--tab does not support --review yet");
-	if (options.tab && !herdrAvailable()) throw new Error("hosted spawn requires Herdr (HERDR_ENV=1); use an ordinary job instead");
+	const parsed = parseSpawnArgs(args);
+	const herdr = herdrAvailable();
+	const tab = parsed.review || parsed.detached ? false : parsed.tab || herdr;
+	const options = { ...parsed, tab };
+	if (parsed.tab && parsed.review) throw new Error("--tab does not support --review yet");
+	if (parsed.tab && parsed.detached) throw new Error("--tab and --detached cannot be combined");
+	if (options.tab && !herdr) throw new Error("hosted spawn requires Herdr (HERDR_ENV=1); use --detached for an ordinary job");
 	const notificationSession = currentNotificationSession();
 	const workspace = workspaceRoot(cwd);
 	const root = workspace ?? repoRoot(cwd);
@@ -227,6 +232,7 @@ function parseSpawnArgs(args: readonly string[]): SpawnOptions {
 	let timeoutMs: number | undefined;
 	let review = false;
 	let tab = false;
+	let detached = false;
 	let positional = false;
 	const task: string[] = [];
 	for (let index = 0; index < args.length; index += 1) {
@@ -235,6 +241,7 @@ function parseSpawnArgs(args: readonly string[]): SpawnOptions {
 		if (value === "--") positional = true;
 		else if (!positional && value === "--review") review = true;
 		else if (!positional && value === "--tab") tab = true;
+		else if (!positional && value === "--detached") detached = true;
 		else if (!positional && (value === "--branch" || value === "--repo" || value === "--label" || value === "--model" || value === "--timeout")) {
 			const optionValue = args[index + 1];
 			if (!optionValue) throw new Error(`${value} requires a value`);
@@ -265,6 +272,7 @@ function parseSpawnArgs(args: readonly string[]): SpawnOptions {
 		label: label ?? (taskText.trim().split(/\r?\n/, 1)[0]?.trim().slice(0, 80) || "job"),
 		review,
 		tab,
+		detached,
 		...(branch ? { branch } : {}),
 		...(repo ? { repo } : {}),
 		...(model ? { model } : {}),
