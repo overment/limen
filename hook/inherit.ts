@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -13,10 +13,22 @@ const TRACKED = [
 	[".agents/limen/worker.md", "templates/worker.md"],
 	[".agents/limen/reviewer.md", "templates/reviewer.md"],
 	[".agents/limen/communication.md", "templates/communication.md"],
-	[".pi/extensions/limen-wake.ts", "hook/wake.ts"],
-	[".pi/extensions/limen-communication.ts", "hook/communication.ts"],
-	[".pi/extensions/limen-steering.ts", "hook/steering.ts"],
 ] as const;
+
+const HOOK_COPIES = [".pi/extensions/limen-wake.ts", ".pi/extensions/limen-communication.ts", ".pi/extensions/limen-steering.ts"] as const;
+
+export function removeHookCopies(root: string): readonly string[] {
+	const removed: string[] = [];
+	for (const path of HOOK_COPIES) {
+		try {
+			unlinkSync(join(root, path));
+			removed.push(path);
+		} catch {
+			// Absent is the desired state.
+		}
+	}
+	return removed;
+}
 
 export function inheritFile(root: string, projectPath: string, packagedPath: string): { readonly path: string; readonly text: string } | undefined {
 	const project = readOptional(join(root, projectPath));

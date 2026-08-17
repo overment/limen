@@ -2,7 +2,7 @@ import { constants } from "node:fs";
 import { access, appendFile, copyFile, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { formatDrift, listDrift } from "../../hook/inherit.ts";
+import { formatDrift, listDrift, removeHookCopies } from "../../hook/inherit.ts";
 import { isGitRepository, repoRoot, workspaceRoot } from "../git.ts";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
@@ -12,6 +12,7 @@ export async function initCommand(args: readonly string[], cwd: string): Promise
 	if (drop) {
 		const root = workspaceRoot(cwd) ?? (isGitRepository(cwd) ? repoRoot(cwd) : undefined);
 		if (!root) throw new Error("init --drop-leftovers requires a Limen project or workspace");
+		for (const path of removeHookCopies(root)) console.log(`removed ${path}`);
 		const leftovers = listDrift(root).filter((item) => item.kind === "leftover");
 		if (!leftovers.length) console.log("no leftover copies");
 		for (const item of leftovers) {
@@ -49,6 +50,7 @@ async function initialize(root: string, repository: boolean): Promise<void> {
 		if (!exists) await copyFile(source, target, constants.COPYFILE_EXCL);
 		console.log(`${exists ? "kept" : "created"} ${target.slice(root.length + 1)}`);
 	}
+	for (const path of removeHookCopies(root)) console.log(`removed ${path}`);
 	await mkdir(`${root}/.limen/jobs`, { recursive: true });
 	if (repository) await ensureIgnored(`${root}/.gitignore`);
 	console.log("ready .limen/jobs");

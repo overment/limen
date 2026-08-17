@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { access, copyFile, readFile, writeFile } from "node:fs/promises";
+import { access, copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import test from "node:test";
 import { limen, scratchRepo, scratchWorkspace } from "./scratch.ts";
@@ -44,6 +44,21 @@ test("init plants project-owned files and a hook stub, never role or hook copies
 	assert.equal(second.status, 0, second.stderr);
 	assert.equal(await readFile(join(scratch.root, "spec/build.md"), "utf8"), "custom bytes\0allowed");
 	assert.equal((await readFile(join(scratch.root, ".gitignore"), "utf8")).match(/\.limen\//g)?.length, 1);
+});
+
+test("init removes leftover hook copies so the stub is the only project extension", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	await mkdir(join(scratch.root, ".pi/extensions"), { recursive: true });
+	await writeFile(join(scratch.root, ".pi/extensions/limen-wake.ts"), "old wake\n");
+	await copyFile(join(ROOT, "hook/steering.ts"), join(scratch.root, ".pi/extensions/limen-steering.ts"));
+	const first = limen(scratch, "init");
+	assert.equal(first.status, 0, first.stderr);
+	assert.match(first.stdout, /removed \.pi\/extensions\/limen-wake\.ts/);
+	assert.match(first.stdout, /removed \.pi\/extensions\/limen-steering\.ts/);
+	await assert.rejects(access(join(scratch.root, ".pi/extensions/limen-wake.ts")));
+	await assert.rejects(access(join(scratch.root, ".pi/extensions/limen-steering.ts")));
+	assert.match(await readFile(join(scratch.root, ".pi/extensions/limen.ts"), "utf8"), /findPackage/);
 });
 
 test("init --drop-leftovers deletes only byte-identical copies", async (context) => {

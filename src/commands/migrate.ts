@@ -1,12 +1,13 @@
 import { lstat, mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { removeHookCopies } from "../../hook/inherit.ts";
 import { repoRoot } from "../git.ts";
 import { processGroupAlive } from "../proc.ts";
 
 type Kind = "none" | "file" | "directory";
 type Pair = { readonly old: string; readonly next: string; oldKind?: Kind; nextKind?: Kind };
-type ExtensionPair = Pair & { readonly name: string; readonly packaged: string };
+type ExtensionPair = Pair & { readonly name: string };
 const PACKAGE_ROOT = fileURLToPath(new URL("../..", import.meta.url));
 export async function migrateCommand(args: readonly string[], cwd: string): Promise<void> {
 	if (args.length) throw new Error("migrate takes no arguments");
@@ -18,7 +19,6 @@ export async function migrateCommand(args: readonly string[], cwd: string): Prom
 	const extension = (name: string): ExtensionPair => ({
 		old: `${root}/.pi/extensions/control-${name}.ts`,
 		next: `${root}/.pi/extensions/limen-${name}.ts`,
-		packaged: `${PACKAGE_ROOT}/hook/${name}.ts`,
 		name,
 	});
 	const extensions = [extension("wake"), extension("communication")];
@@ -34,9 +34,6 @@ export async function migrateCommand(args: readonly string[], cwd: string): Prom
 		pair.oldKind = await kind(pair.old);
 		pair.nextKind = await kind(pair.next);
 		if (pair.oldKind === "directory" || pair.nextKind === "directory") throw new Error(`${pair.name} extension path must be a regular file`);
-		if (pair.oldKind === "file" && pair.nextKind === "file" && !(await readFile(pair.next)).equals(await readFile(pair.packaged))) {
-			throw new Error(`both ${relative(root, pair.old)} and a modified ${relative(root, pair.next)} exist`);
-		}
 	}
 	const agents = await plannedPatch(`${root}/AGENTS.md`, patchAgents);
 	const runtimeExists = directories[0]?.oldKind === "directory" || directories[0]?.nextKind === "directory";
@@ -61,6 +58,7 @@ export async function migrateCommand(args: readonly string[], cwd: string): Prom
 		await writeFile(stub, await readFile(`${PACKAGE_ROOT}/templates/limen-extension.ts`), { flag: "wx" });
 		console.log("created .pi/extensions/limen.ts");
 	} else if (needStub) console.log("kept .pi/extensions/limen.ts");
+	for (const path of removeHookCopies(root)) console.log(`removed ${path}`);
 	for (const patch of [agents, ignore]) {
 		if (!patch) continue;
 		if (patch.before === patch.after) console.log(`kept ${relative(root, patch.path)}`);

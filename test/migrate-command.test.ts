@@ -44,7 +44,7 @@ test("migrate preserves project bytes, replaces extensions, patches narrow text,
 	assert.equal(await exists(join(scratch.root, ".control")), false);
 	assert.equal(await exists(join(scratch.root, ".agents/control")), false);
 	assert.equal(await exists(join(scratch.root, ".pi/extensions/limen-wake.ts")), false);
-	assert.deepEqual(await readFile(join(scratch.root, ".pi/extensions/limen-communication.ts")), communication);
+	assert.equal(await exists(join(scratch.root, ".pi/extensions/limen-communication.ts")), false);
 	assert.match(await readFile(join(scratch.root, ".pi/extensions/limen.ts"), "utf8"), /findPackage/);
 	assert.equal(
 		(await readdir(join(scratch.root, ".pi/extensions"))).some((name) => name.startsWith("control-")),
@@ -110,7 +110,7 @@ test("migrate refuses a live legacy process group", async (context) => {
 	assert.equal(await exists(join(scratch.root, ".limen")), false);
 });
 
-test("directory and extension conflicts fail preflight without mutation", async (context) => {
+test("directory conflicts fail preflight; leftover hook copies are removed", async (context) => {
 	const scratch = await scratchRepo();
 	context.after(scratch.cleanup);
 	await mkdir(join(scratch.root, ".control"));
@@ -124,11 +124,14 @@ test("directory and extension conflicts fail preflight without mutation", async 
 	await writeFile(join(scratch.root, ".pi/extensions/control-wake.ts"), "legacy\n");
 	await writeFile(join(scratch.root, ".pi/extensions/limen-wake.ts"), "modified new\n");
 	const extensions = limen(scratch, "migrate");
-	assert.equal(extensions.status, 1);
-	assert.match(extensions.stderr, /modified \.pi\/extensions\/limen-wake\.ts/);
-	assert.equal(await exists(join(scratch.root, ".control")), true);
-	assert.equal(await exists(join(scratch.root, ".agents/control")), true);
-	assert.equal(await exists(join(scratch.root, ".agents/limen")), false);
+	assert.equal(extensions.status, 0, extensions.stderr);
+	assert.match(extensions.stdout, /removed \.pi\/extensions\/control-wake\.ts/);
+	assert.match(extensions.stdout, /removed \.pi\/extensions\/limen-wake\.ts/);
+	assert.equal(await exists(join(scratch.root, ".control")), false);
+	assert.equal(await exists(join(scratch.root, ".agents/control")), false);
+	assert.equal(await exists(join(scratch.root, ".agents/limen")), true);
+	assert.equal(await exists(join(scratch.root, ".pi/extensions/limen-wake.ts")), false);
+	assert.match(await readFile(join(scratch.root, ".pi/extensions/limen.ts"), "utf8"), /findPackage/);
 });
 
 test("migrate neither matrix is a read-only no-op and creates no extension pair", async (context) => {

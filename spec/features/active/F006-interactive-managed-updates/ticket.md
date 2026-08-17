@@ -10,7 +10,7 @@ A project inherits shop-manual, role, speech, and hook defaults from the install
 
 - Stop `limen init` from copying role prompts, speech, shop manual, or hook bodies.
 - Resolve those files from the package when the project file is absent.
-- Plant one stub so vanilla `pi` still loads package hooks.
+- Plant one stub so vanilla `pi` still loads package hooks. Delete leftover `limen-*.ts` hook copies so they cannot load beside the stub.
 - Name leftover vs overlay drift on the coordinator; `limen init --drop-leftovers` deletes only leftovers.
 - Pass package hooks into hosted and detached jobs (`--no-extensions` plus `--extension`).
 

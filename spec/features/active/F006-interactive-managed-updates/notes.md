@@ -14,7 +14,7 @@ No merge. A project file, if it exists, is the whole answer for that name.
 
 | File | Package default | Project file means |
 |---|---|---|
-| `hook/*.ts` | yes | leftover or mistaken overlay; never a supported fork |
+| `hook/*.ts` | yes | leftover copy; never an overlay. `init`/`migrate` delete `.pi/extensions/limen-*.ts` |
 | `worker.md` `reviewer.md` `communication.md` | yes | overlay |
 | shop manual (`templates/agents.md`) | yes | `AGENTS.md` overlay |
 | `styleguide.md` `vision.md` `build.md` tickets | no | project-owned; not drift |
@@ -29,8 +29,8 @@ No sidecar hash. Old unmodified stock looks like leftover. Customized stock look
 
 ## Commands
 
-- `limen init` plants project-owned empties and `.pi/extensions/limen.ts` (loads package hooks). Does not copy role prompts or hook bodies.
-- `limen init --drop-leftovers` deletes only leftover (byte-identical) files.
+- `limen init` plants project-owned empties and `.pi/extensions/limen.ts` (loads package hooks). Does not copy role prompts or hook bodies. It deletes leftover `.pi/extensions/limen-*.ts` so vanilla `pi` cannot load both.
+- `limen init --drop-leftovers` deletes leftover (byte-identical) prompt copies and leftover hook bodies.
 - Updating the tool is `git pull` on the linked clone. Next spawn and `/reload` see new defaults.
 
 ## Agent brief
