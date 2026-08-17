@@ -15,6 +15,8 @@ This is operator guidance, not a provisioner. Limen does not install Tailscale o
 
 Build the seat until it is boring. Then the doorbell. Auto-picking every PR is unsolicited ownership — keep it opt-in (`limen:triage` or equivalent) and last.
 
+Limen writes files. The seat consumes them. Do not add Tailscale, ntfy, or GitHub to `src/`.
+
 ## One disk
 
 Coordinator and workers must agree on the same `repoRoot` and `.limen/jobs/`.
@@ -59,7 +61,7 @@ Buy the box, then follow [docs/seat/](seat/README.md). Short version:
 4. Persistent Herdr session on the box. Attach with `herdr --remote`. First job: `limen spawn --detached`.
 5. `tailscale serve` for previews. `limen-prune.timer` daily. No unattended reboot.
 
-Do not move the coordinator until a detached job finishes with the lid closed and the phone rings.
+Do not move the coordinator until a detached job finishes with the lid closed and the phone rings. Do not run a coordinator on the Mac **and** the VPS during migration.
 
 ## Seat notes (stolen from the field, not required by Limen)
 
@@ -72,18 +74,35 @@ These are operational facts that keep a seat alive. They are not Limen features.
 - Two jobs on one repo still share whatever database you pointed them at. Files isolate; schema may not.
 - Herdr/`tmux` is the layer that survives a GUI dying. A browser IDE is a viewer.
 
-F007 process containment is macOS-shaped. On Linux, treat stop as best-effort and lean on job files.
+F007 process containment is macOS-shaped (`src/proc.ts` shells Darwin `proc_pidinfo`). On Linux, `limen stop` is best-effort and writes an `unavailable` cleanup note. Accept that. Do not port a second identity stack unless stop-on-Linux actually hurts. `package.json` lists `linux`; the claim is “runs,” not “containment parity.”
+
+## Traps (will bite on day one)
+
+- **Wake is not the bell.** Footer, toast, and `sendUserMessage` fire in the coordinator session *on the seat*. You are not looking at it. Phone push (`docs/seat/bell.sh`) is the attention channel. Do not wait for a Limen-owned notifier (`LIMEN_NOTIFY` does not exist).
+- **Hosted-by-default is wrong on a seat.** Inside Herdr, `limen spawn` is hosted (`HERDR_ENV=1`) — no 90-minute timeout, no tool-call cap, no F007. That encodes “you are watching.” On the seat, pass `--detached` unless you are attached and intend to type. `LIMEN_SPAWN` is not a flag yet.
+- **`--tab` needs a free shell.** `agent start` fails with `pane … is not an available shell` if the new tab is still running prompt hooks or is not idle. First smoke is always `--detached`. Hosted tabs need `herdr integration install pi` and a pane that waited for a real shell.
+- **Herdr `done` is unseen idle**, not process exit. On a seat you attach twice a day, so almost every tab reads `done`. Limen must not treat that as terminal (already true as of `c316fce`). Do not “fix” `idle` vs `done` for headless.
+- **One repo first.** Do not sync the five consumer projects onto the box. Do not copy `.limen/` to the laptop.
 
 ## Doorbell (not built)
 
-A GitHub App or Actions workflow is ingress only:
+Stay outside `src/`. A systemd timer on the seat that `gh api`s mentions/labels, `limen spawn --detached`s, and `gh pr comment`s back is enough. Dedupe on disk (`comment_id` → job id) or a re-poll double-spawns. No GitHub App, no inbound webhook, no public port.
 
-- Mention or an explicit label → `limen spawn` on the seat.
+- Mention or an explicit label → spawn on the seat.
 - Comment back: job id, branch, checks, log pointer.
 - Human merges. CI stays CI.
 - Unlabeled PRs stay untouched.
 
-See `spec/features/planned/F014-github-doorbell/ticket.md`.
+See `spec/features/planned/F014-github-doorbell/ticket.md`. Promote into Limen only if that script is copied to a third machine and still identical.
+
+## When you come back
+
+1. Buy: Ubuntu LTS, 4–8 GB RAM, 80 GB disk, public SSH key-only. Follow [docs/seat/](seat/README.md).
+2. Prove ntfy from the Mac to the phone **before** moving keys or the coordinator.
+3. On the box: Node 24, Git, `gh`, `pi`, Herdr, `limen` (`npm link` from a clone of this repo). One project. `limen init`.
+4. Enable `limen-bell.timer` and `limen-prune.timer`. Persistent Herdr session. `herdr --remote you@seat-name`.
+5. Prove, in order: lid-closed `--detached` job → phone rings → `limen jobs` on attach shows the same id → `tailscale serve` preview opens on the Mac.
+6. Only then live on the seat. Do not write Limen code to “support the VPS.” Optional later, and only after you have typed them twice: `LIMEN_SPAWN=detached`, `LIMEN_NOTIFY=` exec after a wake claim.
 
 ## Related
 

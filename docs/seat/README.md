@@ -57,4 +57,6 @@ If 1 fails, do not move the coordinator. If 1–3 work, the laptop is a window f
 
 ## Not yet
 
-GitHub mention → spawn (F014). Hosted-by-default. A Limen-owned notifier.
+GitHub mention → spawn (F014, operator `gh` timer — not a GitHub App). `LIMEN_SPAWN` / `LIMEN_NOTIFY`. Hosted-by-default on a seat. Linux process-identity parity.
+
+Pickup narrative and traps: [docs/remote.md](../remote.md).
