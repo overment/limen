@@ -4,7 +4,7 @@ The machine that runs jobs is not the machine you sit at.
 
 A **seat** is one always-on host (typically a VPS on a Tailscale tailnet) that owns the Git checkouts, worktrees, and `.limen/jobs/`. Your laptop, phone, or studio Mac is a **window**: attach, look, type, leave. Closing the lid must not kill a worker.
 
-This is operator guidance, not a provisioner. Limen does not install Tailscale or Herdr for you.
+This is operator guidance, not a provisioner. Limen does not install Tailscale or Herdr for you. The numbered box checklist and systemd units live in [docs/seat/](seat/README.md).
 
 ## Two layers
 
@@ -32,7 +32,7 @@ Do not: SSHFS the worktrees; run a coordinator on the laptop against a different
 
 ## Daily loop
 
-1. **Direct agents** — Tailscale up, attach the seat’s Herdr session (or SSH). Coordinator Pi runs *there*. `limen spawn` (hosted by default inside Herdr). Close the window; jobs keep running.
+1. **Direct agents** — Tailscale up, `herdr --remote you@seat-name`. Coordinator Pi runs *there*. On the seat, spawn `--detached` unless you are attached and intend to type. Close the window; jobs keep running.
 2. **Judge** — wake, `limen jobs`, or `limen open`. Job files on the seat are truth; the footer can lag.
 3. **See the product**
    - Usual: preview bound to localhost on the seat, published with `tailscale serve` — open that HTTPS URL. No pull.
@@ -48,6 +48,18 @@ Do not: SSHFS the worktrees; run a coordinator on the laptop against a different
 | Click the app the agent just built | Open the seat preview URL. |
 | Device-specific UI | Pull the git branch to a normal clone. Do not `limen spawn` from it. |
 | After merge | Pull `main` locally only if you still want a laptop checkout. |
+
+## Bring up
+
+Buy the box, then follow [docs/seat/](seat/README.md). Short version:
+
+1. Ubuntu LTS, Tailscale, SSH key only. Node 24, Git, `pi`, Herdr, `limen` linked from a clone.
+2. One project on that disk. `limen init`. Keys stay on the seat.
+3. Prove ntfy on the phone, then enable `limen-bell.timer` against `docs/seat/bell.sh`.
+4. Persistent Herdr session on the box. Attach with `herdr --remote`. First job: `limen spawn --detached`.
+5. `tailscale serve` for previews. `limen-prune.timer` daily. No unattended reboot.
+
+Do not move the coordinator until a detached job finishes with the lid closed and the phone rings.
 
 ## Seat notes (stolen from the field, not required by Limen)
 

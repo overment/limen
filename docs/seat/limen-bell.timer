@@ -1,0 +1,11 @@
+[Unit]
+Description=Scan Limen jobs for terminal state every 15s
+
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=15s
+AccuracySec=5s
+Unit=limen-bell.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,10 @@
+[Unit]
+Description=Prune finished Limen worktrees daily
+
+[Timer]
+OnCalendar=daily
+Persistent=true
+Unit=limen-prune.service
+
+[Install]
+WantedBy=timers.target

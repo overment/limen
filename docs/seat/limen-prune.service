@@ -1,0 +1,9 @@
+[Unit]
+Description=Drop finished Limen worktrees
+After=network-online.target
+
+[Service]
+Type=oneshot
+# Drop-in: User, WorkingDirectory=the repo, Environment=PATH with limen on it.
+WorkingDirectory=/home/you/project
+ExecStart=/usr/local/bin/limen prune

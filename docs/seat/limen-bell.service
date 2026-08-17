@@ -1,0 +1,15 @@
+[Unit]
+Description=Limen seat bell (ntfy on terminal job state)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# Set User, Environment, and ExecStart paths in the drop-in, not here.
+# Example drop-in /etc/systemd/system/limen-bell.service.d/override.conf:
+#   [Service]
+#   User=you
+#   Environment=LIMEN_ROOT=/home/you/project
+#   Environment=NTFY_TOPIC=replace-me
+#   ExecStart=/home/you/limen/docs/seat/bell.sh
+ExecStart=/usr/local/lib/limen/bell.sh
