@@ -22,6 +22,10 @@ Units next to this file: `bell.sh`, `limen-bell.{service,timer}`, `limen-prune.{
 
 ## Bell
 
+Prefer **Moshi** if the phone already gets Herdr/pi pings: pair `moshi-hook` on the box (`--store file` on Linux), `service install`, `loginctl enable-linger`. Steps: [vps.md](../vps.md).
+
+ntfy is the fallback when Moshi is not in play:
+
 1. On the phone: ntfy app, subscribe to a long random topic. From the Mac: `curl -d test https://ntfy.sh/$topic` — phone must buzz **before** you move the coordinator.
 2. Copy `bell.sh` onto the box. `chmod +x`.
 3. Drop-in for `limen-bell.service`: `User`, `LIMEN_ROOT` (the project that contains `.limen`), `NTFY_TOPIC`, `ExecStart` → that script.

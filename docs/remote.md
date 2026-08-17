@@ -4,7 +4,7 @@ The machine that runs jobs is not the machine you sit at.
 
 A **seat** is one always-on host (typically a VPS on a Tailscale tailnet) that owns the Git checkouts, worktrees, and `.limen/jobs/`. Your laptop, phone, or studio Mac is a **window**: attach, look, type, leave. Closing the lid must not kill a worker.
 
-This is operator guidance, not a provisioner. Limen does not install Tailscale or Herdr for you. The numbered box checklist and systemd units live in [docs/seat/](seat/README.md).
+This is operator guidance, not a provisioner. Limen does not install Tailscale or Herdr for you. The walkthrough we actually ran is [vps.md](vps.md). The numbered box checklist and leftover ntfy units live in [docs/seat/](seat/README.md).
 
 ## Two layers
 
