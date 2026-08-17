@@ -1,6 +1,6 @@
 # Communication
 
-> Project-owned registers for how replies and durable writing should read. Keep this file at or below 1000 lines. The injected copy is capped at 1000 lines. The extension attaches this file before every LLM call and names the audience for this reply.
+> Package default speech registers. A project file at `.agents/limen/communication.md` replaces this file for that repository. Keep this file at or below 1000 lines. The injected copy is capped at 1000 lines. The extension attaches the effective register before every LLM call and names the audience for this reply.
 
 Use the register the audience cue names. Switch only when this reply, or part of it, will be executed by another agent.
 

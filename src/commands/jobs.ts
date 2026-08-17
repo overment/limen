@@ -1,7 +1,7 @@
 import { open, readdir, readFile, stat } from "node:fs/promises";
 import { limenRoot, liveDiffstat, workspaceRepository } from "../git.ts";
 import { hostedAgentStatus } from "../herdr.ts";
-import { derivePulse, parseJob, renderJob, type Pulse } from "../job.ts";
+import { derivePulse, type Pulse, parseJob, renderJob } from "../job.ts";
 import { resolveJob } from "../lookup.ts";
 import { processGroupAlive } from "../proc.ts";
 

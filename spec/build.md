@@ -6,11 +6,9 @@
 
 ## NOW
 
-- `F006-interactive-managed-updates` (ACTIVE): shape an interactive, advisory-first update experience and the agent response settings before implementation.
+- `F006-interactive-managed-updates` (ACTIVE): inherit package defaults; overlay only when a project file exists; name leftover copies.
 
 ## NEXT
-
-- Decide F006’s update brief, autonomy boundary, and discussion triggers from the feature-shaping survey.
 - `F011-empty-job-advisory` (PLANNED): a job that produced nothing should say so instead of reading DONE. Observed, not theorised.
 - `F013-remote-seat` (PLANNED): one disk, attach don’t clone; docs and seat-shaped guarantees. Before F014.
 - `F014-github-doorbell` (PLANNED): mention or label starts a job on the seat; comment back evidence; merge stays human.

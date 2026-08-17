@@ -295,7 +295,7 @@ function runningDisplay(jobs: string, session: string): { readonly status: strin
 	return { status: `limen ${running.length} · ${summary}`, title, pulses: running.map(({ pulse }) => pulse) };
 }
 function pulseOf(jobs: string, id: string): Pulse {
-	// Copied into the project as a standalone extension; keep identical to src/job.ts derivePulse.
+	// Keep identical to src/job.ts derivePulse.
 	const pid = Number(text(join(jobs, id, "pid")));
 	const recorded = Number.isSafeInteger(pid) && pid > 0 ? pid : undefined;
 	const activity = text(join(jobs, id, "activity"));

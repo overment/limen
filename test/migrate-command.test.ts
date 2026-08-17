@@ -38,12 +38,14 @@ test("migrate preserves project bytes, replaces extensions, patches narrow text,
 	assert.equal(result.status, 0, result.stderr);
 	assert.match(result.stdout, /moved \.control -> \.limen/);
 	assert.match(result.stdout, /restart.*\/reload/);
+	assert.match(result.stdout, /created \.pi\/extensions\/limen\.ts/);
 	assert.equal(await readFile(join(scratch.root, ".agents/limen/worker.md"), "utf8"), "custom worker\0bytes");
 	assert.equal(await exists(join(scratch.root, ".agents/limen/reviewer.md")), false, "missing prompts stay missing");
 	assert.equal(await exists(join(scratch.root, ".control")), false);
 	assert.equal(await exists(join(scratch.root, ".agents/control")), false);
-	assert.deepEqual(await readFile(join(scratch.root, ".pi/extensions/limen-wake.ts")), await readFile(join(ROOT, "hook/wake.ts")));
+	assert.equal(await exists(join(scratch.root, ".pi/extensions/limen-wake.ts")), false);
 	assert.deepEqual(await readFile(join(scratch.root, ".pi/extensions/limen-communication.ts")), communication);
+	assert.match(await readFile(join(scratch.root, ".pi/extensions/limen.ts"), "utf8"), /findPackage/);
 	assert.equal(
 		(await readdir(join(scratch.root, ".pi/extensions"))).some((name) => name.startsWith("control-")),
 		false,

@@ -30,6 +30,7 @@ const COMMANDS = {
 const HELP = `limen — isolated coding jobs with files and git
 usage:
   limen init
+  limen init --drop-leftovers
   limen workspace init
   limen migrate
   limen spawn "Implement FNNN: <outcome>. Start by writing <slice>. Ticket: spec/features/active/FNNN-slug/ticket.md" [--label L] [--model X] [--branch B] [--timeout 20m; default 90m]

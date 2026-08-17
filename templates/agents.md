@@ -1,12 +1,12 @@
 # Agent shop manual
 
-This repository uses plain specifications, Git, and `limen` to coordinate one human with several coding sessions.
+This repository uses plain specifications, Git, and `limen` to coordinate one human with several coding sessions. Shop-manual, role, and speech defaults live in the installed `limen` package; a project file at the same path replaces that default.
 
 ## Durable intent
 
 - `spec/vision.md` explains durable intent. It is human-owned: propose a change and ask before rewriting it. Keep compact, decision-useful bullets under **Product principles** and **Current direction**; the project-context extension supplies it to every role.
 - `.agents/limen/styleguide.md` defines concise, durable coding practice. Keep it compact, bullet-led, and within its 1000-line injected limit; it governs how code is written and organized here, never product scope or speech.
-- `.agents/limen/communication.md` defines human and agent registers. The project-context extension restacks it before every LLM call and names the audience for that reply.
+- Speech registers live in the installed Limen package. A project file at `.agents/limen/communication.md` replaces that default for this repository only.
 - `spec/build.md` is the coordinator-maintained TRACK / NOW / NEXT / PROVEN board. Before selecting, starting, resuming, reviewing, merging, proving, or dropping work, reconcile it with the planned and active feature folders. Update it in the same coherent change that changes feature state. Each drift advisory never blocks work. Status marks are 🟠 ACTIVE, 🔴 PLANNED, 🟢 PROVEN, ⚪ DROPPED.
 - `spec/features/` is a numbered filing cabinet:
   - `planned/FNNN-slug/` — accepted backlog
@@ -85,6 +85,6 @@ All runtime truth is inspectable under `.limen/jobs/` and in Git.
 - Bad candidate: do not merge; remove its worktree and branch with Git.
 - Conflict or moved base: rebase, or start again from current HEAD.
 - Bad merge: use `git log` and `git reflog` like any other Git recovery.
-- Missed completion message or dead coordinator: read `.limen/jobs/<id>/state` and `limen jobs <id>` now — do not keep waiting for a wake that already failed to surface. Notifications are only a convenience. After updating limen extensions, `/reload` so the coordinator loads them.
+- Missed completion message or dead coordinator: read `.limen/jobs/<id>/state` and `limen jobs <id>` now — do not keep waiting for a wake that already failed to surface. Notifications are only a convenience. After updating the installed `limen`, `/reload` so the coordinator loads the new package hooks.
 
 No harness rule owns these files. If state is messy, inspect and edit it; hygiene never latches the session.

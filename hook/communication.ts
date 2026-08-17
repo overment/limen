@@ -1,5 +1,6 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { readdirSync } from "node:fs";
 import { join } from "node:path";
+import { formatDrift, inheritFile, listDrift, readOptional } from "./inherit.ts";
 
 const CONTEXT_TYPE = "limen-project-context";
 const MAX_CONTEXT_LINES = 1000;
@@ -33,7 +34,9 @@ function readProjectContext(cwd: string): string {
 		readBoundedFile(cwd, "spec/vision.md", "Vision"),
 		readBoundedFile(cwd, "spec/build.md", "Build board"),
 		readBoundedFile(cwd, ".agents/limen/styleguide.md", "Styleguide"),
+		readInheritedAgents(cwd),
 		buildAdvisory(cwd),
+		formatDrift(listDrift(cwd)),
 	].filter((section): section is string => Boolean(section));
 	if (!sections.length) return "";
 	return [
@@ -45,7 +48,9 @@ function readProjectContext(cwd: string): string {
 }
 
 function readCommunication(cwd: string): string {
-	const body = readBoundedFile(cwd, ".agents/limen/communication.md", "Communication");
+	const inherited = inheritFile(cwd, ".agents/limen/communication.md", "templates/communication.md");
+	if (!inherited) return "";
+	const body = boundText(inherited.text, inherited.path, "Communication");
 	if (!body) return "";
 	const audience = process.env.LIMEN_JOB === "1" ? "agent" : "human";
 	return [
@@ -56,9 +61,19 @@ function readCommunication(cwd: string): string {
 	].join("\n\n");
 }
 
+function readInheritedAgents(cwd: string): string {
+	if (process.env.LIMEN_JOB === "1" || readOptional(join(cwd, "AGENTS.md")) !== undefined) return "";
+	const inherited = inheritFile(cwd, "AGENTS.md", "templates/agents.md");
+	return inherited ? boundText(inherited.text, inherited.path, "Shop manual") : "";
+}
+
 function readBoundedFile(cwd: string, path: string, label: string): string {
-	const text = readText(join(cwd, path));
+	const text = readOptional(join(cwd, path));
 	if (text === undefined) return "";
+	return boundText(text, path, label);
+}
+
+function boundText(text: string, path: string, label: string): string {
 	const lines = trimmedLines(text);
 	if (!lines.length) return "";
 	const content = lines.slice(0, MAX_CONTEXT_LINES).join("\n");
@@ -67,7 +82,7 @@ function readBoundedFile(cwd: string, path: string, label: string): string {
 }
 
 function buildAdvisory(cwd: string): string {
-	const board = readText(join(cwd, "spec/build.md"));
+	const board = readOptional(join(cwd, "spec/build.md"));
 	if (board === undefined) return "## Build-board advisory\n`spec/build.md` is unavailable. Reconcile the board before proceeding; this is an advisory, not a gate.";
 	const boardFeatures = new Set(Array.from(board.matchAll(BOARD_FEATURE), (match) => match[1]));
 	const missing = ["active", "planned"].flatMap((lane) =>
@@ -86,14 +101,6 @@ function featureNames(cwd: string, lane: string): readonly string[] {
 			.map((entry) => entry.name);
 	} catch {
 		return [];
-	}
-}
-
-function readText(path: string): string | undefined {
-	try {
-		return readFileSync(path, "utf8");
-	} catch {
-		return undefined;
 	}
 }
 

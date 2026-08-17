@@ -28,9 +28,9 @@ cd /path/to/your-project
 limen init
 ```
 
-Once published, `npm install -g @overment/limen` installs the same binary.
+`npm link` (or later `npm install -g @overment/limen`) puts that clone on `PATH`. The binary reads `hook/` and `templates/` next to itself. Projects do not copy those files.
 
-`limen init` adds missing prompts, extensions, and specs. It never overwrites existing project files.
+`limen init` plants project-owned empties (vision, board, feature lanes, styleguide) and one stub that loads package hooks. It never overwrites existing project files. `limen init --drop-leftovers` deletes only copies that still match the package.
 
 ## Five-minute workflow
 
@@ -171,26 +171,20 @@ The ticket stays under the workspace parent. Branches, worktrees, diffs, and rev
 
 ## Project files
 
-`limen init` creates a small, editable operating system for the project:
+The installed `limen` is the default shop manual, role prompts, speech register, and hooks. `limen init` only creates what the project owns:
 
 ```text
-AGENTS.md                              coordinator shop manual
-.agents/limen/worker.md               worker birth prompt
-.agents/limen/reviewer.md             reviewer birth prompt
 .agents/limen/styleguide.md           project coding practice
-.agents/limen/communication.md        human and agent speech registers
-.pi/extensions/limen-wake.ts          live status and completion handoffs
-.pi/extensions/limen-communication.ts project context and mid-flight speech
-.pi/extensions/limen-steering.ts      in-place correction of a running job
 spec/vision.md                        durable product intent
 spec/build.md                         TRACK / NOW / NEXT / PROVEN
 spec/features/                        planned, active, done, and dropped work
+.pi/extensions/limen.ts               stub: load hooks from the package
 .limen/jobs/<id>/                     runtime evidence
 ```
 
-The project-context extension attaches the current vision, board, and styleguide after each user message. Before every LLM call it restacks `.agents/limen/communication.md` and names the audience: human for coordinators, agent for spawned jobs. These are ordinary project-owned Markdown files; edit them to change guidance.
+Optional overlays replace a package default for that file only: `AGENTS.md`, `.agents/limen/worker.md`, `.agents/limen/reviewer.md`, `.agents/limen/communication.md`. A file that still matches the package is a leftover copy; the coordinator names it and `limen init --drop-leftovers` deletes only those. Different bytes are an overlay — keep, drop, or edit. Never overwrite an overlay.
 
-Project updates are currently deliberate and manual: `init` preserves existing files. Compare new templates and extensions before copying them, preserve local policy, and run `/reload` or restart Pi after replacing an extension. `limen migrate` handles legacy Control project layouts; it is not a general updater.
+The project-context extension attaches vision, board, and styleguide after each user message. Before every LLM call it restacks the speech register (project overlay or package default) and names the audience: human for coordinators, agent for spawned jobs. Updating `limen` updates every project on that machine. `/reload` after a pull. `limen migrate` handles legacy Control layouts; it is not a general updater.
 
 ## Visibility and ownership
 
@@ -221,6 +215,7 @@ Job files and Git remain canonical if a notification is missed.
 
 ```text
 limen init
+limen init --drop-leftovers
 limen workspace init
 limen migrate
 limen spawn "instruction" [--label L] [--model M] [--branch B] [--timeout 20m]

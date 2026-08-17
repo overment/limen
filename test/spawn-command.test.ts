@@ -54,6 +54,9 @@ test("spawn creates isolated branch, canonical record, runs pi, and resumes its 
 	assert.match(argv[argv.indexOf("--session-dir") + 1] ?? "", /\.limen\/jobs\/[^/]+\/session$/);
 	assert.equal(argv.includes("--no-session"), false);
 	assert.equal(argv.includes("--no-context-files"), false);
+	assert.equal(argv.includes("--no-extensions"), true);
+	assert.match(argv[argv.indexOf("--extension") + 1] ?? "", /hook\/steering\.ts$/);
+	assert.match(argv[argv.indexOf("--append-system-prompt") + 1] ?? "", /You implement the coordinator's instruction/);
 	assert.equal(await readFile(join(job, "last-tool"), "utf8"), "bash\n");
 	assert.equal(await readFile(join(job, "tool-calls"), "utf8"), "1\n");
 	const log = await readFile(join(job, "log"), "utf8");
@@ -81,6 +84,22 @@ test("failure is durable and detailed jobs render facts", async (context) => {
 	assert.match(jobs.stdout, /tools 1 · bash/);
 	assert.match(jobs.stdout, /worker exited with code 7/);
 	assert.match(jobs.stdout, /fake pi completed/);
+});
+
+test("a project worker overlay replaces the package birth text", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	assert.equal(limen(scratch, "init").status, 0);
+	await writeFile(join(scratch.root, ".agents/limen/worker.md"), "OVERLAY WORKER\n");
+	const id = onlyJobId(limen(scratch, "spawn", "no model default").stdout);
+	await waitForState(scratch.root, id, "done");
+	const worktree = git(scratch.root, "worktree", "list", "--porcelain")
+		.split("\n")
+		.find((line) => line.includes(id))
+		?.slice("worktree ".length);
+	assert.ok(worktree);
+	const argv = JSON.parse(await readFile(join(worktree, "pi-args.json"), "utf8")) as string[];
+	assert.equal(argv[argv.indexOf("--append-system-prompt") + 1], "OVERLAY WORKER\n");
 });
 
 test("review gets fresh detached worktree and reviewer birth text", async (context) => {

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import test from "node:test";
 import limenCommunication from "../hook/communication.ts";
@@ -59,7 +59,7 @@ test("vision, build board, and styleguide attach after every user message for ev
 	assert.match(result.message.content, /## Vision \(spec\/vision\.md\)\nVision one\./);
 	assert.match(result.message.content, /## Build board \(spec\/build\.md\)\n`F001-auth`/);
 	assert.match(result.message.content, /## Styleguide \(.agents\/limen\/styleguide\.md\)\nPrefer small functions\./);
-	assert.doesNotMatch(result.message.content, /communication\.md/);
+	assert.doesNotMatch(result.message.content, /Shop manual/);
 	assert.match(result.message.content, /<\/limen-project-context>$/);
 	assert.deepEqual(extension().events, ["before_agent_start"]);
 });
@@ -130,7 +130,7 @@ test("build-board advice is non-blocking and names missing board or feature refe
 	assert.match(drifting, /advisory, not a gate/);
 });
 
-test("communication appends to the system prompt with a human audience by default", async (context) => {
+test("a project overlay wins over the package speech register", async (context) => {
 	const root = await projectRoot(context);
 	await writeFile(join(root, ".agents/limen/communication.md"), "Write for a person.\n");
 	const inheritedJob = process.env.LIMEN_JOB;
@@ -179,9 +179,37 @@ test("communication is reread each turn and bounded like other project files", a
 	assert.doesNotMatch(second, /First register\./);
 });
 
-test("missing communication leaves the system prompt alone", async (context) => {
+test("missing communication inherits the package register", async (context) => {
 	const root = await projectRoot(context);
 	const { handlers } = extension();
 	const result = handlers.before_agent_start?.({ systemPrompt: "base" }, { cwd: root });
-	assert.equal(result?.systemPrompt, undefined);
+	assert.match(result?.systemPrompt ?? "", /<limen-communication>/);
+	assert.match(result?.systemPrompt ?? "", /Audience for this reply: human/);
+	assert.match(result?.systemPrompt ?? "", /limen\/templates\/communication\.md/);
+	assert.match(result?.systemPrompt ?? "", /did not write this code/);
+});
+
+test("a coordinator without AGENTS.md inherits the package shop manual", async (context) => {
+	const root = await projectRoot(context);
+	const inheritedJob = process.env.LIMEN_JOB;
+	delete process.env.LIMEN_JOB;
+	context.after(() => {
+		if (inheritedJob === undefined) delete process.env.LIMEN_JOB;
+		else process.env.LIMEN_JOB = inheritedJob;
+	});
+	const content = start(root).message?.content ?? "";
+	assert.match(content, /## Shop manual \(limen\/templates\/agents\.md\)/);
+	assert.match(content, /plain specifications/);
+});
+
+test("identical leftover copies are named as leftovers, overlays as overlays", async (context) => {
+	const root = await projectRoot(context);
+	const packaged = await readFile(new URL("../templates/communication.md", import.meta.url), "utf8");
+	await writeFile(join(root, ".agents/limen/communication.md"), packaged);
+	await writeFile(join(root, "AGENTS.md"), "custom shop\n");
+	const content = start(root).message?.content ?? "";
+	assert.match(content, /## Guidance drift/);
+	assert.match(content, /leftover \(identical; delete to inherit\): \.agents\/limen\/communication\.md/);
+	assert.match(content, /overlay \(differs; keep, drop, or edit\): AGENTS\.md/);
+	assert.doesNotMatch(content, /## Shop manual/);
 });

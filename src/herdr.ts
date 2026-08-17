@@ -46,19 +46,7 @@ export function startHostedPi(input: { readonly place: HerdrPlace; readonly name
 	// Herdr 0.8.0: a --no-focus tab is not an available shell until it has been focused once.
 	primeHostedTab(herdr, input.place.tab);
 	try {
-		const started = call(herdr, [
-			"agent",
-			"start",
-			input.name,
-			"--kind",
-			"pi",
-			"--pane",
-			input.place.pane,
-			"--timeout",
-			String(readyMs),
-			"--",
-			...input.args,
-		]);
+		const started = call(herdr, ["agent", "start", input.name, "--kind", "pi", "--pane", input.place.pane, "--timeout", String(readyMs), "--", ...input.args]);
 		return agentTarget(started) || input.place.pane;
 	} catch (error) {
 		// Readiness can time out after pi is already interactive (slow model, outdated herdr-pi hook).
@@ -248,18 +236,7 @@ async function createTab(input: {
 	try {
 		const workspace = ensureWorkspace(herdr, input.workspaceCwd ?? input.cwd);
 		const envArgs = Object.entries(input.env ?? {}).flatMap(([key, value]) => ["--env", `${key}=${value}`]);
-		const created = call(herdr, [
-			"tab",
-			"create",
-			"--workspace",
-			workspace,
-			"--label",
-			input.label,
-			"--cwd",
-			input.cwd,
-			...envArgs,
-			input.focus ? "--focus" : "--no-focus",
-		]);
+		const created = call(herdr, ["tab", "create", "--workspace", workspace, "--label", input.label, "--cwd", input.cwd, ...envArgs, input.focus ? "--focus" : "--no-focus"]);
 		const place: HerdrPlace = { workspace, tab: id(created, "tab", "tab_id"), pane: id(created, "root_pane", "pane_id"), mode: input.mode };
 		await recordPlace(input.jobDir, place);
 		if (!input.shellOnly) {

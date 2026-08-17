@@ -1,5 +1,4 @@
 import { randomBytes } from "node:crypto";
-import { existsSync } from "node:fs";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { basename, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -28,7 +27,6 @@ type WorktreePlan =
 	| { readonly kind: "reuse"; readonly path: string }
 	| { readonly kind: "add-branch"; readonly path: string; readonly branch: string }
 	| { readonly kind: "add-new"; readonly path: string; readonly branch: string };
-const TEMPLATE_ROOT = fileURLToPath(new URL("../../templates", import.meta.url));
 const [HANDSHAKE_MS, HANDSHAKE_POLL_MS] = [2_000, 20];
 export async function spawnCommand(args: readonly string[], cwd: string): Promise<void> {
 	const parsed = parseSpawnArgs(args);
@@ -94,7 +92,7 @@ export async function spawnCommand(args: readonly string[], cwd: string): Promis
 	const localPreamble = `${root}/.agents/limen/${role}.md`;
 	const preamble = await readFile(localPreamble).then(
 		() => localPreamble,
-		() => `${TEMPLATE_ROOT}/${role}.md`,
+		() => `${PACKAGE_ROOT}/templates/${role}.md`,
 	);
 	const model = options.model ?? (process.env[options.review ? "LIMEN_REVIEWER_MODEL" : "LIMEN_WORKER_MODEL"]?.trim() || undefined);
 	if (options.tab) {
@@ -148,12 +146,11 @@ async function startHosted(input: {
 	let target = "";
 	try {
 		place = await openHostedTab({ jobDir: input.jobDir, label: input.label, cwd: input.worktree, workspaceCwd: input.root, env: paneEnv });
-		const extensions = [`${PACKAGE_ROOT}/hook/hosted.ts`, `${PACKAGE_ROOT}/hook/steering.ts`, `${PACKAGE_ROOT}/hook/communication.ts`].flatMap((path) =>
-			existsSync(path) ? ["--extension", path] : [],
-		);
+		const extensions = ["hosted", "steering", "communication"].flatMap((name) => ["--extension", `${PACKAGE_ROOT}/hook/${name}.ts`]);
 		const agentName = hostedAgentName(input.id);
 		const piArgs = [
 			"--approve",
+			"--no-extensions",
 			"--session-dir",
 			`${input.jobDir}/session`,
 			"--name",
@@ -294,7 +291,11 @@ function makeJobId(label: string): string {
 }
 /** Herdr agent names: lowercase letter start, [a-z0-9_-], max 32. */
 function hostedAgentName(jobId: string): string {
-	const slug = jobId.toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^[^a-z]+/, "") || "job";
+	const slug =
+		jobId
+			.toLowerCase()
+			.replace(/[^a-z0-9_-]+/g, "-")
+			.replace(/^[^a-z]+/, "") || "job";
 	return `limen-${slug}`.slice(0, 32);
 }
 function currentNotificationSession(): string | undefined {

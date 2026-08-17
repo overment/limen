@@ -1,34 +1,34 @@
-# F006-interactive-managed-updates · Make Limen updates safe, current, and discussable
+# F006-interactive-managed-updates · Package defaults, project overlays
 
-[2026-08-14] [🟠] [ACTIVE] [COORDINATOR] ACTIVE · F006-interactive-managed-updates
+[2026-08-17] [🟠] [ACTIVE] [COORDINATOR] ACTIVE · F006-interactive-managed-updates
 
 ## Outcome
 
-A coordinator can bring an existing Limen project forward to the installed Limen release without turning project guidance into a stale fork or silently overwriting judgment. Mechanical updates are clear and reversible; a semantic prompt, extension, or workflow change arrives as a short, decision-ready conversation when its effect is not obvious.
+A project inherits shop-manual, role, speech, and hook defaults from the installed `limen`. Updating the package updates every project. A project file at the same path is a whole-file overlay. Leftover identical copies are named and can be deleted. Overlays are never overwritten.
 
 ## Scope
 
-- Shape an explicit interactive update experience for Limen-managed extensions, prompt bases, project overlays, and coordinator guidance.
-- Define the durable files and provenance needed to distinguish an unchanged managed asset from a project modification, including recovery and workspace behavior.
-- Define the agent-facing response shapes: concise status, safe-update summary, meaningful-difference explanation, options, recommendation, and only the questions that require a human decision.
-- Define job-time prompt composition from an installed Limen base, project-owned additions, and a snapshot of live job facts.
-- Propose a staged, testable implementation boundary for `limen update` (or a better command name).
+- Stop `limen init` from copying role prompts, speech, shop manual, or hook bodies.
+- Resolve those files from the package when the project file is absent.
+- Plant one stub so vanilla `pi` still loads package hooks.
+- Name leftover vs overlay drift on the coordinator; `limen init --drop-leftovers` deletes only leftovers.
+- Pass package hooks into hosted and detached jobs (`--no-extensions` plus `--extension`).
 
 ## Out of scope
 
-- Implementing the update command, prompt composition, asset manifest, or interactive UI.
-- Automatically updating Limen through a package manager or network fetch.
-- Automatically overwriting `spec/vision.md`, `spec/build.md`, tickets, or project-specific rules.
-- Retrofitting every existing project beyond the already-applied prompt and extension refresh.
+- Publishing to the npm registry.
+- A home-directory overlay layer.
+- Merging Markdown.
+- Auto-applying overlays or fetching a new `limen`.
 
 ## Acceptance
 
-- A design note beside this ticket gives a coherent mental model, command lifecycle, asset ownership classes, durable state, recovery behavior, and workspace semantics.
-- It contains concrete examples of the agent’s update brief for: no change, safe mechanical update, customized/ambiguous asset, and legacy prompt migration.
-- It explicitly distinguishes what the agent may apply autonomously from what it must explain and discuss with the human.
-- It names the unresolved response-shape/settings decisions for a human discussion before implementation begins.
-- The proposal preserves Limen’s advisory-first, ordinary-files-and-Git, reversible-operation principles.
+- A new project after `limen init` has no `.agents/limen/{worker,reviewer,communication}.md` and no copied `hook/` bodies.
+- Spawn uses package worker/reviewer text unless the project overlays that file.
+- The communication hook inherits package speech when the project file is absent, and attaches a leftover/overlay advisory when copies exist.
+- `limen init --drop-leftovers` deletes only byte-identical copies.
+- Native checks pass.
 
 ## Notes
 
-The immediate incident was a copied extension becoming stale and a newly improved prompt narrative requiring manual propagation. F006 must make the next update deliberate, concise, and trustworthy rather than a bulk file copy.
+See `notes.md` for the ownership model. The previous design-only brief is replaced by this implementation.

@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
-import { access, readFile, writeFile } from "node:fs/promises";
+import { access, copyFile, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import test from "node:test";
 import { limen, scratchRepo, scratchWorkspace } from "./scratch.ts";
+
+const ROOT = new URL("..", import.meta.url).pathname;
 
 test("init refuses a non-Git directory with guidance", async (context) => {
 	const workspace = await scratchWorkspace();
@@ -13,7 +15,7 @@ test("init refuses a non-Git directory with guidance", async (context) => {
 	assert.match(result.stderr, /limen workspace init/);
 });
 
-test("init fills gaps, preserves existing bytes, and ignores runtime state once", async (context) => {
+test("init plants project-owned files and a hook stub, never role or hook copies", async (context) => {
 	const scratch = await scratchRepo();
 	context.after(scratch.cleanup);
 	await writeFile(join(scratch.root, "AGENTS.md"), "mine-no-newline");
@@ -23,49 +25,38 @@ test("init fills gaps, preserves existing bytes, and ignores runtime state once"
 	assert.equal(await readFile(join(scratch.root, "AGENTS.md"), "utf8"), "mine-no-newline");
 	assert.equal(await readFile(join(scratch.root, ".gitignore"), "utf8"), "dist/\n/.limen/\n");
 	assert.match(await readFile(join(scratch.root, "spec/vision.md"), "utf8"), /Human-owned/);
-	assert.match(await readFile(join(scratch.root, "spec/vision.md"), "utf8"), /Product principles/);
 	assert.match(await readFile(join(scratch.root, "spec/build.md"), "utf8"), /## TRACK/);
-	assert.match(await readFile(join(scratch.root, "spec/build.md"), "utf8"), /## PROVEN/);
-	assert.match(await readFile(join(scratch.root, ".agents/limen/reviewer.md"), "utf8"), /do not rewrite/i);
-	assert.match(await readFile(join(scratch.root, ".agents/limen/worker.md"), "utf8"), /You implement the coordinator's instruction/);
+	assert.match(await readFile(join(scratch.root, ".agents/limen/styleguide.md"), "utf8"), /coding practice/);
+	assert.doesNotMatch(await readFile(join(scratch.root, ".agents/limen/styleguide.md"), "utf8"), /Voice and shape/);
 	assert.match(await readFile(join(scratch.root, "spec/features/_template/ticket.md"), "utf8"), /FNNN/);
-	assert.match(await readFile(join(scratch.root, "spec/features/_template/outcome.md"), "utf8"), /## Result/);
-	for (const lane of ["planned", "active", "done", "dropped"]) {
-		await access(join(scratch.root, "spec/features", lane));
-	}
-	const wake = await readFile(join(scratch.root, ".pi/extensions/limen-wake.ts"), "utf8");
-	assert.match(wake, /sendUserMessage/);
-	assert.match(wake, /deliverAs: "steer"/);
-	assert.match(wake, /getSessionId/);
-	assert.match(wake, /claimDelivery/);
-	const communication = await readFile(join(scratch.root, ".pi/extensions/limen-communication.ts"), "utf8");
-	assert.match(communication, /before_agent_start/);
-	assert.match(communication, /limen-project-context/);
-	assert.match(communication, /limen-communication/);
-	assert.match(communication, /styleguide\.md/);
-	assert.match(communication, /communication\.md/);
-	assert.match(communication, /spec\/build\.md/);
-	const steering = await readFile(join(scratch.root, ".pi/extensions/limen-steering.ts"), "utf8");
-	assert.match(steering, /LIMEN_JOB/);
-	assert.match(steering, /deliverAs: "steer"/);
-	assert.match(steering, /"steer", "inbox"/);
-	const styleguide = await readFile(join(scratch.root, ".agents/limen/styleguide.md"), "utf8");
-	assert.match(styleguide, /coding practice/);
-	assert.match(styleguide, /1000 lines/);
-	assert.doesNotMatch(styleguide, /Voice and shape/);
-	const speech = await readFile(join(scratch.root, ".agents/limen/communication.md"), "utf8");
-	assert.match(speech, /## Human/);
-	assert.match(speech, /## Agent/);
-	assert.match(speech, /did not write this code/);
-	assert.match(speech, /a long dig is a job, not a pause/);
-	assert.match(speech, /ASCII diagram or Mermaid/);
-	assert.match(speech, /dead air/);
+	for (const lane of ["planned", "active", "done", "dropped"]) await access(join(scratch.root, "spec/features", lane));
+	const stub = await readFile(join(scratch.root, ".pi/extensions/limen.ts"), "utf8");
+	assert.match(stub, /findPackage/);
+	assert.match(stub, /hook/);
+	await assert.rejects(access(join(scratch.root, ".agents/limen/worker.md")));
+	await assert.rejects(access(join(scratch.root, ".agents/limen/reviewer.md")));
+	await assert.rejects(access(join(scratch.root, ".agents/limen/communication.md")));
+	await assert.rejects(access(join(scratch.root, ".pi/extensions/limen-wake.ts")));
+	assert.match(first.stdout, /overlay \(differs/);
+	assert.match(first.stdout, /AGENTS\.md/);
 	await writeFile(join(scratch.root, "spec/build.md"), "custom bytes\0allowed");
 	const second = limen(scratch, "init");
 	assert.equal(second.status, 0, second.stderr);
 	assert.equal(await readFile(join(scratch.root, "spec/build.md"), "utf8"), "custom bytes\0allowed");
 	assert.equal((await readFile(join(scratch.root, ".gitignore"), "utf8")).match(/\.limen\//g)?.length, 1);
-	await writeFile(join(scratch.root, ".gitignore"), "/.limen/\n!/.limen/\n");
-	limen(scratch, "init");
-	assert.equal(await readFile(join(scratch.root, ".gitignore"), "utf8"), "/.limen/\n!/.limen/\n/.limen/\n");
+});
+
+test("init --drop-leftovers deletes only byte-identical copies", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	assert.equal(limen(scratch, "init").status, 0);
+	await copyFile(join(ROOT, "templates/worker.md"), join(scratch.root, ".agents/limen/worker.md"));
+	await writeFile(join(scratch.root, ".agents/limen/reviewer.md"), "my reviewer\n");
+	const dropped = limen(scratch, "init", "--drop-leftovers");
+	assert.equal(dropped.status, 0, dropped.stderr);
+	assert.match(dropped.stdout, /dropped \.agents\/limen\/worker\.md/);
+	assert.doesNotMatch(dropped.stdout, /reviewer/);
+	await assert.rejects(access(join(scratch.root, ".agents/limen/worker.md")));
+	assert.equal(await readFile(join(scratch.root, ".agents/limen/reviewer.md"), "utf8"), "my reviewer\n");
+	assert.equal(limen(scratch, "init", "--drop-leftovers").stdout.includes("no leftover copies"), true);
 });

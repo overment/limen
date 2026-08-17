@@ -10,6 +10,7 @@ const ESCAPED_KILL_GRACE_MS = 1_000;
 const PROCESS_QUERY_TIMEOUT_MS = 1_000;
 const PROCESS_QUERY_MAX_BYTES = 1024 * 1024;
 const PIDINFO_HELPER = fileURLToPath(new URL("./proc-pidinfo.rb", import.meta.url));
+const HOOK = fileURLToPath(new URL("../hook", import.meta.url));
 // A job is one short turn. These bounds stop a silent runaway from burning a session; they are not a review gate.
 export const DEFAULT_TIMEOUT_MS = 90 * 60_000;
 export const MAX_TOOL_CALLS = 900;
@@ -310,7 +311,8 @@ export async function runInternalJob(): Promise<void> {
 		})();
 	};
 	const sessionDir = `${jobDir}/session`;
-	const args = ["--mode", "json", "--approve", "--session-dir", sessionDir, "--name", `limen: ${label}`, "--append-system-prompt", preamble];
+	const args = ["--mode", "json", "--approve", "--no-extensions", "--session-dir", sessionDir, "--name", `limen: ${label}`, "--append-system-prompt", preamble];
+	args.push("--extension", `${HOOK}/steering.ts`, "--extension", `${HOOK}/communication.ts`);
 	if (process.env.LIMEN_MODEL) args.push("--model", process.env.LIMEN_MODEL);
 	args.push(`@${taskFile}`);
 	const childEnvironment: NodeJS.ProcessEnv = {

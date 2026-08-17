@@ -74,6 +74,7 @@ function runLimen(scratch: Scratch, addedEnvironment: NodeJS.ProcessEnv, args: r
 		"LIMEN_LABEL",
 		"LIMEN_JOB_LABEL",
 		"LIMEN_CONTEXT_ROOT",
+		"LIMEN_PACKAGE",
 		"LIMEN_HERDR",
 		"PI_SESSION_ID",
 		"PI_SESSION_FILE",

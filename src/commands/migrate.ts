@@ -6,7 +6,7 @@ import { processGroupAlive } from "../proc.ts";
 
 type Kind = "none" | "file" | "directory";
 type Pair = { readonly old: string; readonly next: string; oldKind?: Kind; nextKind?: Kind };
-type ExtensionPair = Pair & { readonly name: string; readonly packaged: string; content?: Buffer };
+type ExtensionPair = Pair & { readonly name: string; readonly packaged: string };
 const PACKAGE_ROOT = fileURLToPath(new URL("../..", import.meta.url));
 export async function migrateCommand(args: readonly string[], cwd: string): Promise<void> {
 	if (args.length) throw new Error("migrate takes no arguments");
@@ -34,8 +34,7 @@ export async function migrateCommand(args: readonly string[], cwd: string): Prom
 		pair.oldKind = await kind(pair.old);
 		pair.nextKind = await kind(pair.next);
 		if (pair.oldKind === "directory" || pair.nextKind === "directory") throw new Error(`${pair.name} extension path must be a regular file`);
-		pair.content = await readFile(pair.packaged);
-		if (pair.oldKind === "file" && pair.nextKind === "file" && !(await readFile(pair.next)).equals(pair.content)) {
+		if (pair.oldKind === "file" && pair.nextKind === "file" && !(await readFile(pair.next)).equals(await readFile(pair.packaged))) {
 			throw new Error(`both ${relative(root, pair.old)} and a modified ${relative(root, pair.next)} exist`);
 		}
 	}
@@ -51,11 +50,17 @@ export async function migrateCommand(args: readonly string[], cwd: string): Prom
 	}
 	for (const pair of extensions) {
 		if (pair.oldKind === "file") {
-			if (pair.nextKind === "none") await writeFile(pair.next, pair.content as Buffer, { flag: "wx" });
 			await rm(pair.old);
-			console.log(`replaced ${pair.name} extension`);
+			console.log(`removed ${relative(root, pair.old)}`);
 		} else console.log(`${pair.nextKind === "file" ? "kept" : "no-op"} ${pair.name} extension`);
 	}
+	const needStub = runtimeExists || extensions.some((pair) => pair.oldKind === "file" || pair.nextKind === "file");
+	const stub = `${root}/.pi/extensions/limen.ts`;
+	if (needStub && (await kind(stub)) === "none") {
+		await mkdir(dirname(stub), { recursive: true });
+		await writeFile(stub, await readFile(`${PACKAGE_ROOT}/templates/limen-extension.ts`), { flag: "wx" });
+		console.log("created .pi/extensions/limen.ts");
+	} else if (needStub) console.log("kept .pi/extensions/limen.ts");
 	for (const patch of [agents, ignore]) {
 		if (!patch) continue;
 		if (patch.before === patch.after) console.log(`kept ${relative(root, patch.path)}`);

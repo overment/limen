@@ -1,12 +1,25 @@
 import { constants } from "node:fs";
-import { access, appendFile, copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
+import { access, appendFile, copyFile, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { isGitRepository, repoRoot } from "../git.ts";
+import { formatDrift, listDrift } from "../../hook/inherit.ts";
+import { isGitRepository, repoRoot, workspaceRoot } from "../git.ts";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 export async function initCommand(args: readonly string[], cwd: string): Promise<void> {
-	if (args.length) throw new Error("init takes no arguments");
+	const drop = args[0] === "--drop-leftovers";
+	if (args.length && !(drop && args.length === 1)) throw new Error("init takes no arguments, or only --drop-leftovers");
+	if (drop) {
+		const root = workspaceRoot(cwd) ?? (isGitRepository(cwd) ? repoRoot(cwd) : undefined);
+		if (!root) throw new Error("init --drop-leftovers requires a Limen project or workspace");
+		const leftovers = listDrift(root).filter((item) => item.kind === "leftover");
+		if (!leftovers.length) console.log("no leftover copies");
+		for (const item of leftovers) {
+			await rm(`${root}/${item.path}`);
+			console.log(`dropped ${item.path}`);
+		}
+		return;
+	}
 	if (!isGitRepository(cwd)) throw new Error("init requires a Git repository; run 'git init' first, or use 'limen workspace init' for a non-Git workspace");
 	const root = repoRoot(cwd);
 	for (const legacy of [".control", ".agents/control", ".pi/extensions/control-wake.ts", ".pi/extensions/control-communication.ts"]) {
@@ -21,17 +34,14 @@ export async function workspaceCommand(args: readonly string[], cwd: string): Pr
 }
 async function initialize(root: string, repository: boolean): Promise<void> {
 	const copies = [
-		[`${ROOT}/templates/agents.md`, `${root}/AGENTS.md`],
-		...(["worker", "reviewer", "styleguide", "communication"] as const).map((name) => [`${ROOT}/templates/${name}.md`, `${root}/.agents/limen/${name}.md`] as const),
+		[`${ROOT}/templates/styleguide.md`, `${root}/.agents/limen/styleguide.md`],
 		[`${ROOT}/templates/spec/vision.md`, `${root}/spec/vision.md`],
 		[`${ROOT}/templates/spec/build.md`, `${root}/spec/build.md`],
 		...(repository ? [] : ([[`${ROOT}/templates/spec/workspace.md`, `${root}/spec/workspace.md`]] as const)),
 		[`${ROOT}/templates/spec/features/_template/ticket.md`, `${root}/spec/features/_template/ticket.md`],
 		[`${ROOT}/templates/spec/features/_template/outcome.md`, `${root}/spec/features/_template/outcome.md`],
 		...(["planned", "active", "done", "dropped"] as const).map((lane) => [`${ROOT}/templates/spec/features/${lane}/.gitkeep`, `${root}/spec/features/${lane}/.gitkeep`] as const),
-		[`${ROOT}/hook/wake.ts`, `${root}/.pi/extensions/limen-wake.ts`],
-		[`${ROOT}/hook/communication.ts`, `${root}/.pi/extensions/limen-communication.ts`],
-		[`${ROOT}/hook/steering.ts`, `${root}/.pi/extensions/limen-steering.ts`],
+		[`${ROOT}/templates/limen-extension.ts`, `${root}/.pi/extensions/limen.ts`],
 	] as const;
 	for (const [source, target] of copies) {
 		await mkdir(dirname(target), { recursive: true });
@@ -42,6 +52,8 @@ async function initialize(root: string, repository: boolean): Promise<void> {
 	await mkdir(`${root}/.limen/jobs`, { recursive: true });
 	if (repository) await ensureIgnored(`${root}/.gitignore`);
 	console.log("ready .limen/jobs");
+	const drift = formatDrift(listDrift(root));
+	if (drift) console.log(drift);
 }
 async function ensureIgnored(path: string): Promise<void> {
 	const exists = await pathExists(path);
