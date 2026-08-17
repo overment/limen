@@ -36,7 +36,7 @@ Herdr is the visible layout when it is running. Job files under `.limen/jobs/` a
 
 **In Herdr, implementation spawn is hosted by default — do not omit a flag and expect a log-tail worker.** Pass `--detached` only when the human asked, or when there is no Herdr. `--tab` forces hosted and refuses without Herdr. Reviews stay detached (`--review` does not combine with `--tab`).
 
-**Hosted weaker guarantees** (recorded in the job’s `hosted` file): no 90-minute timeout, no tool-call cap, no F007 process containment. Herdr owns that process tree. Closing the hosted tab ends the worker. After the tab is gone, `limen open <id>` reopens a **log** view only — it does not resurrect the agent; respawn for a new one. `--tab` does not support `--review` yet.
+**Hosted weaker guarantees** (recorded in the job’s `hosted` file): no 90-minute timeout, no tool-call cap, no F007 process containment. Herdr owns that process tree. Closing the hosted tab ends the worker. After the tab is gone, `limen open <id>` reopens a **log** view only — it does not resurrect the agent; respawn for a new one. `--tab` does not support `--review` yet. Hosted start briefly focuses the new tab so Herdr will treat it as an available shell, then restores the coordinator tab (`HERDR_TAB_ID`). A `--no-focus` tab that was never focused is not startable on Herdr 0.8.
 
 **Other job controls:**
 

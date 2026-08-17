@@ -43,6 +43,8 @@ export function startHostedPi(input: { readonly place: HerdrPlace; readonly name
 	const herdr = requireHerdr();
 	const readyMs = input.timeoutMs ?? 120_000;
 	waitForShell(herdr, input.place.pane, Math.min(readyMs, 60_000));
+	// Herdr 0.8.0: a --no-focus tab is not an available shell until it has been focused once.
+	primeHostedTab(herdr, input.place.tab);
 	try {
 		const started = call(herdr, [
 			"agent",
@@ -121,6 +123,18 @@ function waitForShell(herdr: string, pane: string, timeoutMs: number): void {
 		spawnSync("sleep", ["0.2"], { stdio: "ignore" });
 	}
 	throw new Error(`hosted pane ${pane} did not become an idle shell (last: ${last})`);
+}
+
+function primeHostedTab(herdr: string, tab: string): void {
+	const previous = process.env.HERDR_TAB_ID?.trim();
+	call(herdr, ["tab", "focus", tab]);
+	if (previous && previous !== tab) {
+		try {
+			call(herdr, ["tab", "focus", previous]);
+		} catch {
+			// Coordinator tab may have closed; the new tab staying focused is acceptable.
+		}
+	}
 }
 
 export function hostedAgentStatus(target: string): HostedAgentStatus {

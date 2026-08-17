@@ -19,7 +19,7 @@ test("spawn in Herdr is hosted without --tab; --detached keeps a watch tab", asy
 	context.after(scratch.cleanup);
 	assert.equal(limen(scratch, "init").status, 0);
 	const herdr = await installHostedFakeHerdr(scratch.root, scratch.fakeBin);
-	const env = { HERDR_ENV: "1", LIMEN_HERDR: herdr.bin, FAKE_HERDR_STATE: herdr.dir };
+	const env = { HERDR_ENV: "1", LIMEN_HERDR: herdr.bin, FAKE_HERDR_STATE: herdr.dir, HERDR_TAB_ID: "coord:t0" };
 	const launched = limenWithEnv(scratch, env, "spawn", "--label", "F010 hosted", "make a tiny commit");
 	assert.equal(launched.status, 0, launched.stderr);
 	assert.match(launched.stdout, /started F010 hosted \(hosted\)/);
@@ -32,6 +32,8 @@ test("spawn in Herdr is hosted without --tab; --detached keeps a watch tab", asy
 	assert.match(calls, /tab create /);
 	assert.match(calls, /--no-focus/);
 	assert.doesNotMatch(calls, /tab create .*--focus/);
+	assert.match(calls, /tab focus w1:t1/);
+	assert.match(calls, /tab focus coord:t0/);
 	assert.match(calls, /agent start /);
 	assert.match(calls, /--kind pi/);
 	assert.doesNotMatch(calls, /pane run .*tail/);
@@ -77,6 +79,9 @@ if (args[0] === "workspace" && args[1] === "list") {
 } else if (args[0] === "tab" && args[1] === "rename") {
   ok({ type: "tab_renamed" });
 } else if (args[0] === "tab" && args[1] === "focus") {
+  const tab = args[2];
+  if (state.tabs[tab]) state.tabs[tab].seen = true;
+  writeFileSync(path, JSON.stringify(state));
   ok({ type: "tab_focused" });
 } else if (args[0] === "tab" && args[1] === "close") {
   delete state.tabs[args[2]];
@@ -88,6 +93,8 @@ if (args[0] === "workspace" && args[1] === "list") {
   ok({ type: "pane_process_info", process_info: { foreground_processes: [{ name: "zsh" }] } });
 } else if (args[0] === "agent" && args[1] === "start") {
   const pane = args[args.indexOf("--pane") + 1];
+  const tab = Object.keys(state.tabs).find((id) => state.tabs[id].pane === pane);
+  if (!tab || !state.tabs[tab].seen) fail("agent_pane_busy", "agent target pane " + pane + " is not an available shell");
   state.agents[pane] = { status: "working", ticks: 0 };
   writeFileSync(path, JSON.stringify(state));
   ok({ type: "agent_started", pane: { pane_id: pane }, agent_status: "working" });

@@ -80,7 +80,7 @@ F007 process containment is macOS-shaped (`src/proc.ts` shells Darwin `proc_pidi
 
 - **Wake is not the bell.** Footer, toast, and `sendUserMessage` fire in the coordinator session *on the seat*. You are not looking at it. Phone push (`docs/seat/bell.sh`) is the attention channel. Do not wait for a Limen-owned notifier (`LIMEN_NOTIFY` does not exist).
 - **Hosted-by-default is wrong on a seat.** Inside Herdr, `limen spawn` is hosted (`HERDR_ENV=1`) — no 90-minute timeout, no tool-call cap, no F007. That encodes “you are watching.” On the seat, pass `--detached` unless you are attached and intend to type. `LIMEN_SPAWN` is not a flag yet.
-- **`--tab` needs a free shell.** `agent start` fails with `pane … is not an available shell` if the new tab is still running prompt hooks or is not idle. First smoke is always `--detached`. Hosted tabs need `herdr integration install pi` and a pane that waited for a real shell.
+- **`--tab` needs a free shell that Herdr has seen.** `agent start` fails with `pane … is not an available shell` if the tab was never focused (Herdr 0.8 treats unseen `--no-focus` tabs as busy). Limen now focuses the new tab once, then restores the coordinator. First smoke on a seat is still `--detached`. Hosted tabs need `herdr integration install pi`.
 - **Herdr `done` is unseen idle**, not process exit. On a seat you attach twice a day, so almost every tab reads `done`. Limen must not treat that as terminal (already true as of `c316fce`). Do not “fix” `idle` vs `done` for headless.
 - **One repo first.** Do not sync the five consumer projects onto the box. Do not copy `.limen/` to the laptop.
 
