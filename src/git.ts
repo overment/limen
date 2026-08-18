@@ -26,6 +26,9 @@ export function branchExists(cwd: string, branch: string): boolean {
 	requireGit(cwd, ["check-ref-format", "--branch", branch]);
 	return git(cwd, ["show-ref", "--verify", "--quiet", `refs/heads/${branch}`]).status === 0;
 }
+export function branchCommit(cwd: string, branch: string): string {
+	return requireGit(cwd, ["rev-parse", `refs/heads/${branch}`]).stdout.trim();
+}
 export function listWorktrees(cwd: string): readonly GitWorktree[] {
 	const fields = requireGit(cwd, ["worktree", "list", "--porcelain", "-z"]).stdout.split("\0");
 	const worktrees: GitWorktree[] = [];

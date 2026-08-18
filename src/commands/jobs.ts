@@ -52,8 +52,8 @@ async function orderedJobs(ids: readonly string[], jobsRoot: string): Promise<Re
 }
 async function renderJobDirectory(root: string, jobsRoot: string, id: string, detailed: boolean): Promise<string> {
 	const jobDir = `${jobsRoot}/${id}`;
-	const [state = "", label = "", branch = "", repo = "", pid, started = "", finished = "", toolCalls, lastTool, activity, hosted] = await Promise.all(
-		"state label branch repo pid started-at finished-at tool-calls last-tool activity hosted".split(" ").map((field) => text(`${jobDir}/${field}`)),
+	const [state = "", label = "", branch = "", repo = "", pid, started = "", finished = "", toolCalls, lastTool, activity, hosted, candidate = ""] = await Promise.all(
+		"state label branch repo pid started-at finished-at tool-calls last-tool activity hosted candidate".split(" ").map((field) => text(`${jobDir}/${field}`)),
 	);
 	const agent = await text(`${jobDir}/herdr/agent`);
 	const [taskStat, logStat] = await Promise.all([optionalStat(`${jobDir}/task.md`), optionalStat(`${jobDir}/log`)]);
@@ -92,6 +92,7 @@ async function renderJobDirectory(root: string, jobsRoot: string, id: string, de
 		});
 		const blocks = [rendered];
 		if (repo) blocks.push(`  repo ${display(repo)}`);
+		if (candidate) blocks.push(`  candidate ${display(candidate)}`);
 		if (hosted) blocks.push("  hosted (weaker guarantees)");
 		if (cleanup)
 			blocks.push(

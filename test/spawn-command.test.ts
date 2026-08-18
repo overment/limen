@@ -109,8 +109,15 @@ test("review gets fresh detached worktree and reviewer birth text", async (conte
 	const worker = onlyJobId(limen(scratch, "spawn", "make commit").stdout);
 	await waitForState(scratch.root, worker, "done");
 	const branch = `limen/${worker}`;
+	const candidateSha = git(scratch.root, "rev-parse", branch);
 	const review = onlyJobId(limen(scratch, "spawn", "--review", "--branch", branch, "inspect candidate").stdout);
 	await waitForState(scratch.root, review, "done");
+	const reviewJob = join(scratch.root, ".limen/jobs", review);
+	assert.equal(await readFile(join(reviewJob, "candidate"), "utf8"), `${candidateSha}\n`);
+	const reviewTask = await readFile(join(reviewJob, "task.md"), "utf8");
+	assert.equal(reviewTask, `inspect candidate\n\nCandidate commit: ${candidateSha}.\n`);
+	await assert.rejects(readFile(join(scratch.root, ".limen/jobs", worker, "candidate")));
+	assert.match(limen(scratch, "jobs", review).stdout, new RegExp(`candidate ${candidateSha}`));
 	const worktree = git(scratch.root, "worktree", "list", "--porcelain")
 		.split("\n\n")
 		.find((block) => block.includes(review));

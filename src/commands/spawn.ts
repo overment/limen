@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { basename, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { addBranchWorktree, addDetachedWorktree, addNewWorktree, branchExists, repoRoot, workspaceRepository, workspaceRoot, worktreeForBranch } from "../git.ts";
+import { addBranchWorktree, addDetachedWorktree, addNewWorktree, branchCommit, branchExists, repoRoot, workspaceRepository, workspaceRoot, worktreeForBranch } from "../git.ts";
 import { herdrAvailable, hostedAgentAlive, openHostedTab, openWatchTab, startHostedPi } from "../herdr.ts";
 import { parseDuration } from "../job.ts";
 import { appendLimenLog, atomicWrite, finalizeJob, launchHostedSupervisor, launchWrapper, processGroupAlive, signalProcessGroup, waitForProcessGroup } from "../proc.ts";
@@ -65,11 +65,13 @@ export async function spawnCommand(args: readonly string[], cwd: string): Promis
 		}),
 	);
 	await pruneFinishedWorktrees(root, [worktree]).catch(() => {});
+	const candidate = options.review ? branchCommit(repository, branch) : undefined;
 	const jobDir = `${jobsRoot}/${id}`;
 	await mkdir(jobDir);
 	await mkdir(`${jobDir}/notify/subscribers`, { recursive: true });
 	await Promise.all([
-		writeFile(`${jobDir}/task.md`, `${task.trim()}\n`, { flag: "wx", flush: true }),
+		writeFile(`${jobDir}/task.md`, candidate ? `${task.trim()}\n\nCandidate commit: ${candidate}.\n` : `${task.trim()}\n`, { flag: "wx", flush: true }),
+		...(candidate ? [writeFile(`${jobDir}/candidate`, `${candidate}\n`, { flag: "wx", flush: true })] : []),
 		writeFile(`${jobDir}/label`, `${options.label}\n`, { flag: "wx", flush: true }),
 		writeFile(`${jobDir}/branch`, `${branch}\n`, { flag: "wx", flush: true }),
 		...(workspace ? [writeFile(`${jobDir}/repo`, `${options.repo}\n`, { flag: "wx", flush: true })] : []),
