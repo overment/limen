@@ -1,6 +1,6 @@
 # F019-coordinator-own-hands · Name the threshold for not spawning a worker
 
-[2026-08-18] [🟠] [ACTIVE] [COORDINATOR] ACTIVE · F019-coordinator-own-hands
+[2026-08-18] [🟢] [PROVEN] [COORDINATOR] PROVEN · F019-coordinator-own-hands
 
 ## Outcome
 

@@ -7,8 +7,6 @@
 ## NOW
 
 - `F017-completion-handoff` (ACTIVE): wake carries the final message and commits; hosted done means session end. Before F011.
-- `F018-review-handoff` (ACTIVE): reviewer is given the candidate commit; verdicts filed as `review-<n>.md`; re-reviews name prior findings.
-- `F019-coordinator-own-hands` (ACTIVE): shop-manual threshold for fixing inline instead of spawning. Guidance only.
 
 ## NEXT
 - `F011-empty-job-advisory` (PLANNED): a job that produced nothing should say so instead of reading DONE. Observed, not theorised. After F017 it reads `commits` and `tool-calls` instead of inferring.
@@ -17,6 +15,8 @@
 
 ## PROVEN
 
+- `F019-coordinator-own-hands` (PROVEN): shop-manual threshold for fixing inline instead of spawning. Guidance only. Coordinator-written at `da52ae5`.
+- `F018-review-handoff` (PROVEN): reviewer is given the candidate commit; verdicts filed as `review-<n>.md`. Reviewed PASS at `afea1eb`.
 - `F016-agent-handoff-map` (PROVEN): spawn gives task.md plus preamble; the wake is a pointer, not the work. Notes only.
 - `F015-harness-steering-map` (PROVEN): speech lives in the system prompt per user turn; F008 restack is gone. Notes only.
 - `F006-interactive-managed-updates` (PROVEN): package defaults inherit; leftover hook copies cannot load beside the stub. Reviewed PASS at `236b8e7`.
