@@ -57,11 +57,12 @@ export function startHostedPi(input: { readonly place: HerdrPlace; readonly name
 			throw error;
 		}
 	} finally {
-		if (previous && previous !== input.place.tab) try {
-			call(herdr, ["tab", "focus", previous]);
-		} catch {
-			// Coordinator tab may have closed; the new tab staying focused is acceptable.
-		}
+		if (previous && previous !== input.place.tab)
+			try {
+				call(herdr, ["tab", "focus", previous]);
+			} catch {
+				// Coordinator tab may have closed; the new tab staying focused is acceptable.
+			}
 	}
 }
 
@@ -112,7 +113,9 @@ function waitForShell(herdr: string, pane: string, timeoutMs: number): void {
 			const info = asRecord(asRecord(call(herdr, ["pane", "process-info", "--pane", pane])).process_info);
 			const foreground = Array.isArray(info.foreground_processes) ? info.foreground_processes : [];
 			const only = asRecord(foreground[0]);
-			const name = String(only.name ?? "").replace(/^-/, "").toLowerCase();
+			const name = String(only.name ?? "")
+				.replace(/^-/, "")
+				.toLowerCase();
 			const pid = Number(only.pid);
 			last = name || "none";
 			const aligned = !Number.isFinite(pid) || [info.shell_pid, info.foreground_process_group_id].every((value) => !Number.isFinite(Number(value)) || Number(value) === pid);
