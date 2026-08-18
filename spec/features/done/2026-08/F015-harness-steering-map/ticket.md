@@ -1,6 +1,6 @@
 # F015-harness-steering-map · How the harness currently steers agents
 
-[2026-08-17] [🟠] [ACTIVE] [COORDINATOR] ACTIVE · F015-harness-steering-map
+[2026-08-18] [🟢] [PROVEN] [COORDINATOR] PROVEN · F015-harness-steering-map
 
 Status marks are prose: 🔴 PLANNED · 🟠 ACTIVE · 🟢 PROVEN · ⚪ DROPPED. Update the line when the folder moves. Nothing in `limen` parses it.
 
