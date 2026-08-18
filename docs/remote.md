@@ -53,13 +53,13 @@ Do not: SSHFS the worktrees; run a coordinator on the laptop against a different
 
 ## Bring up
 
-Buy the box, then follow [docs/seat/](seat/README.md). Short version:
+Buy the box, then follow [vps.md](vps.md). Short version:
 
-1. Ubuntu LTS, Tailscale, SSH key only. Node 24, Git, `pi`, Herdr, `limen` linked from a clone.
-2. One project on that disk. `limen init`. Keys stay on the seat.
-3. Prove ntfy on the phone, then enable `limen-bell.timer` against `docs/seat/bell.sh`.
+1. Ubuntu LTS, 8 GB RAM, ≥150 GB disk, Tailscale, SSH key only. Node 24, Git, `gh`, `pi`, Herdr, `limen` linked from a clone of this repo.
+2. Clone the work **branch** (not only `origin/HEAD`). `limen init` in that checkout. Keys stay on the seat.
+3. Bell: Moshi (`moshi-hook pair --store file`, `service install`, `loginctl enable-linger`). ntfy is fallback — [seat/](seat/README.md).
 4. Persistent Herdr session on the box. Attach with `herdr --remote`. First job: `limen spawn --detached`.
-5. `tailscale serve` for previews. `limen-prune.timer` daily. No unattended reboot.
+5. `tailscale serve` for previews. `limen prune` on a timer. No unattended reboot.
 
 Do not move the coordinator until a detached job finishes with the lid closed and the phone rings. Do not run a coordinator on the Mac **and** the VPS during migration.
 
@@ -78,11 +78,11 @@ F007 process containment is macOS-shaped (`src/proc.ts` shells Darwin `proc_pidi
 
 ## Traps (will bite on day one)
 
-- **Wake is not the bell.** Footer, toast, and `sendUserMessage` fire in the coordinator session *on the seat*. You are not looking at it. Phone push (`docs/seat/bell.sh`) is the attention channel. Do not wait for a Limen-owned notifier (`LIMEN_NOTIFY` does not exist).
+- **Wake is not the bell.** Footer, toast, and `sendUserMessage` fire in the coordinator session *on the seat*. You are not looking at it. Moshi (`pair --store file` + linger) is the attention channel; ntfy is fallback. `host setup` is SSH/Mosh onto the box, not the hook. Do not wait for a Limen-owned notifier (`LIMEN_NOTIFY` does not exist).
 - **Hosted-by-default is wrong on a seat.** Inside Herdr, `limen spawn` is hosted (`HERDR_ENV=1`) — no 90-minute timeout, no tool-call cap, no F007. That encodes “you are watching.” On the seat, pass `--detached` unless you are attached and intend to type. `LIMEN_SPAWN` is not a flag yet.
 - **`--tab` needs a free shell that Herdr has seen.** `agent start` fails with `pane … is not an available shell` if the tab was never focused (Herdr 0.8 treats unseen `--no-focus` tabs as busy). Limen now focuses the new tab once, then restores the coordinator. First smoke on a seat is still `--detached`. Hosted tabs need `herdr integration install pi`.
 - **Herdr `done` is unseen idle**, not process exit. On a seat you attach twice a day, so almost every tab reads `done`. Limen must not treat that as terminal (already true as of `c316fce`). Do not “fix” `idle` vs `done` for headless.
-- **One repo first.** Do not sync the five consumer projects onto the box. Do not copy `.limen/` to the laptop.
+- **Checkout the work branch.** `origin/HEAD` plus `limen init` is a blank cabinet. `gh` on the box is HTTPS — do not `git@` unless you added a key. Do not copy `.limen/` to the laptop.
 
 ## Doorbell (not built)
 
@@ -97,10 +97,10 @@ See `spec/features/planned/F014-github-doorbell/ticket.md`. Promote into Limen o
 
 ## When you come back
 
-1. Buy: Ubuntu LTS, 4–8 GB RAM, 80 GB disk, public SSH key-only. Follow [docs/seat/](seat/README.md).
-2. Prove ntfy from the Mac to the phone **before** moving keys or the coordinator.
-3. On the box: Node 24, Git, `gh`, `pi`, Herdr, `limen` (`npm link` from a clone of this repo). One project. `limen init`.
-4. Enable `limen-bell.timer` and `limen-prune.timer`. Persistent Herdr session. `herdr --remote you@seat-name`.
+1. Buy and walk through [vps.md](vps.md). Ubuntu LTS, 8 GB / 150 GB+, public SSH key-only, Tailscale MagicDNS.
+2. Pair Moshi on the box (`--store file`, linger) **before** moving the coordinator. ntfy only if Moshi is out.
+3. Node 24, Git, `gh`, `pi`, Herdr, `limen` (`npm link` from `~/limen`). Checkout the work branch. `limen init`.
+4. Persistent Herdr session. `herdr --remote alice` (or your `Host` alias). First smoke: `--detached`.
 5. Prove, in order: lid-closed `--detached` job → phone rings → `limen jobs` on attach shows the same id → `tailscale serve` preview opens on the Mac.
 6. Only then live on the seat. Do not write Limen code to “support the VPS.” Optional later, and only after you have typed them twice: `LIMEN_SPAWN=detached`, `LIMEN_NOTIFY=` exec after a wake claim.
 
