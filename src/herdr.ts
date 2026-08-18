@@ -72,6 +72,12 @@ export function hostedAgentAlive(target: string): boolean {
 	return hostedAgentStatus(target) !== "missing";
 }
 
+/** Hosted jobs end when the session ends or the agent is gone. Herdr idle/done is unseen background, not completion. */
+export function hostedTerminalReason(status: HostedAgentStatus, sessionEnded: boolean): "hosted session ended" | "hosted agent ended" | undefined {
+	if (sessionEnded) return "hosted session ended";
+	if (status === "missing") return "hosted agent ended";
+}
+
 function liveHostedTarget(pane: string, name: string): string | undefined {
 	for (const target of [pane, name]) {
 		const status = hostedAgentStatus(target);

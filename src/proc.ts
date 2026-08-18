@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { appendFile, open, readFile, rename, rm } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { hostedAgentStatus, renameJobTab } from "./herdr.ts";
+import { hostedAgentStatus, hostedTerminalReason, renameJobTab } from "./herdr.ts";
 import { createStreamParser, type StreamEvent } from "./stream.ts";
 
 const STOP_GRACE_MS = 5_000;
@@ -236,8 +236,6 @@ async function launchDetached(environment: Readonly<Record<string, string>>): Pr
 	child.unref();
 	return child.pid;
 }
-/** Idle this long after tools before treating an abandoned interactive session as done. */
-const HOSTED_IDLE_DONE_MS = 90_000;
 /** Watch a Herdr-hosted agent and publish terminal state when the session really ends. */
 export async function runHostedSupervisor(): Promise<void> {
 	const jobDir = requiredEnvironment("LIMEN_JOB_DIR");
@@ -246,27 +244,18 @@ export async function runHostedSupervisor(): Promise<void> {
 	await atomicWrite(`${jobDir}/state`, "running\n");
 	await appendLimenLog(jobDir, "hosted supervisor started (weaker guarantees: no timeout, no tool-call cap, no process containment)");
 	let stopRequested = false;
-	let idleMs = 0;
 	process.on("SIGTERM", () => {
 		stopRequested = true;
 	});
 	while (!stopRequested) {
 		const status = hostedAgentStatus(target);
-		const tools = Number(await textFile(`${jobDir}/tool-calls`)) || 0;
 		const sessionEnded = Boolean(await textFile(`${jobDir}/session-ended`));
-		// Herdr `done` = unseen idle (background tab). Not job completion. Complete on session file, vanished agent, or long idle after tools.
-		if (status === "missing" || sessionEnded) {
-			await finalizeJob(jobDir, "done", sessionEnded ? "hosted session ended" : "hosted agent ended");
+		// Herdr idle/done = unseen background tab. Not job completion.
+		const reason = hostedTerminalReason(status, sessionEnded);
+		if (reason) {
+			await finalizeJob(jobDir, "done", reason);
 			return;
 		}
-		if (status === "working" || status === "blocked") idleMs = 0;
-		else if (tools > 0 && (status === "idle" || status === "unknown")) {
-			idleMs += 1_000;
-			if (idleMs >= HOSTED_IDLE_DONE_MS) {
-				await finalizeJob(jobDir, "done", `hosted idle ${HOSTED_IDLE_DONE_MS / 1000}s after tools`);
-				return;
-			}
-		} else idleMs = 0;
 		const activity = status === "working" ? "think" : status === "blocked" ? "wait" : "wait";
 		await atomicWrite(`${jobDir}/activity`, `${activity}\n`).catch(() => {});
 		await delay(1_000);

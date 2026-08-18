@@ -2,7 +2,19 @@ import assert from "node:assert/strict";
 import { chmod, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import test from "node:test";
+import { hostedTerminalReason } from "../src/herdr.ts";
 import { limen, limenWithEnv, onlyJobId, scratchRepo, waitForState } from "./scratch.ts";
+
+test("hosted completion is session end or vanished agent, not Herdr idle", () => {
+	assert.equal(hostedTerminalReason("idle", false), undefined);
+	assert.equal(hostedTerminalReason("done", false), undefined);
+	assert.equal(hostedTerminalReason("unknown", false), undefined);
+	assert.equal(hostedTerminalReason("working", false), undefined);
+	assert.equal(hostedTerminalReason("blocked", false), undefined);
+	assert.equal(hostedTerminalReason("missing", false), "hosted agent ended");
+	assert.equal(hostedTerminalReason("idle", true), "hosted session ended");
+	assert.equal(hostedTerminalReason("missing", true), "hosted session ended");
+});
 
 test("spawn --tab refuses without Herdr and leaves no job record", async (context) => {
 	const scratch = await scratchRepo();
