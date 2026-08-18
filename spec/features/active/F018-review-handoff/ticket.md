@@ -1,6 +1,6 @@
 # F018-review-handoff · A reviewer knows the candidate commit and what was already found
 
-[2026-08-18] [🔴] [PLANNED] [COORDINATOR] PLANNED · F018-review-handoff
+[2026-08-18] [🟠] [ACTIVE] [COORDINATOR] ACTIVE · F018-review-handoff
 
 ## Outcome
 

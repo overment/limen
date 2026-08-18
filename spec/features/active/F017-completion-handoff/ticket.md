@@ -1,6 +1,6 @@
 # F017-completion-handoff · The wake carries what landed, and hosted done means the session ended
 
-[2026-08-18] [🔴] [PLANNED] [COORDINATOR] PLANNED · F017-completion-handoff
+[2026-08-18] [🟠] [ACTIVE] [COORDINATOR] ACTIVE · F017-completion-handoff
 
 ## Outcome
 
