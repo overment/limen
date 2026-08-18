@@ -29,12 +29,14 @@ test("spawn in Herdr is hosted without --tab; --detached keeps a watch tab", asy
 	assert.equal(await readFile(join(job, "herdr/mode"), "utf8"), "hosted\n");
 	assert.equal(await readFile(join(job, "herdr/agent"), "utf8"), "w1:p1\n");
 	const calls = await readFile(herdr.calls, "utf8");
+	const lines = calls.split("\n");
+	const focusNew = lines.findIndex((line) => line === "tab focus w1:t1");
+	const start = lines.findIndex((line) => line.startsWith("agent start "));
+	const focusCoord = lines.findIndex((line) => line === "tab focus coord:t0");
 	assert.match(calls, /tab create /);
 	assert.match(calls, /--no-focus/);
 	assert.doesNotMatch(calls, /tab create .*--focus/);
-	assert.match(calls, /tab focus w1:t1/);
-	assert.match(calls, /tab focus coord:t0/);
-	assert.match(calls, /agent start /);
+	assert.ok(focusNew >= 0 && start > focusNew && focusCoord > start, calls);
 	assert.match(calls, /--kind pi/);
 	assert.doesNotMatch(calls, /pane run .*tail/);
 	await waitForState(scratch.root, id, "done");
@@ -80,7 +82,11 @@ if (args[0] === "workspace" && args[1] === "list") {
   ok({ type: "tab_renamed" });
 } else if (args[0] === "tab" && args[1] === "focus") {
   const tab = args[2];
-  if (state.tabs[tab]) state.tabs[tab].seen = true;
+  for (const id of Object.keys(state.tabs)) state.tabs[id].focused = false;
+  if (state.tabs[tab]) {
+    state.tabs[tab].seen = true;
+    state.tabs[tab].focused = true;
+  }
   writeFileSync(path, JSON.stringify(state));
   ok({ type: "tab_focused" });
 } else if (args[0] === "tab" && args[1] === "close") {
@@ -90,11 +96,11 @@ if (args[0] === "workspace" && args[1] === "list") {
 } else if (args[0] === "pane" && args[1] === "run") {
   ok({ type: "pane_ran" });
 } else if (args[0] === "pane" && args[1] === "process-info") {
-  ok({ type: "pane_process_info", process_info: { foreground_processes: [{ name: "zsh" }] } });
+  ok({ type: "pane_process_info", process_info: { foreground_process_group_id: 1, shell_pid: 1, foreground_processes: [{ name: "zsh", pid: 1 }] } });
 } else if (args[0] === "agent" && args[1] === "start") {
   const pane = args[args.indexOf("--pane") + 1];
   const tab = Object.keys(state.tabs).find((id) => state.tabs[id].pane === pane);
-  if (!tab || !state.tabs[tab].seen) fail("agent_pane_busy", "agent target pane " + pane + " is not an available shell");
+  if (!tab || !state.tabs[tab].focused) fail("agent_pane_busy", "agent target pane " + pane + " is not an available shell");
   state.agents[pane] = { status: "working", ticks: 0 };
   writeFileSync(path, JSON.stringify(state));
   ok({ type: "agent_started", pane: { pane_id: pane }, agent_status: "working" });

@@ -42,17 +42,26 @@ export async function openHostedTab(input: {
 export function startHostedPi(input: { readonly place: HerdrPlace; readonly name: string; readonly args: readonly string[]; readonly timeoutMs?: number }): string {
 	const herdr = requireHerdr();
 	const readyMs = input.timeoutMs ?? 120_000;
+	const previous = process.env.HERDR_TAB_ID?.trim();
 	waitForShell(herdr, input.place.pane, Math.min(readyMs, 60_000));
-	// Herdr 0.8.0: a --no-focus tab is not an available shell until it has been focused once.
-	primeHostedTab(herdr, input.place.tab);
+	// Herdr 0.8 will not start an agent in a background pane. Focus, start, then restore.
+	call(herdr, ["tab", "focus", input.place.tab]);
 	try {
-		const started = call(herdr, ["agent", "start", input.name, "--kind", "pi", "--pane", input.place.pane, "--timeout", String(readyMs), "--", ...input.args]);
-		return agentTarget(started) || input.place.pane;
-	} catch (error) {
-		// Readiness can time out after pi is already interactive (slow model, outdated herdr-pi hook).
-		const live = liveHostedTarget(input.place.pane, input.name);
-		if (live) return live;
-		throw error;
+		waitForShell(herdr, input.place.pane, Math.min(readyMs, 15_000));
+		try {
+			const started = call(herdr, ["agent", "start", input.name, "--kind", "pi", "--pane", input.place.pane, "--timeout", String(readyMs), "--", ...input.args]);
+			return agentTarget(started) || input.place.pane;
+		} catch (error) {
+			const live = liveHostedTarget(input.place.pane, input.name);
+			if (live) return live;
+			throw error;
+		}
+	} finally {
+		if (previous && previous !== input.place.tab) try {
+			call(herdr, ["tab", "focus", previous]);
+		} catch {
+			// Coordinator tab may have closed; the new tab staying focused is acceptable.
+		}
 	}
 }
 
@@ -102,27 +111,18 @@ function waitForShell(herdr: string, pane: string, timeoutMs: number): void {
 		try {
 			const info = asRecord(asRecord(call(herdr, ["pane", "process-info", "--pane", pane])).process_info);
 			const foreground = Array.isArray(info.foreground_processes) ? info.foreground_processes : [];
-			const names = foreground.map((row) => String(asRecord(row).name ?? ""));
-			last = names.join(",") || "none";
-			if (foreground.length === 1 && SHELL_NAMES.has(names[0] ?? "")) return;
+			const only = asRecord(foreground[0]);
+			const name = String(only.name ?? "").replace(/^-/, "").toLowerCase();
+			const pid = Number(only.pid);
+			last = name || "none";
+			const aligned = !Number.isFinite(pid) || [info.shell_pid, info.foreground_process_group_id].every((value) => !Number.isFinite(Number(value)) || Number(value) === pid);
+			if (foreground.length === 1 && SHELL_NAMES.has(name) && aligned) return;
 		} catch (error) {
 			last = error instanceof Error ? error.message : String(error);
 		}
 		spawnSync("sleep", ["0.2"], { stdio: "ignore" });
 	}
 	throw new Error(`hosted pane ${pane} did not become an idle shell (last: ${last})`);
-}
-
-function primeHostedTab(herdr: string, tab: string): void {
-	const previous = process.env.HERDR_TAB_ID?.trim();
-	call(herdr, ["tab", "focus", tab]);
-	if (previous && previous !== tab) {
-		try {
-			call(herdr, ["tab", "focus", previous]);
-		} catch {
-			// Coordinator tab may have closed; the new tab staying focused is acceptable.
-		}
-	}
 }
 
 export function hostedAgentStatus(target: string): HostedAgentStatus {
