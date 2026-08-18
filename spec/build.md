@@ -5,6 +5,7 @@
 - Reliable in-flight control on one seat; a laptop is a window; GitHub may ring the doorbell later.
 
 ## NOW
+- `F015-harness-steering-map` (ACTIVE): map every layer that currently steers an agent; notes only.
 
 ## NEXT
 - `F011-empty-job-advisory` (PLANNED): a job that produced nothing should say so instead of reading DONE. Observed, not theorised.
