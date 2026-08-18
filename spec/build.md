@@ -7,7 +7,10 @@
 ## NOW
 
 ## NEXT
-- `F011-empty-job-advisory` (PLANNED): a job that produced nothing should say so instead of reading DONE. Observed, not theorised.
+- `F017-completion-handoff` (PLANNED): wake carries the final message and commits; hosted done means session end. Before F011.
+- `F011-empty-job-advisory` (PLANNED): a job that produced nothing should say so instead of reading DONE. Observed, not theorised. After F017 it reads `commits` and `tool-calls` instead of inferring.
+- `F018-review-handoff` (PLANNED): reviewer is given the candidate commit; verdicts filed as `review-<n>.md`; re-reviews name prior findings.
+- `F019-coordinator-own-hands` (PLANNED): shop-manual threshold for fixing inline instead of spawning. Guidance only.
 - `F013-remote-seat` (PLANNED): one disk, attach don’t clone; docs and seat-shaped guarantees. Before F014.
 - `F014-github-doorbell` (PLANNED): mention or label starts a job on the seat; comment back evidence; merge stays human.
 
