@@ -5,7 +5,6 @@
 - Reliable in-flight control on one seat; a laptop is a window; GitHub may ring the doorbell later.
 
 ## NOW
-- `F016-agent-handoff-map` (ACTIVE): map coordinator ↔ worker ↔ reviewer handoffs; notes only.
 
 ## NEXT
 - `F011-empty-job-advisory` (PLANNED): a job that produced nothing should say so instead of reading DONE. Observed, not theorised.
@@ -14,6 +13,7 @@
 
 ## PROVEN
 
+- `F016-agent-handoff-map` (PROVEN): spawn gives task.md plus preamble; the wake is a pointer, not the work. Notes only.
 - `F015-harness-steering-map` (PROVEN): speech lives in the system prompt per user turn; F008 restack is gone. Notes only.
 - `F006-interactive-managed-updates` (PROVEN): package defaults inherit; leftover hook copies cannot load beside the stub. Reviewed PASS at `236b8e7`.
 - `F010-pane-hosted-jobs` (PROVEN): `limen spawn --tab` runs interactive pi in the job tab; live-tried at `2026-08-15-f010-try-ce97a91f` (`7947b2f`, `755d762`).

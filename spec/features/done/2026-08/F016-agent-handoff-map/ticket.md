@@ -1,6 +1,6 @@
 # F016-agent-handoff-map · How agents hand work to each other
 
-[2026-08-18] [🟠] [ACTIVE] [COORDINATOR] ACTIVE · F016-agent-handoff-map
+[2026-08-18] [🟢] [PROVEN] [COORDINATOR] PROVEN · F016-agent-handoff-map
 
 Status marks are prose: 🔴 PLANNED · 🟠 ACTIVE · 🟢 PROVEN · ⚪ DROPPED. Update the line when the folder moves. Nothing in `limen` parses it.
 
