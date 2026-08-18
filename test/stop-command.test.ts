@@ -240,6 +240,11 @@ test("sleeping descendant discovery delays timeout only through its short bound"
 
 test("proc_pidinfo distinguishes present and confirmed absent PIDs", async () => {
 	const current = await processInfo(process.pid);
+	if (process.platform !== "darwin") {
+		assert.equal(current.kind, "unavailable");
+		assert.equal((await processInfo(999_999_999)).kind, "unavailable");
+		return;
+	}
 	assert.equal(current.kind, "present");
 	if (current.kind !== "present") assert.fail("current process identity must be available");
 	assert.equal(current.process.pid, process.pid);
