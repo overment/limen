@@ -5,6 +5,7 @@
 - Reliable in-flight control on one seat; a laptop is a window; GitHub may ring the doorbell later.
 
 ## NOW
+- `F016-agent-handoff-map` (ACTIVE): map coordinator ↔ worker ↔ reviewer handoffs; notes only.
 
 ## NEXT
 - `F011-empty-job-advisory` (PLANNED): a job that produced nothing should say so instead of reading DONE. Observed, not theorised.
