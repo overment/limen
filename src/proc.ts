@@ -1,8 +1,9 @@
 import { spawn } from "node:child_process";
-import { appendFile, open, readFile, rename, rm } from "node:fs/promises";
+import { appendFile, open, readdir, readFile, rename, rm } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
+import { commitList } from "./git.ts";
 import { hostedAgentStatus, hostedTerminalReason, renameJobTab } from "./herdr.ts";
-import { createStreamParser, type StreamEvent } from "./stream.ts";
+import { assistantText, createStreamParser, type StreamEvent } from "./stream.ts";
 
 const STOP_GRACE_MS = 5_000;
 const ESCAPED_TERM_GRACE_MS = 2_000;
@@ -253,6 +254,7 @@ export async function runHostedSupervisor(): Promise<void> {
 		// Herdr idle/done = unseen background tab. Not job completion.
 		const reason = hostedTerminalReason(status, sessionEnded);
 		if (reason) {
+			await writeHostedResult(jobDir);
 			await finalizeJob(jobDir, "done", reason);
 			return;
 		}
@@ -267,6 +269,31 @@ async function textFile(path: string): Promise<string> {
 		(value) => value.trim(),
 		() => "",
 	);
+}
+/** Last assistant message from the newest hosted session jsonl. A session that died mid-turn leaves no result; that absence is information. */
+async function writeHostedResult(jobDir: string): Promise<void> {
+	try {
+		const newest = (await readdir(`${jobDir}/session`))
+			.filter((name) => name.endsWith(".jsonl"))
+			.sort()
+			.at(-1);
+		if (!newest) return;
+		let last = "";
+		for (const line of (await readFile(`${jobDir}/session/${newest}`, "utf8")).split("\n")) {
+			if (!line.trim()) continue;
+			try {
+				const entry: unknown = JSON.parse(line);
+				if (typeof entry !== "object" || entry === null || (entry as Record<string, unknown>).type !== "message") continue;
+				const text = assistantText((entry as Record<string, unknown>).message);
+				if (text) last = text;
+			} catch {
+				// Not a JSON line; skip.
+			}
+		}
+		if (last) await atomicWrite(`${jobDir}/result`, `${last}\n`);
+	} catch {
+		// Result capture is advisory; the job record and branch remain the source of truth.
+	}
 }
 export async function runInternalJob(): Promise<void> {
 	const jobDir = requiredEnvironment("LIMEN_JOB_DIR");
@@ -316,7 +343,7 @@ export async function runInternalJob(): Promise<void> {
 	// A job is a detached process, not a Herdr pane; inherited Herdr context would misreport the coordinator's pane.
 	for (const name of Object.keys(childEnvironment)) if (name.startsWith("HERDR_")) delete childEnvironment[name];
 	const parser = createStreamParser();
-	const seen = { activity: "" };
+	const seen = { activity: "", assistant: "" };
 	const failLog = (error: unknown) => appendLimenLog(jobDir, `log write failed: ${error instanceof Error ? error.message : String(error)}`).catch(() => {});
 	const apply = (events: readonly StreamEvent[]) => {
 		pending = pending
@@ -366,8 +393,11 @@ export async function runInternalJob(): Promise<void> {
 	} else if (stopRequested || result.signal === "SIGTERM" || result.signal === "SIGKILL") {
 		await finalizeJob(jobDir, "stopped", "process group interrupted");
 	} else if (result.error) await finalizeJob(jobDir, "failed", result.error.message);
-	else if (result.code === 0) await finalizeJob(jobDir, "done", "pi exited 0");
-	else await finalizeJob(jobDir, "failed", `worker exited with code ${result.code ?? "unknown"}`);
+	else if (result.code === 0) {
+		// The last assistant message is the worker's handoff; only a completed turn earns a result file.
+		if (seen.assistant) await atomicWrite(`${jobDir}/result`, `${seen.assistant}\n`).catch(() => {});
+		await finalizeJob(jobDir, "done", "pi exited 0");
+	} else await finalizeJob(jobDir, "failed", `worker exited with code ${result.code ?? "unknown"}`);
 }
 export async function failInternalJob(error: unknown): Promise<void> {
 	const jobDir = process.env.LIMEN_JOB_DIR;
@@ -376,12 +406,20 @@ export async function failInternalJob(error: unknown): Promise<void> {
 }
 export async function finalizeJob(jobDir: string, state: "done" | "failed" | "stopped", detail: string): Promise<void> {
 	await appendLimenLog(jobDir, `${state}: ${detail}`);
+	await recordCommits(jobDir).catch(() => {});
 	await renameJobTab(jobDir, state);
 	await atomicWrite(`${jobDir}/finished-at`, `${new Date().toISOString()}\n`);
 	await atomicWrite(`${jobDir}/state`, `${state}\n`);
 	await rm(`${jobDir}/pid`, { force: true });
 }
-async function recordEvents(jobDir: string, events: readonly StreamEvent[], nextCount: () => number, seen: { activity: string }): Promise<void> {
+/** What landed on the branch since spawn recorded `base`; empty is a fact, absence means it could not be measured. */
+async function recordCommits(jobDir: string): Promise<void> {
+	const [base, branch, worktree] = await Promise.all([textFile(`${jobDir}/base`), textFile(`${jobDir}/branch`), textFile(`${jobDir}/worktree`)]);
+	if (!base || !branch || !worktree) return;
+	const commits = commitList(worktree, base, branch);
+	if (commits !== undefined) await atomicWrite(`${jobDir}/commits`, commits ? `${commits}\n` : "");
+}
+async function recordEvents(jobDir: string, events: readonly StreamEvent[], nextCount: () => number, seen: { activity: string; assistant: string }): Promise<void> {
 	for (const event of events) {
 		if (event.kind === "tool") {
 			seen.activity = "tool";
@@ -392,6 +430,9 @@ async function recordEvents(jobDir: string, events: readonly StreamEvent[], next
 		} else if (event.kind === "activity") {
 			await atomicWrite(`${jobDir}/activity`, `${event.name}\n`);
 			if (seen.activity !== event.name) await appendFile(`${jobDir}/log`, `${(seen.activity = event.name)}\n`);
+		} else if (event.kind === "assistant") {
+			seen.assistant = event.text;
+			await appendFile(`${jobDir}/log`, `${event.text}\n`);
 		} else await appendFile(`${jobDir}/log`, `${event.line}\n`);
 	}
 }

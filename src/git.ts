@@ -69,6 +69,13 @@ export function removeWorktree(cwd: string, path: string): void {
 export function pruneWorktrees(cwd: string): void {
 	requireGit(cwd, ["worktree", "prune"]);
 }
+export function headCommit(cwd: string): string {
+	return requireGit(cwd, ["rev-parse", "HEAD"]).stdout.trim();
+}
+export function commitList(cwd: string, base: string, branch: string): string | undefined {
+	const result = git(cwd, ["log", "--oneline", `${base}..${branch}`]);
+	return result.status === 0 ? result.stdout.trimEnd() : undefined;
+}
 export function liveDiffstat(cwd: string, branch: string): string {
 	const result = git(cwd, ["diff", "--stat", `HEAD...${branch}`]);
 	return result.status === 0 ? result.stdout.trim() : `(unavailable: ${result.stderr.trim() || "git diff failed"})`;

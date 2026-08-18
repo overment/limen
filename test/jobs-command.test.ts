@@ -59,6 +59,31 @@ test("jobs tails a rambling log and recognizes historical Control terminal lines
 	assert.doesNotMatch(result.stdout, /noise-0-/);
 });
 
+test("jobs detail shows result and commits for a terminal job that has them", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	limen(scratch, "init");
+	const job = join(scratch.root, ".limen/jobs/finished");
+	await mkdir(job);
+	await writeFile(join(job, "task.md"), "finish\n");
+	await writeFile(join(job, "state"), "done\n");
+	await writeFile(join(job, "label"), "F017 finished\n");
+	await writeFile(join(job, "branch"), "main\n");
+	await writeFile(join(job, "log"), "done\n");
+	await writeFile(join(job, "commits"), "abc1234 the candidate\n");
+	await writeFile(join(job, "result"), "final summary line\nsecond line\n");
+	const detail = limen(scratch, "jobs", "finished");
+	assert.equal(detail.status, 0, detail.stderr);
+	assert.match(detail.stdout, /commits:\n    abc1234 the candidate/);
+	assert.match(detail.stdout, /result:\n    final summary line\n    second line/);
+	// The compact snapshot stays compact: no result or commits blocks there.
+	await writeFile(join(job, "state"), "running\n");
+	await writeFile(join(job, "activity"), "think\n");
+	const snapshot = limen(scratch, "jobs");
+	assert.equal(snapshot.status, 0, snapshot.stderr);
+	assert.doesNotMatch(snapshot.stdout, /result:|commits:/);
+});
+
 test("jobs lists running first, then newest started-at", async (context) => {
 	const scratch = await scratchRepo();
 	context.after(scratch.cleanup);

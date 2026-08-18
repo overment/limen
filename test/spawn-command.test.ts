@@ -33,6 +33,11 @@ test("spawn creates isolated branch, canonical record, runs pi, and resumes its 
 	assert.ok(Number.isFinite(Date.parse((await readFile(join(job, "started-at"), "utf8")).trim())));
 	assert.ok(Number.isFinite(Date.parse((await readFile(join(job, "finished-at"), "utf8")).trim())));
 	await assert.rejects(readFile(join(job, "pid")));
+	// F017: the wake carries what landed — base at spawn, commits and the final assistant message at finalize.
+	assert.equal((await readFile(join(job, "base"), "utf8")).trim(), git(scratch.root, "rev-parse", "main"));
+	assert.equal(await readFile(join(job, "result"), "utf8"), "fake pi completed\n");
+	const commits = await readFile(join(job, "commits"), "utf8");
+	assert.match(commits, /^[0-9a-f]+ candidate\n$/);
 	const worktreeLine = git(scratch.root, "worktree", "list", "--porcelain")
 		.split("\n")
 		.find((line) => line.includes(id));
@@ -69,6 +74,7 @@ test("spawn creates isolated branch, canonical record, runs pi, and resumes its 
 	assert.equal(resumed.status, 0, resumed.stderr);
 	const resumedId = onlyJobId(resumed.stdout);
 	await waitForState(scratch.root, resumedId, "done");
+	assert.equal((await readFile(join(scratch.root, ".limen/jobs", resumedId, "base"), "utf8")).trim(), git(scratch.root, "rev-parse", `limen/${id}`));
 	assert.equal(await readFile(join(worktree, "uncommitted.txt"), "utf8"), "keep me\n");
 });
 
@@ -118,6 +124,8 @@ test("review gets fresh detached worktree and reviewer birth text", async (conte
 	assert.equal(reviewTask, `inspect candidate\n\nCandidate commit: ${candidateSha}.\n`);
 	await assert.rejects(readFile(join(scratch.root, ".limen/jobs", worker, "candidate")));
 	assert.match(limen(scratch, "jobs", review).stdout, new RegExp(`candidate ${candidateSha}`));
+	assert.equal((await readFile(join(reviewJob, "base"), "utf8")).trim(), git(scratch.root, "rev-parse", branch));
+	assert.equal(await readFile(join(reviewJob, "commits"), "utf8"), "");
 	const worktree = git(scratch.root, "worktree", "list", "--porcelain")
 		.split("\n\n")
 		.find((block) => block.includes(review));

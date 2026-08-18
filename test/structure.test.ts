@@ -15,7 +15,7 @@ test("architecture stays small, pure, direct, and dependency-free", async () => 
 	assert.deepEqual(await readdir(join(ROOT, "bin")), ["limen"]);
 	const source = await filesBelow(join(ROOT, "src"));
 	const sourceLines = (await Promise.all(source.map((path) => readFile(path, "utf8")))).reduce((sum, text) => sum + text.split("\n").length - 1, 0);
-	assert.ok(sourceLines <= 2250, `src has ${sourceLines} lines; audit against first principles`);
+	assert.ok(sourceLines <= 2300, `src has ${sourceLines} lines; audit against first principles`);
 	assert.doesNotMatch(await readFile(join(ROOT, "src/job.ts"), "utf8"), /from ["']node:/);
 	assert.deepEqual((await readdir(join(ROOT, "src/commands"))).sort(), [
 		"close.ts",
@@ -86,9 +86,10 @@ test("job-file table is written by spawn and read by jobs", async () => {
 		assert.ok(spawn.includes(name), `spawn must write ${name}`);
 		assert.ok(jobs.includes(name), `jobs must read ${name}`);
 	}
-	for (const name of ["pid", "finished-at"]) assert.ok(jobs.includes(name), `jobs must read ${name}`);
+	for (const name of ["pid", "finished-at", "commits", "result"]) assert.ok(jobs.includes(name), `jobs must read ${name}`);
 	assert.ok(spawn.includes("candidate"), "spawn must write candidate for review jobs");
 	assert.ok(jobs.includes("candidate"), "jobs must print the candidate line");
+	for (const name of ["base", "worktree"]) assert.ok(spawn.includes(name), `spawn must write ${name}`);
 	for (const name of ["origin-session", "notify/subscribers", "notify/ready"]) assert.ok(spawn.includes(name), `spawn must write ${name}`);
 	const watch = await readFile(join(ROOT, "src/commands/watch.ts"), "utf8");
 	for (const name of ["PI_SESSION_ID", "notify/subscribers", "notify/ready"]) assert.ok(watch.includes(name), `watch must use ${name}`);

@@ -155,7 +155,7 @@ export default function limenWake(pi: PiApi): void {
 		const routed = claimDelivery(job, slot, eligible, () => {
 			const route = fallback ? " This completion was routed here because no subscribed coordinator received it." : "";
 			const location = repo ? ` in repository ${repo}` : "";
-			const message = `Limen job ${JSON.stringify(label)} is ${state} (${id}) on branch ${branch}${location}.${route} Inspect the job record, branch diff and commits, log/session, and relevant checks. Use the accepted ticket intent to take the next safe step: merge acceptable reviewed work, or resume focused fixes and re-review. Keep the user informed; ask only when genuine product ambiguity, a scope or risk tradeoff, or an irreversible action needs a human decision.`;
+			const message = `Limen job ${JSON.stringify(label)} is ${state} (${id}) on branch ${branch}${location}.${route} Inspect the job record, branch diff and commits, log/session, and relevant checks. Use the accepted ticket intent to take the next safe step: merge acceptable reviewed work, or resume focused fixes and re-review. Keep the user informed; ask only when genuine product ambiguity, a scope or risk tradeoff, or an irreversible action needs a human decision.${handoffExcerpt(job)}`;
 			// Toast always — steers alone are easy to miss on a busy coordinator, and workers' steer inbox is not this session.
 			try {
 				session?.ui.notify(`limen: ${label} is ${state} (${id})`, "info");
@@ -267,6 +267,21 @@ export default function limenWake(pi: PiApi): void {
 			commandContext.ui.notify(`limen wake ${muted ? "off" : "on"}${active ? "" : " (inactive here)"}`, "info");
 		},
 	});
+}
+
+/** Bounded commits and final-message excerpts; either is omitted when its file is absent — that absence is information. */
+function handoffExcerpt(job: string): string {
+	const sections: string[] = [];
+	if (existsSync(join(job, "commits"))) {
+		const lines = text(join(job, "commits")).split("\n").filter(Boolean);
+		sections.push(lines.length ? `Commits:\n${lines.slice(0, 10).join("\n")}${lines.length > 10 ? `\n… ${lines.length - 10} more` : ""}` : "Commits: none");
+	}
+	const result = text(join(job, "result"));
+	if (result) {
+		const head = result.split("\n").slice(0, 15).join("\n").slice(0, 1200);
+		sections.push(`Final message:\n${head}${head.length < result.length ? "\n… (full text in the job record)" : ""}`);
+	}
+	return sections.length ? `\n\n${sections.join("\n\n")}` : "";
 }
 
 function runningDisplay(jobs: string, session: string): { readonly status: string; readonly title: string; readonly pulses: readonly Pulse[] } | undefined {

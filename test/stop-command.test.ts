@@ -335,15 +335,29 @@ test("confirmed absence after TERM needs neither KILL nor cleanup", async (conte
 });
 
 test("stop interrupts a process group and is idempotent", async (context) => {
-	const scratch = await scratchRepo(stubbornPi);
+	// Emit a last assistant message, then hang: stop must not copy that text into result.
+	const talkThenWait = `#!/usr/bin/env node
+process.on("SIGTERM", () => {});
+console.log(JSON.stringify({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text: "partial answer" }] } }));
+setInterval(() => {}, 1000);
+`;
+	const scratch = await scratchRepo(talkThenWait);
 	context.after(scratch.cleanup);
 	limen(scratch, "init");
 	const id = onlyJobId(limen(scratch, "spawn", "wait").stdout);
+	const jobDir = join(scratch.root, `.limen/jobs/${id}`);
+	const seenBy = Date.now() + 5_000;
+	while (Date.now() < seenBy) {
+		if ((await readFile(join(jobDir, "log"), "utf8").catch(() => "")).includes("partial answer")) break;
+		await new Promise((resolve) => setTimeout(resolve, 25));
+	}
+	assert.match(await readFile(join(jobDir, "log"), "utf8"), /partial answer/);
 	const stopped = limen(scratch, "stop", id, "test stop");
 	assert.equal(stopped.status, 0, stopped.stderr);
 	await waitForState(scratch.root, id, "stopped");
 	assert.ok(Number.isFinite(Date.parse((await readFile(join(scratch.root, `.limen/jobs/${id}/finished-at`), "utf8")).trim())));
 	await assert.rejects(readFile(join(scratch.root, `.limen/jobs/${id}/pid`)));
+	await assert.rejects(readFile(join(scratch.root, `.limen/jobs/${id}/result`)), "stop must not fabricate a result file");
 	await new Promise((resolve) => setTimeout(resolve, 1_100));
 	await assert.rejects(readFile(join(scratch.root, `.limen/jobs/${id}/cleanup`)), "an ordinary in-group worker needs no cleanup warning");
 	const again = limen(scratch, "stop", id);

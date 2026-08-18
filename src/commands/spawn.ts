@@ -2,7 +2,18 @@ import { randomBytes } from "node:crypto";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { basename, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { addBranchWorktree, addDetachedWorktree, addNewWorktree, branchCommit, branchExists, repoRoot, workspaceRepository, workspaceRoot, worktreeForBranch } from "../git.ts";
+import {
+	addBranchWorktree,
+	addDetachedWorktree,
+	addNewWorktree,
+	branchCommit,
+	branchExists,
+	headCommit,
+	repoRoot,
+	workspaceRepository,
+	workspaceRoot,
+	worktreeForBranch,
+} from "../git.ts";
 import { herdrAvailable, hostedAgentAlive, openHostedTab, openWatchTab, startHostedPi } from "../herdr.ts";
 import { parseDuration } from "../job.ts";
 import { appendLimenLog, atomicWrite, finalizeJob, launchHostedSupervisor, launchWrapper, processGroupAlive, signalProcessGroup, waitForProcessGroup } from "../proc.ts";
@@ -74,6 +85,8 @@ export async function spawnCommand(args: readonly string[], cwd: string): Promis
 		...(candidate ? [writeFile(`${jobDir}/candidate`, `${candidate}\n`, { flag: "wx", flush: true })] : []),
 		writeFile(`${jobDir}/label`, `${options.label}\n`, { flag: "wx", flush: true }),
 		writeFile(`${jobDir}/branch`, `${branch}\n`, { flag: "wx", flush: true }),
+		writeFile(`${jobDir}/worktree`, `${worktree}\n`, { flag: "wx", flush: true }),
+		writeFile(`${jobDir}/base`, `${headCommit(worktree)}\n`, { flag: "wx", flush: true }),
 		...(workspace ? [writeFile(`${jobDir}/repo`, `${options.repo}\n`, { flag: "wx", flush: true })] : []),
 		writeFile(`${jobDir}/started-at`, `${new Date().toISOString()}\n`, { flag: "wx", flush: true }),
 		writeFile(`${jobDir}/tool-calls`, "0\n", { flag: "wx", flush: true }),

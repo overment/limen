@@ -75,6 +75,55 @@ test("wake ignores history, announces start, and steers once on terminal change"
 	assert.deepEqual((await import("node:fs/promises").then(({ readdir }) => readdir(join(jobs, "new")))).sort(), ["activity", "branch", "label", "last-tool", "notify", "state"]);
 });
 
+test("a completion wake carries bounded commits and the worker's final message", async (context) => {
+	stashEnv(context, "LIMEN_JOB", undefined);
+	stashEnv(context, "LIMEN_HERDR", "0");
+	const root = await import("node:fs/promises").then(({ mkdtemp }) => mkdtemp(join(process.env.TMPDIR ?? "/tmp", "limen-wake-handoff-")));
+	context.after(() => import("node:fs/promises").then(({ rm }) => rm(root, { recursive: true, force: true })));
+	await mkdir(join(root, ".agents/limen"), { recursive: true });
+	const jobs = join(root, ".limen/jobs");
+	const handlers = new Map<string, (event: unknown, context: TestContext) => void>();
+	const messages: string[] = [];
+	limenWake({
+		on(event, handler) {
+			handlers.set(event, handler);
+		},
+		sendUserMessage(content) {
+			messages.push(content);
+		},
+	});
+	const session = { cwd: root, isIdle: () => true, sessionManager: sessionManager("coordinator-a"), ui: { notify() {}, setStatus() {} } };
+	handlers.get("session_start")?.({}, session);
+	context.after(() => handlers.get("session_shutdown")?.({}, session));
+	await mkdir(join(jobs, "handoff"), { recursive: true });
+	await writeFile(join(jobs, "handoff/label"), "F017 handoff\n");
+	await writeFile(join(jobs, "handoff/branch"), "limen/handoff\n");
+	await subscribe(jobs, "handoff", "coordinator-a");
+	await writeFile(join(jobs, "handoff/state"), "running\n");
+	const commitLines = Array.from({ length: 12 }, (_, index) => `${(index + 1).toString(16).padStart(7, "0")} commit ${index + 1}`);
+	await writeFile(join(jobs, "handoff/commits"), `${commitLines.join("\n")}\n`);
+	const resultLines = Array.from({ length: 20 }, (_, index) => `result line ${index + 1}`);
+	await writeFile(join(jobs, "handoff/result"), `${resultLines.join("\n")}\n`);
+	await writeFile(join(jobs, "handoff/state"), "done\n");
+	await waitUntil(() => messages.length === 1);
+	const wake = messages[0] ?? "";
+	assert.match(wake, /Commits:\n0000001 commit 1/);
+	assert.match(wake, /000000a commit 10\n… 2 more/);
+	assert.doesNotMatch(wake, /commit 11/);
+	assert.match(wake, /Final message:\nresult line 1\n/);
+	assert.match(wake, /result line 15\n…/);
+	assert.doesNotMatch(wake, /result line 16/);
+	assert.match(wake, /Inspect the job record/, "the pointer sentence stays");
+	// A stopped job without commits or result keeps a plain state-only wake.
+	await mkdir(join(jobs, "bare"), { recursive: true });
+	await writeFile(join(jobs, "bare/label"), "F017 bare\n");
+	await writeFile(join(jobs, "bare/branch"), "limen/bare\n");
+	await subscribe(jobs, "bare", "coordinator-a");
+	await writeFile(join(jobs, "bare/state"), "stopped\n");
+	await waitUntil(() => messages.length === 2);
+	assert.doesNotMatch(messages[1] ?? "", /Commits:|Final message:/);
+});
+
 test("wake shows existing unwatched jobs without claiming their notifications", async (context) => {
 	stashEnv(context, "LIMEN_JOB", undefined);
 	stashEnv(context, "LIMEN_HERDR", "0");

@@ -56,6 +56,35 @@ test("spawn in Herdr is hosted without --tab; --detached keeps a watch tab", asy
 	assert.match(await readFile(join(job, "log"), "utf8"), /hosted agent done|hosted agent ended/);
 });
 
+test("a hosted job finalizes on session end, never on unseen idle after tools", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	assert.equal(limen(scratch, "init").status, 0);
+	const herdr = await installHostedFakeHerdr(scratch.root, scratch.fakeBin);
+	const env = { HERDR_ENV: "1", LIMEN_HERDR: herdr.bin, FAKE_HERDR_STATE: herdr.dir, FAKE_HERDR_PERSIST: "1", HERDR_TAB_ID: "coord:t0" };
+	const launched = limenWithEnv(scratch, env, "spawn", "--label", "F017 hosted end", "work then idle");
+	assert.equal(launched.status, 0, launched.stderr);
+	const id = onlyJobId(launched.stdout);
+	const job = join(scratch.root, ".limen/jobs", id);
+	// Idle after tools must not finish the job: the F015 regression was `done` at 90s while the session kept working.
+	await writeFile(join(job, "tool-calls"), "5\n");
+	await new Promise((resolve) => setTimeout(resolve, 3_000));
+	assert.equal((await readFile(join(job, "state"), "utf8")).trim(), "running", "unseen idle after tools must not read done");
+	// The hosted hook (hook/hosted.ts) writes session-ended at pi session_shutdown; the supervisor then captures the result and finalizes.
+	await mkdir(join(job, "session"), { recursive: true });
+	const entries = [
+		JSON.stringify({ type: "session", version: 3 }),
+		JSON.stringify({ type: "message", message: { role: "assistant", content: [{ type: "text", text: "early note" }] } }),
+		JSON.stringify({ type: "message", message: { role: "toolResult", content: [{ type: "text", text: "tool output" }] } }),
+		JSON.stringify({ type: "message", message: { role: "assistant", content: [{ type: "text", text: "hosted final summary" }] } }),
+	];
+	await writeFile(join(job, "session/2026-01-01T00-00-00-000Z_abc.jsonl"), `${entries.join("\n")}\n`);
+	await writeFile(join(job, "session-ended"), `${new Date().toISOString()}\n`);
+	await waitForState(scratch.root, id, "done");
+	assert.match(await readFile(join(job, "log"), "utf8"), /hosted session ended/);
+	assert.equal(await readFile(join(job, "result"), "utf8"), "hosted final summary\n");
+});
+
 async function installHostedFakeHerdr(root: string, fakeBin: string): Promise<{ readonly dir: string; readonly bin: string; readonly calls: string }> {
 	const dir = join(root, "fake-herdr");
 	await mkdir(dir);
@@ -120,6 +149,11 @@ if (args[0] === "workspace" && args[1] === "list") {
   const target = args[2];
   const agent = state.agents[target];
   if (!agent) fail("agent_not_found", "missing");
+  if (process.env.FAKE_HERDR_PERSIST === "1") {
+    // A background tab Herdr never focused reports unseen-idle; the agent stays alive.
+    ok({ type: "agent_info", agent_status: "idle", pane_id: target });
+    return;
+  }
   agent.ticks = (agent.ticks || 0) + 1;
   if (agent.ticks >= 2) {
     delete state.agents[target];

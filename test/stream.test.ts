@@ -9,7 +9,7 @@ test("json events become a human log and last-tool names", () => {
 		{ kind: "tool", name: "read", detail: "src/game.ts" },
 	]);
 	assert.deepEqual(parser.push('{"type":"tool_execution_end"}\n'), [{ kind: "activity", name: "wait" }]);
-	assert.deepEqual(parser.push('{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"done"}]}}\n'), [{ kind: "log", line: "done" }]);
+	assert.deepEqual(parser.push('{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"done"}]}}\n'), [{ kind: "assistant", text: "done" }]);
 	assert.deepEqual(parser.push("plain diagnostic\n"), [{ kind: "log", line: "plain diagnostic" }]);
 	assert.deepEqual(parser.push("{}\n"), []);
 	assert.deepEqual(parser.flush(), []);
