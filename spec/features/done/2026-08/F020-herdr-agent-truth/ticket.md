@@ -1,6 +1,6 @@
 # F020-herdr-agent-truth · The harness believes what Herdr actually answers about a hosted agent
 
-[2026-08-19] [🟠] [ACTIVE] [COORDINATOR] ACTIVE · F020-herdr-agent-truth
+[2026-08-19] [🟢] [PROVEN] [COORDINATOR] PROVEN · F020-herdr-agent-truth
 
 ## Outcome
 
