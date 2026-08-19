@@ -3,7 +3,8 @@ import { chmod, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { hostedAgentStatus, hostedTerminalReason, stopHostedAgent } from "../src/herdr.ts";
+import { hostedAgentName } from "../src/commands/spawn.ts";
+import { hostedAgentStatus, hostedTerminalReason, startHostedPi, stopHostedAgent } from "../src/herdr.ts";
 import { limen, limenWithEnv, onlyJobId, scratchRepo, waitForState } from "./scratch.ts";
 
 test("hosted completion is session end or vanished agent, not Herdr idle", () => {
@@ -93,7 +94,7 @@ console.log(JSON.stringify({ result: { type: "ok" } }));
 	process.env.LIMEN_HERDR = bin;
 	try {
 		stopHostedAgent("w1:p1");
-		assert.equal(await readFile(calls, "utf8"), "agent send-keys w1:p1 ctrl+c\n");
+		assert.equal(await readFile(calls, "utf8"), "agent send-keys w1:p1 ctrl+c\nagent send-keys w1:p1 ctrl+c\n");
 	} finally {
 		if (previous === undefined) delete process.env.LIMEN_HERDR;
 		else process.env.LIMEN_HERDR = previous;
@@ -257,6 +258,151 @@ test("garbage agent get never counts toward missing", async (context) => {
 	await waitForState(scratch.root, id, "done");
 });
 
+test("hostedAgentName keeps the hex suffix when the slug is long", () => {
+	const a = hostedAgentName("2026-08-19-abcdefghijklmnopqrstuvwxyz-aaaaaaaa");
+	const b = hostedAgentName("2026-08-19-abcdefghijklmnopqrstuvwxyz-bbbbbbbb");
+	assert.equal(a, "limen-abcdefghijklmnopq-aaaaaaaa");
+	assert.equal(b, "limen-abcdefghijklmnopq-bbbbbbbb");
+	assert.equal(a.length, 32);
+	assert.notEqual(a, b);
+});
+
+test("startHostedPi recovery does not adopt another pane by name", async () => {
+	await withFakeHerdr(
+		`const args = process.argv.slice(2);
+const ok = (result) => console.log(JSON.stringify({ result }));
+const fail = (code, message) => { console.log(JSON.stringify({ error: { code, message } })); process.exit(1); };
+if (args[0] === "pane" && args[1] === "process-info") {
+  ok({ type: "pane_process_info", process_info: { foreground_process_group_id: 1, shell_pid: 1, foreground_processes: [{ name: "zsh", pid: 1 }] } });
+} else if (args[0] === "tab" && args[1] === "focus") {
+  ok({ type: "tab_focused" });
+} else if (args[0] === "agent" && args[1] === "start") {
+  fail("agent_already_exists", "name taken");
+} else if (args[0] === "agent" && args[1] === "get") {
+  fail("agent_not_found", "missing");
+} else if (args[0] === "agent" && args[1] === "list") {
+  ok({ type: "agent_list", agents: [{ name: "limen-same", pane_id: "other:p0", agent_status: "working" }] });
+} else process.exit(1);
+`,
+		() => {
+			assert.throws(() => startHostedPi({ place: { workspace: "w1", tab: "w1:t1", pane: "w1:p1", mode: "hosted" }, name: "limen-same", args: ["--approve"] }));
+		},
+	);
+});
+
+test("spawn --tab --timeout errors before creating a job", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	assert.equal(limen(scratch, "init").status, 0);
+	const refused = limen(scratch, "spawn", "--tab", "--timeout", "20m", "do work");
+	assert.equal(refused.status, 1);
+	assert.match(refused.stderr, /hosted jobs have no timeout/);
+	assert.deepEqual(await readdir(join(scratch.root, ".limen/jobs")), []);
+});
+
+test("hosted stop records stopped after two interrupts", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	assert.equal(limen(scratch, "init").status, 0);
+	const herdr = await installHostedFakeHerdr(scratch.root, scratch.fakeBin);
+	const env = { HERDR_ENV: "1", LIMEN_HERDR: herdr.bin, FAKE_HERDR_STATE: herdr.dir, FAKE_HERDR_PERSIST: "1", HERDR_TAB_ID: "coord:t0" };
+	const launched = limenWithEnv(scratch, env, "spawn", "--label", "F021 stop", "stay hosted");
+	assert.equal(launched.status, 0, launched.stderr);
+	const id = onlyJobId(launched.stdout);
+	const job = join(scratch.root, ".limen/jobs", id);
+	const stopped = limenWithEnv(scratch, env, "stop", id, "please stop");
+	assert.equal(stopped.status, 0, stopped.stderr);
+	await waitForState(scratch.root, id, "stopped");
+	assert.equal((await readFile(join(job, "stop-requested"), "utf8")).trim(), "please stop");
+	assert.match(await readFile(join(job, "log"), "utf8"), /stopped: please stop/);
+	assert.equal([...(await readFile(herdr.calls, "utf8")).matchAll(/agent send-keys \S+ ctrl\+c/g)].length, 2);
+});
+
+test("hosted stop leaves running when the agent ignores interrupts", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	assert.equal(limen(scratch, "init").status, 0);
+	const herdr = await installHostedFakeHerdr(scratch.root, scratch.fakeBin);
+	const env = {
+		HERDR_ENV: "1",
+		LIMEN_HERDR: herdr.bin,
+		FAKE_HERDR_STATE: herdr.dir,
+		FAKE_HERDR_PERSIST: "1",
+		FAKE_HERDR_STUBBORN: "1",
+		HERDR_TAB_ID: "coord:t0",
+		LIMEN_HOSTED_STOP_WAIT_MS: "400",
+	};
+	const launched = limenWithEnv(scratch, env, "spawn", "--label", "F021 stubborn", "stay hosted");
+	assert.equal(launched.status, 0, launched.stderr);
+	const id = onlyJobId(launched.stdout);
+	const job = join(scratch.root, ".limen/jobs", id);
+	const stopped = limenWithEnv(scratch, env, "stop", id, "please stop");
+	assert.equal(stopped.status, 1, stopped.stdout);
+	assert.match(stopped.stderr, /agent is still up; closing the tab ends it/);
+	assert.equal((await readFile(join(job, "state"), "utf8")).trim(), "running");
+	assert.equal((await readFile(join(job, "stop-requested"), "utf8")).trim(), "please stop");
+	assert.match(await readFile(join(job, "log"), "utf8"), /stop requested: please stop/);
+	await writeFile(join(job, "session-ended"), `${new Date().toISOString()}\n`);
+	await waitForState(scratch.root, id, "stopped");
+});
+
+test("hosted stop finalizes when the supervisor is gone and the agent is missing", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	assert.equal(limen(scratch, "init").status, 0);
+	const herdr = await installHostedFakeHerdr(scratch.root, scratch.fakeBin);
+	const env = { HERDR_ENV: "1", LIMEN_HERDR: herdr.bin, FAKE_HERDR_STATE: herdr.dir, FAKE_HERDR_PERSIST: "1", HERDR_TAB_ID: "coord:t0" };
+	const launched = limenWithEnv(scratch, env, "spawn", "--label", "F021 orphan", "stay hosted");
+	assert.equal(launched.status, 0, launched.stderr);
+	const id = onlyJobId(launched.stdout);
+	const job = join(scratch.root, ".limen/jobs", id);
+	const pid = Number((await readFile(join(job, "pid"), "utf8")).trim());
+	process.kill(pid, "SIGKILL");
+	const goneBy = Date.now() + 2_000;
+	while (Date.now() < goneBy) {
+		try {
+			process.kill(pid, 0);
+			await new Promise((resolve) => setTimeout(resolve, 25));
+		} catch {
+			break;
+		}
+	}
+	const statePath = join(herdr.dir, "state.json");
+	const fake = JSON.parse(await readFile(statePath, "utf8")) as { agents: Record<string, unknown> };
+	delete fake.agents[(await readFile(join(job, "herdr/agent"), "utf8")).trim()];
+	await writeFile(statePath, JSON.stringify(fake));
+	const stopped = limenWithEnv(scratch, env, "stop", id, "orphan stop");
+	assert.equal(stopped.status, 0, stopped.stderr);
+	assert.equal((await readFile(join(job, "state"), "utf8")).trim(), "stopped");
+	assert.match(await readFile(join(job, "log"), "utf8"), /stopped: orphan stop/);
+});
+
+test("two long hosted labels keep distinct agent names", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	assert.equal(limen(scratch, "init").status, 0);
+	const herdr = await installHostedFakeHerdr(scratch.root, scratch.fakeBin);
+	const env = { HERDR_ENV: "1", LIMEN_HERDR: herdr.bin, FAKE_HERDR_STATE: herdr.dir, FAKE_HERDR_PERSIST: "1", HERDR_TAB_ID: "coord:t0" };
+	const label = "abcdefghijklmnopqrstuvwxyz-long";
+	const first = onlyJobId(limenWithEnv(scratch, env, "spawn", "--label", label, "stay hosted").stdout);
+	const second = onlyJobId(limenWithEnv(scratch, env, "spawn", "--label", label, "stay hosted").stdout);
+	const names = [...(await readFile(herdr.calls, "utf8")).matchAll(/agent start (\S+)/g)].map((match) => match[1]);
+	assert.equal(names.length, 2);
+	assert.notEqual(names[0], names[1]);
+	const panes = [first, second].map(async (id) => (await readFile(join(scratch.root, ".limen/jobs", id, "herdr/agent"), "utf8")).trim());
+	const [paneA, paneB] = await Promise.all(panes);
+	assert.notEqual(paneA, paneB);
+	for (const [id, name] of [
+		[first, names[0]],
+		[second, names[1]],
+	] as const) {
+		assert.ok(name && name.length <= 32, name);
+		assert.equal(name.slice(-8), id.slice(-8));
+		await writeFile(join(scratch.root, ".limen/jobs", id, "session-ended"), `${new Date().toISOString()}\n`);
+		await waitForState(scratch.root, id, "done");
+	}
+});
+
 async function withFakeHerdr(source: string, run: () => void | Promise<void>): Promise<void> {
 	const dir = await mkdtemp(join(tmpdir(), "limen-herdr-status-"));
 	const bin = join(dir, "herdr");
@@ -362,7 +508,11 @@ if (args[0] === "workspace" && args[1] === "list") {
   info(agent.status);
 } else if (args[0] === "agent" && args[1] === "send-keys") {
   const target = args[2];
-  if (state.agents[target]) state.agents[target].status = "done";
+  const agent = state.agents[target];
+  if (agent && process.env.FAKE_HERDR_STUBBORN !== "1") {
+    agent.interrupts = (agent.interrupts || 0) + 1;
+    if (agent.interrupts >= 2) delete state.agents[target];
+  }
   writeFileSync(path, JSON.stringify(state));
   ok({ type: "keys_sent" });
 } else fail("unknown", args.join(" "));

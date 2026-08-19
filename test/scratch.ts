@@ -71,6 +71,7 @@ function runLimen(scratch: Scratch, addedEnvironment: NodeJS.ProcessEnv, args: r
 		"LIMEN_PREAMBLE",
 		"LIMEN_TIMEOUT_MS",
 		"LIMEN_HANDSHAKE_MS",
+		"LIMEN_HOSTED_STOP_WAIT_MS",
 		"LIMEN_MODEL",
 		"LIMEN_LABEL",
 		"LIMEN_JOB_LABEL",

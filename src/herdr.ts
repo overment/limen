@@ -52,7 +52,7 @@ export function startHostedPi(input: { readonly place: HerdrPlace; readonly name
 			const started = call(herdr, ["agent", "start", input.name, "--kind", "pi", "--pane", input.place.pane, "--timeout", String(readyMs), "--", ...input.args]);
 			return agentTarget(started) || input.place.pane;
 		} catch (error) {
-			const live = liveHostedTarget(input.place.pane, input.name);
+			const live = liveHostedTarget(input.place.pane);
 			if (live) return live;
 			throw error;
 		}
@@ -78,11 +78,8 @@ export function hostedTerminalReason(status: HostedAgentStatus, sessionEnded: bo
 	if (status === "missing") return "hosted agent ended";
 }
 
-function liveHostedTarget(pane: string, name: string): string | undefined {
-	for (const target of [pane, name]) {
-		const status = hostedAgentStatus(target);
-		if (status !== "missing") return target;
-	}
+function liveHostedTarget(pane: string): string | undefined {
+	if (hostedAgentStatus(pane) !== "missing") return pane;
 	const herdr = herdrBinary();
 	if (!herdr) return;
 	try {
@@ -90,9 +87,7 @@ function liveHostedTarget(pane: string, name: string): string | undefined {
 		if (Array.isArray(agents)) {
 			for (const row of agents) {
 				const agent = asRecord(row);
-				if (agent.pane_id === pane || agent.name === name || agent.tab_id === pane) {
-					return typeof agent.pane_id === "string" ? agent.pane_id : pane;
-				}
+				if (agent.pane_id === pane) return pane;
 			}
 		}
 	} catch {
@@ -170,6 +165,8 @@ export function stopHostedAgent(target: string): void {
 	const herdr = herdrBinary();
 	if (!herdr) return;
 	try {
+		call(herdr, ["agent", "send-keys", target, "ctrl+c"]);
+		spawnSync("sleep", ["0.2"], { stdio: "ignore" });
 		call(herdr, ["agent", "send-keys", target, "ctrl+c"]);
 	} catch {
 		// Best-effort; supervisor finalizes when the agent disappears.

@@ -1,7 +1,7 @@
-import { readFile } from "node:fs/promises";
-import { stopHostedAgent } from "../herdr.ts";
+import { readFile, writeFile } from "node:fs/promises";
+import { hostedAgentStatus, stopHostedAgent } from "../herdr.ts";
 import { resolveJob } from "../lookup.ts";
-import { appendLimenLog, containEscapedDescendants, discoverEscapedDescendants, finalizeJob, signalProcessGroup, waitForProcessGroup } from "../proc.ts";
+import { appendLimenLog, containEscapedDescendants, discoverEscapedDescendants, finalizeJob, processGroupAlive, signalProcessGroup, waitForProcessGroup } from "../proc.ts";
 export async function stopCommand(args: readonly string[], cwd: string): Promise<void> {
 	const query = args[0];
 	if (!query) throw new Error("stop requires a job id");
@@ -15,11 +15,19 @@ export async function stopCommand(args: readonly string[], cwd: string): Promise
 	await appendLimenLog(jobDir, `stop requested: ${reason}`);
 	const hostedTarget = await text(`${jobDir}/herdr/agent`);
 	if (hostedTarget || (await text(`${jobDir}/hosted`))) {
+		await writeFile(`${jobDir}/stop-requested`, `${reason}\n`);
 		if (hostedTarget) stopHostedAgent(hostedTarget);
 		const pid = Number(await text(`${jobDir}/pid`));
-		if (Number.isSafeInteger(pid) && pid > 0) signalProcessGroup(pid, "SIGTERM");
-		await new Promise((resolve) => setTimeout(resolve, 50));
-		if ((await text(`${jobDir}/state`)) === "running") await finalizeJob(jobDir, "stopped", reason);
+		const deadline = Date.now() + (Number(process.env.LIMEN_HOSTED_STOP_WAIT_MS) || 15_000);
+		while ((await text(`${jobDir}/state`)) === "running" && Date.now() < deadline) {
+			const dead = !Number.isSafeInteger(pid) || pid <= 0 || !processGroupAlive(pid);
+			if (dead && (!hostedTarget || hostedAgentStatus(hostedTarget) === "missing")) {
+				await finalizeJob(jobDir, "stopped", reason);
+				break;
+			}
+			await new Promise((resolve) => setTimeout(resolve, 100));
+		}
+		if ((await text(`${jobDir}/state`)) === "running") throw new Error(`${id} agent is still up; closing the tab ends it`);
 		console.log(`stopped ${id}: ${reason}`);
 		return;
 	}

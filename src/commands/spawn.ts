@@ -52,6 +52,7 @@ export async function spawnCommand(args: readonly string[], cwd: string): Promis
 	const options = { ...parsed, tab };
 	if (parsed.tab && parsed.review) throw new Error("--tab does not support --review yet");
 	if (parsed.tab && parsed.detached) throw new Error("--tab and --detached cannot be combined");
+	if (options.tab && parsed.timeoutMs) throw new Error("hosted jobs have no timeout; omit --timeout or use --detached");
 	if (options.tab && !herdr) throw new Error("hosted spawn requires Herdr (HERDR_ENV=1); use --detached for an ordinary job");
 	if (!(process.env.PATH ?? "").split(":").some((dir) => dir && existsSync(`${dir}/pi`))) throw new Error("pi is not on PATH");
 	const model = options.model ?? (process.env[options.review ? "LIMEN_REVIEWER_MODEL" : "LIMEN_WORKER_MODEL"]?.trim() || undefined);
@@ -213,7 +214,7 @@ async function startHosted(input: {
 		await atomicWrite(`${input.jobDir}/state`, "running\n");
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);
-		const recovered = [target, place?.pane, place ? hostedAgentName(input.id) : ""].find((value) => value && hostedAgentAlive(value));
+		const recovered = [target, place?.pane].find((value) => value && hostedAgentAlive(value));
 		if (recovered) {
 			await writeFile(`${input.jobDir}/herdr/agent`, `${recovered}\n`);
 			const supervisorPid = await launchHostedSupervisor({
@@ -346,14 +347,18 @@ function makeJobId(label: string): string {
 	const slug = label.toLowerCase().replace(/[^a-z0-9]+/g, "-");
 	return `${new Date().toISOString().slice(0, 10)}-${slug.replace(/^-|-$/g, "").slice(0, 32) || "job"}-${randomBytes(4).toString("hex")}`;
 }
-/** Herdr agent names: lowercase letter start, [a-z0-9_-], max 32. */
-function hostedAgentName(jobId: string): string {
+/** Herdr agent names: lowercase letter start, [a-z0-9_-], max 32. Slug truncates; hex suffix does not. */
+export function hostedAgentName(jobId: string): string {
+	const hex = /[0-9a-f]{8}$/.exec(jobId)?.[0] ?? "";
 	const slug =
 		jobId
+			.slice(0, hex ? -9 : undefined)
 			.toLowerCase()
+			.replace(/^\d{4}-\d{2}-\d{2}-/, "")
 			.replace(/[^a-z0-9_-]+/g, "-")
-			.replace(/^[^a-z]+/, "") || "job";
-	return `limen-${slug}`.slice(0, 32);
+			.replace(/^[^a-z]+/, "")
+			.slice(0, 17) || "job";
+	return hex ? `limen-${slug}-${hex}` : `limen-${slug}`.slice(0, 32);
 }
 function currentNotificationSession(): string | undefined {
 	const value = process.env.PI_SESSION_ID?.trim();

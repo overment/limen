@@ -268,8 +268,9 @@ export async function runHostedSupervisor(): Promise<void> {
 		else missingStreak = 0;
 		const reason = sessionEnded ? hostedTerminalReason(status, true) : missingStreak >= 3 ? hostedTerminalReason(status, false) : undefined;
 		if (reason) {
-			await writeHostedResult(jobDir);
-			await finalizeJob(jobDir, "done", reason);
+			const requested = await textFile(`${jobDir}/stop-requested`);
+			if (!requested) await writeHostedResult(jobDir);
+			await finalizeJob(jobDir, requested ? "stopped" : "done", requested || reason);
 			return;
 		}
 		await delay(1_000);
