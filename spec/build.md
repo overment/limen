@@ -6,9 +6,7 @@
 
 ## NOW
 
-Original stability sweep is landed. Next is the reaper it unblocked.
-
-- `F025-dead-job-reaper` (ACTIVE): a running job whose process group died reaps to `failed: process group gone` and wakes; recycled pgids cannot fake life on macOS.
+2026-08-18 stability sweep (F020–F026) is on main. Next honesty holes are opt-in.
 
 ## NEXT
 - `F027-hosted-idle-advisory` (PLANNED): a hosted worker idle after tools, or blocked, taps the coordinator once — advisory wake, no state change, nothing auto-closed. After F020.
@@ -19,6 +17,7 @@ Original stability sweep is landed. Next is the reaper it unblocked.
 
 ## PROVEN
 
+- `F025-dead-job-reaper` (PROVEN): dead running jobs reap to `failed: process group gone`. Coordinator-reviewed at `4edcba3`.
 - `F021-hosted-stop-real` (PROVEN): hosted stop observes exit or tells the truth; name suffix kept. Coordinator-reviewed at `c97c02a`.
 - `F026-spawn-preflight` (PROVEN): versions on the job record; loud fail on missing pi / wrong Node. Coordinator-reviewed at `206506c`.
 - `F024-terminal-state-first` (PROVEN): terminal state before Herdr; idempotent finalize; durable stop-reason. Coordinator-reviewed at `4ce24b6`.

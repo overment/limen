@@ -1,6 +1,6 @@
 # F025-dead-job-reaper · A job whose process died stops claiming to run
 
-[2026-08-19] [🟠] [ACTIVE] [COORDINATOR] ACTIVE · F025-dead-job-reaper
+[2026-08-19] [🟢] [PROVEN] [COORDINATOR] PROVEN · F025-dead-job-reaper
 
 ## Outcome
 
