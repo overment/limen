@@ -16,7 +16,7 @@ import {
 } from "../git.ts";
 import { herdrAvailable, hostedAgentAlive, openHostedTab, openWatchTab, startHostedPi } from "../herdr.ts";
 import { parseDuration } from "../job.ts";
-import { appendLimenLog, atomicWrite, finalizeJob, launchHostedSupervisor, launchWrapper, processGroupAlive, signalProcessGroup, waitForProcessGroup } from "../proc.ts";
+import { appendLimenLog, atomicWrite, finalizeJob, launchHostedSupervisor, launchWrapper, liveJob, signalProcessGroup, waitForProcessGroup } from "../proc.ts";
 import { pruneFinishedWorktrees } from "./prune.ts";
 
 type SpawnOptions = {
@@ -38,7 +38,11 @@ type WorktreePlan =
 	| { readonly kind: "reuse"; readonly path: string }
 	| { readonly kind: "add-branch"; readonly path: string; readonly branch: string }
 	| { readonly kind: "add-new"; readonly path: string; readonly branch: string };
-const [HANDSHAKE_MS, HANDSHAKE_POLL_MS] = [2_000, 20];
+const HANDSHAKE_POLL_MS = 20;
+const handshakeMs = (): number => {
+	const raw = Number(process.env.LIMEN_HANDSHAKE_MS);
+	return Number.isFinite(raw) && raw > 0 ? raw : 10_000;
+};
 export async function spawnCommand(args: readonly string[], cwd: string): Promise<void> {
 	const parsed = parseSpawnArgs(args);
 	const herdr = herdrAvailable();
@@ -137,6 +141,13 @@ export async function spawnCommand(args: readonly string[], cwd: string): Promis
 		throw error;
 	}
 	await waitForHandshake(jobDir, wrapperPid);
+	const state = await text(`${jobDir}/state`);
+	if (state !== "running") {
+		const detail = await lastLimenDetail(jobDir);
+		console.log(detail ? `${state} ${options.label}\n${detail}` : `${state} ${options.label}`);
+		console.log(id);
+		return;
+	}
 	console.log(`started ${options.label}`);
 	console.log(id);
 }
@@ -333,13 +344,11 @@ async function liveJobUsesBranch(jobsRoot: string, branch: string, repo?: string
 	}
 	return false;
 }
-async function liveJob(jobDir: string): Promise<boolean> {
-	if ((await text(`${jobDir}/state`)) !== "running") return false;
-	const pid = Number(await text(`${jobDir}/pid`));
-	if (Number.isSafeInteger(pid) && pid > 0 && processGroupAlive(pid)) return true;
-	const agent = await text(`${jobDir}/herdr/agent`);
-	if (!(await text(`${jobDir}/hosted`)) || !agent) return false;
-	return hostedAgentAlive(agent);
+async function lastLimenDetail(jobDir: string): Promise<string> {
+	const line = (await text(`${jobDir}/log`)).split("\n").findLast((entry) => entry.startsWith("[limen ") || entry.startsWith("[control "));
+	if (!line) return "";
+	const close = line.indexOf("] ");
+	return close === -1 ? line : line.slice(close + 2);
 }
 async function text(path: string): Promise<string> {
 	return readFile(path, "utf8").then(
@@ -348,7 +357,7 @@ async function text(path: string): Promise<string> {
 	);
 }
 async function waitForHandshake(jobDir: string, wrapperPid: number): Promise<void> {
-	const deadline = Date.now() + HANDSHAKE_MS;
+	const deadline = Date.now() + handshakeMs();
 	while (Date.now() < deadline) {
 		if ((await text(`${jobDir}/state`)) !== "running" || (await text(`${jobDir}/pid`))) return;
 		await new Promise((resolve) => setTimeout(resolve, HANDSHAKE_POLL_MS));

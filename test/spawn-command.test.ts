@@ -256,3 +256,15 @@ if (args[0] === "workspace" && args[1] === "list") {
 	assert.equal(await readFile(join(job, "herdr/tab"), "utf8"), "w1:t2\n");
 	assert.equal(await readFile(join(job, "herdr/mode"), "utf8"), "watch\n");
 });
+
+test("spawn prints failed when the wrapper dies before writing pid", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	assert.equal(limen(scratch, "init").status, 0);
+	const launched = limenWithEnv(scratch, { LIMEN_PI: "" }, "spawn", "--label", "boom", "do work");
+	assert.equal(launched.status, 0, launched.stderr);
+	assert.match(launched.stdout, /failed boom/);
+	assert.doesNotMatch(launched.stdout, /started/);
+	const id = onlyJobId(launched.stdout);
+	assert.equal((await readFile(join(scratch.root, ".limen/jobs", id, "state"), "utf8")).trim(), "failed");
+});

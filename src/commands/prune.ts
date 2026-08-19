@@ -1,7 +1,7 @@
-import { readdir, readFile, rm } from "node:fs/promises";
+import { readdir, readFile, realpath, rm } from "node:fs/promises";
 import { basename, dirname, resolve } from "node:path";
 import { limenRoot, listWorktrees, pruneWorktrees, removeWorktree, workspaceRepository } from "../git.ts";
-import { processGroupAlive } from "../proc.ts";
+import { liveJob } from "../proc.ts";
 
 export async function pruneCommand(args: readonly string[], cwd: string): Promise<void> {
 	if (args.length) throw new Error("prune takes no arguments");
@@ -11,7 +11,8 @@ export async function pruneCommand(args: readonly string[], cwd: string): Promis
 
 export async function pruneFinishedWorktrees(root: string, keep: readonly string[] = []): Promise<number> {
 	const jobsRoot = `${root}/.limen/jobs`;
-	const keepPaths = new Set(keep.map((path) => resolve(path)));
+	const keepPaths = new Set<string>();
+	for (const path of keep) keepPaths.add(await resolved(path));
 	const repositories = new Set<string>();
 	const entries = await readdir(jobsRoot, { withFileTypes: true }).catch((error: unknown) => {
 		if (typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT") return [];
@@ -24,18 +25,18 @@ export async function pruneFinishedWorktrees(root: string, keep: readonly string
 		const repository = repo ? workspaceRepository(root, repo) : root;
 		repositories.add(repository);
 		if (await liveJob(jobDir)) {
-			const branch = await text(`${jobDir}/branch`);
-			const live = listWorktrees(repository).find((worktree) => worktree.branch === branch);
-			if (live) keepPaths.add(resolve(live.path));
+			const recorded = await text(`${jobDir}/worktree`);
+			if (recorded) keepPaths.add(await resolved(recorded));
 		}
 	}
 	if (repositories.size === 0) repositories.add(root);
 	let removed = 0;
 	for (const repository of repositories) {
-		const worktreeRoot = resolve(`${dirname(repository)}/.${basename(repository)}-limen-worktrees`);
+		const worktreeRoot = await resolved(`${dirname(repository)}/.${basename(repository)}-limen-worktrees`);
+		const primary = await resolved(repository);
 		for (const worktree of listWorktrees(repository)) {
-			const path = resolve(worktree.path);
-			if (path === resolve(repository) || !path.startsWith(`${worktreeRoot}/`) || keepPaths.has(path)) continue;
+			const path = await resolved(worktree.path);
+			if (path === primary || !path.startsWith(`${worktreeRoot}/`) || keepPaths.has(path)) continue;
 			try {
 				removeWorktree(repository, path);
 				removed += 1;
@@ -44,22 +45,23 @@ export async function pruneFinishedWorktrees(root: string, keep: readonly string
 			}
 		}
 		pruneWorktrees(repository);
+		const registered = new Set(await Promise.all(listWorktrees(repository).map((worktree) => resolved(worktree.path))));
 		const leftovers = await readdir(worktreeRoot, { withFileTypes: true }).catch(() => []);
 		for (const leftover of leftovers) {
-			const path = resolve(worktreeRoot, leftover.name);
-			if (keepPaths.has(path)) continue;
+			const path = await resolved(resolve(worktreeRoot, leftover.name));
+			if (keepPaths.has(path) || registered.has(path)) continue;
 			await rm(path, { recursive: true, force: true });
 		}
 	}
 	return removed;
 }
 
-async function liveJob(jobDir: string): Promise<boolean> {
-	if ((await text(`${jobDir}/state`)) !== "running") return false;
-	const pid = Number(await text(`${jobDir}/pid`));
-	return Number.isSafeInteger(pid) && pid > 0 && processGroupAlive(pid);
+function resolved(path: string): Promise<string> {
+	return realpath(path).then(
+		(value) => value,
+		() => resolve(path),
+	);
 }
-
 function text(path: string): Promise<string> {
 	return readFile(path, "utf8").then(
 		(value) => value.trim(),
