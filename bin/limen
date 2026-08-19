@@ -1,5 +1,10 @@
 #!/usr/bin/env node
 
-import { main } from "../src/main.ts";
+const major = Number.parseInt(process.versions.node, 10);
+if (!Number.isFinite(major) || major < 24) {
+	console.error(`limen requires Node.js 24 (this is ${process.versions.node})`);
+	process.exit(1);
+}
 
+const { main } = await import("../src/main.ts");
 await main(process.argv.slice(2));

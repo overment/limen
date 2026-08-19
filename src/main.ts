@@ -49,6 +49,11 @@ usage:
   limen open <id|suffix|label>
   limen close <FNNN>
 Pass a short coordinator instruction, not $(cat ticket.md). The ticket is a pointer, not the prompt.`;
+export function requireNodeMajor(version = process.versions.node): string | undefined {
+	const major = Number.parseInt(version, 10);
+	if (Number.isFinite(major) && major >= 24) return;
+	return `limen requires Node.js 24 (this is ${version})`;
+}
 export async function main(args: readonly string[], cwd = process.cwd()): Promise<void> {
 	try {
 		if (process.env.LIMEN_INTERNAL_RUN === "1") {

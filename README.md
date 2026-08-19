@@ -6,7 +6,7 @@ You talk to one [Pi](https://pi.dev) coordinator. It starts workers and reviewer
 
 > **Experimental.** Commands, prompts, and project files may still change.
 
-Requires macOS or Linux, Node.js 24+, Git, and `pi` on `PATH`. Windows is unsupported.
+Requires macOS or Linux, Node.js 24+, Git, and `pi` on `PATH`. Windows is unsupported. Last known-good: pi 0.84.2, Herdr 0.8.0 — recorded on each job, not a runtime gate.
 
 Jobs can live on an always-on **seat** (a VPS on Tailscale) while your laptop is only a window. See [docs/remote.md](docs/remote.md). The walkthrough we actually ran is [docs/vps.md](docs/vps.md).
 
