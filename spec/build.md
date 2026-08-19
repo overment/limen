@@ -9,7 +9,6 @@
 Stability sweep from the 2026-08-18 reliability review. These three are independent of each other; each is one focused job.
 
 - `F022-prune-protects-live` (ACTIVE): prune keeps live checkouts by the job's own record, not branch match; reviewer worktrees survive spawns; the startup window counts as live; suite stops racing itself.
-- `F023-wake-quiet-fallback` (ACTIVE): a delivered completion never churns the fallback path; the watcher ignores its own bookkeeping; mute mutes toasts; the wake finds the root from a subdirectory.
 
 ## NEXT
 - `F024-terminal-state-first` (PLANNED): terminal state lands before Herdr cosmetics, exactly once; `stop-reason` made durable for F011; unseen steers surfaced at finalize.
@@ -24,6 +23,7 @@ Stability sweep from the 2026-08-18 reliability review. These three are independ
 
 ## PROVEN
 
+- `F023-wake-quiet-fallback` (PROVEN): delivered jobs skip fallback claims; mute silences toasts; wake finds the root from a subdirectory. Reviewed PASS at `9f43458`.
 - `F020-herdr-agent-truth` (PROVEN): nested Herdr envelope, missing debounce, hook owns activity. Reviewed PASS at `2ef9f40`.
 - `F017-completion-handoff` (PROVEN): wake carries the final message and commits; hosted done means session end. Landed at `437a4dc`.
 - `F019-coordinator-own-hands` (PROVEN): shop-manual threshold for fixing inline instead of spawning. Guidance only. Coordinator-written at `da52ae5`.

@@ -1,6 +1,6 @@
 # F023-wake-quiet-fallback · A delivered completion never churns, and mute means mute
 
-[2026-08-19] [🟠] [ACTIVE] [COORDINATOR] ACTIVE · F023-wake-quiet-fallback
+[2026-08-19] [🟢] [PROVEN] [COORDINATOR] PROVEN · F023-wake-quiet-fallback
 
 ## Outcome
 
