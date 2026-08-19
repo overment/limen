@@ -43,6 +43,7 @@ test("finalizeJob writes state before a hanging rename, once, and sweeps leftove
 	await writeFile(join(job, "task.md"), "hang\n");
 	await writeFile(join(job, "log"), "");
 	await writeFile(join(job, "pid"), "1\n");
+	await writeFile(join(job, "born"), "1.000000\n");
 	await writeFile(join(job, "herdr/workspace"), "w1\n");
 	await writeFile(join(job, "herdr/tab"), "w1:t1\n");
 	await writeFile(join(job, "herdr/pane"), "w1:p1\n");
@@ -74,6 +75,7 @@ if (process.argv[2] === "tab" && process.argv[3] === "rename") Atomics.wait(new 
 	assert.equal(await readFile(join(job, "state"), "utf8"), "done\n");
 	await assert.rejects(readFile(join(job, "state.12345.abc.tmp")));
 	await assert.rejects(readFile(join(job, "pid")));
+	await assert.rejects(readFile(join(job, "born")));
 	const log = await readFile(join(job, "log"), "utf8");
 	assert.match(log, /done: pi exited 0; 1 steer\(s\) never delivered/);
 	assert.doesNotMatch(log, /failed: second writer/);

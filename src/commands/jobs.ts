@@ -3,12 +3,13 @@ import { limenRoot, liveDiffstat, workspaceRepository } from "../git.ts";
 import { hostedAgentStatus } from "../herdr.ts";
 import { derivePulse, type Pulse, parseJob, renderJob } from "../job.ts";
 import { resolveJob } from "../lookup.ts";
-import { processGroupAlive } from "../proc.ts";
+import { confirmDeadJobs, processGroupAlive } from "../proc.ts";
 
 export async function jobsCommand(args: readonly string[], cwd: string): Promise<void> {
 	const selection = select(args);
 	const root = limenRoot(cwd),
 		jobsRoot = `${root}/.limen/jobs`;
+	await confirmDeadJobs(jobsRoot);
 	const entries = await readdir(jobsRoot, { withFileTypes: true }).catch((error: unknown) => {
 		if (typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT") return [];
 		throw error;

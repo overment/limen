@@ -47,12 +47,54 @@ export const STARTUP_GRACE_MS = 10 * 60_000;
 export async function liveJob(jobDir: string, now = Date.now()): Promise<boolean> {
 	if ((await textFile(`${jobDir}/state`)) !== "running") return false;
 	const pid = Number(await textFile(`${jobDir}/pid`));
-	if (Number.isSafeInteger(pid) && pid > 0 && processGroupAlive(pid)) return true;
+	const recorded = Number.isSafeInteger(pid) && pid > 0 ? pid : undefined;
+	if (recorded !== undefined && (await wrapperAlive(recorded, await textFile(`${jobDir}/born`)))) return true;
 	const agent = await textFile(`${jobDir}/herdr/agent`);
 	if ((await textFile(`${jobDir}/hosted`)) && agent && hostedAgentAlive(agent)) return true;
-	if (Number.isSafeInteger(pid) && pid > 0) return false;
+	if (recorded !== undefined) return false;
 	const startedAt = Date.parse(await textFile(`${jobDir}/started-at`));
 	return Number.isFinite(startedAt) && now - startedAt < STARTUP_GRACE_MS;
+}
+async function wrapperAlive(pid: number, born: string): Promise<boolean> {
+	if (!processGroupAlive(pid)) return false;
+	if (!born) return true;
+	const outcome = await processInfo(pid);
+	return outcome.kind === "present" ? outcome.process.born === born : outcome.kind !== "absent";
+}
+export async function reapDeadJobs(jobsRoot: string, seen: Map<string, number>, now = Date.now()): Promise<void> {
+	for (const id of await readdir(jobsRoot).catch(() => [] as string[])) {
+		const jobDir = `${jobsRoot}/${id}`;
+		if ((await textFile(`${jobDir}/state`)) !== "running") {
+			seen.delete(id);
+			continue;
+		}
+		const startedAt = Date.parse(await textFile(`${jobDir}/started-at`));
+		const pid = Number(await textFile(`${jobDir}/pid`));
+		if (!Number.isFinite(startedAt) || now - startedAt < STARTUP_GRACE_MS || !Number.isSafeInteger(pid) || pid <= 0 || (await liveJob(jobDir, now))) {
+			seen.delete(id);
+			continue;
+		}
+		const first = seen.get(id);
+		if (first === undefined) {
+			seen.set(id, now);
+			continue;
+		}
+		if (now - first < reapConfirmMs()) continue;
+		if (await textFile(`${jobDir}/hosted`)) await writeHostedResult(jobDir);
+		await finalizeJob(jobDir, "failed", "process group gone");
+		seen.delete(id);
+	}
+}
+export async function confirmDeadJobs(jobsRoot: string): Promise<void> {
+	const seen = new Map<string, number>();
+	await reapDeadJobs(jobsRoot, seen);
+	if (seen.size === 0) return;
+	await delay(reapConfirmMs());
+	await reapDeadJobs(jobsRoot, seen);
+}
+function reapConfirmMs(): number {
+	const raw = Number(process.env.LIMEN_REAP_CONFIRM_MS);
+	return Number.isFinite(raw) && raw > 0 ? raw : 10_000;
 }
 export function signalProcessGroup(pid: number, signal: NodeJS.Signals | 0): "sent" | "missing" | "denied" {
 	return signalTarget(-pid, signal);
@@ -252,7 +294,7 @@ async function launchDetached(environment: Readonly<Record<string, string>>): Pr
 export async function runHostedSupervisor(): Promise<void> {
 	const jobDir = requiredEnvironment("LIMEN_JOB_DIR");
 	const target = requiredEnvironment("LIMEN_HOSTED_TARGET");
-	await atomicWrite(`${jobDir}/pid`, `${process.pid}\n`);
+	await writeHandshake(jobDir);
 	await atomicWrite(`${jobDir}/state`, "running\n");
 	await appendLimenLog(jobDir, "hosted supervisor started (weaker guarantees: no timeout, no tool-call cap, no process containment)");
 	let stopRequested = false;
@@ -282,6 +324,15 @@ async function textFile(path: string): Promise<string> {
 		(value) => value.trim(),
 		() => "",
 	);
+}
+async function writeHandshake(jobDir: string): Promise<void> {
+	await atomicWrite(`${jobDir}/pid`, `${process.pid}\n`);
+	void recordBorn(jobDir);
+}
+async function recordBorn(jobDir: string): Promise<void> {
+	const outcome = await processInfo(process.pid);
+	if (outcome.kind !== "present" || ["done", "failed", "stopped"].includes(await textFile(`${jobDir}/state`))) return;
+	await atomicWrite(`${jobDir}/born`, `${outcome.process.born}\n`);
 }
 /** Last assistant message from the newest hosted session jsonl. A session that died mid-turn leaves no result; that absence is information. */
 async function writeHostedResult(jobDir: string): Promise<void> {
@@ -397,7 +448,7 @@ export async function runInternalJob(): Promise<void> {
 		child.once("error", (error) => resolve({ code: null, signal: null, error }));
 		child.once("close", (code, signal) => resolve({ code, signal }));
 	});
-	await atomicWrite(`${jobDir}/pid`, `${process.pid}\n`);
+	await writeHandshake(jobDir);
 	await atomicWrite(`${jobDir}/state`, "running\n");
 	await appendLimenLog(jobDir, "worker started");
 	const timeout = setTimeout(() => exhaust(`timeout after ${timeoutMs}ms`), timeoutMs);
@@ -430,6 +481,7 @@ export async function finalizeJob(jobDir: string, state: "done" | "failed" | "st
 	await atomicWrite(`${jobDir}/finished-at`, `${new Date().toISOString()}\n`);
 	await atomicWrite(`${jobDir}/state`, `${state}\n`);
 	await rm(`${jobDir}/pid`, { force: true });
+	await rm(`${jobDir}/born`, { force: true });
 	const inbox = await readdir(`${jobDir}/steer/inbox`).catch(() => []);
 	await appendLimenLog(jobDir, inbox.length ? `${state}: ${detail}; ${inbox.length} steer(s) never delivered` : `${state}: ${detail}`).catch(() => {});
 	for (const name of await readdir(jobDir).catch(() => [])) if (/\.\d+\.[0-9a-f]+\.tmp$/.test(name)) await rm(`${jobDir}/${name}`, { force: true });

@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import { existsSync, type FSWatcher, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, watch, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
+import { reapDeadJobs } from "../src/proc.ts";
 
 type Context = {
 	readonly cwd: string;
@@ -46,6 +47,8 @@ export default function limenWake(pi: PiApi): void {
 	let herdrSeq = Date.now();
 	let herdrMetadata: string | undefined;
 	let herdrMetadataAt = 0;
+	const firstDead = new Map<string, number>();
+	let sweeping = false;
 	const herdrCall = (args: readonly string[]) => {
 		if (!herdr) return;
 		try {
@@ -191,17 +194,23 @@ export default function limenWake(pi: PiApi): void {
 		else if (oldEnoughForFallback(job)) sendCompletion(jobs, id, state, true);
 	};
 	const sweep = () => {
-		if (!active || !session || !jobsDir) return;
+		if (!active || !session || !jobsDir || sweeping) return;
+		sweeping = true;
+		void finishSweep(jobsDir);
+	};
+	const finishSweep = async (jobs: string) => {
 		try {
-			for (const id of readdirSync(jobsDir)) {
-				const job = join(jobsDir, id);
-				if (stateOf(jobsDir, id) === "running" && !routable(job)) enrollLegacyRunning(job);
-				observe(jobsDir, id);
+			await reapDeadJobs(jobs, firstDead);
+			for (const id of readdirSync(jobs)) {
+				const job = join(jobs, id);
+				if (stateOf(jobs, id) === "running" && !routable(job)) enrollLegacyRunning(job);
+				observe(jobs, id);
 			}
-			updateStatus(jobsDir);
+			updateStatus(jobs);
 		} catch {
 			// Display and delivery are advisory; durable state remains on disk.
 		}
+		sweeping = false;
 	};
 	const scheduleSweep = () => {
 		if (!active || changeTimer) return;
@@ -228,6 +237,8 @@ export default function limenWake(pi: PiApi): void {
 		session = context;
 		jobsDir = jobs;
 		sessionId = id;
+		firstDead.clear();
+		sweeping = false;
 		herdr = herdrTarget();
 		for (const jobId of readdirSync(jobs)) {
 			const job = join(jobs, jobId);

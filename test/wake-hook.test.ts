@@ -682,6 +682,66 @@ test("herdr surfaces stay live while the conversation is muted", async (context)
 	assert.equal((await readCalls(calls)).filter((call) => call[0] === "notification").length, 1, "unmute delivers the herdr toast once");
 });
 
+test("a dead running job past grace is reaped once and wakes", async (context) => {
+	stashEnv(context, "LIMEN_JOB", undefined);
+	stashEnv(context, "LIMEN_HERDR", "0");
+	stashEnv(context, "LIMEN_REAP_CONFIRM_MS", "30");
+	const root = await import("node:fs/promises").then(({ mkdtemp }) => mkdtemp(join(process.env.TMPDIR ?? "/tmp", "limen-wake-reap-")));
+	context.after(() => import("node:fs/promises").then(({ rm }) => rm(root, { recursive: true, force: true })));
+	await mkdir(join(root, ".agents/limen"), { recursive: true });
+	const jobs = join(root, ".limen/jobs");
+	const handlers = new Map<string, (event: unknown, context: TestContext) => void>();
+	const messages: string[] = [];
+	limenWake({
+		on(event, handler) {
+			handlers.set(event, handler);
+		},
+		sendUserMessage(content) {
+			messages.push(content);
+		},
+	});
+	const session = { cwd: root, isIdle: () => true, sessionManager: sessionManager("coordinator-a"), ui: { notify() {}, setStatus() {} } };
+	handlers.get("session_start")?.({}, session);
+	context.after(() => handlers.get("session_shutdown")?.({}, session));
+	const young = join(jobs, "young");
+	await mkdir(young, { recursive: true });
+	await writeFile(join(young, "label"), "F025 young\n");
+	await writeFile(join(young, "branch"), "limen/young\n");
+	await writeFile(join(young, "pid"), "999999999\n");
+	await writeFile(join(young, "started-at"), `${new Date(Date.now() - 60_000).toISOString()}\n`);
+	await writeFile(join(young, "log"), "");
+	await subscribe(jobs, "young", "coordinator-a");
+	await writeFile(join(young, "state"), "running\n");
+	const gone = join(jobs, "gone");
+	await mkdir(join(gone, "session"), { recursive: true });
+	await writeFile(join(gone, "label"), "F025 gone\n");
+	await writeFile(join(gone, "branch"), "limen/gone\n");
+	await writeFile(join(gone, "pid"), "999999999\n");
+	await writeFile(join(gone, "started-at"), `${new Date(Date.now() - 60 * 60_000).toISOString()}\n`);
+	await writeFile(join(gone, "log"), "");
+	await writeFile(join(gone, "hosted"), "hosted\n");
+	await writeFile(
+		join(gone, "session", "2026-08-19.jsonl"),
+		`${JSON.stringify({
+			type: "message",
+			message: { role: "assistant", content: [{ type: "text", text: "worker final" }], stopReason: "error", errorMessage: "usage limit reached" },
+		})}\n`,
+	);
+	await subscribe(jobs, "gone", "coordinator-a");
+	await writeFile(join(gone, "state"), "running\n");
+	await waitUntil(() => messages.some((message) => message.includes("is failed (gone)")));
+	assert.equal(await readFile(join(young, "state"), "utf8"), "running\n");
+	assert.equal(await readFile(join(gone, "state"), "utf8"), "failed\n");
+	assert.equal(await readFile(join(gone, "result"), "utf8"), "worker final\n");
+	assert.equal(await readFile(join(gone, "stop-reason"), "utf8"), "error: usage limit reached\n");
+	const wake = messages.find((message) => message.includes("is failed (gone)")) ?? "";
+	assert.match(wake, /Stop reason: error: usage limit reached/);
+	assert.match(wake, /Final message:\nworker final/);
+	assert.equal(messages.filter((message) => message.includes("is failed (gone)")).length, 1);
+	await new Promise((resolve) => setTimeout(resolve, 200));
+	assert.equal(messages.filter((message) => message.includes("is failed (gone)")).length, 1, "a reaped job must wake once");
+});
+
 test("wake does not crash Pi after a stale reload context", async (context) => {
 	stashEnv(context, "LIMEN_JOB", undefined);
 	stashEnv(context, "LIMEN_HERDR", "0");
