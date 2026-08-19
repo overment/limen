@@ -76,6 +76,7 @@ function runLimen(scratch: Scratch, addedEnvironment: NodeJS.ProcessEnv, args: r
 		"LIMEN_JOB_LABEL",
 		"LIMEN_CONTEXT_ROOT",
 		"LIMEN_PACKAGE",
+		"LIMEN_PREFLIGHT",
 		"LIMEN_HERDR",
 		"PI_SESSION_ID",
 		"PI_SESSION_FILE",
@@ -119,7 +120,10 @@ export function git(cwd: string, ...args: readonly string[]): string {
 
 export async function writeFakePi(fakeBin: string, source: string): Promise<void> {
 	const path = join(fakeBin, "pi");
-	await writeFile(path, source);
+	const nl = source.indexOf("\n");
+	const shebang = source.startsWith("#!") && nl !== -1 ? source.slice(0, nl + 1) : "";
+	const body = shebang ? source.slice(shebang.length) : source;
+	await writeFile(path, `${shebang}if (process.argv[2] === "--version") { console.log("0.0.0-test"); process.exit(0); }\n${body}`);
 	await chmod(path, 0o755);
 }
 
@@ -130,10 +134,11 @@ export function onlyJobId(stdout: string): string {
 	return id;
 }
 
-const defaultFakePi = `#!/usr/bin/env node
+export const defaultFakePi = `#!/usr/bin/env node
 const { appendFileSync, readFileSync, writeFileSync } = require("node:fs");
 const { execFileSync } = require("node:child_process");
 const args = process.argv.slice(2);
+if (args[0] === "auth") process.exit(1);
 const promptIndex = args.findIndex((value) => value.startsWith("@"));
 const task = promptIndex >= 0 ? readFileSync(args[promptIndex].slice(1), "utf8") : "";
 writeFileSync("pi-args.json", JSON.stringify(args));

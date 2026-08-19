@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
-import { access, chmod, readFile, realpath, writeFile } from "node:fs/promises";
+import { access, chmod, readdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import test from "node:test";
-import { git, limen, limenWithEnv, limenWithSession, onlyJobId, scratchRepo, waitForState } from "./scratch.ts";
+import { requireNodeMajor } from "../src/main.ts";
+import { defaultFakePi, git, limen, limenWithEnv, limenWithSession, onlyJobId, scratchRepo, waitForState } from "./scratch.ts";
 
 test("spawn creates isolated branch, canonical record, runs pi, and resumes its worktree", async (context) => {
 	const scratch = await scratchRepo();
@@ -30,6 +31,9 @@ test("spawn creates isolated branch, canonical record, runs pi, and resumes its 
 	assert.equal(await readFile(join(job, "origin-session"), "utf8"), "coordinator-a\n");
 	await access(join(job, "notify/subscribers/coordinator-a"));
 	assert.equal(await readFile(join(job, "notify/ready"), "utf8"), "1\n");
+	assert.equal(await readFile(join(job, "versions"), "utf8"), "pi 0.0.0-test\n");
+	assert.match(limen(scratch, "jobs", id).stdout, /versions:\n    pi 0\.0\.0-test/);
+	assert.doesNotMatch(limen(scratch, "jobs", id).stdout, /herdr/);
 	assert.ok(Number.isFinite(Date.parse((await readFile(join(job, "started-at"), "utf8")).trim())));
 	assert.ok(Number.isFinite(Date.parse((await readFile(join(job, "finished-at"), "utf8")).trim())));
 	await assert.rejects(readFile(join(job, "pid")));
@@ -231,6 +235,7 @@ test("spawn opens a named Herdr tab when a fake herdr is on PATH", async (contex
 		`#!/usr/bin/env node
 const { appendFileSync } = require("node:fs");
 const args = process.argv.slice(2);
+if (args[0] === "--version") { console.log("0.0.0-test"); process.exit(0); }
 appendFileSync(${JSON.stringify(calls)}, args.join(" ") + "\\n");
 const label = args.includes("--label") ? args[args.indexOf("--label") + 1] : "";
 if (args[0] === "workspace" && args[1] === "list") {
@@ -255,6 +260,8 @@ if (args[0] === "workspace" && args[1] === "list") {
 	const job = join(scratch.root, ".limen/jobs", id);
 	assert.equal(await readFile(join(job, "herdr/tab"), "utf8"), "w1:t2\n");
 	assert.equal(await readFile(join(job, "herdr/mode"), "utf8"), "watch\n");
+	assert.equal(await readFile(join(job, "versions"), "utf8"), "pi 0.0.0-test\nherdr 0.0.0-test\n");
+	assert.match(limen(scratch, "jobs", id).stdout, /versions:\n    pi 0\.0\.0-test\n    herdr 0\.0\.0-test/);
 });
 
 test("spawn prints failed when the wrapper dies before writing pid", async (context) => {
@@ -267,4 +274,49 @@ test("spawn prints failed when the wrapper dies before writing pid", async (cont
 	assert.doesNotMatch(launched.stdout, /started/);
 	const id = onlyJobId(launched.stdout);
 	assert.equal((await readFile(join(scratch.root, ".limen/jobs", id, "state"), "utf8")).trim(), "failed");
+});
+
+test("requireNodeMajor names the supported major", () => {
+	assert.equal(requireNodeMajor("24.1.0"), undefined);
+	assert.equal(requireNodeMajor("25.0.0"), undefined);
+	assert.equal(requireNodeMajor("22.14.0"), "limen requires Node.js 24 (this is 22.14.0)");
+	assert.equal(requireNodeMajor("not-a-version"), "limen requires Node.js 24 (this is not-a-version)");
+});
+
+test("spawn without pi on PATH fails before worktree add", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	assert.equal(limen(scratch, "init").status, 0);
+	await rm(join(scratch.fakeBin, "pi"));
+	const launched = limenWithEnv(scratch, { PATH: "/nonexistent" }, "spawn", "do work");
+	assert.equal(launched.status, 1);
+	assert.match(launched.stderr, /pi is not on PATH/);
+	assert.deepEqual(await readdir(join(scratch.root, ".limen/jobs")).catch(() => []), []);
+	assert.doesNotMatch(git(scratch.root, "worktree", "list"), /limen-worktrees/);
+});
+
+test("LIMEN_PREFLIGHT=auth fails spawn with pi's message and creates no job", async (context) => {
+	const scratch = await scratchRepo(`#!/usr/bin/env node
+const args = process.argv.slice(2);
+if (args[0] === "auth") { console.error("provider rejected token"); process.exit(2); }
+process.exit(0);
+`);
+	context.after(scratch.cleanup);
+	assert.equal(limen(scratch, "init").status, 0);
+	const launched = limenWithEnv(scratch, { LIMEN_PREFLIGHT: "auth" }, "spawn", "--model", "ticket-specific", "do work");
+	assert.equal(launched.status, 1);
+	assert.match(launched.stderr, /provider rejected token/);
+	assert.deepEqual(await readdir(join(scratch.root, ".limen/jobs")).catch(() => []), []);
+	assert.doesNotMatch(git(scratch.root, "worktree", "list"), /limen-worktrees/);
+});
+
+test("LIMEN_PREFLIGHT=auth proceeds when check passes", async (context) => {
+	const scratch = await scratchRepo(defaultFakePi.replace('if (args[0] === "auth") process.exit(1);', 'if (args[0] === "auth") process.exit(0);'));
+	context.after(scratch.cleanup);
+	assert.equal(limen(scratch, "init").status, 0);
+	const launched = limenWithEnv(scratch, { LIMEN_PREFLIGHT: "auth" }, "spawn", "--model", "ticket-specific", "no model default");
+	assert.equal(launched.status, 0, launched.stderr);
+	const id = onlyJobId(launched.stdout);
+	await waitForState(scratch.root, id, "done");
+	assert.equal(await readFile(join(scratch.root, ".limen/jobs", id, "versions"), "utf8"), "pi 0.0.0-test\n");
 });

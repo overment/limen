@@ -1,4 +1,6 @@
+import { spawn, spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
+import { existsSync } from "node:fs";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { basename, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -51,6 +53,12 @@ export async function spawnCommand(args: readonly string[], cwd: string): Promis
 	if (parsed.tab && parsed.review) throw new Error("--tab does not support --review yet");
 	if (parsed.tab && parsed.detached) throw new Error("--tab and --detached cannot be combined");
 	if (options.tab && !herdr) throw new Error("hosted spawn requires Herdr (HERDR_ENV=1); use --detached for an ordinary job");
+	if (!(process.env.PATH ?? "").split(":").some((dir) => dir && existsSync(`${dir}/pi`))) throw new Error("pi is not on PATH");
+	const model = options.model ?? (process.env[options.review ? "LIMEN_REVIEWER_MODEL" : "LIMEN_WORKER_MODEL"]?.trim() || undefined);
+	if (process.env.LIMEN_PREFLIGHT === "auth") {
+		const result = spawnSync(process.env.LIMEN_PI || "pi", ["auth", "check", ...(model ? ["--model", model] : [])], { encoding: "utf8" });
+		if (result.status !== 0) throw new Error((result.stderr || result.stdout || result.error?.message || "pi auth check failed").trim() || "pi auth check failed");
+	}
 	const notificationSession = currentNotificationSession();
 	const workspace = workspaceRoot(cwd);
 	const root = workspace ?? repoRoot(cwd);
@@ -106,6 +114,7 @@ export async function spawnCommand(args: readonly string[], cwd: string): Promis
 			: []),
 	]);
 	await writeFile(`${jobDir}/notify/ready`, "1\n", { flag: "wx", flush: true });
+	const versions = capturedVersions().then((text) => writeFile(`${jobDir}/versions`, text, { flag: "wx", flush: true }));
 	await atomicWrite(`${jobDir}/state`, "running\n");
 	const role = options.review ? "reviewer" : "worker";
 	const localPreamble = `${root}/.agents/limen/${role}.md`;
@@ -113,9 +122,9 @@ export async function spawnCommand(args: readonly string[], cwd: string): Promis
 		() => localPreamble,
 		() => `${PACKAGE_ROOT}/templates/${role}.md`,
 	);
-	const model = options.model ?? (process.env[options.review ? "LIMEN_REVIEWER_MODEL" : "LIMEN_WORKER_MODEL"]?.trim() || undefined);
 	if (options.tab) {
 		await startHosted({ jobDir, id, label: options.label, root, worktree, preamble, taskFile: `${jobDir}/task.md`, ...(model ? { model } : {}) });
+		await versions.catch(() => {});
 		console.log(`started ${options.label} (hosted)`);
 		console.log(id);
 		return;
@@ -137,6 +146,7 @@ export async function spawnCommand(args: readonly string[], cwd: string): Promis
 		wrapperPid = await launchWrapper(environment);
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);
+		await versions.catch(() => {});
 		await finalizeJob(jobDir, "failed", `failed to launch wrapper: ${message}`);
 		throw error;
 	}
@@ -144,10 +154,12 @@ export async function spawnCommand(args: readonly string[], cwd: string): Promis
 	const state = await text(`${jobDir}/state`);
 	if (state !== "running") {
 		const detail = await lastLimenDetail(jobDir);
+		await versions.catch(() => {});
 		console.log(detail ? `${state} ${options.label}\n${detail}` : `${state} ${options.label}`);
 		console.log(id);
 		return;
 	}
+	await versions.catch(() => {});
 	console.log(`started ${options.label}`);
 	console.log(id);
 }
@@ -301,6 +313,25 @@ function parseSpawnArgs(args: readonly string[]): SpawnOptions {
 		...(model ? { model } : {}),
 		...(timeoutMs ? { timeoutMs } : {}),
 	};
+}
+function probeVersion(command: string): Promise<string> {
+	return new Promise((resolve) => {
+		const child = spawn(command, ["--version"], { stdio: ["ignore", "pipe", "ignore"] });
+		let out = "";
+		const done = (value: string) => {
+			clearTimeout(timer);
+			resolve(value);
+		};
+		const timer = setTimeout(() => child.kill("SIGKILL"), 1_000);
+		child.stdout?.on("data", (chunk: Buffer | string) => (out += chunk));
+		child.once("error", () => done("")).once("close", (code) => done(code === 0 ? (out.trim().split("\n")[0] ?? "") : ""));
+	});
+}
+async function capturedVersions(): Promise<string> {
+	const herdr = process.env.LIMEN_HERDR?.trim();
+	const pi = (await probeVersion(process.env.LIMEN_PI || "pi")) || "unavailable";
+	const extra = herdr !== "0" && (await probeVersion(herdr || "herdr"));
+	return extra ? `pi ${pi}\nherdr ${extra}\n` : `pi ${pi}\n`;
 }
 function workspaceTask(task: string, root: string, repo: string): string {
 	const pointer = task.replace(/\bTicket: (spec\/\S+)/g, (_all, path: string) => `Ticket: ${root}/${path}`);

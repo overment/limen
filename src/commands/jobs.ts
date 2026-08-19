@@ -56,7 +56,7 @@ async function renderJobDirectory(root: string, jobsRoot: string, id: string, de
 		"state label branch repo pid started-at finished-at tool-calls last-tool activity hosted candidate".split(" ").map((field) => text(`${jobDir}/${field}`)),
 	);
 	const agent = await text(`${jobDir}/herdr/agent`);
-	const [commits, result] = detailed ? await Promise.all([text(`${jobDir}/commits`), text(`${jobDir}/result`)]) : ["", ""];
+	const [commits, result, versions] = detailed ? await Promise.all([text(`${jobDir}/commits`), text(`${jobDir}/result`), text(`${jobDir}/versions`)]) : ["", "", ""];
 	const [taskStat, logStat] = await Promise.all([optionalStat(`${jobDir}/task.md`), optionalStat(`${jobDir}/log`)]);
 	const cleanup = detailed ? await text(`${jobDir}/cleanup`) : "";
 	if (!taskStat || !logStat) return `INVALID ${id} · missing task.md or log`;
@@ -95,6 +95,7 @@ async function renderJobDirectory(root: string, jobsRoot: string, id: string, de
 		if (repo) blocks.push(`  repo ${display(repo)}`);
 		if (candidate) blocks.push(`  candidate ${display(candidate)}`);
 		if (hosted) blocks.push("  hosted (weaker guarantees)");
+		if (versions) blocks.push(indented("versions", versions));
 		if (commits) blocks.push(indented("commits", commits));
 		if (result) blocks.push(indented("result", result));
 		if (cleanup)

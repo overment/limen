@@ -6,6 +6,8 @@ This tool is process/worktree isolation, not a hostile-code sandbox.
 
 Windows is unsupported. PID and process-group signals are POSIX-only.
 
+On Linux, escaped-descendant containment does not signal at all: identity verification is macOS-only, and unverified processes are never signaled. Group-level TERM/KILL is the real boundary there. A cleanup note records what could not be confirmed.
+
 ## Reporting
 
 Email [adam@overment.com](mailto:adam@overment.com) or open a private GitHub security advisory on this repository. Please do not file a public issue for an exploitable bug in spawn, stop, or the wake extension until there is a fix.
