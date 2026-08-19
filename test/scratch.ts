@@ -70,6 +70,7 @@ function runLimen(scratch: Scratch, addedEnvironment: NodeJS.ProcessEnv, args: r
 		"LIMEN_TASK_FILE",
 		"LIMEN_PREAMBLE",
 		"LIMEN_TIMEOUT_MS",
+		"LIMEN_HANDSHAKE_MS",
 		"LIMEN_MODEL",
 		"LIMEN_LABEL",
 		"LIMEN_JOB_LABEL",

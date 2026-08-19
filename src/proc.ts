@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { appendFile, open, readdir, readFile, rename, rm } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { commitList } from "./git.ts";
-import { hostedAgentStatus, hostedTerminalReason, renameJobTab } from "./herdr.ts";
+import { hostedAgentAlive, hostedAgentStatus, hostedTerminalReason, renameJobTab } from "./herdr.ts";
 import { assistantText, createStreamParser, type StreamEvent } from "./stream.ts";
 
 const STOP_GRACE_MS = 5_000;
@@ -42,6 +42,17 @@ export async function atomicWrite(path: string, content: string): Promise<void> 
 export function processGroupAlive(pid: number): boolean {
 	const result = signalProcessGroup(pid, 0);
 	return result === "sent" || result === "denied";
+}
+export const STARTUP_GRACE_MS = 10 * 60_000;
+export async function liveJob(jobDir: string, now = Date.now()): Promise<boolean> {
+	if ((await textFile(`${jobDir}/state`)) !== "running") return false;
+	const pid = Number(await textFile(`${jobDir}/pid`));
+	if (Number.isSafeInteger(pid) && pid > 0 && processGroupAlive(pid)) return true;
+	const agent = await textFile(`${jobDir}/herdr/agent`);
+	if ((await textFile(`${jobDir}/hosted`)) && agent && hostedAgentAlive(agent)) return true;
+	if (Number.isSafeInteger(pid) && pid > 0) return false;
+	const startedAt = Date.parse(await textFile(`${jobDir}/started-at`));
+	return Number.isFinite(startedAt) && now - startedAt < STARTUP_GRACE_MS;
 }
 export function signalProcessGroup(pid: number, signal: NodeJS.Signals | 0): "sent" | "missing" | "denied" {
 	return signalTarget(-pid, signal);

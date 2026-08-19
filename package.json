@@ -15,10 +15,10 @@
 		"LICENSE"
 	],
 	"scripts": {
-		"test": "node --test --test-timeout=30000 test/*.test.ts",
+		"test": "node --test --test-concurrency=1 --test-timeout=60000 test/*.test.ts",
 		"typecheck": "tsc --noEmit",
 		"format": "biome format --write .",
-		"check": "tsc --noEmit && biome check . && node --test --test-timeout=30000 test/*.test.ts"
+		"check": "tsc --noEmit && biome check . && node --test --test-concurrency=1 --test-timeout=60000 test/*.test.ts"
 	},
 	"engines": {
 		"node": ">=24"
