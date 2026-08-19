@@ -1,6 +1,6 @@
 # F025-dead-job-reaper · A job whose process died stops claiming to run
 
-[2026-08-19] [🔴] [PLANNED] [COORDINATOR] PLANNED · F025-dead-job-reaper
+[2026-08-19] [🟠] [ACTIVE] [COORDINATOR] ACTIVE · F025-dead-job-reaper
 
 ## Outcome
 
@@ -14,6 +14,7 @@ Observed cost today (2026-08-18 review, finding S4): nothing ever transitions a 
 - **A CLI path too.** A coordinator is not always attached; `limen jobs` (or `limen prune`) performs the same transition under the same rules, so a headless seat converges when anyone looks. One shared helper, two callers.
 - **Identity on macOS.** At handshake, the wrapper records its own birth time (`processInfo` already exists) beside `pid`. Liveness treats "group alive but recorded pid's birth mismatches" as dead. On Linux the file is absent and behavior degrades to today's group check plus the age rules — consistent with the accepted macOS-shaped identity stance in `docs/remote.md`.
 - **Hosted jobs.** A hosted job whose supervisor is dead but whose agent target still answers is not reaped — the agent is the job. Dead supervisor and missing agent together reap as above.
+- **Reaped hosted jobs keep their handoff.** Before finalizing a hosted job, the reaper attempts the same result and stop-reason capture the supervisor would have done (`writeHostedResult` over the session jsonl) — a dead supervisor does not cost the coordinator the worker's final message.
 
 ## Out of scope
 
@@ -30,6 +31,7 @@ Observed cost today (2026-08-18 review, finding S4): nothing ever transitions a 
 - After the transition, `limen spawn --branch <that branch>` succeeds and `limen prune` removes the worktree.
 - On macOS, a fabricated record whose pid points at a live group but whose recorded birth time mismatches is treated as dead; with no birth file the group check alone decides.
 - A hosted record with a live agent target and dead supervisor is not reaped.
+- A reaped hosted job whose session jsonl holds a final assistant message ends with `result` (and `stop-reason` when the message errored) present in the record and in the wake excerpt.
 - `npm run check` green.
 
 ## Notes

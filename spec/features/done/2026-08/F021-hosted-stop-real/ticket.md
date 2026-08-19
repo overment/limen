@@ -1,6 +1,6 @@
 # F021-hosted-stop-real · Stopping a hosted job actually ends the agent, or says it could not
 
-[2026-08-19] [🟠] [ACTIVE] [COORDINATOR] ACTIVE · F021-hosted-stop-real
+[2026-08-19] [🟢] [PROVEN] [COORDINATOR] PROVEN · F021-hosted-stop-real
 
 ## Outcome
 
