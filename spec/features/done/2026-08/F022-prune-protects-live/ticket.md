@@ -1,6 +1,6 @@
 # F022-prune-protects-live · Prune never deletes a checkout a live job is standing in
 
-[2026-08-19] [🟠] [ACTIVE] [COORDINATOR] ACTIVE · F022-prune-protects-live
+[2026-08-19] [🟢] [PROVEN] [COORDINATOR] PROVEN · F022-prune-protects-live
 
 ## Outcome
 

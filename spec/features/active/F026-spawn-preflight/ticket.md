@@ -1,6 +1,6 @@
 # F026-spawn-preflight · A job records what it ran against, and refuses what cannot work
 
-[2026-08-19] [🔴] [PLANNED] [COORDINATOR] PLANNED · F026-spawn-preflight
+[2026-08-19] [🟠] [ACTIVE] [COORDINATOR] ACTIVE · F026-spawn-preflight
 
 ## Outcome
 
@@ -15,6 +15,7 @@ Observed cost today (2026-08-18 review, finding A4): limen pins neither binary a
 - **Optional auth preflight.** With `LIMEN_PREFLIGHT=auth`, spawn runs `pi auth check` (exists since pi 0.84.1) with the job's resolved model before creating the record; a failed check fails the spawn with pi's own message. Off by default — the seat may intentionally spawn ahead of a credential refresh.
 - **Say what Linux does not contain.** One precise paragraph in `SECURITY.md`: on Linux, escaped-descendant containment does not signal at all (identity verification is macOS-only, and unverified processes are never signaled) — group-level TERM/KILL is the real boundary there; a cleanup note records what could not be confirmed. `docs/remote.md` already accepts this; SECURITY.md is where a reader checks.
 - **Known-good note, not a gate.** The README (or `docs/`) names the last pi and Herdr versions the suite was exercised against, updated when they move. No runtime version gate — recording and documentation only; a gate would rot faster than the binaries.
+- **Name the duplicate-wake window.** One sentence in `docs/remote.md`'s traps: with two coordinators (laptop + seat), a machine suspended mid-claim for over 30 s can produce a rare duplicate wake — at-least-once is the designed failure direction, not a bug to file.
 
 ## Out of scope
 
