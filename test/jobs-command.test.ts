@@ -72,8 +72,10 @@ test("jobs detail shows result and commits for a terminal job that has them", as
 	await writeFile(join(job, "log"), "done\n");
 	await writeFile(join(job, "commits"), "abc1234 the candidate\n");
 	await writeFile(join(job, "result"), "final summary line\nsecond line\n");
+	await writeFile(join(job, "stop-reason"), "error: usage limit reached\n");
 	const detail = limen(scratch, "jobs", "finished");
 	assert.equal(detail.status, 0, detail.stderr);
+	assert.match(detail.stdout, /stop-reason:\n    error: usage limit reached/);
 	assert.match(detail.stdout, /commits:\n    abc1234 the candidate/);
 	assert.match(detail.stdout, /result:\n    final summary line\n    second line/);
 	// The compact snapshot stays compact: no result or commits blocks there.

@@ -68,7 +68,14 @@ setInterval(() => {}, 1000);
 	assert.match(missing.stderr, /herdr is not available/);
 	limen(scratch, "stop", id, "test cleanup");
 	await waitForState(scratch.root, id, "stopped");
-	assert.match(await readFile(herdr.calls, "utf8"), /tab rename w1:t2 F012 watch · stopped/);
+	const deadline = Date.now() + 2_000;
+	let calls = "";
+	while (Date.now() < deadline) {
+		calls = await readFile(herdr.calls, "utf8").catch(() => "");
+		if (/tab rename w1:t2 F012 watch · stopped/.test(calls)) break;
+		await new Promise((resolve) => setTimeout(resolve, 25));
+	}
+	assert.match(calls, /tab rename w1:t2 F012 watch · stopped/);
 });
 
 test("close leftover tabs for a proven feature and leaves job files", async (context) => {

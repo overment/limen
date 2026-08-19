@@ -86,7 +86,7 @@ test("job-file table is written by spawn and read by jobs", async () => {
 		assert.ok(spawn.includes(name), `spawn must write ${name}`);
 		assert.ok(jobs.includes(name), `jobs must read ${name}`);
 	}
-	for (const name of ["pid", "finished-at", "commits", "result"]) assert.ok(jobs.includes(name), `jobs must read ${name}`);
+	for (const name of ["pid", "finished-at", "commits", "result", "stop-reason"]) assert.ok(jobs.includes(name), `jobs must read ${name}`);
 	assert.ok(spawn.includes("candidate"), "spawn must write candidate for review jobs");
 	assert.ok(jobs.includes("candidate"), "jobs must print the candidate line");
 	for (const name of ["base", "worktree"]) assert.ok(spawn.includes(name), `spawn must write ${name}`);

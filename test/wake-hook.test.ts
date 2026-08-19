@@ -104,9 +104,14 @@ test("a completion wake carries bounded commits and the worker's final message",
 	await writeFile(join(jobs, "handoff/commits"), `${commitLines.join("\n")}\n`);
 	const resultLines = Array.from({ length: 20 }, (_, index) => `result line ${index + 1}`);
 	await writeFile(join(jobs, "handoff/result"), `${resultLines.join("\n")}\n`);
+	await writeFile(join(jobs, "handoff/stop-reason"), "error: usage limit reached\n");
+	await mkdir(join(jobs, "handoff/steer/inbox"), { recursive: true });
+	await writeFile(join(jobs, "handoff/steer/inbox/0001"), "turn left\n");
 	await writeFile(join(jobs, "handoff/state"), "done\n");
 	await waitUntil(() => messages.length === 1);
 	const wake = messages[0] ?? "";
+	assert.match(wake, /Stop reason: error: usage limit reached/);
+	assert.match(wake, /1 steer\(s\) never delivered/);
 	assert.match(wake, /Commits:\n0000001 commit 1/);
 	assert.match(wake, /000000a commit 10\n… 2 more/);
 	assert.doesNotMatch(wake, /commit 11/);
@@ -121,7 +126,7 @@ test("a completion wake carries bounded commits and the worker's final message",
 	await subscribe(jobs, "bare", "coordinator-a");
 	await writeFile(join(jobs, "bare/state"), "stopped\n");
 	await waitUntil(() => messages.length === 2);
-	assert.doesNotMatch(messages[1] ?? "", /Commits:|Final message:/);
+	assert.doesNotMatch(messages[1] ?? "", /Commits:|Final message:|Stop reason:|never delivered/);
 });
 
 test("wake shows existing unwatched jobs without claiming their notifications", async (context) => {

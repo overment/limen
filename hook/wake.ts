@@ -277,6 +277,8 @@ export default function limenWake(pi: PiApi): void {
 /** Bounded commits and final-message excerpts; either is omitted when its file is absent — that absence is information. */
 function handoffExcerpt(job: string): string {
 	const sections: string[] = [];
+	const stop = text(join(job, "stop-reason"));
+	if (stop) sections.push(`Stop reason: ${stop}`);
 	if (existsSync(join(job, "commits"))) {
 		const lines = text(join(job, "commits")).split("\n").filter(Boolean);
 		sections.push(lines.length ? `Commits:\n${lines.slice(0, 10).join("\n")}${lines.length > 10 ? `\n… ${lines.length - 10} more` : ""}` : "Commits: none");
@@ -285,6 +287,12 @@ function handoffExcerpt(job: string): string {
 	if (result) {
 		const head = result.split("\n").slice(0, 15).join("\n").slice(0, 1200);
 		sections.push(`Final message:\n${head}${head.length < result.length ? "\n… (full text in the job record)" : ""}`);
+	}
+	try {
+		const unseen = readdirSync(join(job, "steer", "inbox")).length;
+		if (unseen) sections.push(`${unseen} steer(s) never delivered`);
+	} catch {
+		// Inbox may be absent; that is not an undelivered steer.
 	}
 	return sections.length ? `\n\n${sections.join("\n\n")}` : "";
 }

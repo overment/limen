@@ -1,4 +1,4 @@
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { appendFile, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { basename } from "node:path";
@@ -182,7 +182,8 @@ export async function renameJobTab(jobDir: string, state: "done" | "failed" | "s
 	const herdr = herdrBinary();
 	if (!herdr) return skip(jobDir, "herdr is not available");
 	try {
-		call(herdr, ["tab", "rename", place.tab, `${(await text(`${jobDir}/label`)) || basename(jobDir)} · ${state}`]);
+		const child = spawn(herdr, ["tab", "rename", place.tab, `${(await text(`${jobDir}/label`)) || basename(jobDir)} · ${state}`], { detached: true, stdio: "ignore" });
+		child.unref();
 	} catch (error) {
 		await skip(jobDir, error instanceof Error ? error.message : String(error));
 	}

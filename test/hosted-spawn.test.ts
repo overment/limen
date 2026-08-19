@@ -168,6 +168,28 @@ test("a hosted job finalizes on session end, never on unseen idle after tools", 
 	await waitForState(scratch.root, id, "done");
 	assert.match(await readFile(join(job, "log"), "utf8"), /hosted session ended/);
 	assert.equal(await readFile(join(job, "result"), "utf8"), "hosted final summary\n");
+	await assert.rejects(readFile(join(job, "stop-reason")), "a clean hosted session writes no stop-reason");
+});
+
+test("a hosted session error writes stop-reason and stays done", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	assert.equal(limen(scratch, "init").status, 0);
+	const herdr = await installHostedFakeHerdr(scratch.root, scratch.fakeBin);
+	const env = { HERDR_ENV: "1", LIMEN_HERDR: herdr.bin, FAKE_HERDR_STATE: herdr.dir, FAKE_HERDR_PERSIST: "1", HERDR_TAB_ID: "coord:t0" };
+	const launched = limenWithEnv(scratch, env, "spawn", "--label", "F024 hosted error", "work then die");
+	assert.equal(launched.status, 0, launched.stderr);
+	const id = onlyJobId(launched.stdout);
+	const job = join(scratch.root, ".limen/jobs", id);
+	await mkdir(join(job, "session"), { recursive: true });
+	await writeFile(
+		join(job, "session/2026-01-01T00-00-00-000Z_abc.jsonl"),
+		`${JSON.stringify({ type: "message", message: { role: "assistant", content: [{ type: "text", text: "early" }], stopReason: "stop" } })}\n${JSON.stringify({ type: "message", message: { role: "assistant", content: [], stopReason: "error", errorMessage: "usage limit reached" } })}\n`,
+	);
+	await writeFile(join(job, "session-ended"), `${new Date().toISOString()}\n`);
+	await waitForState(scratch.root, id, "done");
+	assert.equal(await readFile(join(job, "stop-reason"), "utf8"), "error: usage limit reached\n");
+	assert.equal((await readFile(join(job, "state"), "utf8")).trim(), "done");
 });
 
 test("supervisor does not stamp wait over a hook tool write", async (context) => {

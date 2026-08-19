@@ -247,7 +247,13 @@ if (args[0] === "workspace" && args[1] === "list") {
 	assert.equal(launched.status, 0, launched.stderr);
 	const id = onlyJobId(launched.stdout);
 	await waitForState(scratch.root, id, "done");
-	const recorded = await readFile(calls, "utf8");
+	const deadline = Date.now() + 2_000;
+	let recorded = "";
+	while (Date.now() < deadline) {
+		recorded = await readFile(calls, "utf8").catch(() => "");
+		if (/tab rename w1:t2 F012 spaces · done/.test(recorded)) break;
+		await new Promise((resolve) => setTimeout(resolve, 25));
+	}
 	assert.match(recorded, /tab create /);
 	assert.match(recorded, /--label F012 spaces/);
 	assert.match(recorded, /--no-focus/);
