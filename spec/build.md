@@ -6,9 +6,19 @@
 
 ## NOW
 
+Stability sweep from the 2026-08-18 reliability review. These three are independent of each other; each is one focused job.
+
+- `F020-herdr-agent-truth` (ACTIVE): believe what Herdr actually answers — nested `agent get` envelope, `missing` debounced, CLI failure ≠ vanished agent, fixture matches reality. Confirmed by live probe.
+- `F022-prune-protects-live` (ACTIVE): prune keeps live checkouts by the job's own record, not branch match; reviewer worktrees survive spawns; the startup window counts as live; suite stops racing itself.
+- `F023-wake-quiet-fallback` (ACTIVE): a delivered completion never churns the fallback path; the watcher ignores its own bookkeeping; mute mutes toasts; the wake finds the root from a subdirectory.
+
 ## NEXT
-- `F011-empty-job-advisory` (PLANNED): a job that produced nothing should say so instead of reading DONE. Observed, not theorised. After F017 it reads `commits` and `tool-calls` instead of inferring.
-- `F013-remote-seat` (PLANNED): one disk, attach don’t clone; docs and seat-shaped guarantees. Before F014.
+- `F024-terminal-state-first` (PLANNED): terminal state lands before Herdr cosmetics, exactly once; `stop-reason` made durable for F011; unseen steers surfaced at finalize.
+- `F021-hosted-stop-real` (PLANNED): hosted stop ends the agent or truthfully says it could not; agent names keep their entropy; `--tab --timeout` errors. After F020.
+- `F025-dead-job-reaper` (PLANNED): a running job whose process group died reaps to `failed: process group gone` and wakes; recycled pgids cannot fake life on macOS. After F022 and F024.
+- `F026-spawn-preflight` (PLANNED): every job records its pi/Herdr versions; loud spawn failures for missing pi and wrong Node; optional `pi auth check`; SECURITY.md names what Linux does not contain.
+- `F011-empty-job-advisory` (PLANNED): a job that produced nothing should say so instead of reading DONE. Observed, not theorised. After F017 it reads `commits` and `tool-calls` instead of inferring; after F024 it also reads `stop-reason`.
+- `F013-remote-seat` (PLANNED): one disk, attach don’t clone; docs and seat-shaped guarantees. Before F014, after the stability sweep.
 - `F014-github-doorbell` (PLANNED): mention or label starts a job on the seat; comment back evidence; merge stays human.
 
 ## PROVEN
