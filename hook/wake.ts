@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { existsSync, type FSWatcher, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, watch, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 
 type Context = {
 	readonly cwd: string;
@@ -145,6 +145,7 @@ export default function limenWake(pi: PiApi): void {
 		const branch = text(join(job, "branch"));
 		const repo = text(join(job, "repo"));
 		const slot = fallback ? "_fallback" : sessionId;
+		if (fallback && (deliveredSlots(job).length > 0 || session.isIdle() !== true || muted)) return false;
 		const eligible = () => {
 			recoverClaims(job);
 			if (!isTerminal(stateOf(jobs, id)) || !routable(job)) return false;
@@ -177,7 +178,6 @@ export default function limenWake(pi: PiApi): void {
 		const own = subscribed(job, sessionId);
 		const label = text(join(job, "label")) || id;
 		const branch = text(join(job, "branch"));
-		if (own && state !== "running" && !deliveryExists(job, sessionId) && !deliveryExists(job, "_fallback")) notifyHerdr(job, id, state, label, branch, sessionId);
 		if (own && state === "running" && !muted && claimMarker(job, "started", sessionId)) {
 			try {
 				session.ui.notify(`limen: ${label} started (${id})`, "info");
@@ -186,6 +186,7 @@ export default function limenWake(pi: PiApi): void {
 			}
 		}
 		if (state === "running" || muted) return;
+		if (own && !deliveryExists(job, sessionId) && !deliveryExists(job, "_fallback")) notifyHerdr(job, id, state, label, branch, sessionId);
 		if (own) sendCompletion(jobs, id, state, false);
 		else if (oldEnoughForFallback(job)) sendCompletion(jobs, id, state, true);
 	};
@@ -212,11 +213,12 @@ export default function limenWake(pi: PiApi): void {
 	};
 	pi.on("session_start", (_event, context) => {
 		if (process.env.LIMEN_JOB === "1" || process.env.LIMEN_WAKE === "0") return;
-		if (!existsSync(join(context.cwd, ".agents", "limen"))) return;
+		const root = projectRoot(context.cwd);
+		if (!root) return;
 		stopTimers();
 		const id = context.sessionManager.getSessionId();
 		if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(id)) return;
-		const jobs = join(context.cwd, ".limen", "jobs");
+		const jobs = join(root, ".limen", "jobs");
 		try {
 			mkdirSync(jobs, { recursive: true });
 		} catch {
@@ -232,7 +234,10 @@ export default function limenWake(pi: PiApi): void {
 			if (stateOf(jobs, jobId) === "running" && !routable(job)) enrollLegacyRunning(job);
 			if (subscribed(job, id) && stateOf(jobs, jobId) === "running") claimMarker(job, "started", id);
 		}
-		watcher = watch(jobs, { recursive: true }, scheduleSweep);
+		watcher = watch(jobs, { recursive: true }, (_event, filename) => {
+			if (notifyBookkeeping(filename)) return;
+			scheduleSweep();
+		});
 		watcher.unref();
 		watcher.on("error", () => {
 			watcher?.close();
@@ -417,6 +422,19 @@ function oldEnoughForFallback(job: string): boolean {
 	const finished = Date.parse(text(join(job, "finished-at")));
 	const since = Number.isFinite(finished) ? finished : statSync(join(job, "state")).mtimeMs;
 	return Date.now() - since >= FALLBACK_GRACE_MS;
+}
+function projectRoot(cwd: string): string | undefined {
+	let dir = resolve(cwd);
+	for (;;) {
+		if (existsSync(join(dir, ".agents", "limen"))) return dir;
+		const parent = dirname(dir);
+		if (parent === dir) return undefined;
+		dir = parent;
+	}
+}
+function notifyBookkeeping(filename: string | null): boolean {
+	if (!filename) return false;
+	return /(?:^|\/)notify\/(claims|delivered)(?:\/|$)/.test(filename.replaceAll("\\", "/"));
 }
 function herdrTarget(): HerdrPane | undefined {
 	const binary = process.env.LIMEN_HERDR || "herdr";
