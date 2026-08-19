@@ -252,6 +252,45 @@ test("wake stays out of foreign projects and honors LIMEN_WAKE=0", async (contex
 	assert.deepEqual(disabled.statuses, []);
 });
 
+test("wake finds the project root from a subdirectory", async (context) => {
+	stashEnv(context, "LIMEN_JOB", undefined);
+	stashEnv(context, "LIMEN_HERDR", "0");
+	const root = await import("node:fs/promises").then(({ mkdtemp }) => mkdtemp(join(process.env.TMPDIR ?? "/tmp", "limen-wake-subdir-")));
+	context.after(() => import("node:fs/promises").then(({ rm }) => rm(root, { recursive: true, force: true })));
+	await mkdir(join(root, ".agents/limen"), { recursive: true });
+	await mkdir(join(root, "src"), { recursive: true });
+	const jobs = join(root, ".limen/jobs");
+	const handlers = new Map<string, (event: unknown, context: TestContext) => void>();
+	const messages: string[] = [];
+	const statuses: Array<string | undefined> = [];
+	limenWake({
+		on(event, handler) {
+			handlers.set(event, handler);
+		},
+		sendUserMessage(content) {
+			messages.push(content);
+		},
+	});
+	const session = {
+		cwd: join(root, "src"),
+		isIdle: () => true,
+		sessionManager: sessionManager("coordinator-a"),
+		ui: { notify() {}, setStatus: (_key: string, value: string | undefined) => statuses.push(value) },
+	};
+	handlers.get("session_start")?.({}, session);
+	context.after(() => handlers.get("session_shutdown")?.({}, session));
+	await import("node:fs/promises").then(({ access }) => access(jobs));
+	await mkdir(join(jobs, "sub"), { recursive: true });
+	await writeFile(join(jobs, "sub/label"), "F023 from src\n");
+	await writeFile(join(jobs, "sub/branch"), "candidate\n");
+	await subscribe(jobs, "sub", "coordinator-a");
+	await writeFile(join(jobs, "sub/state"), "running\n");
+	await waitUntil(() => statuses.some((status) => status?.includes("limen 1 · F023 starting")) ?? false);
+	await writeFile(join(jobs, "sub/state"), "done\n");
+	await waitUntil(() => messages.length === 1);
+	assert.match(messages[0] ?? "", /F023 from src.*is done \(sub\)/);
+});
+
 test("/limen off mutes the session and /limen on catches up once", async (context) => {
 	stashEnv(context, "LIMEN_JOB", undefined);
 	stashEnv(context, "LIMEN_HERDR", "0");
@@ -406,6 +445,49 @@ test("subscriptions scope wakes and one idle coordinator receives fallback", asy
 	context.after(() => handlersC.get("session_shutdown")?.({}, sessionC));
 	await waitUntil(() => messagesC.length === 1);
 	assert.match(messagesC[0] ?? "", /F013 pending.*routed here/);
+});
+
+test("already-delivered jobs never re-enter the fallback claim path", async (context) => {
+	stashEnv(context, "LIMEN_JOB", undefined);
+	stashEnv(context, "LIMEN_HERDR", "0");
+	const root = await import("node:fs/promises").then(({ mkdtemp }) => mkdtemp(join(process.env.TMPDIR ?? "/tmp", "limen-wake-delivered-")));
+	context.after(() => import("node:fs/promises").then(({ rm }) => rm(root, { recursive: true, force: true })));
+	await mkdir(join(root, ".agents/limen"), { recursive: true });
+	const jobs = join(root, ".limen/jobs");
+	const job = join(jobs, "old");
+	await mkdir(join(job, "notify/delivered"), { recursive: true });
+	await mkdir(join(job, "notify/subscribers"), { recursive: true });
+	await writeFile(join(job, "label"), "F023 already delivered\n");
+	await writeFile(join(job, "branch"), "old-branch\n");
+	await writeFile(join(job, "state"), "done\n");
+	await writeFile(join(job, "finished-at"), "2000-01-01T00:00:00.000Z\n");
+	await writeFile(join(job, "notify/ready"), "1\n");
+	await writeFile(join(job, "notify/subscribers/old-session"), "1\n");
+	await writeFile(join(job, "notify/delivered/old-session"), "1\n");
+	const handlers = new Map<string, (event: unknown, context: TestContext) => void>();
+	const messages: string[] = [];
+	limenWake({
+		on(event, handler) {
+			handlers.set(event, handler);
+		},
+		sendUserMessage(content) {
+			messages.push(content);
+		},
+	});
+	const session = { cwd: root, isIdle: () => true, sessionManager: sessionManager("coordinator-new"), ui: { notify() {}, setStatus() {} } };
+	handlers.get("session_start")?.({}, session);
+	context.after(() => handlers.get("session_shutdown")?.({}, session));
+	const seen: string[] = [];
+	const { watch, existsSync, readdirSync } = await import("node:fs");
+	const watcher = watch(join(job, "notify"), { recursive: true }, (_event, filename) => {
+		if (filename && (filename === "claims" || filename.startsWith("claims/") || filename.includes("/claims"))) seen.push(String(filename));
+	});
+	context.after(() => watcher.close());
+	await new Promise((resolve) => setTimeout(resolve, 1600));
+	assert.deepEqual(messages, []);
+	assert.equal(existsSync(join(job, "notify/claims")), false, "repeated sweeps must not create notify/claims");
+	assert.deepEqual(seen, [], "the claims directory must stay untouched");
+	assert.deepEqual(readdirSync(join(job, "notify/delivered")), ["old-session"]);
 });
 
 test("two windows on one Pi session share start and completion receipts", async (context) => {
@@ -585,12 +667,14 @@ test("herdr surfaces stay live while the conversation is muted", async (context)
 	);
 	assert.deepEqual(notifications, [], "a muted session must not show start notices");
 	await writeFile(join(jobs, "new/state"), "done\n");
-	await waitUntilAsync(async () => (await readCalls(calls)).some((call) => call[0] === "notification"));
-	assert.deepEqual(messages, [], "the herdr notification must not unmute the conversation");
+	await new Promise((resolve) => setTimeout(resolve, 200));
+	assert.equal((await readCalls(calls)).filter((call) => call[0] === "notification").length, 0, "mute must silence herdr toasts");
+	assert.deepEqual(messages, [], "a muted session must not receive wakes");
 	command("on", commandUi);
 	await waitUntil(() => messages.length === 1);
 	assert.match(messages[0] ?? "", /F001 implementation.*is done/);
-	assert.equal((await readCalls(calls)).filter((call) => call[0] === "notification").length, 1, "unmute must not repeat the herdr notification");
+	await waitUntilAsync(async () => (await readCalls(calls)).some((call) => call[0] === "notification"));
+	assert.equal((await readCalls(calls)).filter((call) => call[0] === "notification").length, 1, "unmute delivers the herdr toast once");
 });
 
 test("wake does not crash Pi after a stale reload context", async (context) => {
