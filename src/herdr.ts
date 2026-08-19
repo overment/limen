@@ -102,8 +102,7 @@ function liveHostedTarget(pane: string, name: string): string | undefined {
 		const info = asRecord(asRecord(call(herdr, ["pane", "process-info", "--pane", pane])).process_info);
 		const foreground = Array.isArray(info.foreground_processes) ? info.foreground_processes : [];
 		const names = foreground.map((row) => String(asRecord(row).name ?? "").toLowerCase());
-		// pi is often argv0 "node" or "pi"; treat non-shell foreground after a start attempt as live.
-		if (names.some((n) => n === "pi" || n.includes("node") || n.includes("pi"))) return pane;
+		if (names.some((n) => n === "pi" || n === "node")) return pane;
 	} catch {
 		// Missing.
 	}
@@ -134,23 +133,44 @@ function waitForShell(herdr: string, pane: string, timeoutMs: number): void {
 	throw new Error(`hosted pane ${pane} did not become an idle shell (last: ${last})`);
 }
 
+const lastHostedStatus = new Map<string, HostedAgentStatus>();
+const lastHostedFault = new Map<string, string>();
+
 export function hostedAgentStatus(target: string): HostedAgentStatus {
 	const herdr = herdrBinary();
-	if (!herdr) return "missing";
+	if (!herdr) return noteHostedFault(target, "herdr_unavailable");
 	try {
-		const status = asRecord(call(herdr, ["agent", "get", target])).agent_status;
-		if (status === "idle" || status === "working" || status === "blocked" || status === "done" || status === "unknown") return status;
-		return "unknown";
-	} catch {
-		return "missing";
+		const row = asRecord(call(herdr, ["agent", "get", target]));
+		const raw = asRecord(row.agent).agent_status ?? row.agent_status;
+		const status = raw === "idle" || raw === "working" || raw === "blocked" || raw === "done" || raw === "unknown" ? raw : "unknown";
+		lastHostedStatus.set(target, status);
+		lastHostedFault.delete(target);
+		return status;
+	} catch (error) {
+		const code = typeof error === "object" && error !== null && "code" in error && typeof error.code === "string" && error.code ? error.code : "herdr_error";
+		if (code === "agent_not_found" || code === "target_not_found") {
+			lastHostedStatus.delete(target);
+			lastHostedFault.delete(target);
+			return "missing";
+		}
+		return noteHostedFault(target, code);
 	}
+}
+
+function noteHostedFault(target: string, code: string): HostedAgentStatus {
+	if (lastHostedFault.get(target) !== code) {
+		lastHostedFault.set(target, code);
+		const jobDir = process.env.LIMEN_JOB_DIR?.trim();
+		if (jobDir) void appendFile(`${jobDir}/log`, `[limen ${new Date().toISOString()}] herdr agent get failed: ${code}\n`);
+	}
+	return lastHostedStatus.get(target) ?? "unknown";
 }
 
 export function stopHostedAgent(target: string): void {
 	const herdr = herdrBinary();
 	if (!herdr) return;
 	try {
-		call(herdr, ["agent", "send-keys", target, "C-c"]);
+		call(herdr, ["agent", "send-keys", target, "ctrl+c"]);
 	} catch {
 		// Best-effort; supervisor finalizes when the agent disappears.
 	}
@@ -299,8 +319,10 @@ function call(herdr: string, args: readonly string[]): unknown {
 	if (result.status !== 0) {
 		const raw = result.stderr.trim() || result.stdout.trim() || `herdr ${args[0]} failed`;
 		try {
-			const err = asRecord(asRecord(JSON.parse(raw)).error).message;
-			if (typeof err === "string" && err) throw new Error(err);
+			const err = asRecord(asRecord(JSON.parse(raw)).error);
+			const message = typeof err.message === "string" && err.message ? err.message : raw;
+			const code = typeof err.code === "string" && err.code ? err.code : undefined;
+			throw Object.assign(new Error(message), code ? { code } : {});
 		} catch (error) {
 			if (error instanceof Error && error.message !== raw) throw error;
 		}

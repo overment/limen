@@ -245,21 +245,22 @@ export async function runHostedSupervisor(): Promise<void> {
 	await atomicWrite(`${jobDir}/state`, "running\n");
 	await appendLimenLog(jobDir, "hosted supervisor started (weaker guarantees: no timeout, no tool-call cap, no process containment)");
 	let stopRequested = false;
+	let missingStreak = 0;
 	process.on("SIGTERM", () => {
 		stopRequested = true;
 	});
 	while (!stopRequested) {
 		const status = hostedAgentStatus(target);
 		const sessionEnded = Boolean(await textFile(`${jobDir}/session-ended`));
-		// Herdr idle/done = unseen background tab. Not job completion.
-		const reason = hostedTerminalReason(status, sessionEnded);
+		// Herdr idle/done = unseen background tab. Not job completion. Missing needs 3 samples.
+		if (status === "missing") missingStreak += 1;
+		else missingStreak = 0;
+		const reason = sessionEnded ? hostedTerminalReason(status, true) : missingStreak >= 3 ? hostedTerminalReason(status, false) : undefined;
 		if (reason) {
 			await writeHostedResult(jobDir);
 			await finalizeJob(jobDir, "done", reason);
 			return;
 		}
-		const activity = status === "working" ? "think" : status === "blocked" ? "wait" : "wait";
-		await atomicWrite(`${jobDir}/activity`, `${activity}\n`).catch(() => {});
 		await delay(1_000);
 	}
 	await finalizeJob(jobDir, "stopped", "hosted supervisor interrupted");
