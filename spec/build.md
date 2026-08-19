@@ -6,15 +6,13 @@
 
 ## NOW
 
-Stability sweep continues. F020/F022/F023 landed. Next two are independent.
+F020–F024 and F026 landed. Last original sweep slice:
 
-- `F024-terminal-state-first` (ACTIVE): terminal state lands before Herdr cosmetics, exactly once; `stop-reason` made durable for F011; unseen steers surfaced at finalize.
-- `F026-spawn-preflight` (ACTIVE): every job records its pi/Herdr versions; loud spawn failures for missing pi and wrong Node; optional `pi auth check`; SECURITY.md names what Linux does not contain.
+- `F021-hosted-stop-real` (ACTIVE): hosted stop ends the agent or truthfully says it could not; agent names keep their entropy; `--tab --timeout` errors.
 
 ## NEXT
-- `F021-hosted-stop-real` (PLANNED): hosted stop ends the agent or truthfully says it could not; agent names keep their entropy; `--tab --timeout` errors. After F020; serialize after F024 (shared stop/herdr/proc).
+- `F025-dead-job-reaper` (PLANNED): a running job whose process group died reaps to `failed: process group gone` and wakes; recycled pgids cannot fake life on macOS. After F021 (shared proc/spawn).
 - `F027-hosted-idle-advisory` (PLANNED): a hosted worker idle after tools, or blocked, taps the coordinator once — advisory wake, no state change, nothing auto-closed. After F020.
-- `F025-dead-job-reaper` (PLANNED): a running job whose process group died reaps to `failed: process group gone` and wakes; recycled pgids cannot fake life on macOS. After F022 and F024.
 - `F028-provider-error-is-failed` (PLANNED): a run whose last turn errored records `failed: <reason>`, matching pi's own text-mode exit semantics. Decision ticket — reverses one F011 exclusion; needs explicit sign-off. After F024.
 - `F011-empty-job-advisory` (PLANNED): a job that produced nothing should say so instead of reading DONE. Observed, not theorised. After F017 it reads `commits` and `tool-calls` instead of inferring; after F024 it also reads `stop-reason`; if F028 is signed off, its advisory targets clean-but-empty runs.
 - `F013-remote-seat` (PLANNED): one disk, attach don’t clone; docs and seat-shaped guarantees. Before F014, after the stability sweep.
@@ -22,6 +20,8 @@ Stability sweep continues. F020/F022/F023 landed. Next two are independent.
 
 ## PROVEN
 
+- `F026-spawn-preflight` (PROVEN): versions on the job record; loud fail on missing pi / wrong Node. Coordinator-reviewed at `206506c`.
+- `F024-terminal-state-first` (PROVEN): terminal state before Herdr; idempotent finalize; durable stop-reason. Coordinator-reviewed at `4ce24b6`.
 - `F022-prune-protects-live` (PROVEN): prune keeps live checkouts by the job worktree record; handshake 10s; suite serialized. Reviewed PASS at `8a44bb5`.
 - `F023-wake-quiet-fallback` (PROVEN): delivered jobs skip fallback claims; mute silences toasts; wake finds the root from a subdirectory. Reviewed PASS at `9f43458`.
 - `F020-herdr-agent-truth` (PROVEN): nested Herdr envelope, missing debounce, hook owns activity. Reviewed PASS at `2ef9f40`.

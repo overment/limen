@@ -1,6 +1,6 @@
 # F021-hosted-stop-real · Stopping a hosted job actually ends the agent, or says it could not
 
-[2026-08-19] [🔴] [PLANNED] [COORDINATOR] PLANNED · F021-hosted-stop-real
+[2026-08-19] [🟠] [ACTIVE] [COORDINATOR] ACTIVE · F021-hosted-stop-real
 
 ## Outcome
 
@@ -14,7 +14,7 @@ Observed cost today (2026-08-18 review, findings C3/S5/M5): `stopCommand` sends 
 - **The supervisor finalizes from observation.** `runHostedSupervisor` keeps polling; when the agent goes `missing` (debounced per F020) or `session-ended` appears, it finalizes `stopped: <requested reason>` when `stop-requested` exists, `done` otherwise.
 - **Truthful failure.** If the agent is still alive ~15 s after the request, the CLI prints that the agent did not exit and that closing the tab ends it; state stays `running`. No fabricated `stopped`.
 - **Supervisor-dead fallback.** If the supervisor process is gone (crash, reboot), `stop` may finalize directly — after confirming the agent target is `missing` — so a genuinely dead hosted job can still be closed out by hand.
-- **Name entropy.** `hostedAgentName` becomes `limen-<slug sliced to 17>-<hex8>`: the slug is what truncates, never the suffix. `startHostedPi`'s failure recovery must not adopt an agent whose name matches but whose pane differs from the one just created.
+- **Name entropy.** `hostedAgentName` becomes `limen-<slug sliced to 17>-<hex8>`: the slug is what truncates, never the suffix. `startHostedPi`'s failure recovery must not adopt an agent whose name matches but whose pane differs from the one just created. While probing live, record whether `agent list` rows expose a `name` field for named agents (the 2026-08-18 probe of an unnamed agent showed none) — `liveHostedTarget`'s name-matching either works or comes out.
 - **Timeout honesty.** `--tab` (or an implied hosted spawn) combined with `--timeout` is an error naming the fact hosted jobs have no timeout, instead of silently ignoring the flag.
 
 ## Out of scope

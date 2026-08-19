@@ -1,6 +1,6 @@
 # F024-terminal-state-first · Terminal truth lands first, once, and includes why the run stopped
 
-[2026-08-19] [🟠] [ACTIVE] [COORDINATOR] ACTIVE · F024-terminal-state-first
+[2026-08-19] [🟢] [PROVEN] [COORDINATOR] PROVEN · F024-terminal-state-first
 
 ## Outcome
 

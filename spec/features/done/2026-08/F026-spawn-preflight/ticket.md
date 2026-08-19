@@ -1,6 +1,6 @@
 # F026-spawn-preflight · A job records what it ran against, and refuses what cannot work
 
-[2026-08-19] [🟠] [ACTIVE] [COORDINATOR] ACTIVE · F026-spawn-preflight
+[2026-08-19] [🟢] [PROVEN] [COORDINATOR] PROVEN · F026-spawn-preflight
 
 ## Outcome
 
