@@ -5,7 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { hostedAgentName } from "../src/commands/spawn.ts";
 import { hostedAgentStatus, hostedTerminalReason, startHostedPi, stopHostedAgent } from "../src/herdr.ts";
-import { type HostedIdleWatch, noteHostedIdle } from "../src/proc.ts";
+import { DEFAULT_HOSTED_IDLE_MS, type HostedIdleWatch, noteHostedIdle } from "../src/proc.ts";
 import { git, limen, limenWithEnv, onlyJobId, scratchRepo, waitForState } from "./scratch.ts";
 
 test("hosted completion is session end or vanished agent, not Herdr idle", () => {
@@ -19,10 +19,15 @@ test("hosted completion is session end or vanished agent, not Herdr idle", () =>
 	assert.equal(hostedTerminalReason("missing", true), "hosted session ended");
 });
 
+test("hosted idle bound defaults to 60s", () => {
+	assert.equal(DEFAULT_HOSTED_IDLE_MS, 60_000);
+});
+
 test("noteHostedIdle writes one stall marker, skips zero tools, and re-arms after working", async () => {
 	const dir = await mkdtemp(join(tmpdir(), "limen-idle-"));
 	try {
 		await writeFile(join(dir, "tool-calls"), "0\n");
+		await writeFile(join(dir, "activity"), "wait\n");
 		const watch: HostedIdleWatch = { leftWorkingAt: undefined, armed: true };
 		await noteHostedIdle(dir, "idle", watch, 0, 10 * 60_000);
 		assert.equal(watch.leftWorkingAt, 0);
@@ -54,6 +59,7 @@ test("noteHostedIdle treats blocked as immediate and ignores unknown", async () 
 	const dir = await mkdtemp(join(tmpdir(), "limen-blocked-"));
 	try {
 		await writeFile(join(dir, "tool-calls"), "3\n");
+		await writeFile(join(dir, "activity"), "tool\n");
 		const watch: HostedIdleWatch = { leftWorkingAt: undefined, armed: true };
 		await noteHostedIdle(dir, "unknown", watch, 0, 10 * 60_000);
 		assert.equal(watch.leftWorkingAt, undefined);
@@ -63,6 +69,73 @@ test("noteHostedIdle treats blocked as immediate and ignores unknown", async () 
 		assert.equal(watch.armed, false);
 	} finally {
 		await rm(dir, { recursive: true, force: true });
+	}
+});
+
+test("noteHostedIdle ignores idle while activity is think or tool", async () => {
+	const dir = await mkdtemp(join(tmpdir(), "limen-idle-loop-"));
+	try {
+		await writeFile(join(dir, "tool-calls"), "5\n");
+		await writeFile(join(dir, "activity"), "think\n");
+		const watch: HostedIdleWatch = { leftWorkingAt: undefined, armed: true };
+		await noteHostedIdle(dir, "idle", watch, 0, 60_000);
+		await noteHostedIdle(dir, "idle", watch, 60_000, 60_000);
+		await assert.rejects(readFile(join(dir, "advisory")), "think is the loop still going");
+		assert.equal(watch.armed, true);
+		assert.equal(watch.leftWorkingAt, undefined);
+		await writeFile(join(dir, "activity"), "tool\n");
+		await noteHostedIdle(dir, "idle", watch, 120_000, 60_000);
+		await assert.rejects(readFile(join(dir, "advisory")), "tool is the loop still going");
+		assert.equal(watch.leftWorkingAt, undefined);
+		await writeFile(join(dir, "activity"), "wait\n");
+		await noteHostedIdle(dir, "idle", watch, 120_000, 60_000);
+		await noteHostedIdle(dir, "idle", watch, 180_000, 60_000);
+		assert.equal(await readFile(join(dir, "advisory"), "utf8"), "idle 1m after 5 tool calls, session still open\n");
+		assert.equal(watch.armed, false);
+	} finally {
+		await rm(dir, { recursive: true, force: true });
+	}
+});
+
+test("noteHostedIdle snapshots result and commits without finishing", async () => {
+	const parent = await mkdtemp(join(tmpdir(), "limen-idle-snap-"));
+	const repo = join(parent, "repo");
+	const dir = join(parent, "job");
+	try {
+		await mkdir(repo);
+		git(repo, "init", "-b", "main");
+		git(repo, "config", "user.email", "limen@example.test");
+		git(repo, "config", "user.name", "Limen Test");
+		await writeFile(join(repo, "README.md"), "scratch\n");
+		git(repo, "add", ".");
+		git(repo, "commit", "-m", "initial");
+		const base = git(repo, "rev-parse", "HEAD");
+		await mkdir(join(dir, "session"), { recursive: true });
+		await writeFile(join(dir, "base"), `${base}\n`);
+		await writeFile(join(dir, "branch"), "main\n");
+		await writeFile(join(dir, "worktree"), `${repo}\n`);
+		await writeFile(join(dir, "tool-calls"), "2\n");
+		await writeFile(join(dir, "activity"), "wait\n");
+		const entries = [
+			JSON.stringify({ type: "session", version: 3 }),
+			JSON.stringify({ type: "message", message: { role: "assistant", content: [{ type: "text", text: "early note" }] } }),
+			JSON.stringify({ type: "message", message: { role: "assistant", content: [{ type: "text", text: "hosted stall summary" }] } }),
+		];
+		await writeFile(join(dir, "session/2026-01-01T00-00-00-000Z_abc.jsonl"), `${entries.join("\n")}\n`);
+		await writeFile(join(repo, "stall.txt"), "done\n");
+		git(repo, "add", "stall.txt");
+		git(repo, "commit", "-m", "stall work");
+		const watch: HostedIdleWatch = { leftWorkingAt: undefined, armed: true };
+		await noteHostedIdle(dir, "idle", watch, 0, 60_000);
+		await assert.rejects(readFile(join(dir, "advisory")));
+		await noteHostedIdle(dir, "idle", watch, 60_000, 60_000);
+		assert.equal(await readFile(join(dir, "advisory"), "utf8"), "idle 1m after 2 tool calls, session still open\n");
+		assert.equal(await readFile(join(dir, "result"), "utf8"), "hosted stall summary\n");
+		assert.match(await readFile(join(dir, "commits"), "utf8"), /stall work/);
+		await assert.rejects(readFile(join(dir, "finished-at")), "stall must not finalize");
+		assert.equal(watch.armed, false);
+	} finally {
+		await rm(parent, { recursive: true, force: true });
 	}
 });
 
@@ -215,7 +288,19 @@ test("hosted supervisor writes one idle advisory and stays running", async (cont
 	await new Promise((resolve) => setTimeout(resolve, 2_500));
 	await assert.rejects(readFile(join(job, "advisory")), "zero tool calls must not advisory");
 	assert.equal((await readFile(join(job, "state"), "utf8")).trim(), "running");
+	await mkdir(join(job, "session"), { recursive: true });
+	const entries = [
+		JSON.stringify({ type: "session", version: 3 }),
+		JSON.stringify({ type: "message", message: { role: "assistant", content: [{ type: "text", text: "early note" }] } }),
+		JSON.stringify({ type: "message", message: { role: "assistant", content: [{ type: "text", text: "hosted stall summary" }] } }),
+	];
+	await writeFile(join(job, "session/2026-01-01T00-00-00-000Z_abc.jsonl"), `${entries.join("\n")}\n`);
+	const worktree = (await readFile(join(job, "worktree"), "utf8")).trim();
+	await writeFile(join(worktree, "stall.txt"), "done\n");
+	git(worktree, "add", "stall.txt");
+	git(worktree, "commit", "-m", "stall work");
 	await writeFile(join(job, "tool-calls"), "14\n");
+	await writeFile(join(job, "activity"), "wait\n");
 	const deadline = Date.now() + 5_000;
 	let advisory = "";
 	while (Date.now() < deadline) {
@@ -227,6 +312,9 @@ test("hosted supervisor writes one idle advisory and stays running", async (cont
 		await new Promise((resolve) => setTimeout(resolve, 50));
 	}
 	assert.match(advisory, /idle \d+s after 14 tool calls, session still open/);
+	assert.equal(await readFile(join(job, "result"), "utf8"), "hosted stall summary\n");
+	assert.match(await readFile(join(job, "commits"), "utf8"), /stall work/);
+	await assert.rejects(readFile(join(job, "finished-at")), "stall must not finalize");
 	assert.equal((await readFile(join(job, "state"), "utf8")).trim(), "running");
 	await new Promise((resolve) => setTimeout(resolve, 1_500));
 	assert.equal((await readFile(join(job, "advisory"), "utf8")).trim(), advisory, "same stall must not rewrite");
