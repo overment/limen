@@ -6,9 +6,9 @@
 
 ## NOW
 
-- `F030-hosted-stall-handoff` (ACTIVE): hosted idle after tools snapshots result+commits and wakes the parent in 60s. Job stays running. After F027.
-- `F027-hosted-idle-advisory` (ACTIVE): merged `24ea294`. Review PASS. 10m tap is too empty/slow for autonomy — F030.
-- `F029-hosted-review` (ACTIVE): merged `914bc4d`. Coordinator PASS. Not proven as a live `--review` tab.
+- `F030-hosted-stall-handoff` (ACTIVE): merged `4e211c9` (`15383c7`). Review PASS. Not proven until a live stall wake carries `result`. `/reload` to load 60s + excerpt.
+- `F027-hosted-idle-advisory` (ACTIVE): merged `24ea294`. Live tap on this coordinator (F030 implement + F030 review). Empty 10m wake superseded by F030.
+- `F029-hosted-review` (ACTIVE): merged `914bc4d`. Live-proven: `2026-08-20-f030-review-85ceb9e7` started `(hosted)`.
 
 ## NEXT
 - `F028-provider-error-is-failed` (PLANNED): a run whose last turn errored records `failed: <reason>`, matching pi's own text-mode exit semantics. Decision ticket — reverses one F011 exclusion; needs explicit sign-off. After F024.
