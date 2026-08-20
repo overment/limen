@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { appendFile, open, readdir, readFile, rename, rm } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { commitList } from "./git.ts";
-import { hostedAgentAlive, hostedAgentStatus, hostedTerminalReason, renameJobTab, type HostedAgentStatus } from "./herdr.ts";
+import { type HostedAgentStatus, hostedAgentAlive, hostedAgentStatus, hostedTerminalReason, renameJobTab } from "./herdr.ts";
 import { assistantStopReason, assistantText, createStreamParser, type StreamEvent } from "./stream.ts";
 
 const STOP_GRACE_MS = 5_000;

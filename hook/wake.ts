@@ -163,7 +163,10 @@ export default function limenWake(pi: PiApi): void {
 			recoverClaims(job);
 			if (!isTerminal(stateOf(jobs, id)) || !routable(job)) return false;
 			// Read claims before delivered records: rename moves atomically between them, so one side is always visible.
-			if (fallback) return session?.isIdle() === true && !muted && completionSlots(claimSlots(job)).every((claim) => claim === "_fallback") && completionSlots(deliveredSlots(job)).length === 0;
+			if (fallback)
+				return (
+					session?.isIdle() === true && !muted && completionSlots(claimSlots(job)).every((claim) => claim === "_fallback") && completionSlots(deliveredSlots(job)).length === 0
+				);
 			return subscribed(job, sessionId) && !existsSync(join(job, "notify", "claims", "_fallback")) && !existsSync(join(job, "notify", "delivered", "_fallback"));
 		};
 		const routed = claimDelivery(job, slot, eligible, () => {
@@ -195,8 +198,16 @@ export default function limenWake(pi: PiApi): void {
 		const eligible = () => {
 			recoverClaims(job);
 			if (stateOf(jobs, id) !== "running" || !text(join(job, "advisory")) || !routable(job)) return false;
-			if (fallback) return session?.isIdle() === true && !muted && advisorySlots(claimSlots(job)).every((claim) => claim === "_advisory._fallback") && advisorySlots(deliveredSlots(job)).length === 0;
-			return subscribed(job, sessionId) && !existsSync(join(job, "notify", "claims", "_advisory._fallback")) && !existsSync(join(job, "notify", "delivered", "_advisory._fallback"));
+			if (fallback)
+				return (
+					session?.isIdle() === true &&
+					!muted &&
+					advisorySlots(claimSlots(job)).every((claim) => claim === "_advisory._fallback") &&
+					advisorySlots(deliveredSlots(job)).length === 0
+				);
+			return (
+				subscribed(job, sessionId) && !existsSync(join(job, "notify", "claims", "_advisory._fallback")) && !existsSync(join(job, "notify", "delivered", "_advisory._fallback"))
+			);
 		};
 		const routed = claimDelivery(job, slot, eligible, () => {
 			const route = fallback ? " This advisory was routed here because no subscribed coordinator received it." : "";

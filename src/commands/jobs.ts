@@ -53,9 +53,10 @@ async function orderedJobs(ids: readonly string[], jobsRoot: string): Promise<Re
 }
 async function renderJobDirectory(root: string, jobsRoot: string, id: string, detailed: boolean): Promise<string> {
 	const jobDir = `${jobsRoot}/${id}`;
-	const [state = "", label = "", branch = "", repo = "", pid, started = "", finished = "", toolCalls, lastTool, activity, hosted, candidate = "", advisory = ""] = await Promise.all(
-		"state label branch repo pid started-at finished-at tool-calls last-tool activity hosted candidate advisory".split(" ").map((field) => text(`${jobDir}/${field}`)),
-	);
+	const [state = "", label = "", branch = "", repo = "", pid, started = "", finished = "", toolCalls, lastTool, activity, hosted, candidate = "", advisory = ""] =
+		await Promise.all(
+			"state label branch repo pid started-at finished-at tool-calls last-tool activity hosted candidate advisory".split(" ").map((field) => text(`${jobDir}/${field}`)),
+		);
 	const agent = await text(`${jobDir}/herdr/agent`);
 	const [commits, result, stopReason, versions] = detailed
 		? await Promise.all([text(`${jobDir}/commits`), text(`${jobDir}/result`), text(`${jobDir}/stop-reason`), text(`${jobDir}/versions`)])

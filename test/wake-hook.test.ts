@@ -929,8 +929,8 @@ test("a muted session holds the advisory until unmuted", async (context) => {
 	await writeFile(join(jobs, "quiet/state"), "running\n");
 	await writeFile(join(jobs, "quiet/advisory"), "blocked after 2 tool calls, session still open\n");
 	await new Promise((resolve) => setTimeout(resolve, 200));
-	assert.deepEqual(messages, []);
-	assert.deepEqual(notifications, []);
+	assert.equal(messages.length, 0);
+	assert.equal(notifications.length, 0);
 	command("on", commandUi);
 	await waitUntil(() => messages.length === 1);
 	assert.match(messages[0] ?? "", /blocked after 2 tool calls/);
