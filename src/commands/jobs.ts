@@ -53,8 +53,8 @@ async function orderedJobs(ids: readonly string[], jobsRoot: string): Promise<Re
 }
 async function renderJobDirectory(root: string, jobsRoot: string, id: string, detailed: boolean): Promise<string> {
 	const jobDir = `${jobsRoot}/${id}`;
-	const [state = "", label = "", branch = "", repo = "", pid, started = "", finished = "", toolCalls, lastTool, activity, hosted, candidate = ""] = await Promise.all(
-		"state label branch repo pid started-at finished-at tool-calls last-tool activity hosted candidate".split(" ").map((field) => text(`${jobDir}/${field}`)),
+	const [state = "", label = "", branch = "", repo = "", pid, started = "", finished = "", toolCalls, lastTool, activity, hosted, candidate = "", advisory = ""] = await Promise.all(
+		"state label branch repo pid started-at finished-at tool-calls last-tool activity hosted candidate advisory".split(" ").map((field) => text(`${jobDir}/${field}`)),
 	);
 	const agent = await text(`${jobDir}/herdr/agent`);
 	const [commits, result, stopReason, versions] = detailed
@@ -98,6 +98,7 @@ async function renderJobDirectory(root: string, jobsRoot: string, id: string, de
 		if (repo) blocks.push(`  repo ${display(repo)}`);
 		if (candidate) blocks.push(`  candidate ${display(candidate)}`);
 		if (hosted) blocks.push("  hosted (weaker guarantees)");
+		if (job.phase === "running" && advisory) blocks.push(`  advisory ${display(advisory)}`);
 		if (stopReason) blocks.push(indented("stop-reason", stopReason));
 		if (versions) blocks.push(indented("versions", versions));
 		if (commits) blocks.push(indented("commits", commits));

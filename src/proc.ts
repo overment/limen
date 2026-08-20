@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { appendFile, open, readdir, readFile, rename, rm } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { commitList } from "./git.ts";
-import { hostedAgentAlive, hostedAgentStatus, hostedTerminalReason, renameJobTab } from "./herdr.ts";
+import { hostedAgentAlive, hostedAgentStatus, hostedTerminalReason, renameJobTab, type HostedAgentStatus } from "./herdr.ts";
 import { assistantStopReason, assistantText, createStreamParser, type StreamEvent } from "./stream.ts";
 
 const STOP_GRACE_MS = 5_000;
@@ -44,6 +44,12 @@ export function processGroupAlive(pid: number): boolean {
 	return result === "sent" || result === "denied";
 }
 export const STARTUP_GRACE_MS = 10 * 60_000;
+export const DEFAULT_HOSTED_IDLE_MS = 10 * 60_000;
+export type HostedIdleWatch = { leftWorkingAt: number | undefined; armed: boolean };
+export function hostedIdleMs(): number {
+	const raw = Number(process.env.LIMEN_HOSTED_IDLE_MS);
+	return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_HOSTED_IDLE_MS;
+}
 export async function liveJob(jobDir: string, now = Date.now()): Promise<boolean> {
 	if ((await textFile(`${jobDir}/state`)) !== "running") return false;
 	const pid = Number(await textFile(`${jobDir}/pid`));
@@ -302,6 +308,7 @@ export async function runHostedSupervisor(): Promise<void> {
 	process.on("SIGTERM", () => {
 		stopRequested = true;
 	});
+	const idle: HostedIdleWatch = { leftWorkingAt: undefined, armed: true };
 	while (!stopRequested) {
 		const status = hostedAgentStatus(target);
 		const sessionEnded = Boolean(await textFile(`${jobDir}/session-ended`));
@@ -315,9 +322,43 @@ export async function runHostedSupervisor(): Promise<void> {
 			await finalizeJob(jobDir, requested ? "stopped" : "done", requested || reason);
 			return;
 		}
+		await noteHostedIdle(jobDir, status, idle);
 		await delay(1_000);
 	}
 	await finalizeJob(jobDir, "stopped", "hosted supervisor interrupted");
+}
+/** One stall notice while the hosted session stays open. Re-arm only after the agent works again. */
+export async function noteHostedIdle(jobDir: string, status: HostedAgentStatus, watch: HostedIdleWatch, now = Date.now(), thresholdMs = hostedIdleMs()): Promise<void> {
+	if (status === "working") {
+		watch.leftWorkingAt = undefined;
+		if (!watch.armed) {
+			watch.armed = true;
+			await clearHostedAdvisory(jobDir);
+		}
+		return;
+	}
+	if (status !== "idle" && status !== "done" && status !== "blocked") return;
+	if (watch.leftWorkingAt === undefined) watch.leftWorkingAt = now;
+	if (!watch.armed) return;
+	const stalled = status === "blocked" || now - watch.leftWorkingAt >= thresholdMs;
+	if (!stalled) return;
+	const tools = Number(await textFile(`${jobDir}/tool-calls`));
+	const count = Number.isSafeInteger(tools) && tools > 0 ? tools : 0;
+	if (status !== "blocked" && count < 1) return;
+	const elapsed = now - watch.leftWorkingAt;
+	const duration = elapsed < 60_000 ? `${Math.max(1, Math.round(elapsed / 1000))}s` : `${Math.round(elapsed / 60_000)}m`;
+	const line = status === "blocked" ? `blocked after ${count} tool calls, session still open` : `idle ${duration} after ${count} tool calls, session still open`;
+	await atomicWrite(`${jobDir}/advisory`, `${line}\n`);
+	watch.armed = false;
+	await appendLimenLog(jobDir, `advisory: ${line}`).catch(() => {});
+}
+async function clearHostedAdvisory(jobDir: string): Promise<void> {
+	await rm(`${jobDir}/advisory`, { force: true });
+	for (const dir of [`${jobDir}/notify/claims`, `${jobDir}/notify/delivered`, `${jobDir}/notify/herdr`]) {
+		for (const name of await readdir(dir).catch(() => [] as string[])) {
+			if (name.startsWith("_advisory.")) await rm(`${dir}/${name}`, { recursive: true, force: true });
+		}
+	}
 }
 async function textFile(path: string): Promise<string> {
 	return readFile(path, "utf8").then(

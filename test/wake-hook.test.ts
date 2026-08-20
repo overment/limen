@@ -742,6 +742,201 @@ test("a dead running job past grace is reaped once and wakes", async (context) =
 	assert.equal(messages.filter((message) => message.includes("is failed (gone)")).length, 1, "a reaped job must wake once");
 });
 
+test("an idle advisory wakes once, stays running, and does not block completion", async (context) => {
+	stashEnv(context, "LIMEN_JOB", undefined);
+	stashEnv(context, "LIMEN_HERDR", "0");
+	const root = await import("node:fs/promises").then(({ mkdtemp }) => mkdtemp(join(process.env.TMPDIR ?? "/tmp", "limen-wake-advisory-")));
+	context.after(() => import("node:fs/promises").then(({ rm }) => rm(root, { recursive: true, force: true })));
+	await mkdir(join(root, ".agents/limen"), { recursive: true });
+	const jobs = join(root, ".limen/jobs");
+	const handlers = new Map<string, (event: unknown, context: TestContext) => void>();
+	const messages: Array<{ content: string; deliverAs?: string }> = [];
+	const notifications: string[] = [];
+	limenWake({
+		on(event, handler) {
+			handlers.set(event, handler);
+		},
+		sendUserMessage(content, options) {
+			messages.push({ content, ...(options ? { deliverAs: options.deliverAs } : {}) });
+		},
+	});
+	const session = {
+		cwd: root,
+		isIdle: () => true,
+		sessionManager: sessionManager("coordinator-a"),
+		ui: { notify: (message: string) => notifications.push(message), setStatus() {} },
+	};
+	handlers.get("session_start")?.({}, session);
+	context.after(() => handlers.get("session_shutdown")?.({}, session));
+	await mkdir(join(jobs, "stall"), { recursive: true });
+	await writeFile(join(jobs, "stall/label"), "F027 stall\n");
+	await writeFile(join(jobs, "stall/branch"), "limen/stall\n");
+	await subscribe(jobs, "stall", "coordinator-a");
+	await writeFile(join(jobs, "stall/state"), "running\n");
+	await writeFile(join(jobs, "stall/advisory"), "idle 10m after 14 tool calls, session still open\n");
+	await waitUntil(() => messages.length === 1);
+	assert.equal(messages[0]?.deliverAs, undefined);
+	assert.match(messages[0]?.content ?? "", /still running \(stall\).*idle 10m after 14 tool calls, session still open/);
+	assert.match(messages[0]?.content ?? "", /Steer it, or open the tab and finish\/exit/);
+	assert.ok(notifications.some((value) => value.includes("is idle (stall)")));
+	assert.equal(await readFile(join(jobs, "stall/state"), "utf8"), "running\n");
+	await writeFile(join(jobs, "stall/state"), "done\n");
+	await waitUntil(() => messages.length === 2);
+	assert.match(messages[1]?.content ?? "", /is done \(stall\)/);
+	assert.doesNotMatch(messages[1]?.content ?? "", /Steer it/);
+	const { existsSync } = await import("node:fs");
+	assert.equal(existsSync(join(jobs, "stall/notify/delivered/coordinator-a")), true);
+	assert.equal(existsSync(join(jobs, "stall/notify/delivered/_advisory.coordinator-a")), true);
+});
+
+test("work resuming then stalling again re-arms one further advisory wake", async (context) => {
+	stashEnv(context, "LIMEN_JOB", undefined);
+	stashEnv(context, "LIMEN_HERDR", "0");
+	const root = await import("node:fs/promises").then(({ mkdtemp }) => mkdtemp(join(process.env.TMPDIR ?? "/tmp", "limen-wake-rearm-")));
+	context.after(() => import("node:fs/promises").then(({ rm }) => rm(root, { recursive: true, force: true })));
+	await mkdir(join(root, ".agents/limen"), { recursive: true });
+	const jobs = join(root, ".limen/jobs");
+	const handlers = new Map<string, (event: unknown, context: TestContext) => void>();
+	const messages: string[] = [];
+	limenWake({
+		on(event, handler) {
+			handlers.set(event, handler);
+		},
+		sendUserMessage(content) {
+			messages.push(content);
+		},
+	});
+	const session = { cwd: root, isIdle: () => true, sessionManager: sessionManager("coordinator-a"), ui: { notify() {}, setStatus() {} } };
+	handlers.get("session_start")?.({}, session);
+	context.after(() => handlers.get("session_shutdown")?.({}, session));
+	const job = join(jobs, "again");
+	await mkdir(job, { recursive: true });
+	await writeFile(join(job, "label"), "F027 again\n");
+	await writeFile(join(job, "branch"), "limen/again\n");
+	await subscribe(jobs, "again", "coordinator-a");
+	await writeFile(join(job, "state"), "running\n");
+	await writeFile(join(job, "advisory"), "idle 10m after 4 tool calls, session still open\n");
+	await waitUntil(() => messages.length === 1);
+	const { rm } = await import("node:fs/promises");
+	await rm(join(job, "advisory"), { force: true });
+	await rm(join(job, "notify/delivered/_advisory.coordinator-a"), { recursive: true, force: true });
+	await rm(join(job, "notify/claims/_advisory.coordinator-a"), { recursive: true, force: true });
+	await writeFile(join(job, "advisory"), "idle 10m after 8 tool calls, session still open\n");
+	await waitUntil(() => messages.length === 2);
+	assert.match(messages[1] ?? "", /idle 10m after 8 tool calls/);
+});
+
+test("first idle wake in a sweep is a real turn; later wakes are followUp", async (context) => {
+	stashEnv(context, "LIMEN_JOB", undefined);
+	stashEnv(context, "LIMEN_HERDR", "0");
+	const root = await import("node:fs/promises").then(({ mkdtemp }) => mkdtemp(join(process.env.TMPDIR ?? "/tmp", "limen-wake-followup-")));
+	context.after(() => import("node:fs/promises").then(({ rm }) => rm(root, { recursive: true, force: true })));
+	await mkdir(join(root, ".agents/limen"), { recursive: true });
+	const jobs = join(root, ".limen/jobs");
+	for (const id of ["one", "two"]) {
+		await mkdir(join(jobs, id), { recursive: true });
+		await writeFile(join(jobs, id, "label"), `F027 ${id}\n`);
+		await writeFile(join(jobs, id, "branch"), `limen/${id}\n`);
+		await subscribe(jobs, id, "coordinator-a");
+		await writeFile(join(jobs, id, "state"), "done\n");
+	}
+	const handlers = new Map<string, (event: unknown, context: TestContext) => void>();
+	const messages: Array<{ content: string; deliverAs?: string }> = [];
+	limenWake({
+		on(event, handler) {
+			handlers.set(event, handler);
+		},
+		sendUserMessage(content, options) {
+			messages.push({ content, ...(options ? { deliverAs: options.deliverAs } : {}) });
+		},
+	});
+	const session = { cwd: root, isIdle: () => true, sessionManager: sessionManager("coordinator-a"), ui: { notify() {}, setStatus() {} } };
+	handlers.get("session_start")?.({}, session);
+	context.after(() => handlers.get("session_shutdown")?.({}, session));
+	await waitUntil(() => messages.length === 2);
+	assert.equal(messages.filter((message) => message.deliverAs === undefined).length, 1);
+	assert.equal(messages.filter((message) => message.deliverAs === "followUp").length, 1);
+	assert.ok(messages.some((message) => message.content.includes("is done (one)") && !message.content.includes("is done (two)")));
+	assert.ok(messages.some((message) => message.content.includes("is done (two)") && !message.content.includes("is done (one)")));
+});
+
+test("a busy session injects every wake as followUp", async (context) => {
+	stashEnv(context, "LIMEN_JOB", undefined);
+	stashEnv(context, "LIMEN_HERDR", "0");
+	const root = await import("node:fs/promises").then(({ mkdtemp }) => mkdtemp(join(process.env.TMPDIR ?? "/tmp", "limen-wake-busy-")));
+	context.after(() => import("node:fs/promises").then(({ rm }) => rm(root, { recursive: true, force: true })));
+	await mkdir(join(root, ".agents/limen"), { recursive: true });
+	const jobs = join(root, ".limen/jobs");
+	await mkdir(join(jobs, "busy"), { recursive: true });
+	await writeFile(join(jobs, "busy/label"), "F027 busy\n");
+	await writeFile(join(jobs, "busy/branch"), "limen/busy\n");
+	await subscribe(jobs, "busy", "coordinator-a");
+	await writeFile(join(jobs, "busy/state"), "done\n");
+	const handlers = new Map<string, (event: unknown, context: TestContext) => void>();
+	const messages: Array<{ content: string; deliverAs?: string }> = [];
+	limenWake({
+		on(event, handler) {
+			handlers.set(event, handler);
+		},
+		sendUserMessage(content, options) {
+			messages.push({ content, ...(options ? { deliverAs: options.deliverAs } : {}) });
+		},
+	});
+	const session = { cwd: root, isIdle: () => false, sessionManager: sessionManager("coordinator-a"), ui: { notify() {}, setStatus() {} } };
+	handlers.get("session_start")?.({}, session);
+	context.after(() => handlers.get("session_shutdown")?.({}, session));
+	await waitUntil(() => messages.length === 1);
+	assert.equal(messages[0]?.deliverAs, "followUp");
+});
+
+test("a muted session holds the advisory until unmuted", async (context) => {
+	stashEnv(context, "LIMEN_JOB", undefined);
+	stashEnv(context, "LIMEN_HERDR", "0");
+	const root = await import("node:fs/promises").then(({ mkdtemp }) => mkdtemp(join(process.env.TMPDIR ?? "/tmp", "limen-wake-mute-adv-")));
+	context.after(() => import("node:fs/promises").then(({ rm }) => rm(root, { recursive: true, force: true })));
+	await mkdir(join(root, ".agents/limen"), { recursive: true });
+	const jobs = join(root, ".limen/jobs");
+	const handlers = new Map<string, (event: unknown, context: TestContext) => void>();
+	let command: ((args: string, context: { ui: { notify(message: string, level: "info"): void } }) => void) | undefined;
+	const messages: string[] = [];
+	const notifications: string[] = [];
+	limenWake({
+		on(event, handler) {
+			handlers.set(event, handler);
+		},
+		sendUserMessage(content) {
+			messages.push(content);
+		},
+		registerCommand(_name, options) {
+			command = options.handler;
+		},
+	});
+	assert.ok(command);
+	const commandUi = { ui: { notify() {} } };
+	const session = {
+		cwd: root,
+		isIdle: () => true,
+		sessionManager: sessionManager("coordinator-a"),
+		ui: { notify: (message: string) => notifications.push(message), setStatus() {} },
+	};
+	handlers.get("session_start")?.({}, session);
+	context.after(() => handlers.get("session_shutdown")?.({}, session));
+	command("off", commandUi);
+	await mkdir(join(jobs, "quiet"), { recursive: true });
+	await writeFile(join(jobs, "quiet/label"), "F027 quiet\n");
+	await writeFile(join(jobs, "quiet/branch"), "limen/quiet\n");
+	await subscribe(jobs, "quiet", "coordinator-a");
+	await writeFile(join(jobs, "quiet/state"), "running\n");
+	await writeFile(join(jobs, "quiet/advisory"), "blocked after 2 tool calls, session still open\n");
+	await new Promise((resolve) => setTimeout(resolve, 200));
+	assert.deepEqual(messages, []);
+	assert.deepEqual(notifications, []);
+	command("on", commandUi);
+	await waitUntil(() => messages.length === 1);
+	assert.match(messages[0] ?? "", /blocked after 2 tool calls/);
+	assert.ok(notifications.some((value) => value.includes("is blocked (quiet)")));
+});
+
 test("wake does not crash Pi after a stale reload context", async (context) => {
 	stashEnv(context, "LIMEN_JOB", undefined);
 	stashEnv(context, "LIMEN_HERDR", "0");
