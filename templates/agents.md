@@ -32,11 +32,11 @@ Herdr is the visible layout when it is running. Job files under `.limen/jobs/` a
 | Mode | Command | What runs | Tab shows | When to use |
 |---|---|---|---|---|
 | **Hosted (interactive)** | `limen spawn …` in Herdr, or `limen spawn --tab …` | Interactive `pi` **inside** the job tab | The worker itself — you can type | **Default whenever Herdr is available** (`HERDR_ENV=1`) |
-| **Detached** | `limen spawn --detached …` | Background `pi` (JSON stream, timeout, tool-call cap, process containment) | Live **log tail** only | Headless/no Herdr, scripts, reviews, or when the human asks |
+| **Detached** | `limen spawn --detached …` | Background `pi` (JSON stream, timeout, tool-call cap, process containment) | Live **log tail** only | Headless/no Herdr, scripts, or when the human asks |
 
-**In Herdr, implementation spawn is hosted by default — do not omit a flag and expect a log-tail worker.** Pass `--detached` only when the human asked, or when there is no Herdr. `--tab` forces hosted and refuses without Herdr. Reviews stay detached (`--review` does not combine with `--tab`).
+**In Herdr, spawn is hosted by default — do not omit a flag and expect a log-tail worker.** Pass `--detached` only when the human asked, or when there is no Herdr. `--tab` forces hosted and refuses without Herdr.
 
-**Hosted weaker guarantees** (recorded in the job’s `hosted` file): no 90-minute timeout, no tool-call cap, no F007 process containment. Herdr owns that process tree. Closing the hosted tab ends the worker. After the tab is gone, `limen open <id>` reopens a **log** view only — it does not resurrect the agent; respawn for a new one. `--tab` does not support `--review` yet. Hosted start focuses the new tab, starts `pi` there, then restores the coordinator tab (`HERDR_TAB_ID`). Herdr 0.8 will not start an agent in a background pane.
+**Hosted weaker guarantees** (recorded in the job’s `hosted` file): no 90-minute timeout, no tool-call cap, no F007 process containment. Herdr owns that process tree. Closing the hosted tab ends the worker. After the tab is gone, `limen open <id>` reopens a **log** view only — it does not resurrect the agent; respawn for a new one. Hosted start focuses the new tab, starts `pi` there, then restores the coordinator tab (`HERDR_TAB_ID`). Herdr 0.8 will not start an agent in a background pane.
 
 **Other job controls:**
 

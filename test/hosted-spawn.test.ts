@@ -5,7 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { hostedAgentName } from "../src/commands/spawn.ts";
 import { hostedAgentStatus, hostedTerminalReason, startHostedPi, stopHostedAgent } from "../src/herdr.ts";
-import { limen, limenWithEnv, onlyJobId, scratchRepo, waitForState } from "./scratch.ts";
+import { git, limen, limenWithEnv, onlyJobId, scratchRepo, waitForState } from "./scratch.ts";
 
 test("hosted completion is session end or vanished agent, not Herdr idle", () => {
 	assert.equal(hostedTerminalReason("idle", false), undefined);
@@ -110,6 +110,11 @@ test("spawn --tab refuses without Herdr and leaves no job record", async (contex
 	assert.equal(refused.status, 1);
 	assert.match(refused.stderr, /hosted spawn requires Herdr/);
 	assert.deepEqual(await readdir(join(scratch.root, ".limen/jobs")), []);
+	const review = limen(scratch, "spawn", "--tab", "--review", "--branch", "limen/ghost", "inspect candidate");
+	assert.equal(review.status, 1);
+	assert.match(review.stderr, /hosted spawn requires Herdr/);
+	assert.doesNotMatch(review.stderr, /does not support --review/);
+	assert.deepEqual(await readdir(join(scratch.root, ".limen/jobs")), []);
 });
 
 test("spawn in Herdr is hosted without --tab; --detached keeps a watch tab", async (context) => {
@@ -140,6 +145,46 @@ test("spawn in Herdr is hosted without --tab; --detached keeps a watch tab", asy
 	await waitForState(scratch.root, id, "done");
 	assert.match(await readFile(join(job, "log"), "utf8"), /hosted supervisor started/);
 	assert.match(await readFile(join(job, "log"), "utf8"), /hosted agent done|hosted agent ended/);
+});
+
+test("spawn --review in Herdr is hosted; --detached keeps a watch tab", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	assert.equal(limen(scratch, "init").status, 0);
+	const worker = onlyJobId(limen(scratch, "spawn", "make commit").stdout);
+	await waitForState(scratch.root, worker, "done");
+	const branch = `limen/${worker}`;
+	const herdr = await installHostedFakeHerdr(scratch.root, scratch.fakeBin);
+	const env = { HERDR_ENV: "1", LIMEN_HERDR: herdr.bin, FAKE_HERDR_STATE: herdr.dir, HERDR_TAB_ID: "coord:t0" };
+	const hosted = limenWithEnv(scratch, env, "spawn", "--review", "--branch", branch, "--label", "F029 review", "inspect candidate");
+	assert.equal(hosted.status, 0, hosted.stderr);
+	assert.match(hosted.stdout, /started F029 review \(hosted\)/);
+	const hostedId = onlyJobId(hosted.stdout);
+	const hostedJob = join(scratch.root, ".limen/jobs", hostedId);
+	assert.match(await readFile(join(hostedJob, "hosted"), "utf8"), /weaker guarantees/);
+	assert.equal(await readFile(join(hostedJob, "herdr/mode"), "utf8"), "hosted\n");
+	assert.equal(await readFile(join(hostedJob, "herdr/agent"), "utf8"), "w1:p1\n");
+	const hostedCalls = await readFile(herdr.calls, "utf8");
+	assert.match(hostedCalls, /--kind pi/);
+	assert.doesNotMatch(hostedCalls, /pane run .*tail/);
+	const hostedTree = git(scratch.root, "worktree", "list", "--porcelain")
+		.split("\n\n")
+		.find((block) => block.includes(hostedId));
+	assert.match(hostedTree ?? "", /detached/);
+	await waitForState(scratch.root, hostedId, "done");
+	const tabbed = limenWithEnv(scratch, env, "spawn", "--tab", "--review", "--branch", branch, "--label", "F029 tab review", "inspect candidate");
+	assert.equal(tabbed.status, 0, tabbed.stderr);
+	assert.match(tabbed.stdout, /started F029 tab review \(hosted\)/);
+	const tabbedId = onlyJobId(tabbed.stdout);
+	assert.match(await readFile(join(scratch.root, ".limen/jobs", tabbedId, "hosted"), "utf8"), /weaker guarantees/);
+	await waitForState(scratch.root, tabbedId, "done");
+	const detached = limenWithEnv(scratch, env, "spawn", "--review", "--detached", "--branch", branch, "--label", "F029 detached review", "inspect candidate");
+	assert.equal(detached.status, 0, detached.stderr);
+	assert.doesNotMatch(detached.stdout, /\(hosted\)/);
+	const detachedId = onlyJobId(detached.stdout);
+	await waitForState(scratch.root, detachedId, "done");
+	await assert.rejects(readFile(join(scratch.root, ".limen/jobs", detachedId, "hosted")));
+	assert.equal(await readFile(join(scratch.root, ".limen/jobs", detachedId, "herdr/mode"), "utf8"), "watch\n");
 });
 
 test("a hosted job finalizes on session end, never on unseen idle after tools", async (context) => {
