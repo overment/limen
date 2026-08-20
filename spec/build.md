@@ -6,8 +6,8 @@
 
 ## NOW
 
-- `F027-hosted-idle-advisory` (ACTIVE): merged `24ea294` (merge `f14fae6`). Review PASS. Not proven — no live hosted stall yet; `/reload` to load the hook.
-- `F029-hosted-review` (ACTIVE): in Herdr, `--review` is an interactive tab unless `--detached`. After F010 leftover.
+- `F027-hosted-idle-advisory` (ACTIVE): merged `24ea294`. Review PASS. Not proven — no live hosted stall yet; `/reload` to load the hook.
+- `F029-hosted-review` (ACTIVE): merged `914bc4d` (`370c342`). Coordinator PASS after independent review died on xAI capacity. Not proven — next `--review` in Herdr should be a tab.
 
 ## NEXT
 - `F028-provider-error-is-failed` (PLANNED): a run whose last turn errored records `failed: <reason>`, matching pi's own text-mode exit semantics. Decision ticket — reverses one F011 exclusion; needs explicit sign-off. After F024.
