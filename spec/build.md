@@ -6,7 +6,7 @@
 
 ## NOW
 
-- `F027-hosted-idle-advisory` (ACTIVE): candidate `24ea294` in review (`2026-08-20-f027-review-fb831e0c`).
+- `F027-hosted-idle-advisory` (ACTIVE): merged `24ea294` (merge `f14fae6`). Review PASS. Not proven — no live hosted stall yet; `/reload` to load the hook.
 - `F029-hosted-review` (ACTIVE): in Herdr, `--review` is an interactive tab unless `--detached`. After F010 leftover.
 
 ## NEXT
