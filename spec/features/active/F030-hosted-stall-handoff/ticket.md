@@ -13,6 +13,7 @@ F027 already writes `advisory` and taps once. That tap is too late (default 10 m
 - **Snapshot on stall.** `noteHostedIdle` (after it writes `advisory`) calls the existing `writeHostedResult` and `recordCommits`. No finalize. No `finished-at`. `state` stays `running`.
 - **Wake carries the handoff.** `sendAdvisory` appends the same `handoffExcerpt` completion wakes use (stop-reason, commits, final message). The lead sentence still says the job is running. Honest moves: inspect and continue the loop; steer; or open the tab and exit if you mean the session to end.
 - **Shorter bound.** Default `LIMEN_HOSTED_IDLE_MS` is 60 seconds (F027 shipped 10 minutes). Env still overrides. `blocked` stays immediate. Zero tool calls still do not advisory.
+- **Thinking is not idle.** The stall clock for `idle`/`done` runs only while job `activity` is `wait` (hosted hook: `turn_start` → think, tool → tool, `turn_end` → wait). `think` and `tool` mean the agentic loop is still going, including reasoning with no tools yet. Herdr `working` still resets the clock. Do not advisory a thinking turn even if Herdr already says `idle`/`done`.
 - **Tests.** A fake hosted agent that goes idle after tools within a shortened bound: `advisory` + `result` + `commits` on disk, one advisory wake containing the final-message excerpt, `state` still `running`. Completion after that still delivers the ordinary done wake.
 
 ## Out of scope
