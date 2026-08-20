@@ -49,6 +49,7 @@ export default function limenWake(pi: PiApi): void {
 	let herdrMetadataAt = 0;
 	const firstDead = new Map<string, number>();
 	let sweeping = false;
+	let injectedThisSweep = false;
 	const herdrCall = (args: readonly string[]) => {
 		if (!herdr) return;
 		try {
@@ -141,6 +142,15 @@ export default function limenWake(pi: PiApi): void {
 		if (!claimMarker(job, "herdr", slot)) return;
 		herdrCall(["notification", "show", `limen: ${label} is ${state}`, "--body", `job ${id} · branch ${branch}`, "--sound", state === "done" ? "done" : "request"]);
 	};
+	const injectWake = (message: string) => {
+		// First idle inject in a sweep is a real turn; later injects, and any inject while busy, are followUp.
+		if (session?.isIdle() === true && !injectedThisSweep) {
+			injectedThisSweep = true;
+			pi.sendUserMessage(message);
+			return;
+		}
+		pi.sendUserMessage(message, { deliverAs: "followUp" });
+	};
 	const sendCompletion = (jobs: string, id: string, state: string, fallback: boolean): boolean => {
 		if (!session) return false;
 		const job = join(jobs, id);
@@ -148,12 +158,12 @@ export default function limenWake(pi: PiApi): void {
 		const branch = text(join(job, "branch"));
 		const repo = text(join(job, "repo"));
 		const slot = fallback ? "_fallback" : sessionId;
-		if (fallback && (deliveredSlots(job).length > 0 || session.isIdle() !== true || muted)) return false;
+		if (fallback && (completionSlots(deliveredSlots(job)).length > 0 || session.isIdle() !== true || muted)) return false;
 		const eligible = () => {
 			recoverClaims(job);
 			if (!isTerminal(stateOf(jobs, id)) || !routable(job)) return false;
 			// Read claims before delivered records: rename moves atomically between them, so one side is always visible.
-			if (fallback) return session?.isIdle() === true && !muted && claimSlots(job).every((claim) => claim === "_fallback") && deliveredSlots(job).length === 0;
+			if (fallback) return session?.isIdle() === true && !muted && completionSlots(claimSlots(job)).every((claim) => claim === "_fallback") && completionSlots(deliveredSlots(job)).length === 0;
 			return subscribed(job, sessionId) && !existsSync(join(job, "notify", "claims", "_fallback")) && !existsSync(join(job, "notify", "delivered", "_fallback"));
 		};
 		const routed = claimDelivery(job, slot, eligible, () => {
@@ -166,11 +176,40 @@ export default function limenWake(pi: PiApi): void {
 			} catch {
 				retire(false);
 			}
-			// Idle: real user turn. Streaming: followUp waits until tools finish (steer interrupts mid-turn and is easy to miss).
-			if (session?.isIdle()) pi.sendUserMessage(message);
-			else pi.sendUserMessage(message, { deliverAs: "followUp" });
+			injectWake(message);
 		});
 		if (routed) notifyHerdr(job, id, state, label, branch, slot);
+		return routed;
+	};
+	const sendAdvisory = (jobs: string, id: string, fallback: boolean): boolean => {
+		if (!session) return false;
+		const job = join(jobs, id);
+		const advisory = text(join(job, "advisory"));
+		if (!advisory) return false;
+		const label = text(join(job, "label")) || id;
+		const branch = text(join(job, "branch"));
+		const repo = text(join(job, "repo"));
+		const slot = fallback ? "_advisory._fallback" : `_advisory.${sessionId}`;
+		if (fallback && (advisorySlots(deliveredSlots(job)).length > 0 || session.isIdle() !== true || muted)) return false;
+		const kind = advisory.startsWith("blocked") ? "blocked" : "idle";
+		const eligible = () => {
+			recoverClaims(job);
+			if (stateOf(jobs, id) !== "running" || !text(join(job, "advisory")) || !routable(job)) return false;
+			if (fallback) return session?.isIdle() === true && !muted && advisorySlots(claimSlots(job)).every((claim) => claim === "_advisory._fallback") && advisorySlots(deliveredSlots(job)).length === 0;
+			return subscribed(job, sessionId) && !existsSync(join(job, "notify", "claims", "_advisory._fallback")) && !existsSync(join(job, "notify", "delivered", "_advisory._fallback"));
+		};
+		const routed = claimDelivery(job, slot, eligible, () => {
+			const route = fallback ? " This advisory was routed here because no subscribed coordinator received it." : "";
+			const location = repo ? ` in repository ${repo}` : "";
+			const message = `Limen job ${JSON.stringify(label)} is still running (${id}) on branch ${branch}${location}: ${advisory}.${route} Steer it, or open the tab and finish/exit.`;
+			try {
+				session?.ui.notify(`limen: ${label} is ${kind} (${id})`, "info");
+			} catch {
+				retire(false);
+			}
+			injectWake(message);
+		});
+		if (routed) notifyHerdr(job, id, kind, label, branch, slot);
 		return routed;
 	};
 	const observe = (jobs: string, id: string) => {
@@ -188,7 +227,13 @@ export default function limenWake(pi: PiApi): void {
 				retire(false);
 			}
 		}
-		if (state === "running" || muted) return;
+		if (muted) return;
+		if (state === "running") {
+			if (!text(join(job, "advisory"))) return;
+			if (own) sendAdvisory(jobs, id, false);
+			else if (oldEnoughForFallback(job, join(job, "advisory"))) sendAdvisory(jobs, id, true);
+			return;
+		}
 		if (own && !deliveryExists(job, sessionId) && !deliveryExists(job, "_fallback")) notifyHerdr(job, id, state, label, branch, sessionId);
 		if (own) sendCompletion(jobs, id, state, false);
 		else if (oldEnoughForFallback(job)) sendCompletion(jobs, id, state, true);
@@ -199,6 +244,7 @@ export default function limenWake(pi: PiApi): void {
 		void finishSweep(jobsDir);
 	};
 	const finishSweep = async (jobs: string) => {
+		injectedThisSweep = false;
 		try {
 			await reapDeadJobs(jobs, firstDead);
 			for (const id of readdirSync(jobs)) {
@@ -437,10 +483,19 @@ function enrollLegacyRunning(job: string): void {
 		// Another coordinator enrolled it first.
 	}
 }
-function oldEnoughForFallback(job: string): boolean {
-	const finished = Date.parse(text(join(job, "finished-at")));
-	const since = Number.isFinite(finished) ? finished : statSync(join(job, "state")).mtimeMs;
+function oldEnoughForFallback(job: string, stamp = join(job, "finished-at")): boolean {
+	const finished = Date.parse(text(stamp));
+	const since = Number.isFinite(finished) ? finished : statSync(existsSync(stamp) ? stamp : join(job, "state")).mtimeMs;
 	return Date.now() - since >= FALLBACK_GRACE_MS;
+}
+function isAdvisorySlot(slot: string): boolean {
+	return slot.startsWith("_advisory.");
+}
+function advisorySlots(names: readonly string[]): string[] {
+	return names.filter((name) => isAdvisorySlot(name));
+}
+function completionSlots(names: readonly string[]): string[] {
+	return names.filter((name) => !isAdvisorySlot(name));
 }
 function projectRoot(cwd: string): string | undefined {
 	let dir = resolve(cwd);

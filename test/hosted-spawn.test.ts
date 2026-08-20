@@ -5,6 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { hostedAgentName } from "../src/commands/spawn.ts";
 import { hostedAgentStatus, hostedTerminalReason, startHostedPi, stopHostedAgent } from "../src/herdr.ts";
+import { noteHostedIdle, type HostedIdleWatch } from "../src/proc.ts";
 import { limen, limenWithEnv, onlyJobId, scratchRepo, waitForState } from "./scratch.ts";
 
 test("hosted completion is session end or vanished agent, not Herdr idle", () => {
@@ -16,6 +17,53 @@ test("hosted completion is session end or vanished agent, not Herdr idle", () =>
 	assert.equal(hostedTerminalReason("missing", false), "hosted agent ended");
 	assert.equal(hostedTerminalReason("idle", true), "hosted session ended");
 	assert.equal(hostedTerminalReason("missing", true), "hosted session ended");
+});
+
+test("noteHostedIdle writes one stall marker, skips zero tools, and re-arms after working", async () => {
+	const dir = await mkdtemp(join(tmpdir(), "limen-idle-"));
+	try {
+		await writeFile(join(dir, "tool-calls"), "0\n");
+		const watch: HostedIdleWatch = { leftWorkingAt: undefined, armed: true };
+		await noteHostedIdle(dir, "idle", watch, 0, 10 * 60_000);
+		assert.equal(watch.leftWorkingAt, 0);
+		assert.equal(watch.armed, true);
+		await noteHostedIdle(dir, "idle", watch, 10 * 60_000, 10 * 60_000);
+		await assert.rejects(readFile(join(dir, "advisory")), "zero tool calls is not a stall");
+		await writeFile(join(dir, "tool-calls"), "14\n");
+		await noteHostedIdle(dir, "idle", watch, 10 * 60_000, 10 * 60_000);
+		assert.equal(await readFile(join(dir, "advisory"), "utf8"), "idle 10m after 14 tool calls, session still open\n");
+		assert.equal(watch.armed, false);
+		await noteHostedIdle(dir, "idle", watch, 20 * 60_000, 10 * 60_000);
+		assert.equal(await readFile(join(dir, "advisory"), "utf8"), "idle 10m after 14 tool calls, session still open\n", "same stall must not nag");
+		await mkdir(join(dir, "notify/delivered/_advisory.coord"), { recursive: true });
+		await writeFile(join(dir, "notify/delivered/_advisory.coord/accepted"), "1\n");
+		await noteHostedIdle(dir, "working", watch, 21 * 60_000, 10 * 60_000);
+		assert.equal(watch.armed, true);
+		assert.equal(watch.leftWorkingAt, undefined);
+		await assert.rejects(readFile(join(dir, "advisory")));
+		await assert.rejects(readdir(join(dir, "notify/delivered/_advisory.coord")));
+		await noteHostedIdle(dir, "idle", watch, 21 * 60_000, 10 * 60_000);
+		await noteHostedIdle(dir, "idle", watch, 31 * 60_000, 10 * 60_000);
+		assert.equal(await readFile(join(dir, "advisory"), "utf8"), "idle 10m after 14 tool calls, session still open\n");
+	} finally {
+		await rm(dir, { recursive: true, force: true });
+	}
+});
+
+test("noteHostedIdle treats blocked as immediate and ignores unknown", async () => {
+	const dir = await mkdtemp(join(tmpdir(), "limen-blocked-"));
+	try {
+		await writeFile(join(dir, "tool-calls"), "3\n");
+		const watch: HostedIdleWatch = { leftWorkingAt: undefined, armed: true };
+		await noteHostedIdle(dir, "unknown", watch, 0, 10 * 60_000);
+		assert.equal(watch.leftWorkingAt, undefined);
+		await assert.rejects(readFile(join(dir, "advisory")));
+		await noteHostedIdle(dir, "blocked", watch, 0, 10 * 60_000);
+		assert.equal(await readFile(join(dir, "advisory"), "utf8"), "blocked after 3 tool calls, session still open\n");
+		assert.equal(watch.armed, false);
+	} finally {
+		await rm(dir, { recursive: true, force: true });
+	}
 });
 
 test("hostedAgentStatus reads nested 0.8.0 envelope and flat legacy", async () => {
@@ -140,6 +188,45 @@ test("spawn in Herdr is hosted without --tab; --detached keeps a watch tab", asy
 	await waitForState(scratch.root, id, "done");
 	assert.match(await readFile(join(job, "log"), "utf8"), /hosted supervisor started/);
 	assert.match(await readFile(join(job, "log"), "utf8"), /hosted agent done|hosted agent ended/);
+});
+
+test("hosted supervisor writes one idle advisory and stays running", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	assert.equal(limen(scratch, "init").status, 0);
+	const herdr = await installHostedFakeHerdr(scratch.root, scratch.fakeBin);
+	const env = {
+		HERDR_ENV: "1",
+		LIMEN_HERDR: herdr.bin,
+		FAKE_HERDR_STATE: herdr.dir,
+		FAKE_HERDR_PERSIST: "1",
+		HERDR_TAB_ID: "coord:t0",
+		LIMEN_HOSTED_IDLE_MS: "200",
+	};
+	const launched = limenWithEnv(scratch, env, "spawn", "--label", "F027 idle", "stay hosted");
+	assert.equal(launched.status, 0, launched.stderr);
+	const id = onlyJobId(launched.stdout);
+	const job = join(scratch.root, ".limen/jobs", id);
+	await new Promise((resolve) => setTimeout(resolve, 2_500));
+	await assert.rejects(readFile(join(job, "advisory")), "zero tool calls must not advisory");
+	assert.equal((await readFile(join(job, "state"), "utf8")).trim(), "running");
+	await writeFile(join(job, "tool-calls"), "14\n");
+	const deadline = Date.now() + 5_000;
+	let advisory = "";
+	while (Date.now() < deadline) {
+		advisory = await readFile(join(job, "advisory"), "utf8").then(
+			(value) => value.trim(),
+			() => "",
+		);
+		if (advisory) break;
+		await new Promise((resolve) => setTimeout(resolve, 50));
+	}
+	assert.match(advisory, /idle \d+s after 14 tool calls, session still open/);
+	assert.equal((await readFile(join(job, "state"), "utf8")).trim(), "running");
+	await new Promise((resolve) => setTimeout(resolve, 1_500));
+	assert.equal((await readFile(join(job, "advisory"), "utf8")).trim(), advisory, "same stall must not rewrite");
+	await writeFile(join(job, "session-ended"), `${new Date().toISOString()}\n`);
+	await waitForState(scratch.root, id, "done");
 });
 
 test("a hosted job finalizes on session end, never on unseen idle after tools", async (context) => {

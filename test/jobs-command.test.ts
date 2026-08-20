@@ -165,6 +165,26 @@ test("compact snapshots cap malformed live diagnostics", async (context) => {
 	assert.ok(Buffer.byteLength(result.stdout) < 1_024);
 });
 
+test("jobs shows the advisory line on a running hosted job", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	limen(scratch, "init");
+	const job = join(scratch.root, ".limen/jobs/stalled");
+	await mkdir(job);
+	await writeFile(join(job, "task.md"), "stall\n");
+	await writeFile(join(job, "state"), "running\n");
+	await writeFile(join(job, "label"), "F027 stalled\n");
+	await writeFile(join(job, "branch"), "limen/stalled\n");
+	await writeFile(join(job, "log"), "wait\n");
+	await writeFile(join(job, "activity"), "wait\n");
+	await writeFile(join(job, "hosted"), "weaker guarantees\n");
+	await writeFile(join(job, "advisory"), "idle 10m after 14 tool calls, session still open\n");
+	const result = limen(scratch, "jobs");
+	assert.equal(result.status, 0, result.stderr);
+	assert.match(result.stdout, /RUNNING F027 stalled/);
+	assert.match(result.stdout, /advisory idle 10m after 14 tool calls, session still open/);
+});
+
 test("jobs rejects ambiguous option shapes", async (context) => {
 	const scratch = await scratchRepo();
 	context.after(scratch.cleanup);
