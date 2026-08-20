@@ -44,7 +44,7 @@ export function processGroupAlive(pid: number): boolean {
 	return result === "sent" || result === "denied";
 }
 export const STARTUP_GRACE_MS = 10 * 60_000;
-export const DEFAULT_HOSTED_IDLE_MS = 10 * 60_000;
+export const DEFAULT_HOSTED_IDLE_MS = 60_000;
 export type HostedIdleWatch = { leftWorkingAt: number | undefined; armed: boolean };
 export function hostedIdleMs(): number {
 	const raw = Number(process.env.LIMEN_HOSTED_IDLE_MS);
@@ -338,6 +338,11 @@ export async function noteHostedIdle(jobDir: string, status: HostedAgentStatus, 
 		return;
 	}
 	if (status !== "idle" && status !== "done" && status !== "blocked") return;
+	// Herdr idle/done is not a stall while the agent is still in a turn (think/tool).
+	if (status !== "blocked" && (await textFile(`${jobDir}/activity`)) !== "wait") {
+		watch.leftWorkingAt = undefined;
+		return;
+	}
 	if (watch.leftWorkingAt === undefined) watch.leftWorkingAt = now;
 	if (!watch.armed) return;
 	const stalled = status === "blocked" || now - watch.leftWorkingAt >= thresholdMs;
@@ -348,6 +353,8 @@ export async function noteHostedIdle(jobDir: string, status: HostedAgentStatus, 
 	const elapsed = now - watch.leftWorkingAt;
 	const duration = elapsed < 60_000 ? `${Math.max(1, Math.round(elapsed / 1000))}s` : `${Math.round(elapsed / 60_000)}m`;
 	const line = status === "blocked" ? `blocked after ${count} tool calls, session still open` : `idle ${duration} after ${count} tool calls, session still open`;
+	await writeHostedResult(jobDir);
+	await recordCommits(jobDir).catch(() => {});
 	await atomicWrite(`${jobDir}/advisory`, `${line}\n`);
 	watch.armed = false;
 	await appendLimenLog(jobDir, `advisory: ${line}`).catch(() => {});

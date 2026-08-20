@@ -212,7 +212,7 @@ export default function limenWake(pi: PiApi): void {
 		const routed = claimDelivery(job, slot, eligible, () => {
 			const route = fallback ? " This advisory was routed here because no subscribed coordinator received it." : "";
 			const location = repo ? ` in repository ${repo}` : "";
-			const message = `Limen job ${JSON.stringify(label)} is still running (${id}) on branch ${branch}${location}: ${advisory}.${route} Steer it, or open the tab and finish/exit.`;
+			const message = `Limen job ${JSON.stringify(label)} is still running (${id}) on branch ${branch}${location}: ${advisory}.${route} Inspect the job record and continue the loop; steer; or open the tab and exit if you mean the session to end.${handoffExcerpt(job)}`;
 			try {
 				session?.ui.notify(`limen: ${label} is ${kind} (${id})`, "info");
 			} catch {
