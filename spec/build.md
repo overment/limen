@@ -6,10 +6,9 @@
 
 ## NOW
 
-2026-08-18 stability sweep (F020–F026) is on main. Next honesty holes are opt-in.
+`F027-hosted-idle-advisory` (ACTIVE): hosted worker idle after tools, or blocked, taps the coordinator once; first idle wake in a sweep is a real turn, later wakes are followUp. Job stays `running`. After F020.
 
 ## NEXT
-- `F027-hosted-idle-advisory` (PLANNED): a hosted worker idle after tools, or blocked, taps the coordinator once — advisory wake, no state change, nothing auto-closed. After F020.
 - `F028-provider-error-is-failed` (PLANNED): a run whose last turn errored records `failed: <reason>`, matching pi's own text-mode exit semantics. Decision ticket — reverses one F011 exclusion; needs explicit sign-off. After F024.
 - `F011-empty-job-advisory` (PLANNED): a job that produced nothing should say so instead of reading DONE. Observed, not theorised. After F017 it reads `commits` and `tool-calls` instead of inferring; after F024 it also reads `stop-reason`; if F028 is signed off, its advisory targets clean-but-empty runs.
 - `F013-remote-seat` (PLANNED): one disk, attach don’t clone; docs and seat-shaped guarantees. Before F014, after the stability sweep.
