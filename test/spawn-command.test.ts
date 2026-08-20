@@ -123,6 +123,7 @@ test("review gets fresh detached worktree and reviewer birth text", async (conte
 	const review = onlyJobId(limen(scratch, "spawn", "--review", "--branch", branch, "inspect candidate").stdout);
 	await waitForState(scratch.root, review, "done");
 	const reviewJob = join(scratch.root, ".limen/jobs", review);
+	await assert.rejects(readFile(join(reviewJob, "hosted")));
 	assert.equal(await readFile(join(reviewJob, "candidate"), "utf8"), `${candidateSha}\n`);
 	const reviewTask = await readFile(join(reviewJob, "task.md"), "utf8");
 	assert.equal(reviewTask, `inspect candidate\n\nCandidate commit: ${candidateSha}.\n`);

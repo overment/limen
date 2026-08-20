@@ -48,9 +48,8 @@ const handshakeMs = (): number => {
 export async function spawnCommand(args: readonly string[], cwd: string): Promise<void> {
 	const parsed = parseSpawnArgs(args);
 	const herdr = herdrAvailable();
-	const tab = parsed.review || parsed.detached ? false : parsed.tab || herdr;
+	const tab = parsed.detached ? false : parsed.tab || herdr;
 	const options = { ...parsed, tab };
-	if (parsed.tab && parsed.review) throw new Error("--tab does not support --review yet");
 	if (parsed.tab && parsed.detached) throw new Error("--tab and --detached cannot be combined");
 	if (options.tab && parsed.timeoutMs) throw new Error("hosted jobs have no timeout; omit --timeout or use --detached");
 	if (options.tab && !herdr) throw new Error("hosted spawn requires Herdr (HERDR_ENV=1); use --detached for an ordinary job");
