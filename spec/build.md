@@ -6,8 +6,9 @@
 
 ## NOW
 
-- `F027-hosted-idle-advisory` (ACTIVE): merged `24ea294`. Review PASS. Not proven — no live hosted stall yet; `/reload` to load the hook.
-- `F029-hosted-review` (ACTIVE): merged `914bc4d` (`370c342`). Coordinator PASS after independent review died on xAI capacity. Not proven — next `--review` in Herdr should be a tab.
+- `F030-hosted-stall-handoff` (ACTIVE): hosted idle after tools snapshots result+commits and wakes the parent in 60s. Job stays running. After F027.
+- `F027-hosted-idle-advisory` (ACTIVE): merged `24ea294`. Review PASS. 10m tap is too empty/slow for autonomy — F030.
+- `F029-hosted-review` (ACTIVE): merged `914bc4d`. Coordinator PASS. Not proven as a live `--review` tab.
 
 ## NEXT
 - `F028-provider-error-is-failed` (PLANNED): a run whose last turn errored records `failed: <reason>`, matching pi's own text-mode exit semantics. Decision ticket — reverses one F011 exclusion; needs explicit sign-off. After F024.
