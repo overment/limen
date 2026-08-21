@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { appendFile, open, readdir, readFile, rename, rm } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { commitList } from "./git.ts";
-import { type HostedAgentStatus, hostedAgentAlive, hostedAgentStatus, hostedTerminalReason, locateHostedAgent, renameJobTab } from "./herdr.ts";
+import { type HostedAgentStatus, hostedAgentAlive, hostedAgentStatus, hostedTerminalReason, locateHostedAgent, settleJobTab } from "./herdr.ts";
 import { assistantStopReason, assistantText, createStreamParser, type StreamEvent } from "./stream.ts";
 
 const STOP_GRACE_MS = 5_000;
@@ -564,7 +564,7 @@ export async function finalizeJob(jobDir: string, state: "done" | "failed" | "st
 	const inbox = await readdir(`${jobDir}/steer/inbox`).catch(() => []);
 	await appendLimenLog(jobDir, inbox.length ? `${state}: ${detail}; ${inbox.length} steer(s) never delivered` : `${state}: ${detail}`).catch(() => {});
 	for (const name of await readdir(jobDir).catch(() => [])) if (/\.\d+\.[0-9a-f]+\.tmp$/.test(name)) await rm(`${jobDir}/${name}`, { force: true });
-	await renameJobTab(jobDir, state);
+	await settleJobTab(jobDir);
 }
 /** What landed on the branch since spawn recorded `base`; empty is a fact, absence means it could not be measured. */
 async function recordCommits(jobDir: string): Promise<void> {

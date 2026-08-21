@@ -1,3 +1,4 @@
+import { execFile } from "node:child_process";
 import { appendFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -34,6 +35,17 @@ export default function limenHosted(pi: PiApi): void {
 		mkdirSync(join(jobDir, "session"), { recursive: true });
 		write("activity", "think");
 		log(`[limen ${new Date().toISOString()}] hosted reporter attached`);
+		// The sidebar description says who this pane is; the tab label already says what it does.
+		const herdr = process.env.LIMEN_HERDR?.trim() || "herdr";
+		const pane = process.env.HERDR_PANE_ID?.trim();
+		if (process.env.HERDR_ENV === "1" && herdr !== "0" && pane) {
+			const role = process.env.LIMEN_ROLE === "reviewer" ? "limen reviewer" : "limen worker";
+			try {
+				execFile(herdr, ["pane", "report-metadata", pane, "--source", "limen", "--display-agent", role], { timeout: 2_000 }, () => {}).unref();
+			} catch {
+				// Advisory.
+			}
+		}
 	});
 	pi.on("turn_start", () => {
 		write("activity", "think");

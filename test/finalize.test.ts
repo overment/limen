@@ -67,7 +67,7 @@ if (process.argv[2] === "tab" && process.argv[3] === "rename") Atomics.wait(new 
 	});
 	const started = Date.now();
 	await finalizeJob(job, "done", "pi exited 0");
-	assert.ok(Date.now() - started < 750, "finalize must not wait for tab rename");
+	assert.ok(Date.now() - started < 750, "finalize must not wait for the tab close");
 	assert.equal(await readFile(join(job, "state"), "utf8"), "done\n");
 	const finished = await readFile(join(job, "finished-at"), "utf8");
 	await finalizeJob(job, "failed", "second writer");
@@ -117,7 +117,7 @@ test("an unseen steer is counted at finalize", async (context) => {
 	assert.match(await readFile(join(job, "log"), "utf8"), /1 steer\(s\) never delivered/);
 });
 
-test("exhaustion finalizes failed while tab rename hangs", async (context) => {
+test("exhaustion finalizes failed while tab close hangs", async (context) => {
 	const scratch = await scratchRepo(burstPi);
 	context.after(() => wipeScratch(scratch));
 	limen(scratch, "init");
@@ -129,7 +129,7 @@ const args = process.argv.slice(2);
 if (args[0] === "workspace" && args[1] === "list") console.log(JSON.stringify({ result: { workspaces: [] } }));
 else if (args[0] === "workspace" && args[1] === "create") console.log(JSON.stringify({ result: { workspace: { workspace_id: "w1" }, tab: { tab_id: "w1:t1" }, root_pane: { pane_id: "w1:p1" } } }));
 else if (args[0] === "tab" && args[1] === "create") console.log(JSON.stringify({ result: { tab: { tab_id: "w1:t2" }, root_pane: { pane_id: "w1:p2" } } }));
-else if (args[0] === "tab" && args[1] === "rename") Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 8000);
+else if (args[0] === "tab" && args[1] === "close") Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 8000);
 else console.log(JSON.stringify({ result: {} }));
 `,
 	);

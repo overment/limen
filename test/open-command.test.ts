@@ -4,29 +4,43 @@ import { join } from "node:path";
 import test from "node:test";
 import { limen, limenWithEnv, onlyJobId, scratchRepo, waitForState } from "./scratch.ts";
 
-test("open focuses a recorded tab and recreates a log tab after it is gone", async (context) => {
-	const scratch = await scratchRepo();
+test("open focuses a recorded tab while running and recreates a log tab once terminal", async (context) => {
+	const scratch = await scratchRepo(`#!/usr/bin/env node
+process.on("SIGTERM", () => process.exit(0));
+setInterval(() => {}, 1000);
+`);
 	context.after(scratch.cleanup);
 	assert.equal(limen(scratch, "init").status, 0);
 	const herdr = await installFakeHerdr(scratch.root, scratch.fakeBin);
 	const env = herdrEnv(herdr);
-	const launched = limenWithEnv(scratch, env, "spawn", "--detached", "--label", "F012 spaces", "make commit");
+	const launched = limenWithEnv(scratch, env, "spawn", "--detached", "--label", "F012 spaces", "long work");
 	assert.equal(launched.status, 0, launched.stderr);
 	const id = onlyJobId(launched.stdout);
-	await waitForState(scratch.root, id, "done");
 	const job = join(scratch.root, ".limen/jobs", id);
+	const deadline = Date.now() + 5_000;
+	while (!(await readFile(join(job, "herdr/tab"), "utf8").catch(() => "")) && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 25));
 	assert.equal(await readFile(join(job, "herdr/tab"), "utf8"), "w1:t1\n");
 	const focused = limenWithEnv(scratch, env, "open", id);
 	assert.equal(focused.status, 0, focused.stderr);
 	assert.match(focused.stdout, /focused F012 spaces/);
 	assert.match(await readFile(herdr.calls, "utf8"), /tab focus w1:t1/);
-	await closeFakeTab(herdr, "w1:t1");
+	// F035: reaching terminal state closes the tab; open then recreates a log view.
+	limen(scratch, "stop", id, "probe finished");
+	await waitForState(scratch.root, id, "stopped");
+	const closeDeadline = Date.now() + 2_000;
+	let calls = "";
+	while (Date.now() < closeDeadline) {
+		calls = await readFile(herdr.calls, "utf8").catch(() => "");
+		if (/tab close w1:t1/.test(calls)) break;
+		await new Promise((resolve) => setTimeout(resolve, 25));
+	}
+	assert.match(calls, /tab close w1:t1/);
 	const reopened = limenWithEnv(scratch, env, "open", id);
 	assert.equal(reopened.status, 0, reopened.stderr);
 	assert.match(reopened.stdout, /opened F012 spaces/);
 	assert.equal(await readFile(join(job, "herdr/tab"), "utf8"), "w1:t2\n");
 	assert.equal(await readFile(join(job, "herdr/mode"), "utf8"), "log\n");
-	assert.match(await readFile(herdr.calls, "utf8"), /tab create .*--label F012 spaces · done/);
+	assert.match(await readFile(herdr.calls, "utf8"), /tab create .*--label F012 spaces · stopped/);
 	assert.match(await readFile(herdr.calls, "utf8"), /pane run w1:p2 tail -n \+1 /);
 	assert.doesNotMatch(await readFile(herdr.calls, "utf8"), /pane run w1:p2 tail -f /);
 });
@@ -72,10 +86,10 @@ setInterval(() => {}, 1000);
 	let calls = "";
 	while (Date.now() < deadline) {
 		calls = await readFile(herdr.calls, "utf8").catch(() => "");
-		if (/tab rename w1:t2 F012 watch · stopped/.test(calls)) break;
+		if (/tab close w1:t2/.test(calls)) break;
 		await new Promise((resolve) => setTimeout(resolve, 25));
 	}
-	assert.match(calls, /tab rename w1:t2 F012 watch · stopped/);
+	assert.match(calls, /tab close w1:t2/);
 });
 
 test("close leftover tabs for a proven feature and leaves job files", async (context) => {
@@ -91,11 +105,12 @@ test("close leftover tabs for a proven feature and leaves job files", async (con
 	assert.equal(active.status, 1);
 	assert.match(active.stderr, /not in done\/ or dropped/);
 	await mkdir(join(scratch.root, "spec/features/done/2026-08/F012-herdr-job-spaces"), { recursive: true });
+	// F035: terminal jobs auto-close, so the sweep exercises a recreated log tab.
+	const reopened = limenWithEnv(scratch, env, "open", keep);
+	assert.match(reopened.stdout, /opened F012 spaces/);
 	const swept = limenWithEnv(scratch, env, "close", "F012");
 	assert.equal(swept.status, 0, swept.stderr);
 	assert.match(swept.stdout, /closed 1 leftover tab for F012/);
-	assert.match(await readFile(herdr.calls, "utf8"), /tab close w1:t1/);
-	assert.doesNotMatch(await readFile(herdr.calls, "utf8"), /tab close w1:t2/);
 	assert.doesNotMatch(await readFile(herdr.calls, "utf8"), /tab close coord:tab/);
 	await access(join(scratch.root, ".limen/jobs", keep, "task.md"));
 	await access(join(scratch.root, ".limen/jobs", other, "task.md"));

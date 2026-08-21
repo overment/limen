@@ -265,7 +265,14 @@ test("spawn in Herdr is hosted without --tab; --detached keeps a watch tab", asy
 	assert.doesNotMatch(calls, /pane run .*tail/);
 	await waitForState(scratch.root, id, "done");
 	assert.match(await readFile(join(job, "log"), "utf8"), /hosted supervisor started/);
-	assert.match(await readFile(join(job, "log"), "utf8"), /hosted agent done|hosted agent ended/);
+	const logDeadline = Date.now() + 2_000;
+	let logText = "";
+	while (Date.now() < logDeadline) {
+		logText = await readFile(join(job, "log"), "utf8").catch(() => "");
+		if (/hosted agent done|hosted agent ended/.test(logText)) break;
+		await new Promise((resolve) => setTimeout(resolve, 25));
+	}
+	assert.match(logText, /hosted agent done|hosted agent ended/);
 });
 
 test("hosted supervisor writes one idle advisory and stays running", async (context) => {

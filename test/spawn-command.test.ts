@@ -257,13 +257,13 @@ if (args[0] === "workspace" && args[1] === "list") {
 	let recorded = "";
 	while (Date.now() < deadline) {
 		recorded = await readFile(calls, "utf8").catch(() => "");
-		if (/tab rename w1:t2 F012 spaces · done/.test(recorded)) break;
+		if (/tab close w1:t2/.test(recorded)) break;
 		await new Promise((resolve) => setTimeout(resolve, 25));
 	}
 	assert.match(recorded, /tab create /);
 	assert.match(recorded, /--label F012 spaces/);
 	assert.match(recorded, /--no-focus/);
-	assert.match(recorded, /tab rename w1:t2 F012 spaces · done/);
+	assert.match(recorded, /tab close w1:t2/);
 	const job = join(scratch.root, ".limen/jobs", id);
 	assert.equal(await readFile(join(job, "herdr/tab"), "utf8"), "w1:t2\n");
 	assert.equal(await readFile(join(job, "herdr/mode"), "utf8"), "watch\n");

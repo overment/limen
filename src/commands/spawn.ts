@@ -123,7 +123,7 @@ export async function spawnCommand(args: readonly string[], cwd: string): Promis
 		() => `${PACKAGE_ROOT}/templates/${role}.md`,
 	);
 	if (options.tab) {
-		await startHosted({ jobDir, id, label: options.label, root, worktree, preamble, taskFile: `${jobDir}/task.md`, ...(model ? { model } : {}) });
+		await startHosted({ jobDir, id, label: options.label, root, worktree, preamble, taskFile: `${jobDir}/task.md`, review: options.review, ...(model ? { model } : {}) });
 		await versions.catch(() => {});
 		console.log(`started ${options.label} (hosted)`);
 		console.log(id);
@@ -171,6 +171,7 @@ async function startHosted(input: {
 	readonly worktree: string;
 	readonly preamble: string;
 	readonly taskFile: string;
+	readonly review: boolean;
 	readonly model?: string;
 }): Promise<void> {
 	const paneEnv = {
@@ -179,6 +180,7 @@ async function startHosted(input: {
 		LIMEN_JOB_ID: input.id,
 		LIMEN_JOB_LABEL: input.label,
 		LIMEN_CONTEXT_ROOT: input.root,
+		LIMEN_ROLE: input.review ? "reviewer" : "worker",
 	};
 	let place: Awaited<ReturnType<typeof openHostedTab>> | undefined;
 	let target = "";
@@ -353,9 +355,11 @@ export function makeJobId(label: string): string {
 	const slug = label.toLowerCase().replace(/[^a-z0-9]+/g, "-");
 	return `${new Date().toISOString().slice(0, 10)}-${slug.replace(/^-|-$/g, "").slice(0, 32) || "job"}-${randomBytes(4).toString("hex")}`;
 }
-/** Herdr agent names: lowercase letter start, [a-z0-9_-], max 32. Slug truncates; hex suffix does not. */
+/** Herdr agent names: lowercase letter start, [a-z0-9_-], max 32. Feature number + hex suffix keeps the unique part inside any width; slug fallback when the label has no feature number. */
 export function hostedAgentName(jobId: string): string {
 	const hex = /[0-9a-f]{8}$/.exec(jobId)?.[0] ?? "";
+	const feature = /(?:^|-)(f\d{3,})(?:-|$)/i.exec(jobId)?.[1]?.toLowerCase();
+	if (feature && hex) return `limen-${feature}-${hex}`;
 	const slug =
 		jobId
 			.slice(0, hex ? -9 : undefined)
