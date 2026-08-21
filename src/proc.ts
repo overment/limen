@@ -2,10 +2,11 @@ import { spawn } from "node:child_process";
 import { appendFile, open, readdir, readFile, rename, rm } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { commitList } from "./git.ts";
-import { type HostedAgentStatus, hostedAgentAlive, hostedAgentStatus, hostedTerminalReason, renameJobTab } from "./herdr.ts";
+import { type HostedAgentStatus, hostedAgentAlive, hostedAgentStatus, hostedTerminalReason, locateHostedAgent, renameJobTab } from "./herdr.ts";
 import { assistantStopReason, assistantText, createStreamParser, type StreamEvent } from "./stream.ts";
 
 const STOP_GRACE_MS = 5_000;
+const HOSTED_UNKNOWN_SAMPLES = 5;
 const ESCAPED_TERM_GRACE_MS = 2_000;
 const ESCAPED_KILL_GRACE_MS = 1_000;
 const PROCESS_QUERY_TIMEOUT_MS = 1_000;
@@ -299,12 +300,14 @@ async function launchDetached(environment: Readonly<Record<string, string>>): Pr
 /** Watch a Herdr-hosted agent and publish terminal state when the session really ends. */
 export async function runHostedSupervisor(): Promise<void> {
 	const jobDir = requiredEnvironment("LIMEN_JOB_DIR");
-	const target = requiredEnvironment("LIMEN_HOSTED_TARGET");
+	let target = requiredEnvironment("LIMEN_HOSTED_TARGET");
 	await writeHandshake(jobDir);
 	await atomicWrite(`${jobDir}/state`, "running\n");
 	await appendLimenLog(jobDir, "hosted supervisor started (weaker guarantees: no timeout, no tool-call cap, no process containment)");
 	let stopRequested = false;
 	let missingStreak = 0;
+	let unknownStreak = 0;
+	let unknownAliveNoted = false;
 	process.on("SIGTERM", () => {
 		stopRequested = true;
 	});
@@ -314,7 +317,33 @@ export async function runHostedSupervisor(): Promise<void> {
 		const sessionEnded = Boolean(await textFile(`${jobDir}/session-ended`));
 		// Herdr idle/done = unseen background tab. Not job completion. Missing needs 3 samples.
 		if (status === "missing") missingStreak += 1;
-		else missingStreak = 0;
+		else if (status === "unknown") unknownStreak += 1;
+		else {
+			missingStreak = 0;
+			unknownStreak = 0;
+			unknownAliveNoted = false;
+		}
+		// A moved pane or degraded Herdr must neither stall finalize forever nor kill a live worker.
+		if ((missingStreak > 0 || unknownStreak >= HOSTED_UNKNOWN_SAMPLES) && !sessionEnded) {
+			const located = locateHostedAgent(target, process.env.LIMEN_AGENT_NAME?.trim() ?? "");
+			if (located) {
+				if (located !== target) {
+					await atomicWrite(`${jobDir}/herdr/agent`, `${located}\n`);
+					await atomicWrite(`${jobDir}/herdr/pane`, `${located}\n`);
+					await appendLimenLog(jobDir, `hosted agent relocated ${target} -> ${located}`);
+					target = located;
+				} else if (status === "unknown" && !unknownAliveNoted) {
+					unknownAliveNoted = true;
+					await appendLimenLog(jobDir, `herdr cannot classify the hosted agent (${HOSTED_UNKNOWN_SAMPLES} samples); the recorded pane still runs pi`);
+				}
+				missingStreak = 0;
+				unknownStreak = 0;
+			} else if (unknownStreak >= HOSTED_UNKNOWN_SAMPLES) {
+				// The probe confirms gone despite unclassifiable status; let the missing window decide.
+				missingStreak += 1;
+				unknownStreak = 0;
+			}
+		}
 		const reason = sessionEnded ? hostedTerminalReason(status, true) : missingStreak >= 3 ? hostedTerminalReason(status, false) : undefined;
 		if (reason) {
 			const requested = await textFile(`${jobDir}/stop-requested`);
@@ -448,7 +477,9 @@ export async function runInternalJob(): Promise<void> {
 	const args = ["--mode", "json", "--approve", "--no-extensions", "--session-dir", sessionDir, "--name", `limen: ${label}`, "--append-system-prompt", preamble];
 	args.push("--extension", `${HOOK}/steering.ts`, "--extension", `${HOOK}/communication.ts`);
 	if (process.env.LIMEN_MODEL) args.push("--model", process.env.LIMEN_MODEL);
-	args.push(`@${taskFile}`);
+	// F034: a continued job resumes its own prior session instead of replaying the task file.
+	if (process.env.LIMEN_CONTINUE === "1") args.push("--continue", (await readFile(taskFile, "utf8")).trim());
+	else args.push(`@${taskFile}`);
 	const childEnvironment: NodeJS.ProcessEnv = {
 		...process.env,
 		LIMEN_JOB: "1",

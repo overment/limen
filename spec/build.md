@@ -6,6 +6,10 @@
 
 ## NOW
 
+- `F031-wake-delivery-retry` (ACTIVE): implemented inline 2026-08-21 — injection promise awaited; failed injections release the claim and retry next sweep. Tests green; awaiting live prove on this coordinator after `/reload`.
+- `F032-hosted-supervisor-target-truth` (ACTIVE): implemented inline 2026-08-21 — supervisor re-resolves via `agent list` + process probe on missing/unknown streaks; moved panes update the record instead of premature `done`. Needs live prove.
+- `F033-hosted-focus-restore` (ACTIVE): implemented inline 2026-08-21 — restore only when the job tab still holds focus (`tab get` `focused`); every outcome logged to the job log. Needs live prove.
+- `F034-job-continue-same-session` (ACTIVE): implemented inline 2026-08-21 — `limen continue <id> "instruction"` seeds the child session with a copy of the parent transcript and runs `pi --continue` in the parent worktree; reviewer continuation opt-in. Tests green; awaiting live prove.
 - `F030-hosted-stall-handoff` (ACTIVE): merged `4e211c9` (`15383c7`). Review PASS. Not proven until a live stall wake carries `result`. `/reload` to load 60s + excerpt.
 - `F027-hosted-idle-advisory` (ACTIVE): merged `24ea294`. Live tap on this coordinator (F030 implement + F030 review). Empty 10m wake superseded by F030.
 - `F029-hosted-review` (ACTIVE): merged `914bc4d`. Live-proven: `2026-08-20-f030-review-85ceb9e7` started `(hosted)`.

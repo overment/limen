@@ -182,10 +182,10 @@ async function startHosted(input: {
 	};
 	let place: Awaited<ReturnType<typeof openHostedTab>> | undefined;
 	let target = "";
+	const agentName = hostedAgentName(input.id);
 	try {
 		place = await openHostedTab({ jobDir: input.jobDir, label: input.label, cwd: input.worktree, workspaceCwd: input.root, env: paneEnv });
 		const extensions = ["hosted", "steering", "communication"].flatMap((name) => ["--extension", `${PACKAGE_ROOT}/hook/${name}.ts`]);
-		const agentName = hostedAgentName(input.id);
 		const piArgs = [
 			"--approve",
 			"--no-extensions",
@@ -199,11 +199,17 @@ async function startHosted(input: {
 			...(input.model ? ["--model", input.model] : []),
 			`@${input.taskFile}`,
 		];
-		target = startHostedPi({ place, name: agentName, args: piArgs });
+		target = startHostedPi({
+			place,
+			name: agentName,
+			args: piArgs,
+			log: (line) => void appendLimenLog(input.jobDir, line).catch(() => {}),
+		});
 		await writeFile(`${input.jobDir}/herdr/agent`, `${target}\n`);
 		const supervisorPid = await launchHostedSupervisor({
 			LIMEN_JOB_DIR: input.jobDir,
 			LIMEN_HOSTED_TARGET: target,
+			LIMEN_AGENT_NAME: agentName,
 			LIMEN_JOB_ID: input.id,
 			LIMEN_LABEL: input.label,
 			LIMEN_CONTEXT_ROOT: input.root,
@@ -219,6 +225,7 @@ async function startHosted(input: {
 			const supervisorPid = await launchHostedSupervisor({
 				LIMEN_JOB_DIR: input.jobDir,
 				LIMEN_HOSTED_TARGET: recovered,
+				LIMEN_AGENT_NAME: agentName,
 				LIMEN_JOB_ID: input.id,
 				LIMEN_LABEL: input.label,
 				LIMEN_CONTEXT_ROOT: input.root,
@@ -327,7 +334,7 @@ function probeVersion(command: string): Promise<string> {
 		child.once("error", () => done("")).once("close", (code) => done(code === 0 ? (out.trim().split("\n")[0] ?? "") : ""));
 	});
 }
-async function capturedVersions(): Promise<string> {
+export async function capturedVersions(): Promise<string> {
 	const herdr = process.env.LIMEN_HERDR?.trim();
 	const pi = (await probeVersion(process.env.LIMEN_PI || "pi")) || "unavailable";
 	const extra = herdr !== "0" && (await probeVersion(herdr || "herdr"));
@@ -342,7 +349,7 @@ function normalizeLabel(value: string): string {
 	if (!label || /[\r\n]/.test(label)) throw new Error("--label must be one non-empty line");
 	return label;
 }
-function makeJobId(label: string): string {
+export function makeJobId(label: string): string {
 	const slug = label.toLowerCase().replace(/[^a-z0-9]+/g, "-");
 	return `${new Date().toISOString().slice(0, 10)}-${slug.replace(/^-|-$/g, "").slice(0, 32) || "job"}-${randomBytes(4).toString("hex")}`;
 }
@@ -391,7 +398,7 @@ async function text(path: string): Promise<string> {
 		() => "",
 	);
 }
-async function waitForHandshake(jobDir: string, wrapperPid: number): Promise<void> {
+export async function waitForHandshake(jobDir: string, wrapperPid: number): Promise<void> {
 	const deadline = Date.now() + handshakeMs();
 	while (Date.now() < deadline) {
 		if ((await text(`${jobDir}/state`)) !== "running" || (await text(`${jobDir}/pid`))) return;

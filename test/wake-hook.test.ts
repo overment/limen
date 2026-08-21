@@ -977,6 +977,60 @@ test("wake does not crash Pi after a stale reload context", async (context) => {
 	handlers.get("session_shutdown")?.({}, session);
 });
 
+test("a rejected injection releases the claim and the next sweep retries", async (context) => {
+	stashEnv(context, "LIMEN_JOB", undefined);
+	stashEnv(context, "LIMEN_HERDR", "0");
+	const root = await import("node:fs/promises").then(({ mkdtemp }) => mkdtemp(join(process.env.TMPDIR ?? "/tmp", "limen-wake-retry-")));
+	context.after(() => import("node:fs/promises").then(({ rm }) => rm(root, { recursive: true, force: true })));
+	await mkdir(join(root, ".agents/limen"), { recursive: true });
+	const jobs = join(root, ".limen/jobs");
+	const handlers = new Map<string, (event: unknown, context: TestContext) => void>();
+	const messages: string[] = [];
+	let rejectNext = true;
+	limenWake({
+		on(event, handler) {
+			handlers.set(event, handler);
+		},
+		sendUserMessage(content) {
+			if (rejectNext) return Promise.reject(new Error("Cannot submit a prompt while compaction is in progress."));
+			messages.push(String(content));
+			return Promise.resolve();
+		},
+	});
+	const session = {
+		cwd: root,
+		isIdle: () => true,
+		sessionManager: sessionManager("coordinator-a"),
+		ui: {
+			notify() {},
+			setStatus() {},
+		},
+	};
+	handlers.get("session_start")?.({}, session);
+	context.after(() => handlers.get("session_shutdown")?.({}, session));
+	await mkdir(join(jobs, "new"), { recursive: true });
+	await writeFile(join(jobs, "new/label"), "F031 retry\n");
+	await writeFile(join(jobs, "new/branch"), "candidate\n");
+	await subscribe(jobs, "new", "coordinator-a");
+	await writeFile(join(jobs, "new/state"), "running\n");
+	await new Promise((resolve) => setTimeout(resolve, 150));
+	await writeFile(join(jobs, "new/state"), "done\n");
+	// The injection rejects mid-compaction; the claim must be released, never delivered.
+	const { existsSync } = await import("node:fs");
+	await waitUntilAsync(() =>
+		readFile(join(jobs, "new/log"), "utf8")
+			.then((logText) => logText.includes("wake injection failed"))
+			.catch(() => false),
+	);
+	assert.equal(existsSync(join(jobs, "new/notify/delivered/coordinator-a")), false, "a failed injection must not mark delivered");
+	// Once pi can accept turns again, a later sweep delivers without any human nudge.
+	rejectNext = false;
+	await waitUntil(() => messages.length >= 1);
+	assert.ok(existsSync(join(jobs, "new/notify/delivered/coordinator-a")));
+	assert.match(messages[0] ?? "", /F031 retry.*is done/);
+	handlers.get("session_shutdown")?.({}, session);
+});
+
 function sessionManager(id: string): { getSessionId(): string } {
 	return { getSessionId: () => id };
 }

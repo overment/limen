@@ -39,7 +39,13 @@ export async function openHostedTab(input: {
 	return place;
 }
 
-export function startHostedPi(input: { readonly place: HerdrPlace; readonly name: string; readonly args: readonly string[]; readonly timeoutMs?: number }): string {
+export function startHostedPi(input: {
+	readonly place: HerdrPlace;
+	readonly name: string;
+	readonly args: readonly string[];
+	readonly timeoutMs?: number;
+	readonly log?: (message: string) => void;
+}): string {
 	const herdr = requireHerdr();
 	const readyMs = input.timeoutMs ?? 120_000;
 	const previous = process.env.HERDR_TAB_ID?.trim();
@@ -52,17 +58,33 @@ export function startHostedPi(input: { readonly place: HerdrPlace; readonly name
 			const started = call(herdr, ["agent", "start", input.name, "--kind", "pi", "--pane", input.place.pane, "--timeout", String(readyMs), "--", ...input.args]);
 			return agentTarget(started) || input.place.pane;
 		} catch (error) {
-			const live = liveHostedTarget(input.place.pane);
+			const live = locateHostedAgent(input.place.pane);
 			if (live) return live;
 			throw error;
 		}
 	} finally {
-		if (previous && previous !== input.place.tab)
-			try {
-				call(herdr, ["tab", "focus", previous]);
-			} catch {
-				// Coordinator tab may have closed; the new tab staying focused is acceptable.
-			}
+		if (previous && previous !== input.place.tab) restoreCoordinatorFocus(herdr, input.place.tab, previous, input.log);
+	}
+}
+
+/** Give the coordinator its tab back only when the human has not already focused elsewhere during the start window. */
+function restoreCoordinatorFocus(herdr: string, jobTab: string, coordinatorTab: string, log?: (message: string) => void): void {
+	let focused: boolean | undefined;
+	try {
+		const row = asRecord(asRecord(call(herdr, ["tab", "get", jobTab])).tab);
+		focused = typeof row.focused === "boolean" ? row.focused : undefined;
+	} catch (error) {
+		log?.(`focus check failed after hosted start: ${error instanceof Error ? error.message : String(error)}`);
+	}
+	if (focused === false) {
+		log?.("focus restore skipped: another tab took focus during hosted start");
+		return;
+	}
+	try {
+		call(herdr, ["tab", "focus", coordinatorTab]);
+		log?.(`coordinator tab restored${focused === undefined ? " (focus state unknown)" : ""}`);
+	} catch (error) {
+		log?.(`focus restore failed: ${error instanceof Error ? error.message : String(error)}; the job tab keeps focus`);
 	}
 }
 
@@ -78,8 +100,9 @@ export function hostedTerminalReason(status: HostedAgentStatus, sessionEnded: bo
 	if (status === "missing") return "hosted agent ended";
 }
 
-function liveHostedTarget(pane: string): string | undefined {
-	if (hostedAgentStatus(pane) !== "missing") return pane;
+/** Live target for a hosted job whose recorded target stopped resolving cleanly: the agent found under a moved pane ID, or an unclassifiable but present process on the recorded pane. Undefined means genuinely gone. */
+export function locateHostedAgent(target: string, agentName = ""): string | undefined {
+	if (hostedAgentStatus(target) !== "missing") return target;
 	const herdr = herdrBinary();
 	if (!herdr) return;
 	try {
@@ -87,17 +110,20 @@ function liveHostedTarget(pane: string): string | undefined {
 		if (Array.isArray(agents)) {
 			for (const row of agents) {
 				const agent = asRecord(row);
-				if (agent.pane_id === pane) return pane;
+				if (agent.pane_id === target) return target;
+				const name = String(asRecord(agent.agent).name ?? agent.name ?? "");
+				const rowPane = typeof agent.pane_id === "string" ? agent.pane_id : undefined;
+				if (agentName && rowPane && (name === agentName || name.startsWith(`${agentName}-`))) return rowPane;
 			}
 		}
 	} catch {
 		// Fall through to process probe.
 	}
 	try {
-		const info = asRecord(asRecord(call(herdr, ["pane", "process-info", "--pane", pane])).process_info);
+		const info = asRecord(asRecord(call(herdr, ["pane", "process-info", "--pane", target])).process_info);
 		const foreground = Array.isArray(info.foreground_processes) ? info.foreground_processes : [];
 		const names = foreground.map((row) => String(asRecord(row).name ?? "").toLowerCase());
-		if (names.some((n) => n === "pi" || n === "node")) return pane;
+		if (names.some((n) => n === "pi" || n === "node")) return target;
 	} catch {
 		// Missing.
 	}

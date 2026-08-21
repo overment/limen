@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { existsSync, type FSWatcher, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, watch, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, type FSWatcher, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, watch, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { reapDeadJobs } from "../src/proc.ts";
 
@@ -14,7 +14,7 @@ type Context = {
 };
 type PiApi = {
 	on(event: "session_start" | "session_shutdown" | "agent_settled", handler: (event: unknown, context: Context) => void): void;
-	sendUserMessage(content: string, options?: { readonly deliverAs: "steer" | "followUp" }): void;
+	sendUserMessage(content: string, options?: { readonly deliverAs: "steer" | "followUp" }): Promise<void> | void;
 	registerCommand?(
 		name: string,
 		options: {
@@ -142,14 +142,13 @@ export default function limenWake(pi: PiApi): void {
 		if (!claimMarker(job, "herdr", slot)) return;
 		herdrCall(["notification", "show", `limen: ${label} is ${state}`, "--body", `job ${id} · branch ${branch}`, "--sound", state === "done" ? "done" : "request"]);
 	};
-	const injectWake = (message: string) => {
+	const injectWake = (message: string): Promise<void> => {
 		// First idle inject in a sweep is a real turn; later injects, and any inject while busy, are followUp.
 		if (session?.isIdle() === true && !injectedThisSweep) {
 			injectedThisSweep = true;
-			pi.sendUserMessage(message);
-			return;
+			return Promise.resolve(pi.sendUserMessage(message));
 		}
-		pi.sendUserMessage(message, { deliverAs: "followUp" });
+		return Promise.resolve(pi.sendUserMessage(message, { deliverAs: "followUp" }));
 	};
 	const sendCompletion = (jobs: string, id: string, state: string, fallback: boolean): boolean => {
 		if (!session) return false;
@@ -179,7 +178,7 @@ export default function limenWake(pi: PiApi): void {
 			} catch {
 				retire(false);
 			}
-			injectWake(message);
+			return injectWake(message);
 		});
 		if (routed) notifyHerdr(job, id, state, label, branch, slot);
 		return routed;
@@ -218,7 +217,7 @@ export default function limenWake(pi: PiApi): void {
 			} catch {
 				retire(false);
 			}
-			injectWake(message);
+			return injectWake(message);
 		});
 		if (routed) notifyHerdr(job, id, kind, label, branch, slot);
 		return routed;
@@ -408,7 +407,7 @@ function processGroupAlive(pid: number): boolean {
 		return typeof error === "object" && error !== null && "code" in error && error.code === "EPERM";
 	}
 }
-function claimDelivery(job: string, slot: string, eligible: () => boolean, send: () => void): boolean {
+function claimDelivery(job: string, slot: string, eligible: () => boolean, send: () => void | Promise<void>): boolean {
 	const claim = join(job, "notify", "claims", slot);
 	const delivered = join(job, "notify", "delivered", slot);
 	mkdirSync(join(job, "notify", "claims"), { recursive: true });
@@ -426,9 +425,23 @@ function claimDelivery(job: string, slot: string, eligible: () => boolean, send:
 		return false;
 	}
 	try {
-		send();
-		writeFileSync(join(claim, "accepted"), "1\n");
-		renameSync(claim, delivered);
+		const injected = send();
+		const accept = () => {
+			writeFileSync(join(claim, "accepted"), "1\n");
+			renameSync(claim, delivered);
+		};
+		if (injected instanceof Promise) {
+			// Delivery counts only once the turn injection resolves. A rejected injection
+			// (pi mid-compaction, where isIdle lies) releases the claim so the next sweep retries.
+			injected.then(accept, () => {
+				rmSync(claim, { recursive: true, force: true });
+				try {
+					appendFileSync(join(job, "log"), `[limen ${new Date().toISOString()}] wake injection failed; the next sweep retries\n`);
+				} catch {
+					// The log is best-effort; the released claim is the durable fact.
+				}
+			});
+		} else accept();
 		return true;
 	} catch {
 		rmSync(claim, { recursive: true, force: true });

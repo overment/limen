@@ -1,4 +1,5 @@
 import { closeCommand } from "./commands/close.ts";
+import { continueCommand } from "./commands/continue.ts";
 import { initCommand, workspaceCommand } from "./commands/init.ts";
 import { jobsCommand } from "./commands/jobs.ts";
 import { migrateCommand } from "./commands/migrate.ts";
@@ -17,6 +18,7 @@ const COMMANDS = {
 	workspace: workspaceCommand,
 	migrate: migrateCommand,
 	spawn: spawnCommand,
+	continue: continueCommand,
 	steer: steerCommand,
 	stop: stopCommand,
 	wait: waitCommand,
@@ -26,7 +28,10 @@ const COMMANDS = {
 	unwatch: unwatchCommand,
 	open: openCommand,
 	close: closeCommand,
-} as const satisfies Record<"init" | "workspace" | "migrate" | "spawn" | "steer" | "stop" | "wait" | "jobs" | "prune" | "watch" | "unwatch" | "open" | "close", Command>;
+} as const satisfies Record<
+	"init" | "workspace" | "migrate" | "spawn" | "continue" | "steer" | "stop" | "wait" | "jobs" | "prune" | "watch" | "unwatch" | "open" | "close",
+	Command
+>;
 const HELP = `limen — isolated coding jobs with files and git
 usage:
   limen init
@@ -39,6 +44,8 @@ usage:
   limen spawn --detached "…"                       # force background worker + log-tail tab
   limen spawn --repo R "Implement FNNN: <outcome>. Ticket: spec/features/active/FNNN-slug/ticket.md" [--label L] [--model X]
   limen spawn --review --branch B --label L "Review the FNNN candidate against spec/features/active/FNNN-slug/ticket.md"
+  limen continue <id|suffix|label> "follow-up instruction" [--review] [--label L] [--model X]
+                                  # resume a finished job in its own pi session — full context, same worktree
   limen steer <id|suffix|label> "correction"
   limen wait <id|suffix|label>
   limen stop <id|suffix|label> [reason]
