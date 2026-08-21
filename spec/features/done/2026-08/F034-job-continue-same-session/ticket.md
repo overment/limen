@@ -1,6 +1,6 @@
 # F034-job-continue-same-session · Resume a finished worker in its own session instead of starting over
 
-[2026-08-20] [🟠] [ACTIVE] [COORDINATOR] ACTIVE · F034-job-continue-same-session
+[2026-08-20] [🟢] [PROVEN] [COORDINATOR] PROVEN · F034-job-continue-same-session
 
 ## Outcome
 

@@ -1,6 +1,6 @@
 # F033-hosted-focus-restore · Hosted spawn takes focus briefly and gives it back politely
 
-[2026-08-20] [🟠] [ACTIVE] [COORDINATOR] ACTIVE · F033-hosted-focus-restore
+[2026-08-20] [🟢] [PROVEN] [COORDINATOR] PROVEN · F033-hosted-focus-restore
 
 ## Outcome
 

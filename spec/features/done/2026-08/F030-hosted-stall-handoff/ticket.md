@@ -1,6 +1,6 @@
 # F030-hosted-stall-handoff · A hosted stall wakes the parent with the worker's last message
 
-[2026-08-20] [🟠] [ACTIVE] [COORDINATOR] ACTIVE · F030-hosted-stall-handoff
+[2026-08-20] [🟢] [PROVEN] [COORDINATOR] PROVEN · F030-hosted-stall-handoff
 
 ## Outcome
 

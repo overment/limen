@@ -1,6 +1,6 @@
 # F031-wake-delivery-retry · A failed wake is retried, not silently lost
 
-[2026-08-20] [🟠] [ACTIVE] [COORDINATOR] ACTIVE · F031-wake-delivery-retry
+[2026-08-20] [🟢] [PROVEN] [COORDINATOR] PROVEN · F031-wake-delivery-retry
 
 ## Outcome
 

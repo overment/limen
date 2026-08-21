@@ -6,13 +6,7 @@
 
 ## NOW
 
-- `F031-wake-delivery-retry` (ACTIVE): implemented inline 2026-08-21 — injection promise awaited; failed injections release the claim and retry next sweep. Tests green; awaiting live prove on this coordinator after `/reload`.
-- `F032-hosted-supervisor-target-truth` (ACTIVE): implemented inline 2026-08-21 — supervisor re-resolves via `agent list` + process probe on missing/unknown streaks; moved panes update the record instead of premature `done`. Needs live prove.
-- `F033-hosted-focus-restore` (ACTIVE): implemented inline 2026-08-21 — restore only when the job tab still holds focus (`tab get` `focused`); every outcome logged to the job log. Needs live prove.
-- `F034-job-continue-same-session` (ACTIVE): implemented inline 2026-08-21 — `limen continue <id> "instruction"` seeds the child session with a copy of the parent transcript and runs `pi --continue` in the parent worktree; reviewer continuation opt-in. Tests green; awaiting live prove.
-- `F030-hosted-stall-handoff` (ACTIVE): merged `4e211c9` (`15383c7`). Review PASS. Not proven until a live stall wake carries `result`. `/reload` to load 60s + excerpt.
-- `F027-hosted-idle-advisory` (ACTIVE): merged `24ea294`. Live tap on this coordinator (F030 implement + F030 review). Empty 10m wake superseded by F030.
-- `F029-hosted-review` (ACTIVE): merged `914bc4d`. Live-proven: `2026-08-20-f030-review-85ceb9e7` started `(hosted)`.
+- `F032-hosted-supervisor-target-truth` (ACTIVE): implemented inline 2026-08-21 (`6ee8ff1`). Suite-covered; live prove still open — needs a moved-pane or degraded-Herdr scenario on a running hosted job.
 
 ## NEXT
 - `F028-provider-error-is-failed` (PLANNED): a run whose last turn errored records `failed: <reason>`, matching pi's own text-mode exit semantics. Decision ticket — reverses one F011 exclusion; needs explicit sign-off. After F024.
@@ -22,6 +16,12 @@
 
 ## PROVEN
 
+- `F034-job-continue-same-session` (🟢 PROVEN): `limen continue` resumed a finished worker's session blind — it recalled AMBERDOVE without tools. Landed at `6ee8ff1`; live-proven 2026-08-21 (parent `...30eeedf4` → child `...13ec2629`).
+- `F033-hosted-focus-restore` (🟢 PROVEN): restore only when the job tab holds focus; logged live at `coordinator tab restored`. Landed at `6ee8ff1`.
+- `F031-wake-delivery-retry` (🟢 PROVEN): failed injections release the claim and retry; delivery path exercised live post-reload, rejection branch test-proven. Landed at `6ee8ff1`.
+- `F030-hosted-stall-handoff` (🟢 PROVEN): live stall wake carried commits + final message excerpt (~60s idle). Coordinator-reviewed at `15383c7`.
+- `F027-hosted-idle-advisory` (🟢 PROVEN): advisory mechanism is F030's vehicle; live tap landed with F030's prove. Merged `24ea294`.
+- `F029-hosted-review` (🟢 PROVEN): hosted reviews work end-to-end; live-proven via F030's hosted implement/review loop. Merged `914bc4d`.
 - `F025-dead-job-reaper` (PROVEN): dead running jobs reap to `failed: process group gone`. Coordinator-reviewed at `4edcba3`.
 - `F021-hosted-stop-real` (PROVEN): hosted stop observes exit or tells the truth; name suffix kept. Coordinator-reviewed at `c97c02a`.
 - `F026-spawn-preflight` (PROVEN): versions on the job record; loud fail on missing pi / wrong Node. Coordinator-reviewed at `206506c`.
