@@ -1,6 +1,6 @@
 # F036-agent-name-and-description · Short agent names, role descriptions
 
-[2026-08-21] [🟠] [ACTIVE] [COORDINATOR] ACTIVE · F036-agent-name-and-description
+[2026-08-21] [🟢] [PROVEN] [COORDINATOR] PROVEN · F036-agent-name-and-description
 
 ## Outcome
 

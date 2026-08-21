@@ -1,6 +1,6 @@
 # F035-auto-close-terminal-tabs · Terminal jobs leave no open tabs
 
-[2026-08-21] [🟠] [ACTIVE] [COORDINATOR] ACTIVE · F035-auto-close-terminal-tabs
+[2026-08-21] [🟢] [PROVEN] [COORDINATOR] PROVEN · F035-auto-close-terminal-tabs
 
 Human direction 2026-08-21: failed / finished / stopped tabs must be closed, not swept manually. Today `finalizeJob` only renames the tab to `· <state>`; closing stays a manual `limen close` step, and the probe jobs proved the coordinator forgets.
 
