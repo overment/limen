@@ -9,6 +9,8 @@
 - `F032-hosted-supervisor-target-truth` (ACTIVE): implemented inline 2026-08-21 (`6ee8ff1`). Suite-covered; live prove still open — needs a moved-pane or degraded-Herdr scenario on a running hosted job.
 
 ## NEXT
+- `F035-auto-close-terminal-tabs` (PLANNED): finalize closes the job tab instead of renaming; `limen open` recreates log views. Implemented at `554e3c9`, suite-covered — prove happens on the next natural terminal wake.
+- `F036-agent-name-and-description` (PLANNED): agent names `limen-<fnnn>-<hex>`; worker panes report `limen worker|reviewer` display-agent. Implemented at `554e3c9` — prove on next hosted spawn.
 - `F028-provider-error-is-failed` (PLANNED): a run whose last turn errored records `failed: <reason>`, matching pi's own text-mode exit semantics. Decision ticket — reverses one F011 exclusion; needs explicit sign-off. After F024.
 - `F011-empty-job-advisory` (PLANNED): a job that produced nothing should say so instead of reading DONE. Observed, not theorised. After F017 it reads `commits` and `tool-calls` instead of inferring; after F024 it also reads `stop-reason`; if F028 is signed off, its advisory targets clean-but-empty runs.
 - `F013-remote-seat` (PLANNED): one disk, attach don’t clone; docs and seat-shaped guarantees. Before F014, after the stability sweep.
