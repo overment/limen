@@ -9,7 +9,7 @@ const BOARD_FEATURE = /(?:^|[^A-Za-z0-9._-])(F\d+-[A-Za-z0-9][A-Za-z0-9._-]*)/g;
 
 type Context = { readonly cwd: string };
 type Message = { readonly customType: string; readonly content: string; readonly display: boolean };
-type StartEvent = { readonly systemPrompt?: string };
+type StartEvent = { readonly prompt?: string; readonly systemPrompt?: string };
 type StartResult = { readonly message?: Message; readonly systemPrompt?: string };
 type PiApi = {
 	on(event: "before_agent_start", handler: (event: StartEvent, context: Context) => StartResult | undefined): void;
@@ -19,7 +19,9 @@ type PiApi = {
 export default function limenCommunication(pi: PiApi): void {
 	pi.on("before_agent_start", (event, context) => {
 		const root = process.env.LIMEN_CONTEXT_ROOT ?? context.cwd;
-		const message = readProjectContext(root);
+		// Wakes are extension prompts that already carry the job record. Re-attaching vision/build
+		// on every completion is noise; speech still restacks so the reply keeps its register.
+		const message = isWakePrompt(event.prompt) ? undefined : readProjectContext(root);
 		const speech = readCommunication(root);
 		if (!message && !speech) return;
 		return {
@@ -27,6 +29,10 @@ export default function limenCommunication(pi: PiApi): void {
 			...(speech ? { systemPrompt: `${event.systemPrompt ?? ""}\n\n${speech}` } : {}),
 		};
 	});
+}
+
+function isWakePrompt(prompt: string | undefined): boolean {
+	return typeof prompt === "string" && prompt.startsWith("Limen job ");
 }
 
 function readProjectContext(cwd: string): string {

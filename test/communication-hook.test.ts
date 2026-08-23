@@ -6,7 +6,7 @@ import limenCommunication from "../hook/communication.ts";
 
 type Context = { readonly cwd: string };
 type Message = { readonly customType: string; readonly content: string; readonly display: boolean };
-type StartEvent = { readonly systemPrompt?: string };
+type StartEvent = { readonly prompt?: string; readonly systemPrompt?: string };
 type StartResult = { readonly message?: Message; readonly systemPrompt?: string };
 type Handlers = {
 	before_agent_start?: (event: StartEvent, context: Context) => StartResult | undefined;
@@ -37,6 +37,18 @@ function start(root: string, event: StartEvent = {}): StartResult {
 	assert.ok(result);
 	return result;
 }
+
+test("a wake prompt skips project context and still restacks speech", async (context) => {
+	const root = await projectRoot(context);
+	await writeFile(join(root, "spec/vision.md"), "Vision one.\n");
+	await writeFile(join(root, "spec/build.md"), "# Build\n");
+	await writeFile(join(root, ".agents/limen/styleguide.md"), "Prefer small functions.\n");
+	await writeFile(join(root, ".agents/limen/communication.md"), "Write for a person.\n");
+	const result = start(root, { prompt: 'Limen job "F031 retry" is done (abc) on branch limen/abc.', systemPrompt: "base" });
+	assert.equal(result.message, undefined);
+	assert.match(result.systemPrompt ?? "", /<limen-communication>/);
+	assert.match(result.systemPrompt ?? "", /Write for a person\./);
+});
 
 test("vision, build board, and styleguide attach after every user message for every role", async (context) => {
 	const root = await projectRoot(context);
