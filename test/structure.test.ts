@@ -27,6 +27,7 @@ test("architecture stays small, pure, direct, and dependency-free", async () => 
 		"spawn.ts",
 		"steer.ts",
 		"stop.ts",
+		"sweep.ts",
 		"wait.ts",
 		"watch.ts",
 	]);
@@ -40,7 +41,7 @@ test("architecture stays small, pure, direct, and dependency-free", async () => 
 	const main = await readFile(join(ROOT, "src/main.ts"), "utf8");
 	assert.match(
 		main,
-		/satisfies\s+Record<\s*"init" \| "workspace" \| "spawn" \| "continue" \| "steer" \| "stop" \| "wait" \| "jobs" \| "prune" \| "watch" \| "unwatch" \| "open" \| "close"\s*,?\s*Command\s*>/,
+		/satisfies\s+Record<\s*"init" \| "workspace" \| "spawn" \| "continue" \| "steer" \| "stop" \| "wait" \| "jobs" \| "prune" \| "watch" \| "unwatch" \| "open" \| "close" \| "sweep"\s*,?\s*Command\s*>/,
 	);
 });
 
@@ -76,6 +77,7 @@ test("pulse law is one function", async () => {
 	assert.match(job, /Number\.isSafeInteger\(pid\) && pid > 0/);
 	assert.match(job, /readonly pid\?: number/);
 	assert.doesNotMatch(job, /from ["']node:/);
+	assert.match(wake, /claims\|delivered\|unconfirmed\|seat/, "seat ring bookkeeping must not churn coordinator watchers");
 });
 
 test("job-file table is written by spawn and read by jobs", async () => {

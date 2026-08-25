@@ -3,6 +3,7 @@ import { appendFileSync, existsSync, type FSWatcher, mkdirSync, readdirSync, rea
 import { dirname, join, resolve } from "node:path";
 import { derivePulse, type Pulse } from "../src/job.ts";
 import { processGroupAlive, reapDeadJobs } from "../src/proc.ts";
+import { registerProject } from "./seat.ts";
 
 type Context = {
 	readonly cwd: string;
@@ -394,6 +395,7 @@ export default function limenWake(pi: PiApi): void {
 		} catch {
 			return;
 		}
+		void registerProject(root).catch(() => {});
 		active = true;
 		session = context;
 		jobsDir = jobs;
@@ -728,7 +730,7 @@ function projectRoot(cwd: string): string | undefined {
 }
 function notifyBookkeeping(filename: string | null): boolean {
 	if (!filename) return false;
-	return /(?:^|\/)notify\/(claims|delivered|unconfirmed)(?:\/|$)/.test(filename.replaceAll("\\", "/"));
+	return /(?:^|\/)notify\/(claims|delivered|unconfirmed|seat)(?:\/|$)/.test(filename.replaceAll("\\", "/"));
 }
 function eventMessage(event: unknown): { readonly role: string; readonly content: string; readonly stopReason?: string } | undefined {
 	if (!event || typeof event !== "object" || !("message" in event)) return undefined;

@@ -1,7 +1,7 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const LIMEN = fileURLToPath(new URL("../bin/limen", import.meta.url));
@@ -80,6 +80,7 @@ function runLimen(scratch: Scratch, addedEnvironment: NodeJS.ProcessEnv, args: r
 		"LIMEN_PACKAGE",
 		"LIMEN_PREFLIGHT",
 		"LIMEN_HERDR",
+		"LIMEN_HOME",
 		"PI_SESSION_ID",
 		"PI_SESSION_FILE",
 		"PI_PROVIDER",
@@ -92,6 +93,7 @@ function runLimen(scratch: Scratch, addedEnvironment: NodeJS.ProcessEnv, args: r
 	])
 		delete environment[name];
 	environment.LIMEN_HERDR = "0";
+	environment.LIMEN_HOME = dirname(scratch.root);
 	Object.assign(environment, addedEnvironment);
 	const result = spawnSync(process.execPath, [LIMEN, ...args], {
 		cwd: scratch.root,

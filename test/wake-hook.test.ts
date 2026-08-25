@@ -1,8 +1,18 @@
 import assert from "node:assert/strict";
-import { chmod, mkdir, readFile, stat, utimes, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rm, stat, utimes, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import limenWake from "../hook/wake.ts";
+
+const WAKE_HOME = await mkdtemp(join(tmpdir(), "limen-wake-home-"));
+const PREVIOUS_LIMEN_HOME = process.env.LIMEN_HOME;
+process.env.LIMEN_HOME = WAKE_HOME;
+test.after(async () => {
+	if (PREVIOUS_LIMEN_HOME === undefined) delete process.env.LIMEN_HOME;
+	else process.env.LIMEN_HOME = PREVIOUS_LIMEN_HOME;
+	await rm(WAKE_HOME, { recursive: true, force: true });
+});
 
 type TestContext = {
 	readonly cwd: string;
@@ -49,6 +59,7 @@ test("wake ignores history, announces start, and steers once on terminal change"
 	};
 	handlers.get("session_start")?.({}, session);
 	context.after(() => handlers.get("session_shutdown")?.({}, session));
+	await waitUntilAsync(async () => (await readFile(join(WAKE_HOME, ".limen/projects"), "utf8").catch(() => "")).split("\n").includes(root));
 	assert.equal(messages.length, 0);
 	await mkdir(join(jobs, "new"));
 	await writeFile(join(jobs, "new/label"), "F001 implementation\n");
