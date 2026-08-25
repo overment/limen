@@ -6,7 +6,6 @@
 
 ## NOW
 
-- `F039-split-proc` (🟠 ACTIVE): one job per file in the `proc.ts` pile. F032 and F045 are proven.
 - `F043-seat-sweep` (🟠 ACTIVE): merged `3eff35a`. Concurrent registry tests pass; live launchd interval not yet installed.
 
 ## NEXT
@@ -16,6 +15,7 @@
 
 ## PROVEN
 
+- `F039-split-proc` (🟢 PROVEN): `proc.ts` split into contain/reap/wrapper/supervisor. Landed `755457f`.
 - `F045-supervisor-stall-escalation` (🟢 PROVEN): supervisor rings and stamps a stalled tab. Live: `⚠ stalled 1m` on `w1H:p17`. Merged `e71dcef`.
 - `F032-hosted-supervisor-target-truth` (🟢 PROVEN): supervisor follows a moved pane; live-proven `w1H:p18` → `w1M:pY`. Implemented `6ee8ff1`.
 - `F011-empty-job-advisory` (🟢 PROVEN): empty jobs say produced nothing; `done` unchanged. Landed `5120e89`.

@@ -1,6 +1,6 @@
 # F039-split-proc · One job per file in the process/runtime pile
 
-[2026-08-25] [🟠] [ACTIVE] [COORDINATOR] ACTIVE · F039-split-proc
+[2026-08-25] [🟢] [PROVEN] [COORDINATOR] PROVEN · F039-split-proc
 
 ## Outcome
 
