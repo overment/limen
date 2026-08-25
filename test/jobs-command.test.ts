@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
-import { mkdir, writeFile } from "node:fs/promises";
+import { chmod, mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import test from "node:test";
-import { limen, scratchRepo } from "./scratch.ts";
+import { limen, limenWithEnv, scratchRepo } from "./scratch.ts";
 
 test("malformed records are informational and do not get rewritten", async (context) => {
 	const scratch = await scratchRepo();
@@ -163,6 +163,46 @@ test("compact snapshots cap malformed live diagnostics", async (context) => {
 	assert.match(result.stdout, /INVALID malformed-live · invalid tool-calls/);
 	assert.doesNotMatch(result.stdout, /x{200}/);
 	assert.ok(Buffer.byteLength(result.stdout) < 1_024);
+});
+
+test("hosted jobs pulse follows activity, not Herdr unseen-idle", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	limen(scratch, "init");
+	const herdr = join(scratch.fakeBin, "herdr");
+	await writeFile(
+		herdr,
+		`#!/usr/bin/env node
+console.log(JSON.stringify({ result: { agent: { agent_status: "idle" } } }));
+`,
+	);
+	await chmod(herdr, 0o755);
+	const env = { HERDR_ENV: "1", LIMEN_HERDR: herdr };
+	const job = join(scratch.root, ".limen/jobs/hosted-think");
+	await mkdir(join(job, "herdr"), { recursive: true });
+	await writeFile(join(job, "task.md"), "think\n");
+	await writeFile(join(job, "state"), "running\n");
+	await writeFile(join(job, "label"), "F038 hosted gen\n");
+	await writeFile(join(job, "branch"), "limen/hosted-think\n");
+	await writeFile(join(job, "log"), "think\n");
+	await writeFile(join(job, "hosted"), "weaker guarantees\n");
+	await writeFile(join(job, "pid"), "1\n");
+	await writeFile(join(job, "herdr/agent"), "w1:p1\n");
+	await writeFile(join(job, "activity"), "think\n");
+	const thinking = limenWithEnv(scratch, env, "jobs");
+	assert.equal(thinking.status, 0, thinking.stderr);
+	assert.match(thinking.stdout, /RUNNING F038 hosted gen/);
+	assert.match(thinking.stdout, / · think(?: ·|$)/);
+	assert.doesNotMatch(thinking.stdout, / · wait(?: ·|$)/);
+	await writeFile(join(job, "activity"), "tool\n");
+	const tooling = limenWithEnv(scratch, env, "jobs");
+	assert.match(tooling.stdout, / · tool(?: ·|$)/);
+	await writeFile(join(job, "activity"), "wait\n");
+	const waiting = limenWithEnv(scratch, env, "jobs");
+	assert.match(waiting.stdout, / · wait(?: ·|$)/);
+	await writeFile(join(job, "pid"), "");
+	const handshake = limenWithEnv(scratch, env, "jobs");
+	assert.match(handshake.stdout, /starting/);
 });
 
 test("jobs shows the advisory line on a running hosted job", async (context) => {

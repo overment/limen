@@ -1,7 +1,8 @@
 import { execFile } from "node:child_process";
 import { appendFileSync, existsSync, type FSWatcher, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, watch, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { reapDeadJobs } from "../src/proc.ts";
+import { derivePulse, type Pulse } from "../src/job.ts";
+import { processGroupAlive, reapDeadJobs } from "../src/proc.ts";
 
 type Context = {
 	readonly cwd: string;
@@ -29,7 +30,6 @@ const SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", 
 const FALLBACK_GRACE_MS = 2_000;
 const CLAIM_STALE_MS = 30_000;
 type HerdrPane = { readonly binary: string; readonly pane: string };
-type Pulse = "starting" | "think" | "tool" | "wait" | "dead";
 
 export default function limenWake(pi: PiApi): void {
 	let watcher: FSWatcher | undefined;
@@ -390,22 +390,14 @@ function runningDisplay(jobs: string, session: string): { readonly status: strin
 	return { status: `limen ${running.length} · ${summary}`, title, pulses: running.map(({ pulse }) => pulse) };
 }
 function pulseOf(jobs: string, id: string): Pulse {
-	// Keep identical to src/job.ts derivePulse.
 	const pid = Number(text(join(jobs, id, "pid")));
 	const recorded = Number.isSafeInteger(pid) && pid > 0 ? pid : undefined;
 	const activity = text(join(jobs, id, "activity"));
-	if (recorded === undefined) return "starting";
-	if (!processGroupAlive(recorded)) return "dead";
-	if (activity === "tool" || activity === "wait") return activity;
-	return "think";
-}
-function processGroupAlive(pid: number): boolean {
-	try {
-		process.kill(-pid, 0);
-		return true;
-	} catch (error) {
-		return typeof error === "object" && error !== null && "code" in error && error.code === "EPERM";
-	}
+	return derivePulse({
+		alive: recorded !== undefined && processGroupAlive(recorded),
+		...(recorded !== undefined ? { pid: recorded } : {}),
+		...(activity ? { activity } : {}),
+	});
 }
 function claimDelivery(job: string, slot: string, eligible: () => boolean, send: () => void | Promise<void>): boolean {
 	const claim = join(job, "notify", "claims", slot);

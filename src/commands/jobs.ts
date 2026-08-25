@@ -1,7 +1,7 @@
 import { open, readdir, readFile, stat } from "node:fs/promises";
 import { limenRoot, liveDiffstat, workspaceRepository } from "../git.ts";
 import { hostedAgentStatus } from "../herdr.ts";
-import { derivePulse, type Pulse, parseJob, renderJob } from "../job.ts";
+import { derivePulse, parseJob, renderJob } from "../job.ts";
 import { resolveJob } from "../lookup.ts";
 import { confirmDeadJobs, processGroupAlive } from "../proc.ts";
 
@@ -74,18 +74,7 @@ async function renderJobDirectory(root: string, jobsRoot: string, id: string, de
 		const agentStatus = job.phase === "running" && hosted && agent ? hostedAgentStatus(agent) : undefined;
 		const hostedAlive = agentStatus !== undefined && agentStatus !== "missing";
 		const alive = hosted ? hostedAlive || processAlive : processAlive;
-		const pulse: Pulse | undefined =
-			job.phase === "running"
-				? hosted
-					? !alive
-						? "dead"
-						: activity === "tool" || activity === "wait"
-							? activity
-							: agentStatus === "working"
-								? "think"
-								: "wait"
-					: derivePulse({ alive: processAlive, ...(job.pid !== undefined ? { pid: job.pid } : {}), ...(activity ? { activity } : {}) })
-				: undefined;
+		const pulse = job.phase === "running" ? derivePulse({ alive, ...(job.pid !== undefined ? { pid: job.pid } : {}), ...(activity ? { activity } : {}) }) : undefined;
 		const rendered = renderJob(job, {
 			elapsedMs: observedAt - startedAt.getTime(),
 			silentMs: observedAt - logStat.mtimeMs,

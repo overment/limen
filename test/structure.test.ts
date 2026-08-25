@@ -67,16 +67,15 @@ test("strict TypeScript and templates preserve the capability-judgment line", as
 		assert.match(agents.toLowerCase(), new RegExp(phrase));
 });
 
-test("copied pulse law stays in lockstep", async () => {
+test("pulse law is one function", async () => {
 	const job = await readFile(join(ROOT, "src/job.ts"), "utf8");
 	const wake = await readFile(join(ROOT, "hook/wake.ts"), "utf8");
-	for (const phrase of ['return "starting"', 'return "dead"', '=== "tool" \|\| .*=== "wait"', 'return "think"']) {
-		assert.match(job, new RegExp(phrase));
-		assert.match(wake, new RegExp(phrase));
-	}
+	const jobs = await readFile(join(ROOT, "src/commands/jobs.ts"), "utf8");
+	assert.match(wake, /import \{[^}]*derivePulse[^}]*\} from ["']\.\.\/src\/job\.ts["']/);
+	assert.match(jobs, /derivePulse\(/);
+	assert.doesNotMatch(jobs, /agentStatus === ["']working["']/);
 	assert.match(job, /Number\.isSafeInteger\(pid\) && pid > 0/);
 	assert.match(job, /readonly pid\?: number/);
-	assert.match(wake, /Number\.isSafeInteger\(pid\) && pid > 0/);
 	assert.doesNotMatch(job, /from ["']node:/);
 });
 
