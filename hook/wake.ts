@@ -14,7 +14,7 @@ type Context = {
 	};
 };
 type PiApi = {
-	on(event: "session_start" | "session_shutdown" | "agent_settled", handler: (event: unknown, context: Context) => void): void;
+	on(event: "session_start" | "session_shutdown" | "agent_settled" | "message_start" | "message_end", handler: (event: unknown, context: Context) => void): void;
 	sendUserMessage(content: string, options?: { readonly deliverAs: "steer" | "followUp" }): Promise<void> | void;
 	registerCommand?(
 		name: string,
@@ -43,6 +43,11 @@ export default function limenWake(pi: PiApi): void {
 	let session: Context | undefined;
 	let jobsDir: string | undefined;
 	let sessionId = "";
+	let limenDir: string | undefined;
+	let lastSweepAt = 0;
+	let initialSweep = false;
+	let footerAlive = true;
+	let footerNoted = false;
 	let herdr: HerdrPane | undefined;
 	let herdrSeq = Date.now();
 	let herdrMetadata: string | undefined;
@@ -50,6 +55,18 @@ export default function limenWake(pi: PiApi): void {
 	const firstDead = new Map<string, number>();
 	let sweeping = false;
 	let injectedThisSweep = false;
+	type PendingDelivery = {
+		readonly claim: string;
+		readonly delivered: string;
+		readonly message: string;
+		readonly blocked: () => void;
+		accepted: boolean;
+		entered: boolean;
+		answered: boolean;
+		settled: boolean;
+	};
+	const pendingDeliveries = new Map<string, PendingDelivery>();
+	let activeDelivery: string | undefined;
 	const herdrCall = (args: readonly string[]) => {
 		if (!herdr) return;
 		try {
@@ -94,13 +111,26 @@ export default function limenWake(pi: PiApi): void {
 		if (changeTimer) clearTimeout(changeTimer);
 		changeTimer = undefined;
 	};
+	const dropFooter = (reason: string) => {
+		if (statusTimer) clearInterval(statusTimer);
+		statusTimer = undefined;
+		footerAlive = false;
+		statusBody = "";
+		frame = 0;
+		if (footerNoted || !limenDir) return;
+		footerNoted = true;
+		try {
+			appendFileSync(join(limenDir, "log"), `[limen ${new Date().toISOString()}] coordinator footer disabled: ${reason}; wake delivery remains active\n`);
+		} catch {
+			// Delivery and the liveness stamp remain the durable signals when this note cannot be written.
+		}
+	};
 	const setStatus = (value: string | undefined) => {
-		if (!session) return;
+		if (!session || !footerAlive) return;
 		try {
 			session.ui.setStatus("limen", value);
 		} catch {
-			// `/reload` and session replacement invalidate the captured ctx; never crash Pi.
-			retire(false);
+			dropFooter("setStatus failed");
 		}
 	};
 	const retire = (reportHerdr = true) => {
@@ -120,7 +150,7 @@ export default function limenWake(pi: PiApi): void {
 		if (reportHerdr) herdrReport("", "");
 	};
 	const drawStatus = () => {
-		if (!active || muted || !statusBody || !session) return;
+		if (!active || !footerAlive || muted || !statusBody || !session) return;
 		setStatus(`${SPINNER[frame]} ${statusBody}`);
 		frame = (frame + 1) % SPINNER.length;
 	};
@@ -133,7 +163,7 @@ export default function limenWake(pi: PiApi): void {
 		statusBody = next.status;
 		herdrReport(next.status.slice("limen ".length), next.title, next.pulses);
 		drawStatus();
-		if (!statusTimer) {
+		if (footerAlive && !statusTimer) {
 			statusTimer = setInterval(drawStatus, 120);
 			statusTimer.unref();
 		}
@@ -150,6 +180,24 @@ export default function limenWake(pi: PiApi): void {
 		}
 		return Promise.resolve(pi.sendUserMessage(message, { deliverAs: "followUp" }));
 	};
+	const deliveryCallbacks = (message: string, blocked: () => void): DeliveryCallbacks => ({
+		blocked,
+		protected(claim) {
+			const pending = pendingDeliveries.get(claim);
+			return Boolean(pending && (pending.entered || session?.isIdle() !== true));
+		},
+		pending(claim, delivered) {
+			pendingDeliveries.set(claim, { claim, delivered, message, blocked, accepted: false, entered: false, answered: false, settled: false });
+		},
+		accepted(claim) {
+			const pending = pendingDeliveries.get(claim);
+			if (pending) pending.accepted = true;
+			confirmDeliveries();
+		},
+		released(claim) {
+			pendingDeliveries.delete(claim);
+		},
+	});
 	const sendCompletion = (jobs: string, id: string, state: string, fallback: boolean): boolean => {
 		if (!session) return false;
 		const job = join(jobs, id);
@@ -158,8 +206,15 @@ export default function limenWake(pi: PiApi): void {
 		const repo = text(join(job, "repo"));
 		const slot = fallback ? "_fallback" : sessionId;
 		if (fallback && (completionSlots(deliveredSlots(job)).length > 0 || session.isIdle() !== true || muted)) return false;
+		const blocked = () => {
+			try {
+				session?.ui.notify(`limen: ${label} wake was unconfirmed twice; automatic delivery stopped (${id})`, "info");
+			} catch {
+				dropFooter("ui.notify failed");
+			}
+		};
 		const eligible = () => {
-			recoverClaims(job);
+			if (recoverClaims(job, (claim) => pendingDeliveries.has(claim))) blocked();
 			if (!isTerminal(stateOf(jobs, id)) || !routable(job)) return false;
 			// Read claims before delivered records: rename moves atomically between them, so one side is always visible.
 			if (fallback)
@@ -168,18 +223,24 @@ export default function limenWake(pi: PiApi): void {
 				);
 			return subscribed(job, sessionId) && !existsSync(join(job, "notify", "claims", "_fallback")) && !existsSync(join(job, "notify", "delivered", "_fallback"));
 		};
-		const routed = claimDelivery(job, slot, eligible, () => {
-			const route = fallback ? " This completion was routed here because no subscribed coordinator received it." : "";
-			const location = repo ? ` in repository ${repo}` : "";
-			const message = `Limen job ${JSON.stringify(label)} is ${state} (${id}) on branch ${branch}${location}.${route} Inspect the job record, branch diff and commits, log/session, and relevant checks. Use the accepted ticket intent to take the next safe step: merge acceptable reviewed work, or resume focused fixes and re-review. Keep the user informed; ask only when genuine product ambiguity, a scope or risk tradeoff, or an irreversible action needs a human decision.${handoffExcerpt(job)}`;
-			// Toast always — steers alone are easy to miss on a busy coordinator, and workers' steer inbox is not this session.
-			try {
-				session?.ui.notify(`limen: ${label} is ${state} (${id})`, "info");
-			} catch {
-				retire(false);
-			}
-			return injectWake(message);
-		});
+		const route = fallback ? " This completion was routed here because no subscribed coordinator received it." : "";
+		const location = repo ? ` in repository ${repo}` : "";
+		const message = `Limen job ${JSON.stringify(label)} is ${state} (${id}) on branch ${branch}${location}.${route} Inspect the job record, branch diff and commits, log/session, and relevant checks. Use the accepted ticket intent to take the next safe step: merge acceptable reviewed work, or resume focused fixes and re-review. Keep the user informed; ask only when genuine product ambiguity, a scope or risk tradeoff, or an irreversible action needs a human decision.${handoffExcerpt(job)}`;
+		const routed = claimDelivery(
+			job,
+			slot,
+			eligible,
+			() => {
+				// Toast always — steers alone are easy to miss on a busy coordinator, and workers' steer inbox is not this session.
+				try {
+					session?.ui.notify(`limen: ${label} is ${state} (${id})`, "info");
+				} catch {
+					dropFooter("ui.notify failed");
+				}
+				return injectWake(message);
+			},
+			deliveryCallbacks(message, blocked),
+		);
 		if (routed) notifyHerdr(job, id, state, label, branch, slot);
 		return routed;
 	};
@@ -194,8 +255,15 @@ export default function limenWake(pi: PiApi): void {
 		const slot = fallback ? "_advisory._fallback" : `_advisory.${sessionId}`;
 		if (fallback && (advisorySlots(deliveredSlots(job)).length > 0 || session.isIdle() !== true || muted)) return false;
 		const kind = advisory.startsWith("blocked") ? "blocked" : "idle";
+		const blocked = () => {
+			try {
+				session?.ui.notify(`limen: ${label} advisory wake was unconfirmed twice; automatic delivery stopped (${id})`, "info");
+			} catch {
+				dropFooter("ui.notify failed");
+			}
+		};
 		const eligible = () => {
-			recoverClaims(job);
+			if (recoverClaims(job, (claim) => pendingDeliveries.has(claim))) blocked();
 			if (stateOf(jobs, id) !== "running" || !text(join(job, "advisory")) || !routable(job)) return false;
 			if (fallback)
 				return (
@@ -208,17 +276,23 @@ export default function limenWake(pi: PiApi): void {
 				subscribed(job, sessionId) && !existsSync(join(job, "notify", "claims", "_advisory._fallback")) && !existsSync(join(job, "notify", "delivered", "_advisory._fallback"))
 			);
 		};
-		const routed = claimDelivery(job, slot, eligible, () => {
-			const route = fallback ? " This advisory was routed here because no subscribed coordinator received it." : "";
-			const location = repo ? ` in repository ${repo}` : "";
-			const message = `Limen job ${JSON.stringify(label)} is still running (${id}) on branch ${branch}${location}: ${advisory}.${route} Inspect the job record and continue the loop; steer; or open the tab and exit if you mean the session to end.${handoffExcerpt(job)}`;
-			try {
-				session?.ui.notify(`limen: ${label} is ${kind} (${id})`, "info");
-			} catch {
-				retire(false);
-			}
-			return injectWake(message);
-		});
+		const route = fallback ? " This advisory was routed here because no subscribed coordinator received it." : "";
+		const location = repo ? ` in repository ${repo}` : "";
+		const message = `Limen job ${JSON.stringify(label)} is still running (${id}) on branch ${branch}${location}: ${advisory}.${route} Inspect the job record and continue the loop; steer; or open the tab and exit if you mean the session to end.${handoffExcerpt(job)}`;
+		const routed = claimDelivery(
+			job,
+			slot,
+			eligible,
+			() => {
+				try {
+					session?.ui.notify(`limen: ${label} is ${kind} (${id})`, "info");
+				} catch {
+					dropFooter("ui.notify failed");
+				}
+				return injectWake(message);
+			},
+			deliveryCallbacks(message, blocked),
+		);
 		if (routed) notifyHerdr(job, id, kind, label, branch, slot);
 		return routed;
 	};
@@ -234,7 +308,7 @@ export default function limenWake(pi: PiApi): void {
 			try {
 				session.ui.notify(`limen: ${label} started (${id})`, "info");
 			} catch {
-				retire(false);
+				dropFooter("ui.notify failed");
 			}
 		}
 		if (muted) return;
@@ -248,6 +322,23 @@ export default function limenWake(pi: PiApi): void {
 		if (own) sendCompletion(jobs, id, state, false);
 		else if (oldEnoughForFallback(job)) sendCompletion(jobs, id, state, true);
 	};
+	const confirmDeliveries = () => {
+		for (const pending of pendingDeliveries.values()) {
+			if (!pending.accepted || !pending.settled) continue;
+			if (pending.entered && pending.answered) confirmClaim(pending.claim, pending.delivered);
+			else if (recordUnconfirmed(pending.claim)) pending.blocked();
+			pendingDeliveries.delete(pending.claim);
+		}
+	};
+	const stampSweep = () => {
+		if (!limenDir || Date.now() - lastSweepAt < CLAIM_STALE_MS) return;
+		lastSweepAt = Date.now();
+		try {
+			writeFileSync(join(limenDir, "last-sweep"), `${new Date(lastSweepAt).toISOString()}\n${sessionId}\n`);
+		} catch {
+			// F043 treats an absent or stale stamp as no listener; never claim liveness we could not write.
+		}
+	};
 	const sweep = () => {
 		if (!active || !session || !jobsDir || sweeping) return;
 		sweeping = true;
@@ -255,9 +346,17 @@ export default function limenWake(pi: PiApi): void {
 	};
 	const finishSweep = async (jobs: string) => {
 		injectedThisSweep = false;
+		stampSweep();
 		try {
+			if (initialSweep) {
+				initialSweep = false;
+				for (const id of readdirSync(jobs).sort()) {
+					const job = join(jobs, id);
+					if (stateOf(jobs, id) === "running" && text(join(job, "advisory"))) observe(jobs, id);
+				}
+			}
 			await reapDeadJobs(jobs, firstDead);
-			for (const id of readdirSync(jobs)) {
+			for (const id of readdirSync(jobs).sort()) {
 				const job = join(jobs, id);
 				if (stateOf(jobs, id) === "running" && !routable(job)) enrollLegacyRunning(job);
 				observe(jobs, id);
@@ -292,7 +391,14 @@ export default function limenWake(pi: PiApi): void {
 		active = true;
 		session = context;
 		jobsDir = jobs;
+		limenDir = join(root, ".limen");
 		sessionId = id;
+		lastSweepAt = 0;
+		initialSweep = true;
+		footerAlive = true;
+		footerNoted = false;
+		pendingDeliveries.clear();
+		activeDelivery = undefined;
 		firstDead.clear();
 		sweeping = false;
 		herdr = herdrTarget();
@@ -314,11 +420,31 @@ export default function limenWake(pi: PiApi): void {
 		sweepTimer.unref();
 		sweep();
 	});
-	pi.on("agent_settled", sweep);
+	pi.on("message_start", (event) => {
+		const message = eventMessage(event);
+		if (!message || message.role !== "user") return;
+		const pending = [...pendingDeliveries.values()].find((candidate) => !candidate.entered && candidate.message === message.content);
+		activeDelivery = pending?.claim;
+		if (pending) pending.entered = true;
+	});
+	pi.on("message_end", (event) => {
+		const message = eventMessage(event);
+		if (!message || message.role !== "assistant" || !activeDelivery || message.stopReason === "error" || message.stopReason === "aborted") return;
+		const pending = pendingDeliveries.get(activeDelivery);
+		if (pending) pending.answered = true;
+	});
+	pi.on("agent_settled", () => {
+		for (const pending of pendingDeliveries.values()) pending.settled = true;
+		confirmDeliveries();
+		activeDelivery = undefined;
+		sweep();
+	});
 	pi.on("session_shutdown", () => {
 		if (!active && !statusTimer && !sweepTimer) return;
 		watcher?.close();
 		watcher = undefined;
+		pendingDeliveries.clear();
+		activeDelivery = undefined;
 		retire(false);
 		releaseHerdr();
 	});
@@ -399,13 +525,24 @@ function pulseOf(jobs: string, id: string): Pulse {
 		...(activity ? { activity } : {}),
 	});
 }
-function claimDelivery(job: string, slot: string, eligible: () => boolean, send: () => void | Promise<void>): boolean {
+type DeliveryCallbacks = {
+	readonly blocked: () => void;
+	readonly protected: (claim: string) => boolean;
+	readonly pending: (claim: string, delivered: string) => void;
+	readonly accepted: (claim: string) => void;
+	readonly released: (claim: string) => void;
+};
+function claimDelivery(job: string, slot: string, eligible: () => boolean, send: () => void | Promise<void>, callbacks: DeliveryCallbacks): boolean {
 	const claim = join(job, "notify", "claims", slot);
 	const delivered = join(job, "notify", "delivered", slot);
 	mkdirSync(join(job, "notify", "claims"), { recursive: true });
 	mkdirSync(join(job, "notify", "delivered"), { recursive: true });
-	recoverClaim(claim, delivered);
-	if (existsSync(delivered)) return false;
+	if (!callbacks.protected(claim)) {
+		const recovered = recoverClaim(claim);
+		if (recovered) callbacks.released(claim);
+		if (recovered === "blocked") callbacks.blocked();
+	}
+	if (existsSync(delivered) || existsSync(claim)) return false;
 	try {
 		mkdirSync(claim);
 		writeFileSync(join(claim, "owner"), `${process.pid}\n${new Date().toISOString()}\n`);
@@ -416,43 +553,81 @@ function claimDelivery(job: string, slot: string, eligible: () => boolean, send:
 		rmSync(claim, { recursive: true, force: true });
 		return false;
 	}
+	callbacks.pending(claim, delivered);
 	try {
 		const injected = send();
 		const accept = () => {
 			writeFileSync(join(claim, "accepted"), "1\n");
-			renameSync(claim, delivered);
+			callbacks.accepted(claim);
 		};
-		if (injected instanceof Promise) {
-			// Delivery counts only once the turn injection resolves. A rejected injection
-			// (pi mid-compaction, where isIdle lies) releases the claim so the next sweep retries.
-			injected.then(accept, () => {
-				rmSync(claim, { recursive: true, force: true });
-				try {
-					appendFileSync(join(job, "log"), `[limen ${new Date().toISOString()}] wake injection failed; the next sweep retries\n`);
-				} catch {
-					// The log is best-effort; the released claim is the durable fact.
-				}
-			});
-		} else accept();
+		const reject = () => {
+			callbacks.released(claim);
+			rmSync(claim, { recursive: true, force: true });
+			try {
+				appendFileSync(join(job, "log"), `[limen ${new Date().toISOString()}] wake injection failed; the next sweep retries\n`);
+			} catch {
+				// The log is best-effort; the released claim is the durable fact.
+			}
+		};
+		if (injected instanceof Promise) injected.then(accept, reject);
+		else accept();
 		return true;
 	} catch {
+		callbacks.released(claim);
 		rmSync(claim, { recursive: true, force: true });
 		return false;
 	}
 }
-function recoverClaim(claim: string, delivered: string): void {
+function recoverClaim(claim: string): "released" | "blocked" | undefined {
 	try {
-		if (!existsSync(claim)) return;
+		if (!existsSync(claim) || existsSync(join(claim, "blocked"))) return undefined;
 		const age = Date.now() - statSync(claim).mtimeMs;
-		if (age < CLAIM_STALE_MS) return;
+		if (age < CLAIM_STALE_MS) return undefined;
 		if (existsSync(join(claim, "accepted"))) {
-			if (!existsSync(delivered)) renameSync(claim, delivered);
-			else rmSync(claim, { recursive: true, force: true });
-			return;
+			if (recordUnconfirmed(claim)) return "blocked";
+			return existsSync(claim) ? undefined : "released";
 		}
 		rmSync(claim, { recursive: true, force: true });
+		return "released";
 	} catch {
 		// Another coordinator recovered it first.
+	}
+	return undefined;
+}
+function recordUnconfirmed(claim: string): boolean {
+	try {
+		if (!existsSync(claim) || existsSync(join(claim, "blocked"))) return false;
+		const slot = claim.slice(claim.lastIndexOf("/") + 1);
+		const notify = dirname(dirname(claim));
+		const attemptsDir = join(notify, "unconfirmed");
+		const attemptsFile = join(attemptsDir, isAdvisorySlot(slot) ? "_advisory" : "_completion");
+		mkdirSync(attemptsDir, { recursive: true });
+		const attempts = Number(text(attemptsFile)) + 1;
+		writeFileSync(attemptsFile, `${attempts}\n`);
+		if (attempts < 2) {
+			rmSync(claim, { recursive: true, force: true });
+			return false;
+		}
+		writeFileSync(join(claim, "blocked"), "automatic retries stopped after two unconfirmed injections\n", { flag: "wx" });
+		const job = dirname(notify);
+		appendFileSync(
+			join(job, "log"),
+			`[limen ${new Date().toISOString()}] wake remained unconfirmed after two accepted injections; automatic retries stopped; claim retained for human recovery\n`,
+		);
+		return true;
+	} catch {
+		return false;
+	}
+}
+function confirmClaim(claim: string, delivered: string): void {
+	try {
+		if (!existsSync(join(claim, "accepted"))) return;
+		if (!existsSync(delivered)) renameSync(claim, delivered);
+		else rmSync(claim, { recursive: true, force: true });
+		const slot = delivered.slice(delivered.lastIndexOf("/") + 1);
+		rmSync(join(dirname(dirname(delivered)), "unconfirmed", isAdvisorySlot(slot) ? "_advisory" : "_completion"), { force: true });
+	} catch {
+		// Another coordinator confirmed or recovered it first.
 	}
 }
 function deliveredSlots(job: string): string[] {
@@ -469,8 +644,13 @@ function claimSlots(job: string): string[] {
 		return [];
 	}
 }
-function recoverClaims(job: string): void {
-	for (const slot of claimSlots(job)) recoverClaim(join(job, "notify", "claims", slot), join(job, "notify", "delivered", slot));
+function recoverClaims(job: string, protectedClaim: (claim: string) => boolean = () => false): boolean {
+	let blocked = false;
+	for (const slot of claimSlots(job)) {
+		const claim = join(job, "notify", "claims", slot);
+		if (!protectedClaim(claim) && recoverClaim(claim) === "blocked") blocked = true;
+	}
+	return blocked;
 }
 function claimMarker(job: string, kind: string, slot: string): boolean {
 	const root = join(job, "notify", kind);
@@ -524,7 +704,21 @@ function projectRoot(cwd: string): string | undefined {
 }
 function notifyBookkeeping(filename: string | null): boolean {
 	if (!filename) return false;
-	return /(?:^|\/)notify\/(claims|delivered)(?:\/|$)/.test(filename.replaceAll("\\", "/"));
+	return /(?:^|\/)notify\/(claims|delivered|unconfirmed)(?:\/|$)/.test(filename.replaceAll("\\", "/"));
+}
+function eventMessage(event: unknown): { readonly role: string; readonly content: string; readonly stopReason?: string } | undefined {
+	if (!event || typeof event !== "object" || !("message" in event)) return undefined;
+	const message = event.message;
+	if (!message || typeof message !== "object" || !("role" in message) || typeof message.role !== "string") return undefined;
+	const content = "content" in message && Array.isArray(message.content) ? message.content : [];
+	const textContent = content
+		.filter((part): part is { readonly type: "text"; readonly text: string } =>
+			Boolean(part && typeof part === "object" && "type" in part && part.type === "text" && "text" in part && typeof part.text === "string"),
+		)
+		.map((part) => part.text)
+		.join("\n");
+	const stopReason = "stopReason" in message && typeof message.stopReason === "string" ? message.stopReason : undefined;
+	return { role: message.role, content: textContent, ...(stopReason ? { stopReason } : {}) };
 }
 function herdrTarget(): HerdrPane | undefined {
 	const binary = process.env.LIMEN_HERDR || "herdr";
