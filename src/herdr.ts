@@ -204,7 +204,23 @@ export function reportHostedStall(input: { readonly pane: string; readonly label
 	const herdr = herdrBinary();
 	if (!herdr) return;
 	const stalled = `⚠ stalled ${input.duration}`;
-	if (input.pane) advisoryCall(herdr, ["pane", "report-metadata", input.pane, "--source", "limen", "--display-agent", stalled, "--state-label", `blocked=${stalled}`]);
+	if (input.pane) {
+		advisoryCall(herdr, [
+			"pane",
+			"report-metadata",
+			input.pane,
+			"--source",
+			"limen",
+			"--display-agent",
+			stalled,
+			"--state-label",
+			`idle=${stalled}`,
+			"--state-label",
+			`done=${stalled}`,
+			"--state-label",
+			`blocked=${stalled}`,
+		]);
+	}
 	if (input.notify) advisoryCall(herdr, ["notification", "show", `limen: ${input.label} stalled`, "--body", stalled, "--sound", "request"]);
 }
 
