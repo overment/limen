@@ -6,7 +6,6 @@
 
 ## NOW
 
-- `F037-continue-record-parity` (🟠 ACTIVE): landed at `62aad12`; hosted review in flight (`2026-08-25-f037-review-9079a635`).
 - `F032-hosted-supervisor-target-truth` (ACTIVE): implemented inline 2026-08-21 (`6ee8ff1`). Suite-covered; live prove still open — needs a moved-pane or degraded-Herdr scenario on a running hosted job.
 
 ## NEXT
@@ -18,6 +17,7 @@
 
 ## PROVEN
 
+- `F037-continue-record-parity` (🟢 PROVEN): continue copies `repo`, finalizes launch fail, hosted in Herdr like spawn. Landed at `62aad12`; review PASS of `62aad12`.
 - `F040-retire-control-migrate` (🟢 PROVEN): `limen migrate` gone; init still refuses leftover Control paths. Landed at `b99f624`.
 - `F038-hosted-pulse-from-activity` (🟢 PROVEN): hosted `jobs`/footer pulse follows `activity`, not Herdr unseen-idle. Landed at `54e678c`.
 - `F036-agent-name-and-description` (🟢 PROVEN): live probe showed `limen-f036-53de86f2` + display-agent `limen worker`. Landed at `554e3c9`.
