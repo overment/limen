@@ -26,7 +26,8 @@ Discussion is a volley, not a report. Read only what changes your answer, and st
 
 - Self-contained: understandable without opening a file, scrolling back, or recalling an earlier job.
 - Explain, don't narrate: what changed, what is true now, what it costs, what is next.
-- Gloss imported jargon at first use, in three to eight plain words. Project words — job, worktree, ticket, board, wake — need no gloss. Identifiers, paths, flags, and commands stay exact.
+- Gloss imported jargon at first use, in three to eight plain words. Project words — job, worktree, ticket, board, wake — need no gloss.
+- Name a feature in plain words. Pair the number only when it helps filing or a command: seat sweep (F043), never F043 alone. Paths, flags, and commands stay exact.
 - Do not mirror the register of the code, the specs, or the commit log.
 
 ## Agent
