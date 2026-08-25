@@ -7,6 +7,7 @@ import { pruneCommand } from "./commands/prune.ts";
 import { spawnCommand } from "./commands/spawn.ts";
 import { steerCommand } from "./commands/steer.ts";
 import { stopCommand } from "./commands/stop.ts";
+import { sweepCommand } from "./commands/sweep.ts";
 import { waitCommand } from "./commands/wait.ts";
 import { unwatchCommand, watchCommand } from "./commands/watch.ts";
 import { failInternalJob, runHostedSupervisor, runInternalJob } from "./proc.ts";
@@ -26,7 +27,8 @@ const COMMANDS = {
 	unwatch: unwatchCommand,
 	open: openCommand,
 	close: closeCommand,
-} as const satisfies Record<"init" | "workspace" | "spawn" | "continue" | "steer" | "stop" | "wait" | "jobs" | "prune" | "watch" | "unwatch" | "open" | "close", Command>;
+	sweep: sweepCommand,
+} as const satisfies Record<"init" | "workspace" | "spawn" | "continue" | "steer" | "stop" | "wait" | "jobs" | "prune" | "watch" | "unwatch" | "open" | "close" | "sweep", Command>;
 const HELP = `limen — isolated coding jobs with files and git
 usage:
   limen init
@@ -49,6 +51,7 @@ usage:
   limen unwatch <id|suffix|label> | --all
   limen open <id|suffix|label>
   limen close <FNNN>
+  limen sweep [--install|--uninstall]
 Pass a short coordinator instruction, not $(cat ticket.md). The ticket is a pointer, not the prompt.`;
 export function requireNodeMajor(version = process.versions.node): string | undefined {
 	const major = Number.parseInt(version, 10);

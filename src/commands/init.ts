@@ -3,6 +3,7 @@ import { access, appendFile, copyFile, mkdir, readFile, rm, writeFile } from "no
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { formatDrift, listDrift, removeHookCopies } from "../../hook/inherit.ts";
+import { registerProject } from "../../hook/seat.ts";
 import { isGitRepository, repoRoot, workspaceRoot } from "../git.ts";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
@@ -52,6 +53,7 @@ async function initialize(root: string, repository: boolean): Promise<void> {
 	}
 	for (const path of removeHookCopies(root)) console.log(`removed ${path}`);
 	await mkdir(`${root}/.limen/jobs`, { recursive: true });
+	await registerProject(root);
 	if (repository) await ensureIgnored(`${root}/.gitignore`);
 	console.log("ready .limen/jobs");
 	const drift = formatDrift(listDrift(root));
