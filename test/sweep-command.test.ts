@@ -47,7 +47,7 @@ test("sweep rings unheard jobs on cadence without consuming wakes, honors livene
 	assert.equal((await readFile(log, "utf8")).trim().split("\n").length, 2, "a live coordinator suppresses seat rings");
 });
 
-test("registry registration and pruning serialize across processes", async (context) => {
+test("registry registration and pruning reclaim a dead lock once across processes", async (context) => {
 	const scratch = await scratchRepo();
 	context.after(scratch.cleanup);
 	const home = dirname(scratch.root),
@@ -56,6 +56,8 @@ test("registry registration and pruning serialize across processes", async (cont
 	await mkdir(dirname(registry), { recursive: true });
 	await Promise.all(projects.map((project) => mkdir(project)));
 	await writeFile(registry, `${join(home, "missing-one")}\n${join(home, "missing-two")}\n`);
+	await mkdir(`${registry}.lock`);
+	await writeFile(join(`${registry}.lock`, "owner"), "999999999\n");
 	const seat = new URL("../hook/seat.ts", import.meta.url).href,
 		sweep = new URL("../src/commands/sweep.ts", import.meta.url).href,
 		registerSource = `import { registerProject } from ${JSON.stringify(seat)}; await registerProject(process.argv[1]);`,

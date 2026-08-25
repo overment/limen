@@ -49,6 +49,7 @@ export async function uninstallSeatSweep(): Promise<void> {
 function withRegistryLock<T>(action: () => T): T {
 	const path = projectsFile(),
 		lock = `${path}.lock`,
+		reclaimer = `${process.pid}.${Date.now()}`,
 		deadline = Date.now() + 10_000;
 	fs.mkdirSync(dirname(path), { recursive: true });
 	while (true) {
@@ -58,7 +59,7 @@ function withRegistryLock<T>(action: () => T): T {
 			break;
 		} catch (error) {
 			if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
-			if (removeAbandonedLock(lock)) continue;
+			if (removeAbandonedLock(lock, reclaimer)) continue;
 			if (Date.now() >= deadline) throw new Error(`timed out locking ${path}`);
 			Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10);
 		}
@@ -69,9 +70,11 @@ function withRegistryLock<T>(action: () => T): T {
 		fs.rmSync(lock, { recursive: true, force: true });
 	}
 }
-function removeAbandonedLock(lock: string): boolean {
+function removeAbandonedLock(lock: string, reclaimer: string): boolean {
 	try {
-		const owner = Number(fs.existsSync(join(lock, "owner")) ? fs.readFileSync(join(lock, "owner"), "utf8").trim() : 0);
+		const identity = fs.statSync(lock),
+			ownerText = fs.existsSync(join(lock, "owner")) ? fs.readFileSync(join(lock, "owner"), "utf8").trim() : "",
+			owner = Number(ownerText);
 		if (owner > 0) {
 			try {
 				process.kill(owner, 0);
@@ -79,8 +82,20 @@ function removeAbandonedLock(lock: string): boolean {
 			} catch (error) {
 				if ((error as NodeJS.ErrnoException).code !== "ESRCH") return false;
 			}
-		} else if (Date.now() - fs.statSync(lock).mtimeMs < 5_000) return false;
-		fs.rmSync(lock, { recursive: true, force: true });
+		} else if (Date.now() - identity.mtimeMs < 5_000) return false;
+		const claim = join(lock, "reclaimer");
+		try {
+			fs.writeFileSync(claim, reclaimer, { flag: "wx" });
+		} catch (error) {
+			if ((error as NodeJS.ErrnoException).code === "ENOENT") return true;
+			if ((error as NodeJS.ErrnoException).code !== "EEXIST" || fs.readFileSync(claim, "utf8") !== reclaimer) return false;
+		}
+		const claimedIdentity = fs.statSync(lock),
+			claimedOwner = fs.existsSync(join(lock, "owner")) ? fs.readFileSync(join(lock, "owner"), "utf8").trim() : "";
+		if (claimedIdentity.dev !== identity.dev || claimedIdentity.ino !== identity.ino || claimedOwner !== ownerText) return false;
+		const abandoned = `${lock}.abandoned.${reclaimer}`;
+		fs.renameSync(lock, abandoned);
+		fs.rmSync(abandoned, { recursive: true, force: true });
 		return true;
 	} catch (error) {
 		if ((error as NodeJS.ErrnoException).code === "ENOENT") return true;
