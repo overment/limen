@@ -35,4 +35,4 @@
 
 Found in the 2026-08-25 source review. Do not start until F032 is proven or dropped — the supervisor loop lives here, and a move on top of an unproven relocate path is how the prove gets lost.
 
-After F038, so pulse imports have a stable home. Process-control blast radius: fresh reviewer on the split, even if the diff is mostly moves.
+After F038 (landed `54e678c` — pulse imports have their stable home) and after F045, whose supervisor-escalation surgery lands in `proc.ts` before the split moves it. Process-control blast radius: fresh reviewer on the split, even if the diff is mostly moves.
