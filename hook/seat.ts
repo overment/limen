@@ -67,10 +67,17 @@ function withRegistryLock<T>(action: () => T): T {
 	try {
 		return action();
 	} finally {
-		fs.rmSync(lock, { recursive: true, force: true });
+		const released = `${lock}.released.${reclaimer}`;
+		try {
+			fs.renameSync(lock, released);
+		} catch (error) {
+			if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+		}
+		fs.rmSync(released, { recursive: true, force: true, maxRetries: 10, retryDelay: 10 });
 	}
 }
 function removeAbandonedLock(lock: string, reclaimer: string): boolean {
+	let claim = "";
 	try {
 		const identity = fs.statSync(lock),
 			ownerText = fs.existsSync(join(lock, "owner")) ? fs.readFileSync(join(lock, "owner"), "utf8").trim() : "",
@@ -83,23 +90,26 @@ function removeAbandonedLock(lock: string, reclaimer: string): boolean {
 				if ((error as NodeJS.ErrnoException).code !== "ESRCH") return false;
 			}
 		} else if (Date.now() - identity.mtimeMs < 5_000) return false;
-		const claim = join(lock, "reclaimer");
+		const claimPath = `${lock}.reclaimer.${identity.dev}.${identity.ino}`;
 		try {
-			fs.writeFileSync(claim, reclaimer, { flag: "wx" });
+			fs.writeFileSync(claimPath, reclaimer, { flag: "wx" });
+			claim = claimPath;
 		} catch (error) {
-			if ((error as NodeJS.ErrnoException).code === "ENOENT") return true;
-			if ((error as NodeJS.ErrnoException).code !== "EEXIST" || fs.readFileSync(claim, "utf8") !== reclaimer) return false;
+			if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+			return false;
 		}
 		const claimedIdentity = fs.statSync(lock),
 			claimedOwner = fs.existsSync(join(lock, "owner")) ? fs.readFileSync(join(lock, "owner"), "utf8").trim() : "";
 		if (claimedIdentity.dev !== identity.dev || claimedIdentity.ino !== identity.ino || claimedOwner !== ownerText) return false;
 		const abandoned = `${lock}.abandoned.${reclaimer}`;
 		fs.renameSync(lock, abandoned);
-		fs.rmSync(abandoned, { recursive: true, force: true });
+		fs.rmSync(abandoned, { recursive: true, force: true, maxRetries: 10, retryDelay: 10 });
 		return true;
 	} catch (error) {
 		if ((error as NodeJS.ErrnoException).code === "ENOENT") return true;
 		throw error;
+	} finally {
+		if (claim) fs.rmSync(claim, { force: true });
 	}
 }
 function run(command: string, args: readonly string[]): Promise<boolean> {

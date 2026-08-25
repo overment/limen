@@ -47,32 +47,34 @@ test("sweep rings unheard jobs on cadence without consuming wakes, honors livene
 	assert.equal((await readFile(log, "utf8")).trim().split("\n").length, 2, "a live coordinator suppresses seat rings");
 });
 
-test("registry registration and pruning reclaim a dead lock once across processes", async (context) => {
+test("registry registration and pruning repeatedly reclaim dead locks across processes", async (context) => {
 	const scratch = await scratchRepo();
 	context.after(scratch.cleanup);
 	const home = dirname(scratch.root),
-		registry = join(home, ".limen/projects"),
-		projects = Array.from({ length: 40 }, (_, index) => join(home, `project-${index}`));
+		registry = join(home, ".limen/projects");
 	await mkdir(dirname(registry), { recursive: true });
-	await Promise.all(projects.map((project) => mkdir(project)));
-	await writeFile(registry, `${join(home, "missing-one")}\n${join(home, "missing-two")}\n`);
-	await mkdir(`${registry}.lock`);
-	await writeFile(join(`${registry}.lock`, "owner"), "999999999\n");
 	const seat = new URL("../hook/seat.ts", import.meta.url).href,
 		sweep = new URL("../src/commands/sweep.ts", import.meta.url).href,
 		registerSource = `import { registerProject } from ${JSON.stringify(seat)}; await registerProject(process.argv[1]);`,
 		pruneSource = `import { sweepCommand } from ${JSON.stringify(sweep)}; await sweepCommand([], process.cwd());`,
 		environment = { ...process.env, LIMEN_HOME: home, LIMEN_HERDR: "0" };
-	const results = await Promise.all([
-		...projects.map((project) => runChild(registerSource, [project], environment)),
-		...Array.from({ length: 8 }, () => runChild(pruneSource, [], environment)),
-	]);
-	assert.deepEqual(
-		results.filter((result) => result.status !== 0),
-		[],
-		results.map((result) => result.stderr).join("\n"),
-	);
-	assert.deepEqual(new Set((await readFile(registry, "utf8")).trim().split("\n")), new Set(projects));
+	for (let round = 0; round < 8; round++) {
+		const projects = Array.from({ length: 80 }, (_, index) => join(home, `project-${round}-${index}`));
+		await Promise.all(projects.map((project) => mkdir(project)));
+		await writeFile(registry, `${join(home, "missing-one")}\n${join(home, "missing-two")}\n`);
+		await mkdir(`${registry}.lock`);
+		await writeFile(join(`${registry}.lock`, "owner"), "999999999\n");
+		const results = await Promise.all([
+			...projects.map((project) => runChild(registerSource, [project], environment)),
+			...Array.from({ length: 12 }, () => runChild(pruneSource, [], environment)),
+		]);
+		assert.deepEqual(
+			results.filter((result) => result.status !== 0),
+			[],
+			results.map((result) => result.stderr).join("\n"),
+		);
+		assert.deepEqual(new Set((await readFile(registry, "utf8")).trim().split("\n")), new Set(projects));
+	}
 });
 
 test("sweep reaps dead jobs and a later pass rings the unheard completion", async (context) => {
