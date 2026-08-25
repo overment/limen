@@ -1,6 +1,6 @@
 # F043-seat-sweep · A launchd-swept seat notices what no open session can
 
-[2026-08-25] [🔴] [PLANNED] [COORDINATOR] PLANNED · F043-seat-sweep
+[2026-08-25] [🟠] [ACTIVE] [COORDINATOR] ACTIVE · F043-seat-sweep
 
 ## Outcome
 

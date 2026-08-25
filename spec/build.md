@@ -6,13 +6,13 @@
 
 ## NOW
 
+- `F043-seat-sweep` (🟠 ACTIVE): `limen sweep` + launchd interval job. Wave 2; F042 and F045 are on `main`.
+- `F045-supervisor-stall-escalation` (🟠 ACTIVE): merged `e71dcef`; review PASS of `9139a20`. Live prove still open — stalled worker with coordinator closed.
+- `F042-wake-delivery-integrity` (🟠 ACTIVE): merged `70eaebd`; re-review PASS of `7e43d23`.
+- `F044-hosted-start-retry` (🟠 ACTIVE): merged `fe510dd`; review PASS.
 - `F032-hosted-supervisor-target-truth` (🟠 ACTIVE): implemented inline 2026-08-21 (`6ee8ff1`). Suite-covered; live prove still open — needs a moved-pane or degraded-Herdr scenario on a running hosted job.
-- `F045-supervisor-stall-escalation` (🟠 ACTIVE): supervisor rings Herdr and stamps the tab when a hosted worker stalls. Wave 1; disjoint from F042/F044.
-- `F042-wake-delivery-integrity` (🟠 ACTIVE): consume a wake claim only after a turn actually ran. Wave 1; `hook/wake.ts`.
-- `F044-hosted-start-retry` (🟠 ACTIVE): one retry on the transient herdr pane-shell failure. Wave 1; `src/herdr.ts`.
 
 ## NEXT
-- `F043-seat-sweep` (🔴 PLANNED): `limen sweep` + launchd interval job — reap and ring across registered projects, survives reboots, never consumes coordinator wakes. Wave 2; after F045 and F042.
 - `F039-split-proc` (🔴 PLANNED): one job per file in the `proc.ts` pile; unused exports gone; CONTRIBUTING matches the 2750 cap. After F032 prove and F045 (F038 is done).
 - `F028-provider-error-is-failed` (PLANNED): a run whose last turn errored records `failed: <reason>`, matching pi's own text-mode exit semantics. Decision ticket — reverses one F011 exclusion; needs explicit sign-off. After F024.
 - `F011-empty-job-advisory` (PLANNED): a job that produced nothing should say so instead of reading DONE. Observed, not theorised. After F017 it reads `commits` and `tool-calls` instead of inferring; after F024 it also reads `stop-reason`; if F028 is signed off, its advisory targets clean-but-empty runs.
