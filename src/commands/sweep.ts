@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import { isAbsolute, join } from "node:path";
-import { installSeatSweep, registeredProjects, showSeatNotification, uninstallSeatSweep, writeRegisteredProjects } from "../../hook/seat.ts";
+import { installSeatSweep, showSeatNotification, uninstallSeatSweep, updateRegisteredProjects } from "../../hook/seat.ts";
 import { confirmDeadJobs } from "../proc.ts";
 
 const DEFAULT_RING_MS = 5 * 60_000;
@@ -12,9 +12,7 @@ export async function sweepCommand(args: readonly string[], _cwd: string): Promi
 	if (args.length === 1 && args[0] === "--install") return installSeatSweep();
 	if (args.length === 1 && args[0] === "--uninstall") return uninstallSeatSweep();
 	if (args.length) throw new Error("sweep accepts no arguments, --install, or --uninstall");
-	const projects = registeredProjects();
-	const living = projects.filter((project) => isAbsolute(project) && fs.existsSync(project) && fs.statSync(project).isDirectory());
-	if (projects.length) writeRegisteredProjects(living);
+	const living = updateRegisteredProjects((projects) => projects.filter((project) => isAbsolute(project) && fs.existsSync(project) && fs.statSync(project).isDirectory()));
 	await Promise.all(living.map(sweepProject));
 }
 async function sweepProject(root: string): Promise<void> {

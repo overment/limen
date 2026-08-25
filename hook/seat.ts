@@ -8,14 +8,25 @@ const PACKAGE_ROOT = fileURLToPath(new URL("..", import.meta.url));
 const home = () => process.env.LIMEN_HOME || homedir();
 export const projectsFile = () => join(home(), ".limen", "projects");
 export const registeredProjects = () => [...new Set((fs.existsSync(projectsFile()) ? fs.readFileSync(projectsFile(), "utf8") : "").split(/\r?\n/).filter(Boolean))];
-export function writeRegisteredProjects(projects: readonly string[]): void {
-	fs.mkdirSync(dirname(projectsFile()), { recursive: true });
-	fs.writeFileSync(projectsFile(), projects.length ? `${projects.join("\n")}\n` : "");
+export function updateRegisteredProjects(update: (projects: readonly string[]) => readonly string[]): readonly string[] {
+	return withRegistryLock(() => {
+		const before = registeredProjects(),
+			after = [...new Set(update(before))];
+		if (before.length === after.length && before.every((project, index) => project === after[index])) return before;
+		const path = projectsFile(),
+			temporary = `${path}.${process.pid}.${Date.now()}.tmp`;
+		try {
+			fs.writeFileSync(temporary, after.length ? `${after.join("\n")}\n` : "", { flag: "wx" });
+			fs.renameSync(temporary, path);
+		} finally {
+			fs.rmSync(temporary, { force: true });
+		}
+		return after;
+	});
 }
 export async function registerProject(root: string): Promise<void> {
-	const project = resolve(root),
-		projects = registeredProjects();
-	if (!projects.includes(project)) writeRegisteredProjects([...projects, project]);
+	const project = resolve(root);
+	updateRegisteredProjects((projects) => (projects.includes(project) ? projects : [...projects, project]));
 }
 export async function showSeatNotification(title: string, body: string): Promise<boolean> {
 	const herdr = process.env.LIMEN_HERDR || "herdr";
@@ -34,6 +45,47 @@ export async function uninstallSeatSweep(): Promise<void> {
 	const path = join(home(), "Library", "LaunchAgents", "limen-sweep.plist");
 	fs.rmSync(path, { force: true });
 	console.log(`removed ${path}`);
+}
+function withRegistryLock<T>(action: () => T): T {
+	const path = projectsFile(),
+		lock = `${path}.lock`,
+		deadline = Date.now() + 10_000;
+	fs.mkdirSync(dirname(path), { recursive: true });
+	while (true) {
+		try {
+			fs.mkdirSync(lock);
+			fs.writeFileSync(join(lock, "owner"), `${process.pid}\n`);
+			break;
+		} catch (error) {
+			if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+			if (removeAbandonedLock(lock)) continue;
+			if (Date.now() >= deadline) throw new Error(`timed out locking ${path}`);
+			Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10);
+		}
+	}
+	try {
+		return action();
+	} finally {
+		fs.rmSync(lock, { recursive: true, force: true });
+	}
+}
+function removeAbandonedLock(lock: string): boolean {
+	try {
+		const owner = Number(fs.existsSync(join(lock, "owner")) ? fs.readFileSync(join(lock, "owner"), "utf8").trim() : 0);
+		if (owner > 0) {
+			try {
+				process.kill(owner, 0);
+				return false;
+			} catch (error) {
+				if ((error as NodeJS.ErrnoException).code !== "ESRCH") return false;
+			}
+		} else if (Date.now() - fs.statSync(lock).mtimeMs < 5_000) return false;
+		fs.rmSync(lock, { recursive: true, force: true });
+		return true;
+	} catch (error) {
+		if ((error as NodeJS.ErrnoException).code === "ENOENT") return true;
+		throw error;
+	}
 }
 function run(command: string, args: readonly string[]): Promise<boolean> {
 	return new Promise((done) => execFile(command, args, { timeout: 2_000 }, (error) => done(!error)));

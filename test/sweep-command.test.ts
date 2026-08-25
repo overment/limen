@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { access, chmod, mkdir, readdir, readFile, stat, utimes, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import test from "node:test";
@@ -47,6 +47,32 @@ test("sweep rings unheard jobs on cadence without consuming wakes, honors livene
 	assert.equal((await readFile(log, "utf8")).trim().split("\n").length, 2, "a live coordinator suppresses seat rings");
 });
 
+test("registry registration and pruning serialize across processes", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	const home = dirname(scratch.root),
+		registry = join(home, ".limen/projects"),
+		projects = Array.from({ length: 40 }, (_, index) => join(home, `project-${index}`));
+	await mkdir(dirname(registry), { recursive: true });
+	await Promise.all(projects.map((project) => mkdir(project)));
+	await writeFile(registry, `${join(home, "missing-one")}\n${join(home, "missing-two")}\n`);
+	const seat = new URL("../hook/seat.ts", import.meta.url).href,
+		sweep = new URL("../src/commands/sweep.ts", import.meta.url).href,
+		registerSource = `import { registerProject } from ${JSON.stringify(seat)}; await registerProject(process.argv[1]);`,
+		pruneSource = `import { sweepCommand } from ${JSON.stringify(sweep)}; await sweepCommand([], process.cwd());`,
+		environment = { ...process.env, LIMEN_HOME: home, LIMEN_HERDR: "0" };
+	const results = await Promise.all([
+		...projects.map((project) => runChild(registerSource, [project], environment)),
+		...Array.from({ length: 8 }, () => runChild(pruneSource, [], environment)),
+	]);
+	assert.deepEqual(
+		results.filter((result) => result.status !== 0),
+		[],
+		results.map((result) => result.stderr).join("\n"),
+	);
+	assert.deepEqual(new Set((await readFile(registry, "utf8")).trim().split("\n")), new Set(projects));
+});
+
 test("sweep reaps dead jobs and a later pass rings the unheard completion", async (context) => {
 	const scratch = await scratchRepo();
 	context.after(scratch.cleanup);
@@ -92,4 +118,14 @@ test("sweep install writes a valid absolute launchd interval job and uninstall r
 	assert.equal(await readFile(kept, "utf8"), "keep\n");
 });
 
+function runChild(source: string, args: readonly string[], env: NodeJS.ProcessEnv): Promise<{ readonly status: number; readonly stderr: string }> {
+	return new Promise((done) => {
+		const child = spawn(process.execPath, ["--input-type=module", "--eval", source, ...args], { env, stdio: ["ignore", "ignore", "pipe"] });
+		let stderr = "";
+		child.stderr.setEncoding("utf8");
+		child.stderr.on("data", (chunk) => (stderr += chunk));
+		child.on("error", (error) => done({ status: 1, stderr: `${stderr}${error.message}` }));
+		child.on("exit", (status) => done({ status: status ?? 1, stderr }));
+	});
+}
 const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
