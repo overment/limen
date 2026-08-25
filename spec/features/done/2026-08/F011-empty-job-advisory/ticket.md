@@ -11,7 +11,7 @@ A job that finished without doing anything says so. A coordinator scanning `lime
 - Notice, from facts already written to `.limen/jobs/<id>/`, that a terminal job produced no work: no tool calls, and no commits on its branch.
 - Say so in `limen jobs` output and in the completion wake, beside the existing terminal state.
 - Where the stream makes a provider or model failure visible, record that reason in the job log so the cause is durable rather than buried in the session file.
-- Keep it advisory. An empty job is still `done` if `pi` exited 0; the harness reports, it does not re-classify or gate.
+- Keep it advisory. This now targets clean-but-empty runs; F028 classifies a final `error` or `aborted` stop reason as `failed`.
 
 ## Out of scope
 

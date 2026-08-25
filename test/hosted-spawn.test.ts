@@ -5,7 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { hostedAgentName } from "../src/commands/spawn.ts";
 import { hostedAgentStatus, hostedTerminalReason, startHostedPi, stopHostedAgent } from "../src/herdr.ts";
-import { DEFAULT_HOSTED_IDLE_MS, DEFAULT_STALL_RERING_MS, type HostedIdleWatch, noteHostedIdle } from "../src/supervisor.ts";
+import { DEFAULT_HOSTED_IDLE_MS, DEFAULT_STALL_RERING_MS, type HostedIdleWatch, noteHostedIdle, writeHostedResult } from "../src/supervisor.ts";
 import { git, limen, limenWithEnv, onlyJobId, scratchRepo, waitForState } from "./scratch.ts";
 
 test("hosted completion is session end or vanished agent, not Herdr idle", () => {
@@ -17,6 +17,18 @@ test("hosted completion is session end or vanished agent, not Herdr idle", () =>
 	assert.equal(hostedTerminalReason("missing", false), "hosted agent ended");
 	assert.equal(hostedTerminalReason("idle", true), "hosted session ended");
 	assert.equal(hostedTerminalReason("missing", true), "hosted session ended");
+});
+
+test("hosted result capture follows the last assistant stop reason", async (context) => {
+	const root = await mkdtemp(join(tmpdir(), "limen-hosted-result-"));
+	context.after(() => rm(root, { recursive: true, force: true }));
+	await mkdir(join(root, "session"));
+	await writeFile(
+		join(root, "session/run.jsonl"),
+		`${JSON.stringify({ type: "message", message: { role: "assistant", content: [], stopReason: "error", errorMessage: "temporary" } })}\n${JSON.stringify({ type: "message", message: { role: "assistant", content: [], stopReason: "stop" } })}\n`,
+	);
+	await writeHostedResult(root);
+	await assert.rejects(readFile(join(root, "stop-reason")));
 });
 
 test("hosted idle bound defaults to 60s and re-ring to 15m", () => {
@@ -567,7 +579,7 @@ test("a hosted job finalizes on session end, never on unseen idle after tools", 
 	await assert.rejects(readFile(join(job, "stop-reason")), "a clean hosted session writes no stop-reason");
 });
 
-test("a hosted session error writes stop-reason and stays done", async (context) => {
+test("a hosted session error fails with its stop reason", async (context) => {
 	const scratch = await scratchRepo();
 	context.after(scratch.cleanup);
 	assert.equal(limen(scratch, "init").status, 0);
@@ -583,9 +595,10 @@ test("a hosted session error writes stop-reason and stays done", async (context)
 		`${JSON.stringify({ type: "message", message: { role: "assistant", content: [{ type: "text", text: "early" }], stopReason: "stop" } })}\n${JSON.stringify({ type: "message", message: { role: "assistant", content: [], stopReason: "error", errorMessage: "usage limit reached" } })}\n`,
 	);
 	await writeFile(join(job, "session-ended"), `${new Date().toISOString()}\n`);
-	await waitForState(scratch.root, id, "done");
+	await waitForState(scratch.root, id, "failed");
 	assert.equal(await readFile(join(job, "stop-reason"), "utf8"), "error: usage limit reached\n");
-	assert.equal((await readFile(join(job, "state"), "utf8")).trim(), "done");
+	assert.equal((await readFile(join(job, "state"), "utf8")).trim(), "failed");
+	assert.match(await readFile(join(job, "log"), "utf8"), /failed: error: usage limit reached/);
 });
 
 test("supervisor does not stamp wait over a hook tool write", async (context) => {

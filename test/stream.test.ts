@@ -13,6 +13,7 @@ test("json events become a human log and last-tool names", () => {
 	assert.deepEqual(parser.push('{"type":"message_end","message":{"role":"assistant","content":[],"stopReason":"error","errorMessage":"usage limit reached"}}\n'), [
 		{ kind: "assistant", text: "", stopReason: "error: usage limit reached" },
 	]);
+	assert.deepEqual(parser.push('{"type":"message_end","message":{"role":"assistant","content":[],"stopReason":"stop"}}\n'), [{ kind: "assistant", text: "" }]);
 	assert.deepEqual(parser.push("plain diagnostic\n"), [{ kind: "log", line: "plain diagnostic" }]);
 	assert.deepEqual(parser.push("{}\n"), []);
 	assert.deepEqual(parser.flush(), []);
