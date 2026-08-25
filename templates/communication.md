@@ -27,7 +27,7 @@ Discussion is a volley, not a report. Read only what changes your answer, and st
 - Self-contained: understandable without opening a file, scrolling back, or recalling an earlier job.
 - Explain, don't narrate: what changed, what is true now, what it costs, what is next.
 - Gloss imported jargon at first use, in three to eight plain words. Project words — job, worktree, ticket, board, wake — need no gloss.
-- Name a feature in plain words. Pair the number only when it helps filing or a command: seat sweep (F043), never F043 alone. Paths, flags, and commands stay exact.
+- Name a feature by what it does, in one short clause a stranger could use. Assume they have not read the spec or this thread. A slug is not enough. Pair the number only when filing or a command needs it: a timer that reaps dead jobs and rings with no session open (F043), never F043, never "seat sweep" alone. Paths, flags, and commands stay exact.
 - Do not mirror the register of the code, the specs, or the commit log.
 
 ## Agent
