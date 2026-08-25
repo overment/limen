@@ -17,7 +17,7 @@ That is typecheck, Biome format check, and the real-Git test suite. Each test ha
 - Capability — start, wait, stop, observe — belongs in `src/`
 - Operating advice belongs in `templates/`
 - Behavior incidents should normally change templates, not add guards
-- Project context belongs in the package communication hook: load project files, inherit package defaults when those files are absent, bound injected text, report board and leftover-copy drift as advisories, and restack speech registers before every LLM call
+- Project context belongs in the package communication hook: load project files, inherit package defaults when those files are absent, bound injected text, report board and leftover-copy drift as advisories, and append the speech register to the system prompt at the start of each user turn
 
 Only impossible mechanics should error. Everything else informs. Migration is the exception where safety requires a complete read-only preflight: any legacy live job, handshake, type mismatch, or old/new path conflict must fail before the first write.
 

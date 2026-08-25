@@ -38,7 +38,7 @@ function start(root: string, event: StartEvent = {}): StartResult {
 	return result;
 }
 
-test("a wake prompt skips project context and still restacks speech", async (context) => {
+test("a wake prompt skips project context and still appends speech", async (context) => {
 	const root = await projectRoot(context);
 	await writeFile(join(root, "spec/vision.md"), "Vision one.\n");
 	await writeFile(join(root, "spec/build.md"), "# Build\n");
