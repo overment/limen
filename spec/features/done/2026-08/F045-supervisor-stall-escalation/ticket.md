@@ -1,6 +1,6 @@
 # F045-supervisor-stall-escalation · The supervisor rings when a hosted worker stalls, coordinator or not
 
-[2026-08-25] [🟠] [ACTIVE] [COORDINATOR] ACTIVE · F045-supervisor-stall-escalation
+[2026-08-25] [🟢] [PROVEN] [COORDINATOR] PROVEN · F045-supervisor-stall-escalation
 
 ## Outcome
 

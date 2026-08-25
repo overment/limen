@@ -6,7 +6,6 @@
 
 ## NOW
 
-- `F045-supervisor-stall-escalation` (🟠 ACTIVE): merged `e71dcef`; review PASS of `9139a20`. Live prove in flight (`F045 stall prove`) — needs a tool call then 60s idle; zero-tool jobs do not stall.
 - `F043-seat-sweep` (🟠 ACTIVE): merged `3eff35a`. Concurrent registry tests pass; live launchd interval not yet installed.
 
 ## NEXT
@@ -17,6 +16,7 @@
 
 ## PROVEN
 
+- `F045-supervisor-stall-escalation` (🟢 PROVEN): supervisor rings and stamps a stalled tab. Live: `⚠ stalled 1m` on `w1H:p17`. Merged `e71dcef`.
 - `F032-hosted-supervisor-target-truth` (🟢 PROVEN): supervisor follows a moved pane; live-proven `w1H:p18` → `w1M:pY`. Implemented `6ee8ff1`.
 - `F011-empty-job-advisory` (🟢 PROVEN): empty jobs say produced nothing; `done` unchanged. Landed `5120e89`.
 - `F044-hosted-start-retry` (🟢 PROVEN): one pane-shell retry then honest fail. Landed `fe510dd`; review PASS.
