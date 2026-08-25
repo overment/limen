@@ -1,6 +1,6 @@
 # F027-hosted-idle-advisory · A hosted worker that stalls taps the coordinator's shoulder once
 
-[2026-08-20] [🟠] [ACTIVE] [COORDINATOR] ACTIVE · F027-hosted-idle-advisory
+[2026-08-20] [🟢] [PROVEN] [COORDINATOR] PROVEN · F027-hosted-idle-advisory
 
 ## Outcome
 

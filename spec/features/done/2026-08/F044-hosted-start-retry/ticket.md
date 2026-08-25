@@ -1,6 +1,6 @@
 # F044-hosted-start-retry · One retry before a hosted start failure is final
 
-[2026-08-25] [🟠] [ACTIVE] [COORDINATOR] ACTIVE · F044-hosted-start-retry
+[2026-08-25] [🟢] [PROVEN] [COORDINATOR] PROVEN · F044-hosted-start-retry
 
 ## Outcome
 

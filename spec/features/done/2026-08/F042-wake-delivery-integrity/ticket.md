@@ -1,6 +1,6 @@
 # F042-wake-delivery-integrity · A wake is only consumed by a wake that actually happened
 
-[2026-08-25] [🟠] [ACTIVE] [COORDINATOR] ACTIVE · F042-wake-delivery-integrity
+[2026-08-25] [🟢] [PROVEN] [COORDINATOR] PROVEN · F042-wake-delivery-integrity
 
 ## Outcome
 

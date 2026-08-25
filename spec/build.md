@@ -6,22 +6,21 @@
 
 ## NOW
 
-- `F011-empty-job-advisory` (🟠 ACTIVE): empty jobs say so instead of reading DONE. Advisory only; `done` stays `done`.
 - `F043-seat-sweep` (🟠 ACTIVE): parked on branch `limen/2026-08-25-f043-seat-sweep-7b8ad802` at `996bba9` after three lock-race FAILs. Not merging until the lock is boring.
 - `F045-supervisor-stall-escalation` (🟠 ACTIVE): merged `e71dcef`; review PASS of `9139a20`. Live prove still open — stalled worker with coordinator closed.
-- `F042-wake-delivery-integrity` (🟠 ACTIVE): merged `70eaebd`; re-review PASS of `7e43d23`.
-- `F044-hosted-start-retry` (🟠 ACTIVE): merged `fe510dd`; review PASS.
 - `F032-hosted-supervisor-target-truth` (🟠 ACTIVE): implemented inline 2026-08-21 (`6ee8ff1`). Suite-covered; live prove still open — needs a moved-pane or degraded-Herdr scenario on a running hosted job.
 
 ## NEXT
 - `F039-split-proc` (🔴 PLANNED): one job per file in the `proc.ts` pile; unused exports gone; CONTRIBUTING matches the 2750 cap. After F032 prove and F045 (F038 is done).
 - `F028-provider-error-is-failed` (PLANNED): a run whose last turn errored records `failed: <reason>`, matching pi's own text-mode exit semantics. Decision ticket — reverses one F011 exclusion; needs explicit sign-off. After F024.
-- `F011-empty-job-advisory` (PLANNED): a job that produced nothing should say so instead of reading DONE. Observed, not theorised. After F017 it reads `commits` and `tool-calls` instead of inferring; after F024 it also reads `stop-reason`; if F028 is signed off, its advisory targets clean-but-empty runs.
 - `F013-remote-seat` (PLANNED): one disk, attach don’t clone; docs and seat-shaped guarantees. Before F014, after this quality sweep and F032's prove.
 - `F014-github-doorbell` (PLANNED): mention or label starts a job on the seat; comment back evidence; merge stays human.
 
 ## PROVEN
 
+- `F011-empty-job-advisory` (🟢 PROVEN): empty jobs say produced nothing; `done` unchanged. Landed `5120e89`.
+- `F044-hosted-start-retry` (🟢 PROVEN): one pane-shell retry then honest fail. Landed `fe510dd`; review PASS.
+- `F042-wake-delivery-integrity` (🟢 PROVEN): claim only after a real turn; batched wakes and live heartbeat. Merged `70eaebd`; re-review PASS of `7e43d23`.
 - `F041-dynamic-communication` (🟢 PROVEN): package speech now chooses compact format and contextual tone per response; six model probes and fresh review PASS of `0fa6d06`.
 - `F037-continue-record-parity` (🟢 PROVEN): continue copies `repo`, finalizes launch fail, hosted in Herdr like spawn. Landed at `62aad12`; review PASS of `62aad12`.
 - `F040-retire-control-migrate` (🟢 PROVEN): `limen migrate` gone; init still refuses leftover Control paths. Landed at `b99f624`.

@@ -1,6 +1,6 @@
 # F029-hosted-review · Reviews in Herdr are interactive tabs, like workers
 
-[2026-08-20] [🟠] [ACTIVE] [COORDINATOR] ACTIVE · F029-hosted-review
+[2026-08-20] [🟢] [PROVEN] [COORDINATOR] PROVEN · F029-hosted-review
 
 ## Outcome
 

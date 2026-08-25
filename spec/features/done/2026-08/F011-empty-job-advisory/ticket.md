@@ -1,6 +1,6 @@
 # F011-empty-job-advisory · Do not report an empty job as done
 
-[2026-08-15] [🟠] [ACTIVE] [COORDINATOR] ACTIVE · F011-empty-job-advisory
+[2026-08-15] [🟢] [PROVEN] [COORDINATOR] PROVEN · F011-empty-job-advisory
 
 ## Outcome
 
