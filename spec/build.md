@@ -6,6 +6,7 @@
 
 ## NOW
 
+- `F041-dynamic-communication` (🟠 ACTIVE): rewrite the package speech register so replies choose compact format and contextual tone per turn while restoring the current state for a reader who did not follow the work.
 - `F032-hosted-supervisor-target-truth` (ACTIVE): implemented inline 2026-08-21 (`6ee8ff1`). Suite-covered; live prove still open — needs a moved-pane or degraded-Herdr scenario on a running hosted job.
 
 ## NEXT
