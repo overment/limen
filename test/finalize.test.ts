@@ -91,6 +91,7 @@ test("a provider-error stream stays done and writes stop-reason", async (context
 	const job = join(scratch.root, ".limen/jobs", id);
 	assert.equal(await readFile(join(job, "stop-reason"), "utf8"), "error: usage limit reached\n");
 	assert.equal((await readFile(join(job, "state"), "utf8")).trim(), "done");
+	assert.match(await readFile(join(job, "log"), "utf8"), /assistant error: usage limit reached/);
 	const detail = limen(scratch, "jobs", id);
 	assert.equal(detail.status, 0, detail.stderr);
 	assert.match(detail.stdout, /stop-reason:\n    error: usage limit reached/);

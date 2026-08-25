@@ -1,7 +1,7 @@
 import { open, readdir, readFile, stat } from "node:fs/promises";
 import { limenRoot, liveDiffstat, workspaceRepository } from "../git.ts";
 import { hostedAgentStatus } from "../herdr.ts";
-import { derivePulse, parseJob, renderJob } from "../job.ts";
+import { derivePulse, parseJob, producedNothing, renderJob } from "../job.ts";
 import { resolveJob } from "../lookup.ts";
 import { confirmDeadJobs, processGroupAlive } from "../proc.ts";
 
@@ -31,12 +31,17 @@ export async function jobsCommand(args: readonly string[], cwd: string): Promise
 	}
 	const running = order.filter(([, state]) => state === "running");
 	const rendered = await Promise.all(running.map(([id]) => renderJobDirectory(root, jobsRoot, id, false)));
-	const summary = rendered.length ? rendered.join("\n") : "no running jobs";
-	console.log(
-		selection === "snapshot" && order.length > running.length
-			? `${summary}\n${order.length - running.length} terminal ${order.length - running.length === 1 ? "job" : "jobs"} hidden · use limen jobs --all or limen jobs <id> for detail`
-			: summary,
-	);
+	if (selection !== "snapshot") {
+		console.log(rendered.length ? rendered.join("\n") : "no running jobs");
+		return;
+	}
+	const terminal = order.filter(([, state]) => state !== "running");
+	const observed = await Promise.all(terminal.map(async (entry) => ({ entry, empty: await jobProducedNothing(`${jobsRoot}/${entry[0]}`) })));
+	const empty = observed.filter(({ empty }) => empty).map(({ entry }) => entry);
+	const emptyRendered = await Promise.all(empty.map(([id]) => renderJobDirectory(root, jobsRoot, id, false)));
+	const summary = [...rendered, ...emptyRendered].join("\n") || "no running jobs";
+	const hiddenCount = terminal.length - empty.length;
+	console.log(hiddenCount ? `${summary}\n${hiddenCount} terminal ${hiddenCount === 1 ? "job" : "jobs"} hidden · use limen jobs --all or limen jobs <id> for detail` : summary);
 }
 function select(args: readonly string[]) {
 	if (args.length > 1) throw new Error("jobs accepts no argument, --running, --active, --all, or one job id, suffix, or label");
@@ -58,9 +63,8 @@ async function renderJobDirectory(root: string, jobsRoot: string, id: string, de
 			"state label branch repo pid started-at finished-at tool-calls last-tool activity hosted candidate advisory parent".split(" ").map((field) => text(`${jobDir}/${field}`)),
 		);
 	const agent = await text(`${jobDir}/herdr/agent`);
-	const [commits, result, stopReason, versions] = detailed
-		? await Promise.all([text(`${jobDir}/commits`), text(`${jobDir}/result`), text(`${jobDir}/stop-reason`), text(`${jobDir}/versions`)])
-		: ["", "", "", ""];
+	const [commits, commitsStat] = await Promise.all([text(`${jobDir}/commits`), optionalStat(`${jobDir}/commits`)]);
+	const [result, stopReason, versions] = detailed ? await Promise.all([text(`${jobDir}/result`), text(`${jobDir}/stop-reason`), text(`${jobDir}/versions`)]) : ["", "", ""];
 	const [taskStat, logStat] = await Promise.all([optionalStat(`${jobDir}/task.md`), optionalStat(`${jobDir}/log`)]);
 	const cleanup = detailed ? await text(`${jobDir}/cleanup`) : "";
 	if (!taskStat || !logStat) return `INVALID ${id} · missing task.md or log`;
@@ -75,10 +79,12 @@ async function renderJobDirectory(root: string, jobsRoot: string, id: string, de
 		const hostedAlive = agentStatus !== undefined && agentStatus !== "missing";
 		const alive = hosted ? hostedAlive || processAlive : processAlive;
 		const pulse = job.phase === "running" ? derivePulse({ alive, ...(job.pid !== undefined ? { pid: job.pid } : {}), ...(activity ? { activity } : {}) }) : undefined;
+		const recordedTools = toolCalls ? recordedCount(toolCalls) : undefined;
 		const rendered = renderJob(job, {
 			elapsedMs: observedAt - startedAt.getTime(),
 			silentMs: observedAt - logStat.mtimeMs,
-			...(toolCalls ? { toolCalls: recordedCount(toolCalls) } : {}),
+			...(recordedTools !== undefined ? { toolCalls: recordedTools } : {}),
+			...(job.phase !== "running" && producedNothing(recordedTools, commitsStat ? commits : undefined) ? { producedNothing: true } : {}),
 			...(lastTool ? { lastTool: display(lastTool) } : {}),
 			...(job.phase === "running" && pulse ? { pulse, processAlive: alive } : {}),
 			diffstat: detailed ? liveDiffstat(repo ? workspaceRepository(root, repo) : root, branch) : "",
@@ -92,7 +98,7 @@ async function renderJobDirectory(root: string, jobsRoot: string, id: string, de
 		if (job.phase === "running" && advisory) blocks.push(`  advisory ${display(advisory)}`);
 		if (stopReason) blocks.push(indented("stop-reason", stopReason));
 		if (versions) blocks.push(indented("versions", versions));
-		if (commits) blocks.push(indented("commits", commits));
+		if (detailed && commits) blocks.push(indented("commits", commits));
 		if (result) blocks.push(indented("result", result));
 		if (cleanup)
 			blocks.push(
@@ -104,6 +110,15 @@ async function renderJobDirectory(root: string, jobsRoot: string, id: string, de
 		return blocks.join("\n");
 	} catch (error: unknown) {
 		return `INVALID ${id} · ${error instanceof Error ? error.message : String(error)}${log.tail ? `\n  log:\n${log.tail}` : ""}`;
+	}
+}
+async function jobProducedNothing(jobDir: string): Promise<boolean> {
+	const [toolCalls, commits, commitsStat] = await Promise.all([text(`${jobDir}/tool-calls`), text(`${jobDir}/commits`), optionalStat(`${jobDir}/commits`)]);
+	if (!toolCalls || !commitsStat) return false;
+	try {
+		return producedNothing(recordedCount(toolCalls), commits);
+	} catch {
+		return false;
 	}
 }
 function indented(name: string, body: string): string {

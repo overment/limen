@@ -86,6 +86,48 @@ test("jobs detail shows result and commits for a terminal job that has them", as
 	assert.doesNotMatch(snapshot.stdout, /result:|commits:/);
 });
 
+test("jobs marks a terminal job with zero tool calls and no commits as produced nothing", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	limen(scratch, "init");
+	const root = join(scratch.root, ".limen/jobs");
+	const empty = join(root, "empty");
+	await mkdir(empty);
+	await writeFile(join(empty, "task.md"), "empty\n");
+	await writeFile(join(empty, "state"), "done\n");
+	await writeFile(join(empty, "label"), "F011 empty\n");
+	await writeFile(join(empty, "branch"), "limen/empty\n");
+	await writeFile(join(empty, "log"), "[limen 2026-08-15T00:00:00.000Z] done: pi exited 0\n");
+	await writeFile(join(empty, "tool-calls"), "0\n");
+	await writeFile(join(empty, "commits"), "");
+	await writeFile(join(empty, "stop-reason"), "error: usage limit reached\n");
+
+	const snapshot = limen(scratch, "jobs");
+	assert.equal(snapshot.status, 0, snapshot.stderr);
+	assert.match(snapshot.stdout, /DONE F011 empty.*tools 0.*produced nothing \(0 tool calls, no commits\)/);
+	assert.doesNotMatch(snapshot.stdout, /terminal job hidden/);
+	const detail = limen(scratch, "jobs", "empty");
+	assert.equal(detail.status, 0, detail.stderr);
+	assert.match(detail.stdout, /DONE F011 empty.*tools 0.*produced nothing \(0 tool calls, no commits\)/);
+	assert.match(detail.stdout, /stop-reason:\n    error: usage limit reached/);
+
+	const survey = join(root, "survey");
+	await mkdir(survey);
+	for (const [name, value] of [
+		["task.md", "survey\n"],
+		["state", "done\n"],
+		["label", "F011 survey\n"],
+		["branch", "limen/survey\n"],
+		["log", "surveyed\n"],
+		["tool-calls", "1\n"],
+		["commits", ""],
+	] as const)
+		await writeFile(join(survey, name), value);
+	const surveyDetail = limen(scratch, "jobs", "survey");
+	assert.equal(surveyDetail.status, 0, surveyDetail.stderr);
+	assert.doesNotMatch(surveyDetail.stdout, /produced nothing/);
+});
+
 test("jobs lists running first, then newest started-at", async (context) => {
 	const scratch = await scratchRepo();
 	context.after(scratch.cleanup);

@@ -129,6 +129,52 @@ test("a completion wake carries bounded commits and the worker's final message",
 	assert.doesNotMatch(messages[1] ?? "", /Commits:|Final message:|Stop reason:|never delivered/);
 });
 
+test("a completion wake says when a terminal job produced nothing", async (context) => {
+	stashEnv(context, "LIMEN_JOB", undefined);
+	stashEnv(context, "LIMEN_HERDR", "0");
+	const root = await import("node:fs/promises").then(({ mkdtemp }) => mkdtemp(join(process.env.TMPDIR ?? "/tmp", "limen-wake-empty-handoff-")));
+	context.after(() => import("node:fs/promises").then(({ rm }) => rm(root, { recursive: true, force: true })));
+	await mkdir(join(root, ".agents/limen"), { recursive: true });
+	const jobs = join(root, ".limen/jobs");
+	const handlers = new Map<string, (event: unknown, context: TestContext) => void>();
+	const messages: string[] = [];
+	limenWake({
+		on(event, handler) {
+			handlers.set(event, handler);
+		},
+		sendUserMessage(content) {
+			messages.push(content);
+		},
+	});
+	const session = { cwd: root, isIdle: () => true, sessionManager: sessionManager("coordinator-a"), ui: { notify() {}, setStatus() {} } };
+	handlers.get("session_start")?.({}, session);
+	context.after(() => handlers.get("session_shutdown")?.({}, session));
+
+	const empty = join(jobs, "empty");
+	await mkdir(empty, { recursive: true });
+	await writeFile(join(empty, "label"), "F011 empty\n");
+	await writeFile(join(empty, "branch"), "limen/empty\n");
+	await writeFile(join(empty, "tool-calls"), "0\n");
+	await writeFile(join(empty, "commits"), "");
+	await writeFile(join(empty, "stop-reason"), "error: usage limit reached\n");
+	await subscribe(jobs, "empty", "coordinator-a");
+	await writeFile(join(empty, "state"), "done\n");
+	await waitUntil(() => messages.length === 1);
+	assert.match(messages[0] ?? "", /is done \(empty\).*It produced nothing \(0 tool calls, no commits\)/);
+	assert.match(messages[0] ?? "", /Stop reason: error: usage limit reached/);
+
+	const survey = join(jobs, "survey");
+	await mkdir(survey, { recursive: true });
+	await writeFile(join(survey, "label"), "F011 survey\n");
+	await writeFile(join(survey, "branch"), "limen/survey\n");
+	await writeFile(join(survey, "tool-calls"), "1\n");
+	await writeFile(join(survey, "commits"), "");
+	await subscribe(jobs, "survey", "coordinator-a");
+	await writeFile(join(survey, "state"), "done\n");
+	await waitUntil(() => messages.length === 2);
+	assert.doesNotMatch(messages[1] ?? "", /produced nothing/);
+});
+
 test("wake shows existing unwatched jobs without claiming their notifications", async (context) => {
 	stashEnv(context, "LIMEN_JOB", undefined);
 	stashEnv(context, "LIMEN_HERDR", "0");

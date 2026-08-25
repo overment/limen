@@ -566,7 +566,10 @@ export async function runInternalJob(): Promise<void> {
 	if (graceTimer) clearTimeout(graceTimer);
 	apply(parser.flush());
 	await pending;
-	if (seen.stop) await atomicWrite(`${jobDir}/stop-reason`, `${seen.stop}\n`).catch(() => {});
+	if (seen.stop) {
+		await atomicWrite(`${jobDir}/stop-reason`, `${seen.stop}\n`).catch(() => {});
+		await appendLimenLog(jobDir, `assistant ${seen.stop}`).catch(() => {});
+	}
 	if (exhausted) {
 		// Keep the wrapper alive through its pre-TERM snapshot and durable failure write.
 		await exhaustionTermination;

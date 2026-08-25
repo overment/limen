@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { appendFileSync, existsSync, type FSWatcher, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, watch, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
-import { derivePulse, type Pulse } from "../src/job.ts";
+import { derivePulse, type Pulse, producedNothing } from "../src/job.ts";
 import { processGroupAlive, reapDeadJobs } from "../src/proc.ts";
 
 type Context = {
@@ -227,7 +227,10 @@ export default function limenWake(pi: PiApi): void {
 		};
 		const route = fallback ? " This completion was routed here because no subscribed coordinator received it." : "";
 		const location = repo ? ` in repository ${repo}` : "";
-		const message = `Limen job ${JSON.stringify(label)} is ${state} (${id}) on branch ${branch}${location}.${route} Inspect the job record, branch diff and commits, log/session, and relevant checks. Use the accepted ticket intent to take the next safe step: merge acceptable reviewed work, or resume focused fixes and re-review. Keep the user informed; ask only when genuine product ambiguity, a scope or risk tradeoff, or an irreversible action needs a human decision.${handoffExcerpt(job)}`;
+		const next = jobProducedNothing(job)
+			? " It produced nothing (0 tool calls, no commits). Inspect the job record and log/session to understand why, then resume focused work if the ticket remains open."
+			: " Inspect the job record, branch diff and commits, log/session, and relevant checks. Use the accepted ticket intent to take the next safe step: merge acceptable reviewed work, or resume focused fixes and re-review.";
+		const message = `Limen job ${JSON.stringify(label)} is ${state} (${id}) on branch ${branch}${location}.${route}${next} Keep the user informed; ask only when genuine product ambiguity, a scope or risk tradeoff, or an irreversible action needs a human decision.${handoffExcerpt(job)}`;
 		const routed = claimDelivery(
 			job,
 			slot,
@@ -488,8 +491,9 @@ function handoffExcerpt(job: string): string {
 	const sections: string[] = [];
 	const stop = text(join(job, "stop-reason"));
 	if (stop) sections.push(`Stop reason: ${stop}`);
-	if (existsSync(join(job, "commits"))) {
-		const lines = text(join(job, "commits")).split("\n").filter(Boolean);
+	const commits = existsSync(join(job, "commits")) ? text(join(job, "commits")) : undefined;
+	if (commits !== undefined) {
+		const lines = commits.split("\n").filter(Boolean);
 		sections.push(lines.length ? `Commits:\n${lines.slice(0, 10).join("\n")}${lines.length > 10 ? `\n… ${lines.length - 10} more` : ""}` : "Commits: none");
 	}
 	const result = text(join(job, "result"));
@@ -504,6 +508,16 @@ function handoffExcerpt(job: string): string {
 		// Inbox may be absent; that is not an undelivered steer.
 	}
 	return sections.length ? `\n\n${sections.join("\n\n")}` : "";
+}
+function jobProducedNothing(job: string): boolean {
+	const commits = existsSync(join(job, "commits")) ? text(join(job, "commits")) : undefined;
+	return producedNothing(recordedToolCalls(job), commits);
+}
+function recordedToolCalls(job: string): number | undefined {
+	const value = text(join(job, "tool-calls"));
+	if (!value) return undefined;
+	const count = Number(value);
+	return Number.isSafeInteger(count) && count >= 0 ? count : undefined;
 }
 
 function runningDisplay(jobs: string, session: string): { readonly status: string; readonly title: string; readonly pulses: readonly Pulse[] } | undefined {

@@ -21,6 +21,7 @@ export type JobView = {
 	readonly elapsedMs: number;
 	readonly silentMs: number;
 	readonly toolCalls?: number;
+	readonly producedNothing?: boolean;
 	readonly lastTool?: string;
 	readonly pulse?: Pulse;
 	readonly processAlive?: boolean;
@@ -89,6 +90,9 @@ export function parseDuration(value: string): number {
 	if (milliseconds > 2_147_483_647) throw new Error("timeout exceeds Node's maximum timer duration");
 	return milliseconds;
 }
+export function producedNothing(toolCalls: number | undefined, commits: string | undefined): boolean {
+	return toolCalls === 0 && commits === "";
+}
 export function renderJob(job: Job, view: JobView): string {
 	const facts = [
 		`${PHASE_LABELS[job.phase]} ${job.label}`,
@@ -99,6 +103,7 @@ export function renderJob(job: Job, view: JobView): string {
 	];
 	if (view.pulse) facts.push(view.pulse);
 	if (view.toolCalls !== undefined) facts.push(`tools ${view.toolCalls}`);
+	if (view.producedNothing) facts.push("produced nothing (0 tool calls, no commits)");
 	if (view.lastTool) facts.push(view.lastTool);
 	if (job.phase === "running" && job.pid !== undefined) facts.push(`pid ${job.pid}${view.processAlive === false ? " (not alive)" : ""}`);
 	const blocks = [facts.join(" · ")];
