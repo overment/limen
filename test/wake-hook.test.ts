@@ -866,6 +866,46 @@ test("first idle wake in a sweep is a real turn; later wakes are followUp", asyn
 	assert.ok(messages.some((message) => message.content.includes("is done (two)") && !message.content.includes("is done (one)")));
 });
 
+test("one assistant response confirms every batched followUp wake in the turn", async (context) => {
+	stashEnv(context, "LIMEN_JOB", undefined);
+	stashEnv(context, "LIMEN_HERDR", "0");
+	const root = await import("node:fs/promises").then(({ mkdtemp }) => mkdtemp(join(process.env.TMPDIR ?? "/tmp", "limen-wake-batched-")));
+	context.after(() => import("node:fs/promises").then(({ rm }) => rm(root, { recursive: true, force: true })));
+	await mkdir(join(root, ".agents/limen"), { recursive: true });
+	const jobs = join(root, ".limen/jobs");
+	for (const id of ["one", "two"]) {
+		await mkdir(join(jobs, id), { recursive: true });
+		await writeFile(join(jobs, id, "label"), `F042 ${id}\n`);
+		await writeFile(join(jobs, id, "branch"), `limen/${id}\n`);
+		await subscribe(jobs, id, "coordinator-a");
+		await writeFile(join(jobs, id, "state"), "done\n");
+	}
+	const handlers = new Map<string, (event: unknown, context: TestContext) => void>();
+	const messages: string[] = [];
+	limenWake({
+		on(event, handler) {
+			handlers.set(event, handler);
+		},
+		sendUserMessage(content) {
+			messages.push(content);
+		},
+	});
+	const session = { cwd: root, isIdle: () => false, sessionManager: sessionManager("coordinator-a"), ui: { notify() {}, setStatus() {} } };
+	handlers.get("session_start")?.({}, session);
+	context.after(() => handlers.get("session_shutdown")?.({}, session));
+	await waitUntil(() => messages.length === 2);
+	for (const content of messages) {
+		handlers.get("message_start")?.({ message: { role: "user", content: [{ type: "text", text: content }] } }, session);
+	}
+	handlers.get("message_end")?.({ message: { role: "assistant", content: [{ type: "text", text: "both acknowledged" }], stopReason: "stop" } }, session);
+	handlers.get("agent_settled")?.({}, session);
+	const { existsSync } = await import("node:fs");
+	assert.equal(existsSync(join(jobs, "one/notify/delivered/coordinator-a")), true);
+	assert.equal(existsSync(join(jobs, "two/notify/delivered/coordinator-a")), true);
+	await new Promise((resolve) => setTimeout(resolve, 650));
+	assert.equal(messages.length, 2, "confirmed batched wakes must not be injected again");
+});
+
 test("a busy session injects every wake as followUp", async (context) => {
 	stashEnv(context, "LIMEN_JOB", undefined);
 	stashEnv(context, "LIMEN_HERDR", "0");
@@ -1088,6 +1128,57 @@ test("an accepted wake is recovered after shutdown when no turn ran", async (con
 	const { existsSync } = await import("node:fs");
 	assert.equal(existsSync(join(job, "notify/delivered/coordinator-a")), true);
 	assert.equal(existsSync(claim), false);
+});
+
+test("another listener does not recover a live accepted claim", async (context) => {
+	stashEnv(context, "LIMEN_JOB", undefined);
+	stashEnv(context, "LIMEN_HERDR", "0");
+	const root = await import("node:fs/promises").then(({ mkdtemp }) => mkdtemp(join(process.env.TMPDIR ?? "/tmp", "limen-wake-live-claim-")));
+	context.after(() => import("node:fs/promises").then(({ rm }) => rm(root, { recursive: true, force: true })));
+	await mkdir(join(root, ".agents/limen"), { recursive: true });
+	const jobs = join(root, ".limen/jobs");
+	const job = join(jobs, "live");
+	await mkdir(job, { recursive: true });
+	await writeFile(join(job, "label"), "F042 live claim\n");
+	await writeFile(join(job, "branch"), "limen/live\n");
+	await subscribe(jobs, "live", "coordinator-a");
+	await writeFile(join(job, "state"), "done\n");
+	const firstHandlers = new Map<string, (event: unknown, context: TestContext) => void>();
+	const firstMessages: string[] = [];
+	limenWake({
+		on(event, handler) {
+			firstHandlers.set(event, handler);
+		},
+		sendUserMessage(content) {
+			firstMessages.push(content);
+		},
+	});
+	const firstSession = { cwd: root, isIdle: () => false, sessionManager: sessionManager("coordinator-a"), ui: { notify() {}, setStatus() {} } };
+	firstHandlers.get("session_start")?.({}, firstSession);
+	context.after(() => firstHandlers.get("session_shutdown")?.({}, firstSession));
+	await waitUntil(() => firstMessages.length === 1);
+	const claim = join(job, "notify/claims/coordinator-a");
+	const stale = new Date(Date.now() - 31_000);
+	await utimes(claim, stale, stale);
+
+	const secondHandlers = new Map<string, (event: unknown, context: TestContext) => void>();
+	const secondMessages: string[] = [];
+	limenWake({
+		on(event, handler) {
+			secondHandlers.set(event, handler);
+		},
+		sendUserMessage(content) {
+			secondMessages.push(content);
+		},
+	});
+	const secondSession = { cwd: root, isIdle: () => false, sessionManager: sessionManager("coordinator-a"), ui: { notify() {}, setStatus() {} } };
+	secondHandlers.get("session_start")?.({}, secondSession);
+	context.after(() => secondHandlers.get("session_shutdown")?.({}, secondSession));
+	await new Promise((resolve) => setTimeout(resolve, 650));
+	assert.equal(secondMessages.length, 0, "the live claimant's heartbeat protects its accepted claim");
+	emitWakeTurn(firstHandlers, firstSession, firstMessages[0] ?? "");
+	const { existsSync } = await import("node:fs");
+	assert.equal(existsSync(join(job, "notify/delivered/coordinator-a")), true);
 });
 
 test("a provider-error turn is unconfirmed and retries before delivery", async (context) => {

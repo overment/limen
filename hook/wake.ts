@@ -66,7 +66,7 @@ export default function limenWake(pi: PiApi): void {
 		settled: boolean;
 	};
 	const pendingDeliveries = new Map<string, PendingDelivery>();
-	let activeDelivery: string | undefined;
+	const activeDeliveries = new Set<string>();
 	const herdrCall = (args: readonly string[]) => {
 		if (!herdr) return;
 		try {
@@ -188,6 +188,7 @@ export default function limenWake(pi: PiApi): void {
 		},
 		pending(claim, delivered) {
 			pendingDeliveries.set(claim, { claim, delivered, message, blocked, accepted: false, entered: false, answered: false, settled: false });
+			refreshClaim(claim);
 		},
 		accepted(claim) {
 			const pending = pendingDeliveries.get(claim);
@@ -196,6 +197,7 @@ export default function limenWake(pi: PiApi): void {
 		},
 		released(claim) {
 			pendingDeliveries.delete(claim);
+			activeDeliveries.delete(claim);
 		},
 	});
 	const sendCompletion = (jobs: string, id: string, state: string, fallback: boolean): boolean => {
@@ -330,6 +332,9 @@ export default function limenWake(pi: PiApi): void {
 			pendingDeliveries.delete(pending.claim);
 		}
 	};
+	const refreshPendingClaims = () => {
+		for (const pending of pendingDeliveries.values()) refreshClaim(pending.claim);
+	};
 	const stampSweep = () => {
 		if (!limenDir || Date.now() - lastSweepAt < CLAIM_STALE_MS) return;
 		lastSweepAt = Date.now();
@@ -346,6 +351,7 @@ export default function limenWake(pi: PiApi): void {
 	};
 	const finishSweep = async (jobs: string) => {
 		injectedThisSweep = false;
+		refreshPendingClaims();
 		stampSweep();
 		try {
 			if (initialSweep) {
@@ -398,7 +404,7 @@ export default function limenWake(pi: PiApi): void {
 		footerAlive = true;
 		footerNoted = false;
 		pendingDeliveries.clear();
-		activeDelivery = undefined;
+		activeDeliveries.clear();
 		firstDead.clear();
 		sweeping = false;
 		herdr = herdrTarget();
@@ -424,27 +430,37 @@ export default function limenWake(pi: PiApi): void {
 		const message = eventMessage(event);
 		if (!message || message.role !== "user") return;
 		const pending = [...pendingDeliveries.values()].find((candidate) => !candidate.entered && candidate.message === message.content);
-		activeDelivery = pending?.claim;
-		if (pending) pending.entered = true;
+		if (!pending) return;
+		pending.entered = true;
+		activeDeliveries.add(pending.claim);
 	});
 	pi.on("message_end", (event) => {
 		const message = eventMessage(event);
-		if (!message || message.role !== "assistant" || !activeDelivery || message.stopReason === "error" || message.stopReason === "aborted") return;
-		const pending = pendingDeliveries.get(activeDelivery);
-		if (pending) pending.answered = true;
+		if (!message || message.role !== "assistant" || message.stopReason === "error" || message.stopReason === "aborted") return;
+		for (const claim of activeDeliveries) {
+			const pending = pendingDeliveries.get(claim);
+			if (pending) pending.answered = true;
+		}
 	});
 	pi.on("agent_settled", () => {
 		for (const pending of pendingDeliveries.values()) pending.settled = true;
 		confirmDeliveries();
-		activeDelivery = undefined;
+		activeDeliveries.clear();
 		sweep();
 	});
 	pi.on("session_shutdown", () => {
 		if (!active && !statusTimer && !sweepTimer) return;
 		watcher?.close();
 		watcher = undefined;
+		for (const pending of pendingDeliveries.values()) {
+			try {
+				writeFileSync(join(pending.claim, "live"), "closed\n");
+			} catch {
+				// The claim may already have been confirmed or recovered.
+			}
+		}
 		pendingDeliveries.clear();
-		activeDelivery = undefined;
+		activeDeliveries.clear();
 		retire(false);
 		releaseHerdr();
 	});
@@ -581,9 +597,10 @@ function claimDelivery(job: string, slot: string, eligible: () => boolean, send:
 function recoverClaim(claim: string): "released" | "blocked" | undefined {
 	try {
 		if (!existsSync(claim) || existsSync(join(claim, "blocked"))) return undefined;
-		const age = Date.now() - statSync(claim).mtimeMs;
-		if (age < CLAIM_STALE_MS) return undefined;
+		if (Date.now() - statSync(claim).mtimeMs < CLAIM_STALE_MS) return undefined;
 		if (existsSync(join(claim, "accepted"))) {
+			const live = join(claim, "live");
+			if (text(live) !== "closed" && existsSync(live) && Date.now() - statSync(live).mtimeMs < CLAIM_STALE_MS) return undefined;
 			if (recordUnconfirmed(claim)) return "blocked";
 			return existsSync(claim) ? undefined : "released";
 		}
@@ -593,6 +610,13 @@ function recoverClaim(claim: string): "released" | "blocked" | undefined {
 		// Another coordinator recovered it first.
 	}
 	return undefined;
+}
+function refreshClaim(claim: string): void {
+	try {
+		writeFileSync(join(claim, "live"), `${new Date().toISOString()}\n`);
+	} catch {
+		// A missing claim was confirmed or recovered between the sweep and this heartbeat.
+	}
 }
 function recordUnconfirmed(claim: string): boolean {
 	try {
