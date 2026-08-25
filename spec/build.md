@@ -6,7 +6,8 @@
 
 ## NOW
 
-- `F043-seat-sweep` (🟠 ACTIVE): `limen sweep` + launchd interval job. Wave 2; F042 and F045 are on `main`.
+- `F011-empty-job-advisory` (🟠 ACTIVE): empty jobs say so instead of reading DONE. Advisory only; `done` stays `done`.
+- `F043-seat-sweep` (🟠 ACTIVE): parked on branch `limen/2026-08-25-f043-seat-sweep-7b8ad802` at `996bba9` after three lock-race FAILs. Not merging until the lock is boring.
 - `F045-supervisor-stall-escalation` (🟠 ACTIVE): merged `e71dcef`; review PASS of `9139a20`. Live prove still open — stalled worker with coordinator closed.
 - `F042-wake-delivery-integrity` (🟠 ACTIVE): merged `70eaebd`; re-review PASS of `7e43d23`.
 - `F044-hosted-start-retry` (🟠 ACTIVE): merged `fe510dd`; review PASS.
