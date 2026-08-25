@@ -54,14 +54,31 @@ export function startHostedPi(input: {
 	call(herdr, ["tab", "focus", input.place.tab]);
 	try {
 		waitForShell(herdr, input.place.pane, Math.min(readyMs, 15_000));
-		try {
-			const started = call(herdr, ["agent", "start", input.name, "--kind", "pi", "--pane", input.place.pane, "--timeout", String(readyMs), "--", ...input.args]);
-			return agentTarget(started) || input.place.pane;
-		} catch (error) {
-			const live = locateHostedAgent(input.place.pane);
-			if (live) return live;
-			throw error;
+		let failed: unknown;
+		for (const attempt of [1, 2] as const) {
+			input.log?.(`hosted agent start attempt ${attempt}`);
+			try {
+				const started = call(herdr, ["agent", "start", input.name, "--kind", "pi", "--pane", input.place.pane, "--timeout", String(readyMs), "--", ...input.args]);
+				return agentTarget(started) || input.place.pane;
+			} catch (error) {
+				failed = error;
+				const paneShellFailure = error instanceof Error && error.message === `agent target pane ${input.place.pane} is not an available shell`;
+				if (attempt === 1 && paneShellFailure) {
+					input.log?.(`hosted agent start attempt 1 failed: ${error.message}; waiting for shell before attempt 2`);
+					try {
+						waitForShell(herdr, input.place.pane, Math.min(readyMs, 15_000));
+					} catch (waitError) {
+						failed = waitError;
+						break;
+					}
+					continue;
+				}
+				break;
+			}
 		}
+		const live = locateHostedAgent(input.place.pane);
+		if (live) return live;
+		throw failed;
 	} finally {
 		if (previous && previous !== input.place.tab) restoreCoordinatorFocus(herdr, input.place.tab, previous, input.log);
 	}

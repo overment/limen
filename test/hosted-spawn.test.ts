@@ -275,6 +275,71 @@ test("spawn in Herdr is hosted without --tab; --detached keeps a watch tab", asy
 	assert.match(logText, /hosted agent done|hosted agent ended/);
 });
 
+test("hosted start retries one pane-shell failure and logs both attempts", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	assert.equal(limen(scratch, "init").status, 0);
+	const herdr = await installHostedFakeHerdr(scratch.root, scratch.fakeBin);
+	const env = {
+		HERDR_ENV: "1",
+		LIMEN_HERDR: herdr.bin,
+		FAKE_HERDR_STATE: herdr.dir,
+		FAKE_HERDR_PERSIST: "1",
+		FAKE_HERDR_START_PANE_FAILURES: "1",
+		HERDR_TAB_ID: "coord:t0",
+	};
+	const launched = limenWithEnv(scratch, env, "spawn", "--label", "F044 retry", "stay hosted");
+	assert.equal(launched.status, 0, launched.stderr);
+	const id = onlyJobId(launched.stdout);
+	const job = join(scratch.root, ".limen/jobs", id);
+	assert.equal((await readFile(join(job, "state"), "utf8")).trim(), "running");
+	assert.equal([...(await readFile(herdr.calls, "utf8")).matchAll(/^agent start /gm)].length, 2);
+	const log = await readFile(join(job, "log"), "utf8");
+	assert.match(log, /hosted agent start attempt 1/);
+	assert.match(log, /hosted agent start attempt 2/);
+	await writeFile(join(job, "session-ended"), `${new Date().toISOString()}\n`);
+	await waitForState(scratch.root, id, "done");
+});
+
+test("hosted start finalizes failed after two pane-shell failures", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	assert.equal(limen(scratch, "init").status, 0);
+	const herdr = await installHostedFakeHerdr(scratch.root, scratch.fakeBin);
+	const env = {
+		HERDR_ENV: "1",
+		LIMEN_HERDR: herdr.bin,
+		FAKE_HERDR_STATE: herdr.dir,
+		FAKE_HERDR_START_PANE_FAILURES: "2",
+		HERDR_TAB_ID: "coord:t0",
+	};
+	const launched = limenWithEnv(scratch, env, "spawn", "--label", "F044 fail", "do not start");
+	assert.equal(launched.status, 1);
+	const [id] = await readdir(join(scratch.root, ".limen/jobs"));
+	assert.ok(id);
+	const job = join(scratch.root, ".limen/jobs", id);
+	assert.equal((await readFile(join(job, "state"), "utf8")).trim(), "failed");
+	assert.match(await readFile(join(job, "log"), "utf8"), /failed: hosted start failed: agent target pane w1:p1 is not an available shell/);
+	assert.equal([...(await readFile(herdr.calls, "utf8")).matchAll(/^agent start /gm)].length, 2);
+});
+
+test("hosted start does not retry a non-pane-shell error", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	assert.equal(limen(scratch, "init").status, 0);
+	const herdr = await installHostedFakeHerdr(scratch.root, scratch.fakeBin);
+	const env = {
+		HERDR_ENV: "1",
+		LIMEN_HERDR: herdr.bin,
+		FAKE_HERDR_STATE: herdr.dir,
+		FAKE_HERDR_START_ERROR: "1",
+		HERDR_TAB_ID: "coord:t0",
+	};
+	const launched = limenWithEnv(scratch, env, "spawn", "--label", "F044 auth", "do not start");
+	assert.equal(launched.status, 1);
+	assert.equal([...(await readFile(herdr.calls, "utf8")).matchAll(/^agent start /gm)].length, 1);
+});
+
 test("hosted supervisor writes one idle advisory and stays running", async (context) => {
 	const scratch = await scratchRepo();
 	context.after(scratch.cleanup);
@@ -734,6 +799,10 @@ if (args[0] === "workspace" && args[1] === "list") {
 } else if (args[0] === "agent" && args[1] === "start") {
   const pane = args[args.indexOf("--pane") + 1];
   const tab = Object.keys(state.tabs).find((id) => state.tabs[id].pane === pane);
+  state.startAttempts = (state.startAttempts || 0) + 1;
+  writeFileSync(path, JSON.stringify(state));
+  if (state.startAttempts <= Number(process.env.FAKE_HERDR_START_PANE_FAILURES || 0)) fail("agent_pane_busy", "agent target pane " + pane + " is not an available shell");
+  if (process.env.FAKE_HERDR_START_ERROR === "1") fail("auth_failed", "authentication denied");
   if (!tab || !state.tabs[tab].focused) fail("agent_pane_busy", "agent target pane " + pane + " is not an available shell");
   state.agents[pane] = { status: "working", ticks: 0 };
   writeFileSync(path, JSON.stringify(state));
