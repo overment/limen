@@ -216,6 +216,38 @@ export function stopHostedAgent(target: string): void {
 	}
 }
 
+/** Make a hosted stall visible without depending on a coordinator session. */
+export function reportHostedStall(input: { readonly pane: string; readonly label: string; readonly duration: string; readonly notify: boolean }): void {
+	const herdr = herdrBinary();
+	if (!herdr) return;
+	const stalled = `⚠ stalled ${input.duration}`;
+	if (input.pane) {
+		advisoryCall(herdr, [
+			"pane",
+			"report-metadata",
+			input.pane,
+			"--source",
+			"limen",
+			"--display-agent",
+			stalled,
+			"--state-label",
+			`idle=${stalled}`,
+			"--state-label",
+			`done=${stalled}`,
+			"--state-label",
+			`blocked=${stalled}`,
+		]);
+	}
+	if (input.notify) advisoryCall(herdr, ["notification", "show", `limen: ${input.label} stalled`, "--body", stalled, "--sound", "request"]);
+}
+
+/** Restore the role description installed by the hosted hook after a stall recovers. */
+export function restoreHostedPane(pane: string, role: "worker" | "reviewer"): void {
+	const herdr = herdrBinary();
+	if (!herdr) return;
+	advisoryCall(herdr, ["pane", "report-metadata", pane, "--source", "limen", "--display-agent", `limen ${role}`, "--clear-state-labels"]);
+}
+
 /** Terminal jobs leave no open tabs: close the recorded place. Job files and `limen open` remain the record. */
 export async function settleJobTab(jobDir: string): Promise<void> {
 	const place = await readPlace(jobDir);
@@ -353,6 +385,11 @@ function tabExists(herdr: string, tab: string): boolean {
 	} catch {
 		return false;
 	}
+}
+
+function advisoryCall(herdr: string, args: readonly string[]): void {
+	// These surfaces are additive. A slow or unavailable daemon must not stall supervision.
+	spawnSync(herdr, args, { stdio: "ignore", timeout: 2_000 });
 }
 
 function call(herdr: string, args: readonly string[]): unknown {

@@ -5,7 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { hostedAgentName } from "../src/commands/spawn.ts";
 import { hostedAgentStatus, hostedTerminalReason, startHostedPi, stopHostedAgent } from "../src/herdr.ts";
-import { DEFAULT_HOSTED_IDLE_MS, type HostedIdleWatch, noteHostedIdle } from "../src/proc.ts";
+import { DEFAULT_HOSTED_IDLE_MS, DEFAULT_STALL_RERING_MS, type HostedIdleWatch, noteHostedIdle } from "../src/proc.ts";
 import { git, limen, limenWithEnv, onlyJobId, scratchRepo, waitForState } from "./scratch.ts";
 
 test("hosted completion is session end or vanished agent, not Herdr idle", () => {
@@ -19,8 +19,9 @@ test("hosted completion is session end or vanished agent, not Herdr idle", () =>
 	assert.equal(hostedTerminalReason("missing", true), "hosted session ended");
 });
 
-test("hosted idle bound defaults to 60s", () => {
+test("hosted idle bound defaults to 60s and re-ring to 15m", () => {
 	assert.equal(DEFAULT_HOSTED_IDLE_MS, 60_000);
+	assert.equal(DEFAULT_STALL_RERING_MS, 15 * 60_000);
 });
 
 test("noteHostedIdle writes one stall marker, skips zero tools, and re-arms after working", async () => {
@@ -51,6 +52,108 @@ test("noteHostedIdle writes one stall marker, skips zero tools, and re-arms afte
 		await noteHostedIdle(dir, "idle", watch, 31 * 60_000, 10 * 60_000);
 		assert.equal(await readFile(join(dir, "advisory"), "utf8"), "idle 10m after 14 tool calls, session still open\n");
 	} finally {
+		await rm(dir, { recursive: true, force: true });
+	}
+});
+
+test("noteHostedIdle rings and stamps unheard stalls until delivery, then restores and re-arms", async () => {
+	const dir = await mkdtemp(join(tmpdir(), "limen-stall-ring-"));
+	const callsPath = join(dir, "herdr-calls");
+	const previousRering = process.env.LIMEN_STALL_RERING_MS;
+	const previousHerdrEnv = process.env.HERDR_ENV;
+	const previousHerdrPane = process.env.HERDR_PANE_ID;
+	const previousRole = process.env.LIMEN_ROLE;
+	try {
+		await mkdir(join(dir, "herdr"));
+		await writeFile(join(dir, "herdr/pane"), "w1:p1\n");
+		await writeFile(join(dir, "label"), "F045 stall ring\n");
+		await writeFile(join(dir, "tool-calls"), "4\n");
+		await writeFile(join(dir, "activity"), "wait\n");
+		process.env.LIMEN_STALL_RERING_MS = "10";
+		process.env.LIMEN_ROLE = "worker";
+		delete process.env.HERDR_ENV;
+		delete process.env.HERDR_PANE_ID;
+		await withFakeHerdr(
+			`const args = process.argv.slice(2);
+const allowed = ["idle", "working", "blocked", "done", "unknown"];
+for (let i = 0; i < args.length; i++) {
+	if (args[i] === "--state-label" && !allowed.includes(args[i + 1].split("=", 1)[0])) process.exit(2);
+}
+require("node:fs").appendFileSync(${JSON.stringify(callsPath)}, JSON.stringify(args) + "\\n");
+`,
+			async () => {
+				const watch: HostedIdleWatch = { leftWorkingAt: undefined, armed: true };
+				await noteHostedIdle(dir, "idle", watch, 0, 60);
+				await noteHostedIdle(dir, "idle", watch, 60, 60);
+				let calls = (await readFile(callsPath, "utf8"))
+					.trim()
+					.split("\n")
+					.map((line) => JSON.parse(line) as string[]);
+				assert.equal(calls.filter((call) => call[0] === "notification").length, 1);
+				const first = calls[0] as string[];
+				assert.deepEqual(first.slice(0, 5), ["pane", "report-metadata", "w1:p1", "--source", "limen"]);
+				assert.equal(first[first.indexOf("--display-agent") + 1], "⚠ stalled 1s");
+				assert.deepEqual(
+					first.flatMap((arg, i) => (arg === "--state-label" ? [first[i + 1]] : [])),
+					["idle=⚠ stalled 1s", "done=⚠ stalled 1s", "blocked=⚠ stalled 1s"],
+				);
+
+				await noteHostedIdle(dir, "idle", watch, 69, 60);
+				await noteHostedIdle(dir, "idle", watch, 70, 60);
+				calls = (await readFile(callsPath, "utf8"))
+					.trim()
+					.split("\n")
+					.map((line) => JSON.parse(line) as string[]);
+				assert.equal(calls.filter((call) => call[0] === "notification").length, 2, "an unheard stall re-rings at the configured interval");
+
+				await mkdir(join(dir, "notify/delivered/_advisory.coord"), { recursive: true });
+				await noteHostedIdle(dir, "idle", watch, 120_000, 60);
+				calls = (await readFile(callsPath, "utf8"))
+					.trim()
+					.split("\n")
+					.map((line) => JSON.parse(line) as string[]);
+				assert.equal(calls.filter((call) => call[0] === "notification").length, 2, "delivery silences later rings");
+				const stalled = calls.filter((call) => call[0] === "pane").at(-1) as string[];
+				assert.equal(stalled[stalled.indexOf("--display-agent") + 1], "⚠ stalled 2m", "the stamped duration keeps updating");
+
+				await noteHostedIdle(dir, "working", watch, 120_001, 60);
+				calls = (await readFile(callsPath, "utf8"))
+					.trim()
+					.split("\n")
+					.map((line) => JSON.parse(line) as string[]);
+				const restored = calls.at(-1) as string[];
+				assert.equal(restored[restored.indexOf("--display-agent") + 1], "limen worker");
+				assert.ok(restored.includes("--clear-state-labels"));
+				await assert.rejects(readFile(join(dir, "advisory")));
+
+				await noteHostedIdle(dir, "idle", watch, 120_001, 60);
+				await noteHostedIdle(dir, "idle", watch, 120_061, 60);
+				calls = (await readFile(callsPath, "utf8"))
+					.trim()
+					.split("\n")
+					.map((line) => JSON.parse(line) as string[]);
+				assert.equal(calls.filter((call) => call[0] === "notification").length, 3, "recovery re-arms the supervisor ring");
+
+				process.env.LIMEN_ROLE = "reviewer";
+				await noteHostedIdle(dir, "working", watch, 120_062, 60);
+				calls = (await readFile(callsPath, "utf8"))
+					.trim()
+					.split("\n")
+					.map((line) => JSON.parse(line) as string[]);
+				const reviewerRestored = calls.at(-1) as string[];
+				assert.equal(reviewerRestored[reviewerRestored.indexOf("--display-agent") + 1], "limen reviewer");
+				assert.ok(reviewerRestored.includes("--clear-state-labels"));
+			},
+		);
+	} finally {
+		if (previousRering === undefined) delete process.env.LIMEN_STALL_RERING_MS;
+		else process.env.LIMEN_STALL_RERING_MS = previousRering;
+		if (previousHerdrEnv === undefined) delete process.env.HERDR_ENV;
+		else process.env.HERDR_ENV = previousHerdrEnv;
+		if (previousHerdrPane === undefined) delete process.env.HERDR_PANE_ID;
+		else process.env.HERDR_PANE_ID = previousHerdrPane;
+		if (previousRole === undefined) delete process.env.LIMEN_ROLE;
+		else process.env.LIMEN_ROLE = previousRole;
 		await rm(dir, { recursive: true, force: true });
 	}
 });
@@ -720,7 +823,7 @@ test("two long hosted labels keep distinct agent names", async (context) => {
 		[first, names[0]],
 		[second, names[1]],
 	] as const) {
-		assert.ok(name && name.length <= 32, name);
+		assert.ok(name && name.length <= 32, name ?? "missing agent name");
 		assert.equal(name.slice(-8), id.slice(-8));
 		await writeFile(join(scratch.root, ".limen/jobs", id, "session-ended"), `${new Date().toISOString()}\n`);
 		await waitForState(scratch.root, id, "done");
