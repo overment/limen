@@ -6,10 +6,10 @@
 
 ## NOW
 
+- `F039-split-proc` (🟠 ACTIVE): one job per file in the `proc.ts` pile. F032 and F045 are proven.
 - `F043-seat-sweep` (🟠 ACTIVE): merged `3eff35a`. Concurrent registry tests pass; live launchd interval not yet installed.
 
 ## NEXT
-- `F039-split-proc` (🔴 PLANNED): one job per file in the `proc.ts` pile; unused exports gone; CONTRIBUTING matches the 2750 cap. After F032 prove and F045 (F038 is done).
 - `F028-provider-error-is-failed` (PLANNED): a run whose last turn errored records `failed: <reason>`, matching pi's own text-mode exit semantics. Decision ticket — reverses one F011 exclusion; needs explicit sign-off. After F024.
 - `F013-remote-seat` (PLANNED): one disk, attach don’t clone; docs and seat-shaped guarantees. Before F014, after this quality sweep and F032's prove.
 - `F014-github-doorbell` (PLANNED): mention or label starts a job on the seat; comment back evidence; merge stays human.
