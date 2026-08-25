@@ -485,6 +485,38 @@ test("garbage agent get never counts toward missing", async (context) => {
 	await waitForState(scratch.root, id, "done");
 });
 
+test("continue in Herdr is hosted and passes --continue, not @task", async (context) => {
+	const continuing = `#!/usr/bin/env node
+const { writeFileSync, mkdirSync } = require("node:fs");
+const args = process.argv.slice(2);
+if (args[0] === "auth") process.exit(1);
+const dirIndex = args.indexOf("--session-dir");
+if (dirIndex >= 0) {
+  mkdirSync(args[dirIndex + 1], { recursive: true });
+  writeFileSync(args[dirIndex + 1] + "/session.jsonl", JSON.stringify({ type: "session" }) + "\\n");
+}
+writeFileSync("pi-args.json", JSON.stringify(args));
+console.log(JSON.stringify({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text: "ok" }] } }));
+`;
+	const scratch = await scratchRepo(continuing);
+	context.after(scratch.cleanup);
+	assert.equal(limen(scratch, "init").status, 0);
+	const parent = onlyJobId(limen(scratch, "spawn", "--detached", "--label", "F037 parent", "first slice").stdout);
+	await waitForState(scratch.root, parent, "done");
+	const herdr = await installHostedFakeHerdr(scratch.root, scratch.fakeBin);
+	const env = { HERDR_ENV: "1", LIMEN_HERDR: herdr.bin, FAKE_HERDR_STATE: herdr.dir, HERDR_TAB_ID: "coord:t0" };
+	const launched = limenWithEnv(scratch, env, "continue", parent, "now refine the seam");
+	assert.equal(launched.status, 0, launched.stderr);
+	assert.match(launched.stdout, /\(hosted\)/);
+	const id = onlyJobId(launched.stdout);
+	const job = join(scratch.root, ".limen/jobs", id);
+	assert.match(await readFile(join(job, "hosted"), "utf8"), /weaker guarantees/);
+	const calls = await readFile(herdr.calls, "utf8");
+	assert.match(calls, /agent start /);
+	assert.match(calls, /--continue now refine the seam/);
+	assert.doesNotMatch(calls, /@/);
+});
+
 test("hostedAgentName keeps the hex suffix when the slug is long", () => {
 	const a = hostedAgentName("2026-08-19-abcdefghijklmnopqrstuvwxyz-aaaaaaaa");
 	const b = hostedAgentName("2026-08-19-abcdefghijklmnopqrstuvwxyz-bbbbbbbb");

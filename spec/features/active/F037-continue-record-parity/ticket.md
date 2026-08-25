@@ -1,6 +1,6 @@
 # F037-continue-record-parity · Continue writes a complete job record and follows spawn's Herdr default
 
-[2026-08-25] [🔴] [PLANNED] [COORDINATOR] PLANNED · F037-continue-record-parity
+[2026-08-25] [🟠] [ACTIVE] [COORDINATOR] ACTIVE · F037-continue-record-parity
 
 ## Outcome
 

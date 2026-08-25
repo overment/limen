@@ -6,12 +6,12 @@
 
 ## NOW
 
-- `F040-retire-control-migrate` (🟠 ACTIVE): drop `limen migrate` and `[control ` log compat; implementing.
+- `F037-continue-record-parity` (🟠 ACTIVE): continue matches spawn; implementing.
+- `F040-retire-control-migrate` (🟠 ACTIVE): drop `limen migrate` and `[control ` log compat; suite-covered, filing next.
 - `F038-hosted-pulse-from-activity` (🟠 ACTIVE): hosted pulse follows `activity`; suite-covered, filing next.
 - `F032-hosted-supervisor-target-truth` (ACTIVE): implemented inline 2026-08-21 (`6ee8ff1`). Suite-covered; live prove still open — needs a moved-pane or degraded-Herdr scenario on a running hosted job.
 
 ## NEXT
-- `F037-continue-record-parity` (🔴 PLANNED): continue writes `repo`, finalizes a failed launch, and is hosted in Herdr like spawn.
 - `F039-split-proc` (🔴 PLANNED): one job per file in the `proc.ts` pile; unused exports gone; CONTRIBUTING matches the 2750 cap. After F032 and F038.
 - `F028-provider-error-is-failed` (PLANNED): a run whose last turn errored records `failed: <reason>`, matching pi's own text-mode exit semantics. Decision ticket — reverses one F011 exclusion; needs explicit sign-off. After F024.
 - `F011-empty-job-advisory` (PLANNED): a job that produced nothing should say so instead of reading DONE. Observed, not theorised. After F017 it reads `commits` and `tool-calls` instead of inferring; after F024 it also reads `stop-reason`; if F028 is signed off, its advisory targets clean-but-empty runs.

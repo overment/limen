@@ -80,16 +80,23 @@ test("pulse law is one function", async () => {
 
 test("job-file table is written by spawn and read by jobs", async () => {
 	const spawn = await readFile(join(ROOT, "src/commands/spawn.ts"), "utf8");
+	const cont = await readFile(join(ROOT, "src/commands/continue.ts"), "utf8");
 	const jobs = await readFile(join(ROOT, "src/commands/jobs.ts"), "utf8");
 	for (const name of ["task.md", "label", "branch", "repo", "started-at", "tool-calls", "last-tool", "activity", "log", "state", "versions"]) {
 		assert.ok(spawn.includes(name), `spawn must write ${name}`);
+		assert.ok(cont.includes(name), `continue must write ${name}`);
 		assert.ok(jobs.includes(name), `jobs must read ${name}`);
 	}
-	for (const name of ["pid", "finished-at", "commits", "result", "stop-reason"]) assert.ok(jobs.includes(name), `jobs must read ${name}`);
+	for (const name of ["pid", "finished-at", "commits", "result", "stop-reason", "parent"]) assert.ok(jobs.includes(name), `jobs must read ${name}`);
 	assert.ok(spawn.includes("candidate"), "spawn must write candidate for review jobs");
 	assert.ok(jobs.includes("candidate"), "jobs must print the candidate line");
+	assert.ok(cont.includes("parent"), "continue must write parent");
+	assert.ok(cont.includes("hosted"), "continue must write hosted");
 	for (const name of ["base", "worktree"]) assert.ok(spawn.includes(name), `spawn must write ${name}`);
-	for (const name of ["origin-session", "notify/subscribers", "notify/ready"]) assert.ok(spawn.includes(name), `spawn must write ${name}`);
+	for (const name of ["origin-session", "notify/subscribers", "notify/ready"]) {
+		assert.ok(spawn.includes(name), `spawn must write ${name}`);
+		assert.ok(cont.includes(name), `continue must write ${name}`);
+	}
 	const watch = await readFile(join(ROOT, "src/commands/watch.ts"), "utf8");
 	for (const name of ["PI_SESSION_ID", "notify/subscribers", "notify/ready"]) assert.ok(watch.includes(name), `watch must use ${name}`);
 });

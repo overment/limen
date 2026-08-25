@@ -33,8 +33,14 @@ type SpawnOptions = {
 	detached: boolean;
 };
 const PACKAGE_ROOT = fileURLToPath(new URL("../..", import.meta.url));
-const HOSTED_NOTE =
+export const HOSTED_NOTE =
 	"Hosted job: weaker guarantees. No 90-minute timeout, no tool-call cap, no F007 process containment. Herdr owns the process tree. Closing the tab ends the worker.\n";
+export function preflightPi(model?: string): void {
+	if (!(process.env.PATH ?? "").split(":").some((dir) => dir && existsSync(`${dir}/pi`))) throw new Error("pi is not on PATH");
+	if (process.env.LIMEN_PREFLIGHT !== "auth") return;
+	const result = spawnSync(process.env.LIMEN_PI || "pi", ["auth", "check", ...(model ? ["--model", model] : [])], { encoding: "utf8" });
+	if (result.status !== 0) throw new Error((result.stderr || result.stdout || result.error?.message || "pi auth check failed").trim() || "pi auth check failed");
+}
 type WorktreePlan =
 	| { readonly kind: "detach"; readonly path: string; readonly ref: string }
 	| { readonly kind: "reuse"; readonly path: string }
@@ -53,12 +59,8 @@ export async function spawnCommand(args: readonly string[], cwd: string): Promis
 	if (parsed.tab && parsed.detached) throw new Error("--tab and --detached cannot be combined");
 	if (options.tab && parsed.timeoutMs) throw new Error("hosted jobs have no timeout; omit --timeout or use --detached");
 	if (options.tab && !herdr) throw new Error("hosted spawn requires Herdr (HERDR_ENV=1); use --detached for an ordinary job");
-	if (!(process.env.PATH ?? "").split(":").some((dir) => dir && existsSync(`${dir}/pi`))) throw new Error("pi is not on PATH");
 	const model = options.model ?? (process.env[options.review ? "LIMEN_REVIEWER_MODEL" : "LIMEN_WORKER_MODEL"]?.trim() || undefined);
-	if (process.env.LIMEN_PREFLIGHT === "auth") {
-		const result = spawnSync(process.env.LIMEN_PI || "pi", ["auth", "check", ...(model ? ["--model", model] : [])], { encoding: "utf8" });
-		if (result.status !== 0) throw new Error((result.stderr || result.stdout || result.error?.message || "pi auth check failed").trim() || "pi auth check failed");
-	}
+	preflightPi(model);
 	const notificationSession = currentNotificationSession();
 	const workspace = workspaceRoot(cwd);
 	const root = workspace ?? repoRoot(cwd);
@@ -163,7 +165,7 @@ export async function spawnCommand(args: readonly string[], cwd: string): Promis
 	console.log(`started ${options.label}`);
 	console.log(id);
 }
-async function startHosted(input: {
+export async function startHosted(input: {
 	readonly jobDir: string;
 	readonly id: string;
 	readonly label: string;
@@ -173,6 +175,7 @@ async function startHosted(input: {
 	readonly taskFile: string;
 	readonly review: boolean;
 	readonly model?: string;
+	readonly continueText?: string;
 }): Promise<void> {
 	const paneEnv = {
 		LIMEN_JOB: "1",
@@ -199,7 +202,7 @@ async function startHosted(input: {
 			input.preamble,
 			...extensions,
 			...(input.model ? ["--model", input.model] : []),
-			`@${input.taskFile}`,
+			...(input.continueText !== undefined ? ["--continue", input.continueText] : [`@${input.taskFile}`]),
 		];
 		target = startHostedPi({
 			place,
@@ -346,7 +349,7 @@ function workspaceTask(task: string, root: string, repo: string): string {
 	const pointer = task.replace(/\bTicket: (spec\/\S+)/g, (_all, path: string) => `Ticket: ${root}/${path}`);
 	return `Repository: ${repo}. Work only in this repository.\n\n${pointer}`;
 }
-function normalizeLabel(value: string): string {
+export function normalizeLabel(value: string): string {
 	const label = value.trim();
 	if (!label || /[\r\n]/.test(label)) throw new Error("--label must be one non-empty line");
 	return label;
@@ -370,7 +373,7 @@ export function hostedAgentName(jobId: string): string {
 			.slice(0, 17) || "job";
 	return hex ? `limen-${slug}-${hex}` : `limen-${slug}`.slice(0, 32);
 }
-function currentNotificationSession(): string | undefined {
+export function currentNotificationSession(): string | undefined {
 	const value = process.env.PI_SESSION_ID?.trim();
 	if (value && !/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(value)) throw new Error("PI_SESSION_ID is not safe for notification routing");
 	return value || undefined;

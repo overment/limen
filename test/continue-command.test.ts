@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
-import { readdir, readFile } from "node:fs/promises";
+import { chmod, readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import test from "node:test";
-import { git, limen, onlyJobId, scratchRepo, waitForState } from "./scratch.ts";
+import { git, limen, limenWithEnv, onlyJobId, scratchRepo, scratchWorkspace, waitForState } from "./scratch.ts";
 
 const continuingFakePi = `#!/usr/bin/env node
 const { writeFileSync, mkdirSync } = require("node:fs");
@@ -64,6 +64,8 @@ test("continue resumes a finished job in its own session and links the record", 
 		false,
 		"a continued job must not replay the task file",
 	);
+	const detail = limen(scratch, "jobs", id);
+	assert.match(detail.stdout, new RegExp(`parent ${parent}`));
 });
 
 test("continue refuses a running job and a pruned worktree without writing records", async (context) => {
@@ -84,4 +86,81 @@ test("continue refuses a running job and a pruned worktree without writing recor
 	assert.equal(pruned.status, 1);
 	assert.match(pruned.stderr, /gone .* pruned; spawn a fresh job instead/s);
 	assert.deepEqual(await readdir(join(scratch.root, ".limen/jobs")), before, "refusals must not create job records");
+});
+
+test("workspace continue copies repo so jobs diffs the child", async (context) => {
+	const workspace = await scratchWorkspace(continuingFakePi);
+	context.after(workspace.cleanup);
+	assert.equal(limen(workspace, "workspace", "init").status, 0);
+	const parent = onlyJobId(limen(workspace, "spawn", "--repo", "api", "--label", "F037 api", "first slice").stdout);
+	await waitForState(workspace.root, parent, "done");
+	const launched = limen(workspace, "continue", parent, "keep going");
+	assert.equal(launched.status, 0, launched.stderr);
+	const id = onlyJobId(launched.stdout);
+	await waitForState(workspace.root, id, "done");
+	assert.equal(await readFile(join(workspace.root, ".limen/jobs", id, "repo"), "utf8"), "api\n");
+	const detail = limen(workspace, "jobs", id);
+	assert.match(detail.stdout, /repo api/);
+	assert.doesNotMatch(detail.stdout, /unavailable/);
+});
+
+test("continue --detached stays a wrapper even in Herdr", async (context) => {
+	const scratch = await scratchRepo(continuingFakePi);
+	context.after(scratch.cleanup);
+	assert.equal(limen(scratch, "init").status, 0);
+	const parent = onlyJobId(limen(scratch, "spawn", "--label", "F037 det", "first slice").stdout);
+	await waitForState(scratch.root, parent, "done");
+	const herdr = join(scratch.fakeBin, "herdr");
+	await writeFile(herdr, "#!/usr/bin/env node\nconsole.log(JSON.stringify({ result: {} }));\n");
+	await chmod(herdr, 0o755);
+	const launched = limenWithEnv(scratch, { HERDR_ENV: "1", LIMEN_HERDR: herdr }, "continue", "--detached", parent, "keep going");
+	assert.equal(launched.status, 0, launched.stderr);
+	const id = onlyJobId(launched.stdout);
+	await waitForState(scratch.root, id, "done");
+	const job = join(scratch.root, ".limen/jobs", id);
+	await assert.rejects(readFile(join(job, "hosted")));
+	const worktree = (await readFile(join(job, "worktree"), "utf8")).trim();
+	const argv = JSON.parse(await readFile(join(worktree, "pi-args.json"), "utf8")) as string[];
+	assert.equal(argv.includes("--continue"), true);
+	assert.equal(argv.includes("--mode"), true);
+});
+
+test("LIMEN_PREFLIGHT=auth fails continue with no record", async (context) => {
+	const scratch = await scratchRepo(continuingFakePi);
+	context.after(scratch.cleanup);
+	assert.equal(limen(scratch, "init").status, 0);
+	const parent = onlyJobId(limen(scratch, "spawn", "--label", "F037 auth", "first slice").stdout);
+	await waitForState(scratch.root, parent, "done");
+	const before = await readdir(join(scratch.root, ".limen/jobs"));
+	const refused = limenWithEnv(scratch, { LIMEN_PREFLIGHT: "auth" }, "continue", parent, "keep going");
+	assert.equal(refused.status, 1);
+	assert.match(refused.stderr, /auth/);
+	assert.deepEqual(await readdir(join(scratch.root, ".limen/jobs")), before);
+});
+
+test("hosted continue start failure finalizes the child record", async (context) => {
+	const scratch = await scratchRepo(continuingFakePi);
+	context.after(scratch.cleanup);
+	assert.equal(limen(scratch, "init").status, 0);
+	const parent = onlyJobId(limen(scratch, "spawn", "--label", "F037 fail", "first slice").stdout);
+	await waitForState(scratch.root, parent, "done");
+	const herdr = join(scratch.fakeBin, "herdr");
+	await writeFile(
+		herdr,
+		`#!/usr/bin/env node
+console.log(JSON.stringify({ error: { code: "boom", message: "herdr down" } }));
+process.exit(1);
+`,
+	);
+	await chmod(herdr, 0o755);
+	const launched = limenWithEnv(scratch, { HERDR_ENV: "1", LIMEN_HERDR: herdr }, "continue", parent, "keep going");
+	assert.equal(launched.status, 1);
+	const jobs = await readdir(join(scratch.root, ".limen/jobs"));
+	const child = jobs.find((name) => name !== parent);
+	assert.ok(child);
+	const job = join(scratch.root, ".limen/jobs", child);
+	assert.equal((await readFile(join(job, "state"), "utf8")).trim(), "failed");
+	assert.match(await readFile(join(job, "finished-at"), "utf8"), /T/);
+	const leftovers = (await readdir(job)).filter((name) => /\.tmp$/.test(name));
+	assert.deepEqual(leftovers, []);
 });
