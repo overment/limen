@@ -1,6 +1,6 @@
 # F040-retire-control-migrate · Drop the Control → Limen one-shot if no one still needs it
 
-[2026-08-25] [🟠] [ACTIVE] [COORDINATOR] ACTIVE · F040-retire-control-migrate
+[2026-08-25] [🟢] [PROVEN] [COORDINATOR] PROVEN · F040-retire-control-migrate
 
 **Decision ticket.** Do not activate without explicit human sign-off; if declined, move to `dropped/` with the reasoning in `outcome.md` and leave `limen migrate` as-is.
 

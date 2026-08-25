@@ -1,6 +1,6 @@
 # F038-hosted-pulse-from-activity · Hosted pulse follows activity, not an unfocused tab
 
-[2026-08-25] [🟠] [ACTIVE] [COORDINATOR] ACTIVE · F038-hosted-pulse-from-activity
+[2026-08-25] [🟢] [PROVEN] [COORDINATOR] PROVEN · F038-hosted-pulse-from-activity
 
 ## Outcome
 
