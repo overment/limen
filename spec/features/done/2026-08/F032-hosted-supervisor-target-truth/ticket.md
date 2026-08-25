@@ -1,6 +1,6 @@
 # F032-hosted-supervisor-target-truth · Finalize reflects the worker, not Herdr's degraded view
 
-[2026-08-20] [🟠] [ACTIVE] [COORDINATOR] ACTIVE · F032-hosted-supervisor-target-truth
+[2026-08-20] [🟢] [PROVEN] [COORDINATOR] PROVEN · F032-hosted-supervisor-target-truth
 
 ## Outcome
 

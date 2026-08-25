@@ -6,9 +6,8 @@
 
 ## NOW
 
-- `F043-seat-sweep` (🟠 ACTIVE): parked on branch `limen/2026-08-25-f043-seat-sweep-7b8ad802` at `996bba9` after three lock-race FAILs. Not merging until the lock is boring.
-- `F045-supervisor-stall-escalation` (🟠 ACTIVE): merged `e71dcef`; review PASS of `9139a20`. Live prove still open — stalled worker with coordinator closed.
-- `F032-hosted-supervisor-target-truth` (🟠 ACTIVE): implemented inline 2026-08-21 (`6ee8ff1`). Suite-covered; live prove still open — needs a moved-pane or degraded-Herdr scenario on a running hosted job.
+- `F045-supervisor-stall-escalation` (🟠 ACTIVE): merged `e71dcef`; review PASS of `9139a20`. Live prove in flight (`F045 stall prove`) — needs a tool call then 60s idle; zero-tool jobs do not stall.
+- `F043-seat-sweep` (🟠 ACTIVE): merged `3eff35a`. Concurrent registry tests pass; live launchd interval not yet installed.
 
 ## NEXT
 - `F039-split-proc` (🔴 PLANNED): one job per file in the `proc.ts` pile; unused exports gone; CONTRIBUTING matches the 2750 cap. After F032 prove and F045 (F038 is done).
@@ -18,6 +17,7 @@
 
 ## PROVEN
 
+- `F032-hosted-supervisor-target-truth` (🟢 PROVEN): supervisor follows a moved pane; live-proven `w1H:p18` → `w1M:pY`. Implemented `6ee8ff1`.
 - `F011-empty-job-advisory` (🟢 PROVEN): empty jobs say produced nothing; `done` unchanged. Landed `5120e89`.
 - `F044-hosted-start-retry` (🟢 PROVEN): one pane-shell retry then honest fail. Landed `fe510dd`; review PASS.
 - `F042-wake-delivery-integrity` (🟢 PROVEN): claim only after a real turn; batched wakes and live heartbeat. Merged `70eaebd`; re-review PASS of `7e43d23`.
