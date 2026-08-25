@@ -105,7 +105,7 @@ spec/features/                        planned, active, done, and dropped work
 
 Optional overlays replace a package default for that file only: `AGENTS.md`, `.agents/limen/worker.md`, `.agents/limen/reviewer.md`, `.agents/limen/communication.md`. A file that still matches the package is a leftover copy; the coordinator names it. Different bytes are an overlay — keep, drop, or edit. Never overwrite an overlay.
 
-The project-context extension attaches vision, board, and styleguide after each user message, and restacks the speech register (overlay or package) before every LLM call. Updating the clone updates every project on that machine.
+The project-context extension attaches vision, board, and styleguide after each user message, and appends the speech register (overlay or package) to the system prompt at the start of each user turn. Updating the clone updates every project on that machine.
 
 ## Recovery
 

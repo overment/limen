@@ -6,7 +6,6 @@
 
 ## NOW
 
-- `F041-dynamic-communication` (🟠 ACTIVE): rewrite the package speech register so replies choose compact format and contextual tone per turn while restoring the current state for a reader who did not follow the work.
 - `F032-hosted-supervisor-target-truth` (ACTIVE): implemented inline 2026-08-21 (`6ee8ff1`). Suite-covered; live prove still open — needs a moved-pane or degraded-Herdr scenario on a running hosted job.
 
 ## NEXT
@@ -18,6 +17,7 @@
 
 ## PROVEN
 
+- `F041-dynamic-communication` (🟢 PROVEN): package speech now chooses compact format and contextual tone per response; six model probes and fresh review PASS of `0fa6d06`.
 - `F037-continue-record-parity` (🟢 PROVEN): continue copies `repo`, finalizes launch fail, hosted in Herdr like spawn. Landed at `62aad12`; review PASS of `62aad12`.
 - `F040-retire-control-migrate` (🟢 PROVEN): `limen migrate` gone; init still refuses leftover Control paths. Landed at `b99f624`.
 - `F038-hosted-pulse-from-activity` (🟢 PROVEN): hosted `jobs`/footer pulse follows `activity`, not Herdr unseen-idle. Landed at `54e678c`.
@@ -45,7 +45,7 @@
 - `F010-pane-hosted-jobs` (PROVEN): `limen spawn --tab` runs interactive pi in the job tab; live-tried at `2026-08-15-f010-try-ce97a91f` (`7947b2f`, `755d762`).
 - `F012-herdr-job-spaces` (PROVEN): named Herdr tab per job; `limen open` reopens a closed one; `limen close FNNN` after the feature is proven. Coordinator-checked at `a65584e`.
 - `F009-running-job-supervision` (PROVEN): `limen steer` writes an inbox file; the worker delivers it once between tool calls. Independently reviewed at `57f6c96`.
-- `F008-guidance-register-split` (PROVEN): coding practice attached per user message; speech registers restacked before every LLM call with a named audience.
+- `F008-guidance-register-split` (PROVEN): coding practice attached per user message; speech registers appended to the system prompt at the start of each user turn with a named audience.
 - `F007-terminal-process-containment` (PROVEN): bounded macOS process-identity snapshots, PID-safe escaped-descendant cleanup, and durable warnings when termination cannot be confirmed.
 - `F005-active-job-visibility` (PROVEN): bounded live-job snapshots and passive cross-session visibility; independently reviewed and checked.
 - `F002-stage-model-defaults` (PROVEN): stage defaults with explicit per-job override.

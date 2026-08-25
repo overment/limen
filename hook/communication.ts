@@ -20,7 +20,7 @@ export default function limenCommunication(pi: PiApi): void {
 	pi.on("before_agent_start", (event, context) => {
 		const root = process.env.LIMEN_CONTEXT_ROOT ?? context.cwd;
 		// Wakes are extension prompts that already carry the job record. Re-attaching vision/build
-		// on every completion is noise; speech still restacks so the reply keeps its register.
+		// on every completion is noise; speech still appends so the reply keeps its register.
 		const message = isWakePrompt(event.prompt) ? undefined : readProjectContext(root);
 		const speech = readCommunication(root);
 		if (!message && !speech) return;
