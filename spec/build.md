@@ -6,14 +6,15 @@
 
 ## NOW
 
-- `F028-provider-error-is-failed` (🟠 ACTIVE): signed off 2026-08-26. Last-turn `error`/`aborted` records `failed`.
+- Quality sweep closed. Next product move is the remote seat.
 
 ## NEXT
-- `F013-remote-seat` (PLANNED): one disk, attach don’t clone; docs and seat-shaped guarantees. Before F014, after this quality sweep and F032's prove.
+- `F013-remote-seat` (PLANNED): one disk, attach don’t clone; docs and seat-shaped guarantees. Before F014.
 - `F014-github-doorbell` (PLANNED): mention or label starts a job on the seat; comment back evidence; merge stays human.
 
 ## PROVEN
 
+- `F028-provider-error-is-failed` (🟢 PROVEN): last-turn `error`/`aborted` records `failed`. Landed `967ab4b`. Signed off 2026-08-26.
 - `F046-optional-speech-command` (🟢 PROVEN): `/speak` reads the latest response without another agent turn; brief by default, full on request.
 - `F043-seat-sweep` (🟢 PROVEN): `limen sweep` + LaunchAgent every 60s. Installed `works.earendil.limen-sweep`. Merged `3eff35a`.
 - `F039-split-proc` (🟢 PROVEN): `proc.ts` split into contain/reap/wrapper/supervisor. Landed `755457f`.
