@@ -48,6 +48,25 @@ Herdr is the visible layout when it is running. Job files under `.limen/jobs/` a
 - `limen stop <id|label> [reason]` — stop a running job.
 - `limen prune` — drop finished worktrees that no live job still needs.
 
+**This conversation's tab.** When `HERDR_ENV=1`, the coordinator owns this tab title. A subject that will last more than one reply gets a rename — do not wait for the human to mention Herdr, and do not rename on every turn. Tab label: one short phrase (~24 characters), same taste as `--label`. Agent name: `[a-z][a-z0-9_-]{0,31}`, unique among live agents, `limen-` plus a slug — never `limen-fNNN-`, that is a worker. Skip the whole step outside Herdr.
+
+```bash
+herdr tab rename "$HERDR_TAB_ID" "herdr tab names"
+herdr agent rename "$HERDR_PANE_ID" limen-tab-names
+```
+
+**Herdr layout (native).** Job files remain truth; these only arrange what the human sees. Do not create or close a workspace, tab, or pane the human did not ask for. Do not dump `herdr --skill` unless the task is Herdr itself.
+
+| Need | Command |
+|---|---|
+| tab title | `herdr tab rename "$HERDR_TAB_ID" "short topic"` |
+| agent handle | `herdr agent rename "$HERDR_PANE_ID" limen-slug` |
+| what's here | `herdr workspace list` · `herdr tab list --workspace "$HERDR_WORKSPACE_ID"` |
+| this pane | `herdr pane current --current` |
+| focus a tab | `herdr tab focus <tab_id>` |
+
+IDs come from `HERDR_WORKSPACE_ID` / `HERDR_TAB_ID` / `HERDR_PANE_ID`. Prefer `--current` over the UI-focused pane. Leave the workspace name alone unless the human asked.
+
 ## Default loop
 
 Reconcile the board against the planned and active feature folders, then read the ticket and use judgment proportional to the stakes:
