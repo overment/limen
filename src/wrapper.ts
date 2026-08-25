@@ -155,13 +155,17 @@ export async function runInternalJob(): Promise<void> {
 	} else if (result.error) await finalizeJob(jobDir, "failed", result.error.message);
 	else if (result.code === 0) {
 		if (seen.assistant) await atomicWrite(`${jobDir}/result`, `${seen.assistant}\n`).catch(() => {});
-		await finalizeJob(jobDir, "done", "pi exited 0");
+		const failedReason = isFailedStopReason(seen.stop) ? seen.stop : "";
+		await finalizeJob(jobDir, failedReason ? "failed" : "done", failedReason || "pi exited 0");
 	} else await finalizeJob(jobDir, "failed", `worker exited with code ${result.code ?? "unknown"}`);
 }
 export async function failInternalJob(error: unknown): Promise<void> {
 	const jobDir = process.env.LIMEN_JOB_DIR;
 	if (!jobDir) return;
 	await finalizeJob(jobDir, "failed", error instanceof Error ? error.message : String(error));
+}
+export function isFailedStopReason(reason: string): boolean {
+	return reason === "error" || reason.startsWith("error: ") || reason === "aborted" || reason.startsWith("aborted: ");
 }
 export async function finalizeJob(jobDir: string, state: "done" | "failed" | "stopped", detail: string): Promise<void> {
 	if (["done", "failed", "stopped"].includes(await textFile(`${jobDir}/state`))) return;

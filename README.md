@@ -45,7 +45,7 @@ Tell the coordinator the outcome you want. It writes or moves the ticket, keeps 
 
 A useful ask names the outcome and the first artifact, not a tour of the repo. The coordinator turns that into a short spawn plus a `Ticket:` pointer. It does not paste the ticket into the prompt.
 
-`done` on a job means that Pi exited 0. It does not mean the ticket is finished or the branch is safe to merge. The coordinator inspects the record, the diff, and the checks, then either merges, resumes a repair, or asks you.
+`done` means the run ended cleanly: Pi exited 0, or a hosted session ended, without a final `error` or `aborted` stop reason. A provider-errored run records `failed` with that reason. Neither state means the ticket is finished or the branch is safe to merge. The coordinator inspects the record, the diff, and the checks, then either merges, resumes a repair, or asks you.
 
 When the blast radius earns a second pair of eyes, the coordinator starts a fresh reviewer against the candidate. The reviewer reports a verdict; it does not rewrite the branch. You still merge.
 

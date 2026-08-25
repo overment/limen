@@ -40,9 +40,10 @@ function interpret(event: unknown): StreamEvent | undefined {
 	if (event.type === "tool_execution_end") return { kind: "activity", name: "wait" };
 	if (event.type === "message_end") {
 		const message = "message" in event ? event.message : undefined;
+		if (!message || typeof message !== "object" || !("role" in message) || message.role !== "assistant") return { kind: "activity", name: "think" };
 		const text = assistantText(message),
 			stopReason = assistantStopReason(message);
-		return text || stopReason ? { kind: "assistant", text, ...(stopReason ? { stopReason } : {}) } : { kind: "activity", name: "think" };
+		return { kind: "assistant", text, ...(stopReason ? { stopReason } : {}) };
 	}
 	if (event.type === "agent_start" || event.type === "turn_start" || event.type === "message_start" || event.type === "message_update") return { kind: "activity", name: "think" };
 }

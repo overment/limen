@@ -12,7 +12,20 @@ function wipeScratch(scratch: Scratch): void {
 }
 
 const errorPi = `#!/usr/bin/env node
+const { execFileSync } = require("node:child_process");
+require("node:fs").writeFileSync("partial.txt", "useful work before the error\\n");
+execFileSync("git", ["add", "partial.txt"]);
+execFileSync("git", ["commit", "-m", "partial before provider error"]);
 console.log(JSON.stringify({ type: "message_end", message: { role: "assistant", content: [], stopReason: "error", errorMessage: "usage limit reached" } }));
+`;
+
+const abortedPi = `#!/usr/bin/env node
+console.log(JSON.stringify({ type: "message_end", message: { role: "assistant", content: [], stopReason: "aborted" } }));
+`;
+
+const recoveredPi = `#!/usr/bin/env node
+console.log(JSON.stringify({ type: "message_end", message: { role: "assistant", content: [], stopReason: "error", errorMessage: "temporary" } }));
+console.log(JSON.stringify({ type: "message_end", message: { role: "assistant", content: [], stopReason: "stop" } }));
 `;
 
 const lateSteerPi = `#!/usr/bin/env node
@@ -82,19 +95,42 @@ if (process.argv[2] === "tab" && process.argv[3] === "rename") Atomics.wait(new 
 	assert.equal((log.match(/\] (?:done|failed|stopped):/g) ?? []).length, 1);
 });
 
-test("a provider-error stream stays done and writes stop-reason", async (context) => {
+test("a provider-error stream fails with its stop reason and preserves prior commits", async (context) => {
 	const scratch = await scratchRepo(errorPi);
 	context.after(scratch.cleanup);
 	limen(scratch, "init");
 	const id = onlyJobId(limen(scratch, "spawn", "hit the limit").stdout);
-	await waitForState(scratch.root, id, "done");
+	await waitForState(scratch.root, id, "failed");
 	const job = join(scratch.root, ".limen/jobs", id);
 	assert.equal(await readFile(join(job, "stop-reason"), "utf8"), "error: usage limit reached\n");
-	assert.equal((await readFile(join(job, "state"), "utf8")).trim(), "done");
-	assert.match(await readFile(join(job, "log"), "utf8"), /assistant error: usage limit reached/);
+	assert.equal((await readFile(join(job, "state"), "utf8")).trim(), "failed");
+	assert.match(await readFile(join(job, "log"), "utf8"), /failed: error: usage limit reached/);
+	assert.match(await readFile(join(job, "commits"), "utf8"), /partial before provider error/);
 	const detail = limen(scratch, "jobs", id);
 	assert.equal(detail.status, 0, detail.stderr);
+	assert.match(detail.stdout, /FAILED .*hit the limit/);
 	assert.match(detail.stdout, /stop-reason:\n    error: usage limit reached/);
+	assert.match(detail.stdout, /commits:\n.*partial before provider error/s);
+});
+
+test("an aborted stream fails with its stop reason", async (context) => {
+	const scratch = await scratchRepo(abortedPi);
+	context.after(scratch.cleanup);
+	limen(scratch, "init");
+	const id = onlyJobId(limen(scratch, "spawn", "abort now").stdout);
+	await waitForState(scratch.root, id, "failed");
+	const job = join(scratch.root, ".limen/jobs", id);
+	assert.equal(await readFile(join(job, "stop-reason"), "utf8"), "aborted\n");
+	assert.match(await readFile(join(job, "log"), "utf8"), /failed: aborted/);
+});
+
+test("a recovered provider error follows the clean final turn", async (context) => {
+	const scratch = await scratchRepo(recoveredPi);
+	context.after(scratch.cleanup);
+	limen(scratch, "init");
+	const id = onlyJobId(limen(scratch, "spawn", "recover").stdout);
+	await waitForState(scratch.root, id, "done");
+	await assert.rejects(readFile(join(scratch.root, ".limen/jobs", id, "stop-reason")));
 });
 
 test("a clean run writes no stop-reason", async (context) => {

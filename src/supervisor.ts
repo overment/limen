@@ -1,7 +1,7 @@
 import { readdir, readFile, rm } from "node:fs/promises";
 import { type HostedAgentStatus, hostedAgentStatus, hostedTerminalReason, locateHostedAgent, reportHostedStall, restoreHostedPane } from "./herdr.ts";
 import { assistantStopReason, assistantText } from "./stream.ts";
-import { appendLimenLog, atomicWrite, finalizeJob, recordCommits, textFile, writeHandshake } from "./wrapper.ts";
+import { appendLimenLog, atomicWrite, finalizeJob, isFailedStopReason, recordCommits, textFile, writeHandshake } from "./wrapper.ts";
 
 const HOSTED_UNKNOWN_SAMPLES = 5;
 export const DEFAULT_HOSTED_IDLE_MS = 60_000;
@@ -65,7 +65,9 @@ export async function runHostedSupervisor(): Promise<void> {
 		if (reason) {
 			const requested = await textFile(`${jobDir}/stop-requested`);
 			if (!requested) await writeHostedResult(jobDir);
-			await finalizeJob(jobDir, requested ? "stopped" : "done", requested || reason);
+			const stopReason = requested ? "" : await textFile(`${jobDir}/stop-reason`);
+			const failedReason = isFailedStopReason(stopReason) ? stopReason : "";
+			await finalizeJob(jobDir, requested ? "stopped" : failedReason ? "failed" : "done", requested || failedReason || reason);
 			return;
 		}
 		await noteHostedIdle(jobDir, status, idle);
@@ -144,10 +146,11 @@ export async function writeHostedResult(jobDir: string): Promise<void> {
 				const entry: unknown = JSON.parse(line);
 				if (typeof entry !== "object" || entry === null || (entry as Record<string, unknown>).type !== "message") continue;
 				const message = (entry as Record<string, unknown>).message;
+				if (typeof message !== "object" || message === null || !("role" in message) || message.role !== "assistant") continue;
 				const text = assistantText(message);
 				const reason = assistantStopReason(message);
 				if (text) last = text;
-				if (text || reason) stop = reason;
+				stop = reason;
 			} catch {}
 		}
 		if (last) await atomicWrite(`${jobDir}/result`, `${last}\n`);
