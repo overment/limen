@@ -218,6 +218,7 @@ export async function startHosted(input: {
 			LIMEN_JOB_ID: input.id,
 			LIMEN_LABEL: input.label,
 			LIMEN_CONTEXT_ROOT: input.root,
+			LIMEN_ROLE: input.review ? "reviewer" : "worker",
 		});
 		// Known at launch — never run the detached handshake killer against a live hosted agent.
 		await atomicWrite(`${input.jobDir}/pid`, `${supervisorPid}\n`);
@@ -234,6 +235,7 @@ export async function startHosted(input: {
 				LIMEN_JOB_ID: input.id,
 				LIMEN_LABEL: input.label,
 				LIMEN_CONTEXT_ROOT: input.root,
+				LIMEN_ROLE: input.review ? "reviewer" : "worker",
 			});
 			await atomicWrite(`${input.jobDir}/pid`, `${supervisorPid}\n`);
 			await atomicWrite(`${input.jobDir}/state`, "running\n");
