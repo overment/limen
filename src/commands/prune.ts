@@ -1,7 +1,7 @@
 import { readdir, readFile, realpath, rm } from "node:fs/promises";
 import { basename, dirname, resolve } from "node:path";
 import { limenRoot, listWorktrees, pruneWorktrees, removeWorktree, workspaceRepository } from "../git.ts";
-import { liveJob } from "../proc.ts";
+import { liveJob } from "../reap.ts";
 
 export async function pruneCommand(args: readonly string[], cwd: string): Promise<void> {
 	if (args.length) throw new Error("prune takes no arguments");

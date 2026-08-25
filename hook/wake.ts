@@ -1,8 +1,9 @@
 import { execFile } from "node:child_process";
 import { appendFileSync, existsSync, type FSWatcher, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, watch, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
+import { processGroupAlive } from "../src/contain.ts";
 import { derivePulse, type Pulse, producedNothing } from "../src/job.ts";
-import { processGroupAlive, reapDeadJobs } from "../src/proc.ts";
+import { reapDeadJobs } from "../src/reap.ts";
 import { registerProject } from "./seat.ts";
 
 type Context = {

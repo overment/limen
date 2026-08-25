@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import test from "node:test";
-import { liveJob } from "../src/proc.ts";
+import { liveJob } from "../src/reap.ts";
 import { git, limen, onlyJobId, scratchRepo, waitForState, writeFakePi } from "./scratch.ts";
 
 const completingPi = `#!/usr/bin/env node

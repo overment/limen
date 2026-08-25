@@ -1,7 +1,8 @@
 import { readFile, writeFile } from "node:fs/promises";
+import { containEscapedDescendants, discoverEscapedDescendants, processGroupAlive, signalProcessGroup, waitForProcessGroup } from "../contain.ts";
 import { hostedAgentStatus, stopHostedAgent } from "../herdr.ts";
 import { resolveJob } from "../lookup.ts";
-import { appendLimenLog, containEscapedDescendants, discoverEscapedDescendants, finalizeJob, processGroupAlive, signalProcessGroup, waitForProcessGroup } from "../proc.ts";
+import { appendLimenLog, finalizeJob } from "../wrapper.ts";
 export async function stopCommand(args: readonly string[], cwd: string): Promise<void> {
 	const query = args[0];
 	if (!query) throw new Error("stop requires a job id");

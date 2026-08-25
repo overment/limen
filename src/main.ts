@@ -10,7 +10,8 @@ import { stopCommand } from "./commands/stop.ts";
 import { sweepCommand } from "./commands/sweep.ts";
 import { waitCommand } from "./commands/wait.ts";
 import { unwatchCommand, watchCommand } from "./commands/watch.ts";
-import { failInternalJob, runHostedSupervisor, runInternalJob } from "./proc.ts";
+import { runHostedSupervisor } from "./supervisor.ts";
+import { failInternalJob, runInternalJob } from "./wrapper.ts";
 
 type Command = (args: readonly string[], cwd: string) => Promise<void>;
 const COMMANDS = {
@@ -53,11 +54,6 @@ usage:
   limen close <FNNN>
   limen sweep [--install|--uninstall]
 Pass a short coordinator instruction, not $(cat ticket.md). The ticket is a pointer, not the prompt.`;
-export function requireNodeMajor(version = process.versions.node): string | undefined {
-	const major = Number.parseInt(version, 10);
-	if (Number.isFinite(major) && major >= 24) return;
-	return `limen requires Node.js 24 (this is ${version})`;
-}
 export async function main(args: readonly string[], cwd = process.cwd()): Promise<void> {
 	try {
 		if (process.env.LIMEN_INTERNAL_RUN === "1") {

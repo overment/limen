@@ -4,6 +4,7 @@ import { existsSync } from "node:fs";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { basename, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { signalProcessGroup, waitForProcessGroup } from "../contain.ts";
 import {
 	addBranchWorktree,
 	addDetachedWorktree,
@@ -18,7 +19,8 @@ import {
 } from "../git.ts";
 import { herdrAvailable, hostedAgentAlive, openHostedTab, openWatchTab, startHostedPi } from "../herdr.ts";
 import { parseDuration } from "../job.ts";
-import { appendLimenLog, atomicWrite, finalizeJob, launchHostedSupervisor, launchWrapper, liveJob, signalProcessGroup, waitForProcessGroup } from "../proc.ts";
+import { liveJob } from "../reap.ts";
+import { appendLimenLog, atomicWrite, finalizeJob, launchHostedSupervisor, launchWrapper } from "../wrapper.ts";
 import { pruneFinishedWorktrees } from "./prune.ts";
 
 type SpawnOptions = {

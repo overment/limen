@@ -1,7 +1,7 @@
 import * as fs from "node:fs";
 import { isAbsolute, join } from "node:path";
 import { installSeatSweep, showSeatNotification, uninstallSeatSweep, updateRegisteredProjects } from "../../hook/seat.ts";
-import { confirmDeadJobs } from "../proc.ts";
+import { confirmDeadJobs } from "../reap.ts";
 
 const text = (path: string) => (fs.existsSync(path) ? fs.readFileSync(path, "utf8").trim() : "");
 const modified = (path: string) => (fs.existsSync(path) ? fs.statSync(path).mtimeMs : 0);

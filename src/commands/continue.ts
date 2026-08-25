@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { headCommit, repoRoot, workspaceRoot } from "../git.ts";
 import { herdrAvailable, openWatchTab } from "../herdr.ts";
 import { resolveJob } from "../lookup.ts";
-import { atomicWrite, finalizeJob, launchWrapper } from "../proc.ts";
+import { atomicWrite, finalizeJob, launchWrapper } from "../wrapper.ts";
 import { capturedVersions, currentNotificationSession, HOSTED_NOTE, makeJobId, normalizeLabel, preflightPi, startHosted, waitForHandshake } from "./spawn.ts";
 
 const PACKAGE_ROOT = fileURLToPath(new URL("../..", import.meta.url));

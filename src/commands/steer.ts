@@ -1,6 +1,6 @@
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { processGroupAlive } from "../contain.ts";
 import { resolveJob } from "../lookup.ts";
-import { processGroupAlive } from "../proc.ts";
 
 const READY_WAIT_MS = 2_000;
 

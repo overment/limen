@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { access, chmod, readdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import test from "node:test";
-import { requireNodeMajor } from "../src/main.ts";
 import { defaultFakePi, git, limen, limenWithEnv, limenWithSession, onlyJobId, scratchRepo, waitForState } from "./scratch.ts";
 
 test("spawn creates isolated branch, canonical record, runs pi, and resumes its worktree", async (context) => {
@@ -281,13 +280,6 @@ test("spawn prints failed when the wrapper dies before writing pid", async (cont
 	assert.doesNotMatch(launched.stdout, /started/);
 	const id = onlyJobId(launched.stdout);
 	assert.equal((await readFile(join(scratch.root, ".limen/jobs", id, "state"), "utf8")).trim(), "failed");
-});
-
-test("requireNodeMajor names the supported major", () => {
-	assert.equal(requireNodeMajor("24.1.0"), undefined);
-	assert.equal(requireNodeMajor("25.0.0"), undefined);
-	assert.equal(requireNodeMajor("22.14.0"), "limen requires Node.js 24 (this is 22.14.0)");
-	assert.equal(requireNodeMajor("not-a-version"), "limen requires Node.js 24 (this is not-a-version)");
 });
 
 test("spawn without pi on PATH fails before worktree add", async (context) => {

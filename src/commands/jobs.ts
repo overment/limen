@@ -1,9 +1,10 @@
 import { open, readdir, readFile, stat } from "node:fs/promises";
+import { processGroupAlive } from "../contain.ts";
 import { limenRoot, liveDiffstat, workspaceRepository } from "../git.ts";
 import { hostedAgentStatus } from "../herdr.ts";
 import { derivePulse, parseJob, producedNothing, renderJob } from "../job.ts";
 import { resolveJob } from "../lookup.ts";
-import { confirmDeadJobs, processGroupAlive } from "../proc.ts";
+import { confirmDeadJobs } from "../reap.ts";
 
 export async function jobsCommand(args: readonly string[], cwd: string): Promise<void> {
 	const selection = select(args);

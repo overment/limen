@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import test from "node:test";
-import { finalizeJob } from "../src/proc.ts";
+import { finalizeJob } from "../src/wrapper.ts";
 import { limen, limenWithEnv, onlyJobId, type Scratch, scratchRepo, waitForState } from "./scratch.ts";
 
 function wipeScratch(scratch: Scratch): void {
