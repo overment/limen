@@ -391,7 +391,7 @@ async function liveJobUsesBranch(jobsRoot: string, branch: string, repo?: string
 	return false;
 }
 async function lastLimenDetail(jobDir: string): Promise<string> {
-	const line = (await text(`${jobDir}/log`)).split("\n").findLast((entry) => entry.startsWith("[limen ") || entry.startsWith("[control "));
+	const line = (await text(`${jobDir}/log`)).split("\n").findLast((entry) => entry.startsWith("[limen "));
 	if (!line) return "";
 	const close = line.indexOf("] ");
 	return close === -1 ? line : line.slice(close + 2);

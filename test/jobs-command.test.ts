@@ -39,7 +39,7 @@ test("a running record without pid is starting, not invalid", async (context) =>
 	assert.doesNotMatch(result.stdout, /INVALID/);
 });
 
-test("jobs tails a rambling log and recognizes historical Control terminal lines", async (context) => {
+test("jobs tails a rambling log and keeps the last limen detail line", async (context) => {
 	const scratch = await scratchRepo();
 	context.after(scratch.cleanup);
 	limen(scratch, "init");
@@ -50,7 +50,7 @@ test("jobs tails a rambling log and recognizes historical Control terminal lines
 	await writeFile(join(job, "label"), "ramble\n");
 	await writeFile(join(job, "branch"), "main\n");
 	const noise = Array.from({ length: 400 }, (_, i) => `noise-${i}-${"x".repeat(40)}`).join("\n");
-	await writeFile(join(job, "log"), `${noise}\n[limen 2026-08-13T00:00:00.000Z] start\n[control 2026-08-13T00:00:01.000Z] failed: rambling\nlast line\n`);
+	await writeFile(join(job, "log"), `${noise}\n[limen 2026-08-13T00:00:00.000Z] start\n[limen 2026-08-13T00:00:01.000Z] failed: rambling\nlast line\n`);
 	const result = limen(scratch, "jobs", "ramble");
 	assert.equal(result.status, 0, result.stderr);
 	assert.match(result.stdout, /FAILED ramble/);

@@ -24,7 +24,7 @@ export async function initCommand(args: readonly string[], cwd: string): Promise
 	if (!isGitRepository(cwd)) throw new Error("init requires a Git repository; run 'git init' first, or use 'limen workspace init' for a non-Git workspace");
 	const root = repoRoot(cwd);
 	for (const legacy of [".control", ".agents/control", ".pi/extensions/control-wake.ts", ".pi/extensions/control-communication.ts"]) {
-		if (await pathExists(`${root}/${legacy}`)) throw new Error(`legacy ${legacy} exists; run limen migrate instead`);
+		if (await pathExists(`${root}/${legacy}`)) throw new Error(`legacy ${legacy} exists; leftover Control path — rename or remove it by hand`);
 	}
 	await initialize(root, true);
 }

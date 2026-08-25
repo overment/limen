@@ -22,7 +22,6 @@ test("architecture stays small, pure, direct, and dependency-free", async () => 
 		"continue.ts",
 		"init.ts",
 		"jobs.ts",
-		"migrate.ts",
 		"open.ts",
 		"prune.ts",
 		"spawn.ts",
@@ -41,7 +40,7 @@ test("architecture stays small, pure, direct, and dependency-free", async () => 
 	const main = await readFile(join(ROOT, "src/main.ts"), "utf8");
 	assert.match(
 		main,
-		/satisfies\s+Record<\s*"init" \| "workspace" \| "migrate" \| "spawn" \| "continue" \| "steer" \| "stop" \| "wait" \| "jobs" \| "prune" \| "watch" \| "unwatch" \| "open" \| "close"\s*,?\s*Command\s*>/,
+		/satisfies\s+Record<\s*"init" \| "workspace" \| "spawn" \| "continue" \| "steer" \| "stop" \| "wait" \| "jobs" \| "prune" \| "watch" \| "unwatch" \| "open" \| "close"\s*,?\s*Command\s*>/,
 	);
 });
 

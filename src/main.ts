@@ -2,7 +2,6 @@ import { closeCommand } from "./commands/close.ts";
 import { continueCommand } from "./commands/continue.ts";
 import { initCommand, workspaceCommand } from "./commands/init.ts";
 import { jobsCommand } from "./commands/jobs.ts";
-import { migrateCommand } from "./commands/migrate.ts";
 import { openCommand } from "./commands/open.ts";
 import { pruneCommand } from "./commands/prune.ts";
 import { spawnCommand } from "./commands/spawn.ts";
@@ -16,7 +15,6 @@ type Command = (args: readonly string[], cwd: string) => Promise<void>;
 const COMMANDS = {
 	init: initCommand,
 	workspace: workspaceCommand,
-	migrate: migrateCommand,
 	spawn: spawnCommand,
 	continue: continueCommand,
 	steer: steerCommand,
@@ -28,16 +26,12 @@ const COMMANDS = {
 	unwatch: unwatchCommand,
 	open: openCommand,
 	close: closeCommand,
-} as const satisfies Record<
-	"init" | "workspace" | "migrate" | "spawn" | "continue" | "steer" | "stop" | "wait" | "jobs" | "prune" | "watch" | "unwatch" | "open" | "close",
-	Command
->;
+} as const satisfies Record<"init" | "workspace" | "spawn" | "continue" | "steer" | "stop" | "wait" | "jobs" | "prune" | "watch" | "unwatch" | "open" | "close", Command>;
 const HELP = `limen — isolated coding jobs with files and git
 usage:
   limen init
   limen init --drop-leftovers
   limen workspace init
-  limen migrate
   limen spawn "Implement FNNN: <outcome>. Start by writing <slice>. Ticket: spec/features/active/FNNN-slug/ticket.md" [--label L] [--model X] [--branch B] [--timeout 20m; default 90m]
   limen spawn "…" [--label L] [--model X]          # in Herdr: hosted interactive tab; else detached
   limen spawn --tab "…"                            # force hosted (requires Herdr; no --timeout)

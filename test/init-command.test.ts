@@ -6,6 +6,26 @@ import { limen, scratchRepo, scratchWorkspace } from "./scratch.ts";
 
 const ROOT = new URL("..", import.meta.url).pathname;
 
+test("migrate is an unknown command", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	const result = limen(scratch, "migrate");
+	assert.equal(result.status, 1);
+	assert.match(result.stderr, /unknown command/);
+});
+
+test("init refuses leftover Control paths before creating Limen files", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	await mkdir(join(scratch.root, ".agents/control"), { recursive: true });
+	const result = limen(scratch, "init");
+	assert.equal(result.status, 1);
+	assert.match(result.stderr, /leftover Control path/);
+	assert.doesNotMatch(result.stderr, /migrate/);
+	await assert.rejects(access(join(scratch.root, ".limen")));
+	await assert.rejects(access(join(scratch.root, ".pi")));
+});
+
 test("init refuses a non-Git directory with guidance", async (context) => {
 	const workspace = await scratchWorkspace();
 	context.after(workspace.cleanup);

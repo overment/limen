@@ -124,7 +124,6 @@ The coordinator does this. You only need it if you are looking at a stuck tab yo
 limen init
 limen init --drop-leftovers
 limen workspace init
-limen migrate
 limen spawn "instruction" [--label L] [--model M] [--branch B] [--timeout 20m]
 limen spawn --repo R "instruction" [--label L] [--model M]
 limen spawn --review --branch B --label L "instruction"

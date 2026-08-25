@@ -143,7 +143,7 @@ async function readLog(path: string): Promise<{ tail: string; detail: string }> 
 			const overflow = bytes.byteLength > 4_096;
 			const slice = overflow ? bytes.subarray(bytes.byteLength - 4_096) : bytes;
 			const tail = overflow ? slice.toString("utf8").replace(/^[^\n]*\n?/, "…\n") : slice.toString();
-			return { tail, detail: lines.findLast((line) => line.startsWith("[limen ") || line.startsWith("[control ")) ?? "" };
+			return { tail, detail: lines.findLast((line) => line.startsWith("[limen ")) ?? "" };
 		} finally {
 			await handle.close();
 		}

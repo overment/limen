@@ -23,4 +23,4 @@ Only impossible mechanics should error. Everything else informs. Migration is th
 
 ## Formatter
 
-Biome formats. The linter preset stays `none` except `nursery.noFloatingPromises`. Do not enable a style pack to clean up the tree. `limen init` never overwrites existing project files and refuses legacy artifacts; use `limen migrate` for Control projects. Change `templates/` and `hook/` in this package; projects inherit them unless they overlay a file.
+Biome formats. The linter preset stays `none` except `nursery.noFloatingPromises`. Do not enable a style pack to clean up the tree. `limen init` never overwrites existing project files and refuses leftover Control paths (rename or remove them by hand). Change `templates/` and `hook/` in this package; projects inherit them unless they overlay a file.
