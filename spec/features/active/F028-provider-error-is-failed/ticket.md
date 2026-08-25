@@ -1,6 +1,6 @@
 # F028-provider-error-is-failed · A run whose last turn errored records failed, as pi itself would
 
-[2026-08-19] [🔴] [PLANNED] [COORDINATOR] PLANNED · F028-provider-error-is-failed
+[2026-08-19] [🟠] [ACTIVE] [COORDINATOR] ACTIVE · F028-provider-error-is-failed
 
 **Decision ticket.** This reverses one line of F011's out-of-scope ("Changing what `done`, `failed`, and `stopped` mean"). Do not activate without explicit human sign-off; if declined, move to `dropped/` with the reasoning in `outcome.md`.
 

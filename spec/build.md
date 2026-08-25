@@ -6,15 +6,15 @@
 
 ## NOW
 
-- `F043-seat-sweep` (🟠 ACTIVE): merged `3eff35a`. Concurrent registry tests pass; live launchd interval not yet installed.
+- `F028-provider-error-is-failed` (🟠 ACTIVE): signed off 2026-08-26. Last-turn `error`/`aborted` records `failed`.
 
 ## NEXT
-- `F028-provider-error-is-failed` (PLANNED): a run whose last turn errored records `failed: <reason>`, matching pi's own text-mode exit semantics. Decision ticket — reverses one F011 exclusion; needs explicit sign-off. After F024.
 - `F013-remote-seat` (PLANNED): one disk, attach don’t clone; docs and seat-shaped guarantees. Before F014, after this quality sweep and F032's prove.
 - `F014-github-doorbell` (PLANNED): mention or label starts a job on the seat; comment back evidence; merge stays human.
 
 ## PROVEN
 
+- `F043-seat-sweep` (🟢 PROVEN): `limen sweep` + LaunchAgent every 60s. Installed `works.earendil.limen-sweep`. Merged `3eff35a`.
 - `F039-split-proc` (🟢 PROVEN): `proc.ts` split into contain/reap/wrapper/supervisor. Landed `755457f`.
 - `F045-supervisor-stall-escalation` (🟢 PROVEN): supervisor rings and stamps a stalled tab. Live: `⚠ stalled 1m` on `w1H:p17`. Merged `e71dcef`.
 - `F032-hosted-supervisor-target-truth` (🟢 PROVEN): supervisor follows a moved pane; live-proven `w1H:p18` → `w1M:pY`. Implemented `6ee8ff1`.
