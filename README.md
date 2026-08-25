@@ -107,6 +107,8 @@ Optional overlays replace a package default for that file only: `AGENTS.md`, `.a
 
 The project-context extension attaches vision, board, and styleguide after each user message, and appends the speech register (overlay or package) to the system prompt at the start of each user turn. Updating the clone updates every project on that machine.
 
+If the optional `speak` CLI is executable on `PATH`, Pi also gets a `/speak` command. It reads the latest assistant response as a compressed spoken brief without starting another model turn; `/speak full` skips compression. The command is absent when the CLI is unavailable, and Limen never starts audio on its own.
+
 ## Recovery
 
 The coordinator does this. You only need it if you are looking at a stuck tab yourself.

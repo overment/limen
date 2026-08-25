@@ -1,6 +1,7 @@
 import { readdirSync } from "node:fs";
 import { join } from "node:path";
 import { formatDrift, inheritFile, listDrift, readOptional } from "./inherit.ts";
+import { registerSpeak, type SpeakPiApi } from "./speak.ts";
 
 const CONTEXT_TYPE = "limen-project-context";
 const MAX_CONTEXT_LINES = 1000;
@@ -11,12 +12,13 @@ type Context = { readonly cwd: string };
 type Message = { readonly customType: string; readonly content: string; readonly display: boolean };
 type StartEvent = { readonly prompt?: string; readonly systemPrompt?: string };
 type StartResult = { readonly message?: Message; readonly systemPrompt?: string };
-type PiApi = {
+type PiApi = SpeakPiApi & {
 	on(event: "before_agent_start", handler: (event: StartEvent, context: Context) => StartResult | undefined): void;
 };
 
 /** Attach project context after each user message. Append speech to the system prompt so it never appears in the thread. */
 export default function limenCommunication(pi: PiApi): void {
+	registerSpeak(pi);
 	pi.on("before_agent_start", (event, context) => {
 		const root = process.env.LIMEN_CONTEXT_ROOT ?? context.cwd;
 		// Wakes are extension prompts that already carry the job record. Re-attaching vision/build

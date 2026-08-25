@@ -14,6 +14,7 @@
 
 ## PROVEN
 
+- `F046-optional-speech-command` (🟢 PROVEN): `/speak` reads the latest response without another agent turn; brief by default, full on request.
 - `F043-seat-sweep` (🟢 PROVEN): `limen sweep` + LaunchAgent every 60s. Installed `works.earendil.limen-sweep`. Merged `3eff35a`.
 - `F039-split-proc` (🟢 PROVEN): `proc.ts` split into contain/reap/wrapper/supervisor. Landed `755457f`.
 - `F045-supervisor-stall-escalation` (🟢 PROVEN): supervisor rings and stamps a stalled tab. Live: `⚠ stalled 1m` on `w1H:p17`. Merged `e71dcef`.
