@@ -6,7 +6,7 @@
 
 ## NOW
 
-- Quality sweep closed. Next product move is the remote seat.
+- `F047-reload-keeps-wakes` (🟠 ACTIVE): a reloaded coordinator tab still gets wakes for jobs it started. Observed in mega-live.
 
 ## NEXT
 - `F013-remote-seat` (PLANNED): one disk, attach don’t clone; docs and seat-shaped guarantees. Before F014.

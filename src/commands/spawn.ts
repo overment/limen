@@ -64,6 +64,7 @@ export async function spawnCommand(args: readonly string[], cwd: string): Promis
 	const model = options.model ?? (process.env[options.review ? "LIMEN_REVIEWER_MODEL" : "LIMEN_WORKER_MODEL"]?.trim() || undefined);
 	preflightPi(model);
 	const notificationSession = currentNotificationSession();
+	const coordinatorTab = process.env.HERDR_TAB_ID?.trim();
 	const workspace = workspaceRoot(cwd);
 	const root = workspace ?? repoRoot(cwd);
 	if (workspace && !options.repo) throw new Error("workspace spawn requires --repo <immediate-child>");
@@ -116,6 +117,7 @@ export async function spawnCommand(args: readonly string[], cwd: string): Promis
 					writeFile(`${jobDir}/notify/subscribers/${notificationSession}`, `${new Date().toISOString()}\n`, { flag: "wx", flush: true }),
 				]
 			: []),
+		...(coordinatorTab ? [writeFile(`${jobDir}/origin-tab`, `${coordinatorTab}\n`, { flag: "wx", flush: true })] : []),
 	]);
 	await writeFile(`${jobDir}/notify/ready`, "1\n", { flag: "wx", flush: true });
 	const versions = capturedVersions().then((text) => writeFile(`${jobDir}/versions`, text, { flag: "wx", flush: true }));

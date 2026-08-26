@@ -414,10 +414,13 @@ export default function limenWake(pi: PiApi): void {
 		firstDead.clear();
 		sweeping = false;
 		herdr = herdrTarget();
+		const tab = process.env.HERDR_TAB_ID?.trim();
 		for (const jobId of readdirSync(jobs)) {
 			const job = join(jobs, jobId);
-			if (stateOf(jobs, jobId) === "running" && !routable(job)) enrollLegacyRunning(job);
-			if (subscribed(job, id) && stateOf(jobs, jobId) === "running") claimMarker(job, "started", id);
+			if (stateOf(jobs, jobId) !== "running") continue;
+			if (!routable(job)) enrollLegacyRunning(job);
+			if (tab && text(join(job, "origin-tab")) === tab) subscribeSession(job, id);
+			if (subscribed(job, id)) claimMarker(job, "started", id);
 		}
 		watcher = watch(jobs, { recursive: true }, (_event, filename) => {
 			if (notifyBookkeeping(filename)) return;
@@ -718,6 +721,14 @@ function enrollLegacyRunning(job: string): void {
 		writeFileSync(join(job, "notify", "ready"), "1\n", { flag: "wx" });
 	} catch {
 		// Another coordinator enrolled it first.
+	}
+}
+function subscribeSession(job: string, session: string): void {
+	mkdirSync(join(job, "notify", "subscribers"), { recursive: true });
+	try {
+		writeFileSync(join(job, "notify", "subscribers", session), `${new Date().toISOString()}\n`, { flag: "wx" });
+	} catch {
+		// Already subscribed.
 	}
 }
 function oldEnoughForFallback(job: string, stamp = join(job, "finished-at")): boolean {

@@ -61,6 +61,7 @@ export async function continueCommand(args: readonly string[], cwd: string): Pro
 	await mkdir(jobDir, { recursive: false });
 	await mkdir(`${jobDir}/notify/subscribers`, { recursive: true });
 	const notificationSession = currentNotificationSession();
+	const coordinatorTab = process.env.HERDR_TAB_ID?.trim();
 	await Promise.all([
 		writeFile(`${jobDir}/task.md`, `${instruction}\n`, { flag: "wx", flush: true }),
 		writeFile(`${jobDir}/label`, `${finalLabel}\n`, { flag: "wx", flush: true }),
@@ -81,6 +82,7 @@ export async function continueCommand(args: readonly string[], cwd: string): Pro
 					writeFile(`${jobDir}/notify/subscribers/${notificationSession}`, `${new Date().toISOString()}\n`, { flag: "wx", flush: true }),
 				]
 			: []),
+		...(coordinatorTab ? [writeFile(`${jobDir}/origin-tab`, `${coordinatorTab}\n`, { flag: "wx", flush: true })] : []),
 	]);
 	await writeFile(`${jobDir}/notify/ready`, "1\n", { flag: "wx", flush: true });
 	const versions = capturedVersions().then((text) => writeFile(`${jobDir}/versions`, text, { flag: "wx", flush: true }));

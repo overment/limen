@@ -224,6 +224,50 @@ test("wake shows existing unwatched jobs without claiming their notifications", 
 	await assert.rejects(import("node:fs/promises").then(({ access }) => access(join(job, "notify/subscribers/coordinator-b"))));
 });
 
+test("a reloaded coordinator tab resubscribes to its running jobs", async (context) => {
+	stashEnv(context, "LIMEN_JOB", undefined);
+	stashEnv(context, "LIMEN_HERDR", "0");
+	stashEnv(context, "HERDR_TAB_ID", "w1:t1");
+	const root = await import("node:fs/promises").then(({ mkdtemp }) => mkdtemp(join(process.env.TMPDIR ?? "/tmp", "limen-wake-reload-")));
+	context.after(() => import("node:fs/promises").then(({ rm }) => rm(root, { recursive: true, force: true })));
+	await mkdir(join(root, ".agents/limen"), { recursive: true });
+	const jobs = join(root, ".limen/jobs");
+	const mine = join(jobs, "mine");
+	const other = join(jobs, "other");
+	for (const job of [mine, other]) {
+		await mkdir(join(job, "notify/subscribers"), { recursive: true });
+		await writeFile(join(job, "state"), "running\n");
+		await writeFile(join(job, "label"), `${job === mine ? "mine" : "other"}\n`);
+		await writeFile(join(job, "branch"), "limen/x\n");
+		await writeFile(join(job, "notify/ready"), "1\n");
+		await writeFile(join(job, "notify/subscribers/old-session"), "1\n");
+	}
+	await writeFile(join(mine, "origin-tab"), "w1:t1\n");
+	await writeFile(join(other, "origin-tab"), "w1:t9\n");
+	const handlers = new Map<string, (event: unknown, context: TestContext) => void>();
+	const messages: string[] = [];
+	limenWake({
+		on(event, handler) {
+			handlers.set(event, handler);
+		},
+		sendUserMessage(content) {
+			messages.push(content);
+		},
+	});
+	const session = {
+		cwd: root,
+		isIdle: () => true,
+		sessionManager: sessionManager("new-session"),
+		ui: { notify() {}, setStatus() {} },
+	};
+	handlers.get("session_start")?.({}, session);
+	context.after(() => handlers.get("session_shutdown")?.({}, session));
+	assert.equal(await readFile(join(mine, "notify/subscribers/new-session"), "utf8").then((text) => text.length > 0), true);
+	await assert.rejects(import("node:fs/promises").then(({ access }) => access(join(other, "notify/subscribers/new-session"))));
+	await writeFile(join(mine, "state"), "done\n");
+	await waitUntil(() => messages.some((message) => message.includes("is done (mine)")));
+});
+
 test("wake recreates the ignored jobs directory on session start", async (context) => {
 	stashEnv(context, "LIMEN_JOB", undefined);
 	stashEnv(context, "LIMEN_HERDR", "0");
