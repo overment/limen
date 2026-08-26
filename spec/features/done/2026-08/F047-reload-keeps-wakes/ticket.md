@@ -1,6 +1,6 @@
 # F047-reload-keeps-wakes · A reloaded coordinator still gets its job wakes
 
-[2026-08-26] [🟠] [ACTIVE] [COORDINATOR] ACTIVE · F047-reload-keeps-wakes
+[2026-08-26] [🟢] [PROVEN] [COORDINATOR] PROVEN · F047-reload-keeps-wakes
 
 ## Outcome
 

@@ -6,7 +6,7 @@
 
 ## NOW
 
-- `F047-reload-keeps-wakes` (🟠 ACTIVE): a reloaded coordinator tab still gets wakes for jobs it started. Observed in mega-live.
+- Quality sweep closed. Next product move is the remote seat.
 
 ## NEXT
 - `F013-remote-seat` (PLANNED): one disk, attach don’t clone; docs and seat-shaped guarantees. Before F014.
@@ -14,6 +14,7 @@
 
 ## PROVEN
 
+- `F047-reload-keeps-wakes` (🟢 PROVEN): reloaded coordinator tab keeps wakes for jobs it started. Landed `a70cf2a`.
 - `F028-provider-error-is-failed` (🟢 PROVEN): last-turn `error`/`aborted` records `failed`. Landed `967ab4b`. Signed off 2026-08-26.
 - `F046-optional-speech-command` (🟢 PROVEN): `/speak` reads the latest response without another agent turn; brief by default, full on request.
 - `F043-seat-sweep` (🟢 PROVEN): `limen sweep` + LaunchAgent every 60s. Installed `works.earendil.limen-sweep`. Merged `3eff35a`.
