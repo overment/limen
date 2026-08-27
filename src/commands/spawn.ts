@@ -17,10 +17,10 @@ import {
 	workspaceRoot,
 	worktreeForBranch,
 } from "../git.ts";
-import { herdrAvailable, hostedAgentAlive, openHostedTab, openWatchTab, startHostedPi } from "../herdr.ts";
+import { herdrAvailable, openHostedTab, openWatchTab } from "../herdr.ts";
 import { parseDuration } from "../job.ts";
 import { liveJob } from "../reap.ts";
-import { appendLimenLog, atomicWrite, finalizeJob, launchHostedSupervisor, launchWrapper } from "../wrapper.ts";
+import { atomicWrite, finalizeJob, launchHostedSupervisor, launchWrapper } from "../wrapper.ts";
 import { pruneFinishedWorktrees } from "./prune.ts";
 
 type SpawnOptions = {
@@ -65,6 +65,7 @@ export async function spawnCommand(args: readonly string[], cwd: string): Promis
 	preflightPi(model);
 	const notificationSession = currentNotificationSession();
 	const coordinatorTab = process.env.HERDR_TAB_ID?.trim();
+	const role = options.review ? "reviewer" : "worker";
 	const workspace = workspaceRoot(cwd);
 	const root = workspace ?? repoRoot(cwd);
 	if (workspace && !options.repo) throw new Error("workspace spawn requires --repo <immediate-child>");
@@ -110,7 +111,13 @@ export async function spawnCommand(args: readonly string[], cwd: string): Promis
 		writeFile(`${jobDir}/last-tool`, "", { flag: "wx", flush: true }),
 		writeFile(`${jobDir}/activity`, "think\n", { flag: "wx", flush: true }),
 		writeFile(`${jobDir}/log`, "", { flag: "wx", flush: true }),
-		...(options.tab ? [writeFile(`${jobDir}/hosted`, HOSTED_NOTE, { flag: "wx", flush: true })] : []),
+		...(options.tab
+			? [
+					writeFile(`${jobDir}/hosted`, HOSTED_NOTE, { flag: "wx", flush: true }),
+					writeFile(`${jobDir}/role`, `${role}\n`, { flag: "wx", flush: true }),
+					writeFile(`${jobDir}/agent-name`, `${hostedAgentName(id)}\n`, { flag: "wx", flush: true }),
+				]
+			: []),
 		...(notificationSession
 			? [
 					writeFile(`${jobDir}/origin-session`, `${notificationSession}\n`, { flag: "wx", flush: true }),
@@ -122,14 +129,13 @@ export async function spawnCommand(args: readonly string[], cwd: string): Promis
 	await writeFile(`${jobDir}/notify/ready`, "1\n", { flag: "wx", flush: true });
 	const versions = capturedVersions().then((text) => writeFile(`${jobDir}/versions`, text, { flag: "wx", flush: true }));
 	await atomicWrite(`${jobDir}/state`, "running\n");
-	const role = options.review ? "reviewer" : "worker";
 	const localPreamble = `${root}/.agents/limen/${role}.md`;
 	const preamble = await readFile(localPreamble).then(
 		() => localPreamble,
 		() => `${PACKAGE_ROOT}/templates/${role}.md`,
 	);
 	if (options.tab) {
-		await startHosted({ jobDir, id, label: options.label, root, worktree, preamble, taskFile: `${jobDir}/task.md`, review: options.review, ...(model ? { model } : {}) });
+		await startHosted({ jobDir, id, label: options.label, root, worktree, preamble, taskFile: `${jobDir}/task.md`, role, ...(model ? { model } : {}) });
 		await versions.catch(() => {});
 		console.log(`started ${options.label} (hosted)`);
 		console.log(id);
@@ -177,75 +183,43 @@ export async function startHosted(input: {
 	readonly worktree: string;
 	readonly preamble: string;
 	readonly taskFile: string;
-	readonly review: boolean;
+	readonly role: "worker" | "reviewer";
 	readonly model?: string;
-	readonly continueText?: string;
+	readonly continueFile?: string;
 }): Promise<void> {
-	const paneEnv = {
-		LIMEN_JOB: "1",
-		LIMEN_HOSTED: "1",
-		LIMEN_JOB_ID: input.id,
-		LIMEN_JOB_LABEL: input.label,
-		LIMEN_CONTEXT_ROOT: input.root,
-		LIMEN_ROLE: input.review ? "reviewer" : "worker",
-	};
-	let place: Awaited<ReturnType<typeof openHostedTab>> | undefined;
-	let target = "";
 	const agentName = hostedAgentName(input.id);
 	try {
-		place = await openHostedTab({ jobDir: input.jobDir, label: input.label, cwd: input.worktree, workspaceCwd: input.root, env: paneEnv });
-		const extensions = ["hosted", "steering", "communication"].flatMap((name) => ["--extension", `${PACKAGE_ROOT}/hook/${name}.ts`]);
-		const piArgs = [
-			"--approve",
-			"--no-extensions",
-			"--session-dir",
-			`${input.jobDir}/session`,
-			"--name",
-			`limen: ${input.label}`,
-			"--append-system-prompt",
-			input.preamble,
-			...extensions,
-			...(input.model ? ["--model", input.model] : []),
-			...(input.continueText !== undefined ? ["--continue", input.continueText] : [`@${input.taskFile}`]),
-		];
-		target = startHostedPi({
-			place,
-			name: agentName,
-			args: piArgs,
-			log: (line) => void appendLimenLog(input.jobDir, line).catch(() => {}),
+		await openHostedTab({
+			jobDir: input.jobDir,
+			label: input.label,
+			cwd: input.worktree,
+			workspaceCwd: input.root,
+			env: {
+				LIMEN_JOB: "1",
+				LIMEN_HOSTED: "1",
+				LIMEN_JOB_ID: input.id,
+				LIMEN_JOB_LABEL: input.label,
+				LIMEN_CONTEXT_ROOT: input.root,
+				LIMEN_ROLE: input.role,
+			},
 		});
-		await writeFile(`${input.jobDir}/herdr/agent`, `${target}\n`);
 		const supervisorPid = await launchHostedSupervisor({
 			LIMEN_JOB_DIR: input.jobDir,
-			LIMEN_HOSTED_TARGET: target,
-			LIMEN_AGENT_NAME: agentName,
+			LIMEN_WORKTREE: input.worktree,
+			LIMEN_TASK_FILE: input.taskFile,
+			LIMEN_PREAMBLE: input.preamble,
 			LIMEN_JOB_ID: input.id,
 			LIMEN_LABEL: input.label,
 			LIMEN_CONTEXT_ROOT: input.root,
-			LIMEN_ROLE: input.review ? "reviewer" : "worker",
+			LIMEN_ROLE: input.role,
+			LIMEN_AGENT_NAME: agentName,
+			LIMEN_HOSTED_START: "1",
+			LIMEN_MODEL: input.model ?? "",
+			LIMEN_CONTINUE_FILE: input.continueFile ?? "",
 		});
-		// Known at launch — never run the detached handshake killer against a live hosted agent.
-		await atomicWrite(`${input.jobDir}/pid`, `${supervisorPid}\n`);
-		await atomicWrite(`${input.jobDir}/state`, "running\n");
+		await waitForHandshake(input.jobDir, supervisorPid, "hosted supervisor");
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);
-		const recovered = [target, place?.pane].find((value) => value && hostedAgentAlive(value));
-		if (recovered) {
-			await writeFile(`${input.jobDir}/herdr/agent`, `${recovered}\n`);
-			const supervisorPid = await launchHostedSupervisor({
-				LIMEN_JOB_DIR: input.jobDir,
-				LIMEN_HOSTED_TARGET: recovered,
-				LIMEN_AGENT_NAME: agentName,
-				LIMEN_JOB_ID: input.id,
-				LIMEN_LABEL: input.label,
-				LIMEN_CONTEXT_ROOT: input.root,
-				LIMEN_ROLE: input.review ? "reviewer" : "worker",
-			});
-			await atomicWrite(`${input.jobDir}/pid`, `${supervisorPid}\n`);
-			await atomicWrite(`${input.jobDir}/state`, "running\n");
-			await appendLimenLog(input.jobDir, `hosted agent ready after start warning: ${message}`);
-			return;
-		}
 		await finalizeJob(input.jobDir, "failed", `hosted start failed: ${message}`);
 		throw error;
 	}
@@ -411,7 +385,7 @@ async function text(path: string): Promise<string> {
 		() => "",
 	);
 }
-export async function waitForHandshake(jobDir: string, wrapperPid: number): Promise<void> {
+export async function waitForHandshake(jobDir: string, wrapperPid: number, owner = "detached wrapper"): Promise<void> {
 	const deadline = Date.now() + handshakeMs();
 	while (Date.now() < deadline) {
 		if ((await text(`${jobDir}/state`)) !== "running" || (await text(`${jobDir}/pid`))) return;
@@ -422,6 +396,6 @@ export async function waitForHandshake(jobDir: string, wrapperPid: number): Prom
 		signalProcessGroup(wrapperPid, "SIGKILL");
 		await waitForProcessGroup(wrapperPid, 1_000);
 	}
-	await finalizeJob(jobDir, "failed", "detached wrapper did not become ready");
-	throw new Error("detached job wrapper did not start; inspect the job record");
+	await finalizeJob(jobDir, "failed", `${owner} did not become ready`);
+	throw new Error(`${owner} did not start; inspect the job record`);
 }

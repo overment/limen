@@ -44,21 +44,27 @@ export function startHostedPi(input: {
 	readonly name: string;
 	readonly args: readonly string[];
 	readonly timeoutMs?: number;
+	readonly coordinatorTab?: string;
+	readonly stopped?: () => boolean;
 	readonly log?: (message: string) => void;
 }): string {
 	const herdr = requireHerdr();
-	const readyMs = input.timeoutMs ?? 120_000;
-	const previous = process.env.HERDR_TAB_ID?.trim();
-	waitForShell(herdr, input.place.pane, Math.min(readyMs, 60_000));
+	const readyMs = input.timeoutMs ?? 5_000;
+	assertHostedStartActive(input.stopped);
+	waitForShell(herdr, input.place.pane, 60_000, input.stopped);
+	assertHostedStartActive(input.stopped);
 	// Herdr 0.8 will not start an agent in a background pane. Focus, start, then restore.
 	call(herdr, ["tab", "focus", input.place.tab]);
 	try {
-		waitForShell(herdr, input.place.pane, Math.min(readyMs, 15_000));
+		assertHostedStartActive(input.stopped);
+		waitForShell(herdr, input.place.pane, 15_000, input.stopped);
+		assertHostedStartActive(input.stopped);
 		let failed: unknown;
 		for (const attempt of [1, 2] as const) {
+			assertHostedStartActive(input.stopped);
 			input.log?.(`hosted agent start attempt ${attempt}`);
 			try {
-				const started = call(herdr, ["agent", "start", input.name, "--kind", "pi", "--pane", input.place.pane, "--timeout", String(readyMs), "--", ...input.args]);
+				const started = call(herdr, ["agent", "start", input.name, "--kind", "pi", "--pane", input.place.pane, "--timeout", String(readyMs), "--", ...input.args], readyMs + 250);
 				return agentTarget(started) || input.place.pane;
 			} catch (error) {
 				failed = error;
@@ -66,7 +72,7 @@ export function startHostedPi(input: {
 				if (attempt === 1 && paneShellFailure) {
 					input.log?.(`hosted agent start attempt 1 failed: ${error.message}; waiting for shell before attempt 2`);
 					try {
-						waitForShell(herdr, input.place.pane, Math.min(readyMs, 15_000));
+						waitForShell(herdr, input.place.pane, 15_000, input.stopped);
 					} catch (waitError) {
 						failed = waitError;
 						break;
@@ -77,11 +83,19 @@ export function startHostedPi(input: {
 			}
 		}
 		const live = locateHostedAgent(input.place.pane);
-		if (live) return live;
+		if (live) {
+			input.log?.(`hosted agent ready after start warning: ${failed instanceof Error ? failed.message : String(failed)}`);
+			return live;
+		}
 		throw failed;
 	} finally {
-		if (previous && previous !== input.place.tab) restoreCoordinatorFocus(herdr, input.place.tab, previous, input.log);
+		const coordinator = input.coordinatorTab?.trim();
+		if (coordinator && coordinator !== input.place.tab) restoreCoordinatorFocus(herdr, input.place.tab, coordinator, input.log);
 	}
+}
+
+function assertHostedStartActive(stopped?: () => boolean): void {
+	if (stopped?.()) throw Object.assign(new Error("hosted start stopped by request"), { code: "hosted_start_stopped" });
 }
 
 /** Give the coordinator its tab back only when the human has not already focused elsewhere during the start window. */
@@ -148,10 +162,11 @@ export function locateHostedAgent(target: string, agentName = ""): string | unde
 
 const SHELL_NAMES = new Set(["zsh", "bash", "sh", "fish", "nu", "pwsh", "powershell"]);
 /** Pane must be at an interactive shell before `agent start`; new tabs often still run prompt hooks. */
-function waitForShell(herdr: string, pane: string, timeoutMs: number): void {
+function waitForShell(herdr: string, pane: string, timeoutMs: number, stopped?: () => boolean): void {
 	const deadline = Date.now() + timeoutMs;
 	let last = "";
 	while (Date.now() < deadline) {
+		assertHostedStartActive(stopped);
 		try {
 			const info = asRecord(asRecord(call(herdr, ["pane", "process-info", "--pane", pane])).process_info);
 			const foreground = Array.isArray(info.foreground_processes) ? info.foreground_processes : [];
@@ -392,8 +407,8 @@ function advisoryCall(herdr: string, args: readonly string[]): void {
 	spawnSync(herdr, args, { stdio: "ignore", timeout: 2_000 });
 }
 
-function call(herdr: string, args: readonly string[]): unknown {
-	const result = spawnSync(herdr, args, { encoding: "utf8", timeout: 180_000 });
+function call(herdr: string, args: readonly string[], timeout = 180_000): unknown {
+	const result = spawnSync(herdr, args, { encoding: "utf8", timeout });
 	if (result.error) throw result.error;
 	if (result.status !== 0) {
 		const raw = result.stderr.trim() || result.stdout.trim() || `herdr ${args[0]} failed`;

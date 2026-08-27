@@ -38,7 +38,7 @@ Herdr is the visible layout when it is running. Job files under `.limen/jobs/` a
 
 **`--label` is the tab title. Always pass it.** Lead with the feature number; keep it one short phrase (about 24 characters of useful text). That string is the Herdr tab, the job-ID slug, and — when it contains `FNNN` — the agent name `limen-fNNN-<hex>`. The sidebar description is the role (`limen worker` / `limen reviewer`), not the label. Omit `--label` and the first 80 characters of the task become the tab — that is how unreadable rows appear. Good: `F036 naming`, `F325 review`, `F034 continue`. Bad: the whole prompt, or a label with no feature number.
 
-**Hosted weaker guarantees** (recorded in the job’s `hosted` file): no 90-minute timeout, no tool-call cap, no F007 process containment. Herdr owns that process tree. Closing the hosted tab ends the worker. After the tab is gone, `limen open <id>` reopens a **log** view only — it does not resurrect the agent; respawn for a new one. Hosted start focuses the new tab, starts `pi` there, then restores the coordinator tab (`HERDR_TAB_ID`). Herdr 0.8 will not start an agent in a background pane.
+**Hosted weaker guarantees** (recorded in the job’s `hosted` file): no 90-minute timeout, no tool-call cap, no F007 process containment. Herdr owns that process tree. Closing the hosted tab ends the worker. After the tab is gone, `limen open <id>` reopens a **log** view only — it does not resurrect the agent; respawn for a new one. Spawn returns the job ID quickly; moments later the hosted runtime focuses the new tab, starts `pi` there, then restores the recorded coordinator tab. Herdr 0.8 will not start an agent in a background pane.
 
 **Other job controls:**
 

@@ -366,7 +366,7 @@ test("spawn in Herdr is hosted without --tab; --detached keeps a watch tab", asy
 	const job = join(scratch.root, ".limen/jobs", id);
 	assert.match(await readFile(join(job, "hosted"), "utf8"), /weaker guarantees/);
 	assert.equal(await readFile(join(job, "herdr/mode"), "utf8"), "hosted\n");
-	assert.equal(await readFile(join(job, "herdr/agent"), "utf8"), "w1:p1\n");
+	assert.equal(await waitForFile(join(job, "herdr/agent"), /w1:p1/), "w1:p1\n");
 	const calls = await readFile(herdr.calls, "utf8");
 	const lines = calls.split("\n");
 	const focusNew = lines.findIndex((line) => line === "tab focus w1:t1");
@@ -390,6 +390,38 @@ test("spawn in Herdr is hosted without --tab; --detached keeps a watch tab", asy
 	assert.match(logText, /hosted agent done|hosted agent ended/);
 });
 
+test("hosted spawn returns on the supervisor PID while agent start is still busy", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	assert.equal(limen(scratch, "init").status, 0);
+	const herdr = await installHostedFakeHerdr(scratch.root, scratch.fakeBin);
+	const env = {
+		HERDR_ENV: "1",
+		LIMEN_HERDR: herdr.bin,
+		FAKE_HERDR_STATE: herdr.dir,
+		FAKE_HERDR_PERSIST: "1",
+		FAKE_HERDR_START_BUSY_MS: "8000",
+		HERDR_TAB_ID: "coord:t0",
+	};
+	const before = Date.now();
+	const launched = limenWithEnv(scratch, env, "spawn", "--label", "F048 handshake", "stay hosted");
+	assert.equal(launched.status, 0, launched.stderr);
+	assert.ok(Date.now() - before < 6_000, "spawn must not wait for agent readiness");
+	const id = onlyJobId(launched.stdout);
+	const job = join(scratch.root, ".limen/jobs", id);
+	const pid = Number((await readFile(join(job, "pid"), "utf8")).trim());
+	assert.ok(Number.isSafeInteger(pid) && pid > 0);
+	assert.doesNotThrow(() => process.kill(pid, 0));
+	await waitForFile(join(herdr.dir, "start-busy"), /\d+/);
+	await assert.rejects(readFile(join(job, "herdr/agent")), "the caller returned before agent start completed");
+	await waitForFile(join(job, "herdr/agent"), /w1:p1/);
+	await waitForFile(join(job, "log"), /hosted agent ready after start warning/);
+	assert.equal(await readFile(join(job, "role"), "utf8"), "worker\n");
+	assert.match(await readFile(join(job, "agent-name"), "utf8"), /^limen-f048-[0-9a-f]{8}\n$/);
+	await writeFile(join(job, "session-ended"), `${new Date().toISOString()}\n`);
+	await waitForState(scratch.root, id, "done");
+});
+
 test("hosted start retries one pane-shell failure and logs both attempts", async (context) => {
 	const scratch = await scratchRepo();
 	context.after(scratch.cleanup);
@@ -407,9 +439,10 @@ test("hosted start retries one pane-shell failure and logs both attempts", async
 	assert.equal(launched.status, 0, launched.stderr);
 	const id = onlyJobId(launched.stdout);
 	const job = join(scratch.root, ".limen/jobs", id);
+	await waitForFile(herdr.calls, (value) => [...value.matchAll(/^agent start /gm)].length === 2);
 	assert.equal((await readFile(join(job, "state"), "utf8")).trim(), "running");
 	assert.equal([...(await readFile(herdr.calls, "utf8")).matchAll(/^agent start /gm)].length, 2);
-	const log = await readFile(join(job, "log"), "utf8");
+	const log = await waitForFile(join(job, "log"), /hosted agent start attempt 2/);
 	assert.match(log, /hosted agent start attempt 1/);
 	assert.match(log, /hosted agent start attempt 2/);
 	await writeFile(join(job, "session-ended"), `${new Date().toISOString()}\n`);
@@ -429,10 +462,10 @@ test("hosted start finalizes failed after two pane-shell failures", async (conte
 		HERDR_TAB_ID: "coord:t0",
 	};
 	const launched = limenWithEnv(scratch, env, "spawn", "--label", "F044 fail", "do not start");
-	assert.equal(launched.status, 1);
-	const [id] = await readdir(join(scratch.root, ".limen/jobs"));
-	assert.ok(id);
+	assert.equal(launched.status, 0, launched.stderr);
+	const id = onlyJobId(launched.stdout);
 	const job = join(scratch.root, ".limen/jobs", id);
+	await waitForState(scratch.root, id, "failed");
 	assert.equal((await readFile(join(job, "state"), "utf8")).trim(), "failed");
 	assert.match(await readFile(join(job, "log"), "utf8"), /failed: hosted start failed: agent target pane w1:p1 is not an available shell/);
 	assert.equal([...(await readFile(herdr.calls, "utf8")).matchAll(/^agent start /gm)].length, 2);
@@ -451,7 +484,8 @@ test("hosted start does not retry a non-pane-shell error", async (context) => {
 		HERDR_TAB_ID: "coord:t0",
 	};
 	const launched = limenWithEnv(scratch, env, "spawn", "--label", "F044 auth", "do not start");
-	assert.equal(launched.status, 1);
+	assert.equal(launched.status, 0, launched.stderr);
+	await waitForState(scratch.root, onlyJobId(launched.stdout), "failed");
 	assert.equal([...(await readFile(herdr.calls, "utf8")).matchAll(/^agent start /gm)].length, 1);
 });
 
@@ -525,7 +559,7 @@ test("spawn --review in Herdr is hosted; --detached keeps a watch tab", async (c
 	const hostedJob = join(scratch.root, ".limen/jobs", hostedId);
 	assert.match(await readFile(join(hostedJob, "hosted"), "utf8"), /weaker guarantees/);
 	assert.equal(await readFile(join(hostedJob, "herdr/mode"), "utf8"), "hosted\n");
-	assert.equal(await readFile(join(hostedJob, "herdr/agent"), "utf8"), "w1:p1\n");
+	assert.equal(await waitForFile(join(hostedJob, "herdr/agent"), /w1:p1/), "w1:p1\n");
 	const hostedCalls = await readFile(herdr.calls, "utf8");
 	assert.match(hostedCalls, /--kind pi/);
 	assert.doesNotMatch(hostedCalls, /pane run .*tail/);
@@ -574,7 +608,7 @@ test("a hosted job finalizes on session end, never on unseen idle after tools", 
 	await writeFile(join(job, "session/2026-01-01T00-00-00-000Z_abc.jsonl"), `${entries.join("\n")}\n`);
 	await writeFile(join(job, "session-ended"), `${new Date().toISOString()}\n`);
 	await waitForState(scratch.root, id, "done");
-	assert.match(await readFile(join(job, "log"), "utf8"), /hosted session ended/);
+	assert.match(await waitForFile(join(job, "log"), /hosted session ended/), /hosted session ended/);
 	assert.equal(await readFile(join(job, "result"), "utf8"), "hosted final summary\n");
 	await assert.rejects(readFile(join(job, "stop-reason")), "a clean hosted session writes no stop-reason");
 });
@@ -692,10 +726,12 @@ console.log(JSON.stringify({ type: "message_end", message: { role: "assistant", 
 	const id = onlyJobId(launched.stdout);
 	const job = join(scratch.root, ".limen/jobs", id);
 	assert.match(await readFile(join(job, "hosted"), "utf8"), /weaker guarantees/);
-	const calls = await readFile(herdr.calls, "utf8");
+	assert.equal(await readFile(join(job, "continue"), "utf8"), "now refine the seam\n");
+	const calls = await waitForFile(herdr.calls, /agent start /);
 	assert.match(calls, /agent start /);
 	assert.match(calls, /--continue now refine the seam/);
 	assert.doesNotMatch(calls, /@/);
+	await waitForState(scratch.root, id, "done");
 });
 
 test("hostedAgentName keeps the hex suffix when the slug is long", () => {
@@ -738,6 +774,56 @@ test("spawn --tab --timeout errors before creating a job", async (context) => {
 	assert.equal(refused.status, 1);
 	assert.match(refused.stderr, /hosted jobs have no timeout/);
 	assert.deepEqual(await readdir(join(scratch.root, ".limen/jobs")), []);
+});
+
+test("hosted stop before pi starts finalizes with the requested reason", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	assert.equal(limen(scratch, "init").status, 0);
+	const herdr = await installHostedFakeHerdr(scratch.root, scratch.fakeBin);
+	const env = {
+		HERDR_ENV: "1",
+		LIMEN_HERDR: herdr.bin,
+		FAKE_HERDR_STATE: herdr.dir,
+		FAKE_HERDR_SHELL_BUSY_MS: "6000",
+		HERDR_TAB_ID: "coord:t0",
+	};
+	const launched = limenWithEnv(scratch, env, "spawn", "--label", "F048 early stop", "do not start");
+	assert.equal(launched.status, 0, launched.stderr);
+	const id = onlyJobId(launched.stdout);
+	const job = join(scratch.root, ".limen/jobs", id);
+	await waitForFile(join(herdr.dir, "shell-busy"), /\d+/);
+	assert.doesNotMatch(await readFile(herdr.calls, "utf8"), /agent start /);
+	const stopped = limenWithEnv(scratch, env, "stop", id, "cancel during start");
+	assert.equal(stopped.status, 0, stopped.stderr);
+	await waitForState(scratch.root, id, "stopped");
+	assert.match(await readFile(join(job, "log"), "utf8"), /stopped: cancel during start/);
+	assert.doesNotMatch(await readFile(herdr.calls, "utf8"), /agent start /);
+});
+
+test("hosted stop while agent start resolves stops the appeared worker", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	assert.equal(limen(scratch, "init").status, 0);
+	const herdr = await installHostedFakeHerdr(scratch.root, scratch.fakeBin);
+	const env = {
+		HERDR_ENV: "1",
+		LIMEN_HERDR: herdr.bin,
+		FAKE_HERDR_STATE: herdr.dir,
+		FAKE_HERDR_PERSIST: "1",
+		FAKE_HERDR_START_BUSY_MS: "8000",
+		HERDR_TAB_ID: "coord:t0",
+	};
+	const launched = limenWithEnv(scratch, env, "spawn", "--label", "F048 resolving stop", "do not strand");
+	assert.equal(launched.status, 0, launched.stderr);
+	const id = onlyJobId(launched.stdout);
+	const job = join(scratch.root, ".limen/jobs", id);
+	await waitForFile(join(herdr.dir, "start-busy"), /\d+/);
+	const stopped = limenWithEnv(scratch, env, "stop", id, "cancel resolving start");
+	assert.equal(stopped.status, 0, stopped.stderr);
+	await waitForState(scratch.root, id, "stopped");
+	assert.equal(await readFile(join(job, "stop-requested"), "utf8"), "cancel resolving start\n");
+	assert.equal([...(await readFile(herdr.calls, "utf8")).matchAll(/agent send-keys \S+ ctrl\+c/g)].length, 2);
 });
 
 test("hosted stop records stopped after two interrupts", async (context) => {
@@ -796,6 +882,7 @@ test("hosted stop finalizes when the supervisor is gone and the agent is missing
 	assert.equal(launched.status, 0, launched.stderr);
 	const id = onlyJobId(launched.stdout);
 	const job = join(scratch.root, ".limen/jobs", id);
+	await waitForFile(join(job, "herdr/agent"), /w1:p1/);
 	const pid = Number((await readFile(join(job, "pid"), "utf8")).trim());
 	process.kill(pid, "SIGKILL");
 	const goneBy = Date.now() + 2_000;
@@ -826,10 +913,11 @@ test("two long hosted labels keep distinct agent names", async (context) => {
 	const label = "abcdefghijklmnopqrstuvwxyz-long";
 	const first = onlyJobId(limenWithEnv(scratch, env, "spawn", "--label", label, "stay hosted").stdout);
 	const second = onlyJobId(limenWithEnv(scratch, env, "spawn", "--label", label, "stay hosted").stdout);
-	const names = [...(await readFile(herdr.calls, "utf8")).matchAll(/agent start (\S+)/g)].map((match) => match[1]);
+	const calls = await waitForFile(herdr.calls, (value) => [...value.matchAll(/agent start (\S+)/g)].length === 2);
+	const names = [...calls.matchAll(/agent start (\S+)/g)].map((match) => match[1]);
 	assert.equal(names.length, 2);
 	assert.notEqual(names[0], names[1]);
-	const panes = [first, second].map(async (id) => (await readFile(join(scratch.root, ".limen/jobs", id, "herdr/agent"), "utf8")).trim());
+	const panes = [first, second].map(async (id) => (await waitForFile(join(scratch.root, ".limen/jobs", id, "herdr/agent"), /w1:p\d+/)).trim());
 	const [paneA, paneB] = await Promise.all(panes);
 	assert.notEqual(paneA, paneB);
 	for (const [id, name] of [
@@ -842,6 +930,16 @@ test("two long hosted labels keep distinct agent names", async (context) => {
 		await waitForState(scratch.root, id, "done");
 	}
 });
+
+async function waitForFile(path: string, expected: RegExp | ((value: string) => boolean), timeoutMs = 10_000): Promise<string> {
+	const deadline = Date.now() + timeoutMs;
+	while (Date.now() < deadline) {
+		const value = await readFile(path, "utf8").catch(() => "");
+		if (typeof expected === "function" ? expected(value) : expected.test(value)) return value;
+		await new Promise((resolve) => setTimeout(resolve, 25));
+	}
+	throw new Error(`file ${path} did not reach expected content`);
+}
 
 async function withFakeHerdr(source: string, run: () => void | Promise<void>): Promise<void> {
 	const dir = await mkdtemp(join(tmpdir(), "limen-herdr-status-"));
@@ -911,6 +1009,11 @@ if (args[0] === "workspace" && args[1] === "list") {
 } else if (args[0] === "pane" && args[1] === "run") {
   ok({ type: "pane_ran" });
 } else if (args[0] === "pane" && args[1] === "process-info") {
+  const shellBusyMs = Number(process.env.FAKE_HERDR_SHELL_BUSY_MS || 0);
+  if (shellBusyMs > 0) {
+    writeFileSync(dir + "/shell-busy", String(process.pid));
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, shellBusyMs);
+  }
   ok({ type: "pane_process_info", process_info: { foreground_process_group_id: 1, shell_pid: 1, foreground_processes: [{ name: "zsh", pid: 1 }] } });
 } else if (args[0] === "agent" && args[1] === "start") {
   const pane = args[args.indexOf("--pane") + 1];
@@ -922,6 +1025,11 @@ if (args[0] === "workspace" && args[1] === "list") {
   if (!tab || !state.tabs[tab].focused) fail("agent_pane_busy", "agent target pane " + pane + " is not an available shell");
   state.agents[pane] = { status: "working", ticks: 0 };
   writeFileSync(path, JSON.stringify(state));
+  const busyMs = Number(process.env.FAKE_HERDR_START_BUSY_MS || 0);
+  if (busyMs > 0) {
+    writeFileSync(dir + "/start-busy", String(process.pid));
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, busyMs);
+  }
   ok({ type: "agent_started", pane: { pane_id: pane }, agent_status: "working" });
 } else if (args[0] === "agent" && args[1] === "get") {
   const target = args[2];
