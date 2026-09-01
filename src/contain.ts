@@ -23,6 +23,9 @@ export function processGroupAlive(pid: number): boolean {
 export function signalProcessGroup(pid: number, signal: NodeJS.Signals | 0): "sent" | "missing" | "denied" {
 	return signalTarget(-pid, signal);
 }
+export function processAlive(pid: number): boolean {
+	return signalTarget(pid, 0) !== "missing";
+}
 function signalTarget(target: number, signal: NodeJS.Signals | 0): "sent" | "missing" | "denied" {
 	try {
 		process.kill(target, signal);

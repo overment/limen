@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { appendFile, open, readdir, readFile, rename, rm } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { containEscapedDescendants, discoverEscapedDescendants, processInfo, signalProcessGroup } from "./contain.ts";
+import { containEscapedDescendants, discoverEscapedDescendants, processAlive, processInfo, signalProcessGroup } from "./contain.ts";
 import { commitList } from "./git.ts";
 import { settleJobTab } from "./herdr.ts";
 import { createStreamParser, type StreamEvent } from "./stream.ts";
@@ -176,7 +176,11 @@ export async function finalizeJob(jobDir: string, state: "done" | "failed" | "st
 	await rm(`${jobDir}/born`, { force: true });
 	const inbox = await readdir(`${jobDir}/steer/inbox`).catch(() => []);
 	await appendLimenLog(jobDir, inbox.length ? `${state}: ${detail}; ${inbox.length} steer(s) never delivered` : `${state}: ${detail}`).catch(() => {});
-	for (const name of await readdir(jobDir).catch(() => [])) if (/\.\d+\.[0-9a-f]+\.tmp$/.test(name)) await rm(`${jobDir}/${name}`, { force: true });
+	// A tmp whose writer still runs is an in-flight rename by a racing finalizer, not a leftover; deleting it makes that rename ENOENT and crashes the other process.
+	for (const name of await readdir(jobDir).catch(() => [])) {
+		const writer = /\.(\d+)\.[0-9a-f]+\.tmp$/.exec(name);
+		if (writer && !processAlive(Number(writer[1]))) await rm(`${jobDir}/${name}`, { force: true });
+	}
 	await settleJobTab(jobDir);
 }
 export async function recordCommits(jobDir: string): Promise<void> {
