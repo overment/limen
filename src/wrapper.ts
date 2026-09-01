@@ -171,11 +171,12 @@ export async function finalizeJob(jobDir: string, state: "done" | "failed" | "st
 	if (["done", "failed", "stopped"].includes(await textFile(`${jobDir}/state`))) return;
 	await recordCommits(jobDir).catch(() => {});
 	await atomicWrite(`${jobDir}/finished-at`, `${new Date().toISOString()}\n`);
+	// The terminal log line lands before the state flip; state is the commit point observers key on, and the story must already be durable when they see it.
+	const inbox = await readdir(`${jobDir}/steer/inbox`).catch(() => []);
+	await appendLimenLog(jobDir, inbox.length ? `${state}: ${detail}; ${inbox.length} steer(s) never delivered` : `${state}: ${detail}`).catch(() => {});
 	await atomicWrite(`${jobDir}/state`, `${state}\n`);
 	await rm(`${jobDir}/pid`, { force: true });
 	await rm(`${jobDir}/born`, { force: true });
-	const inbox = await readdir(`${jobDir}/steer/inbox`).catch(() => []);
-	await appendLimenLog(jobDir, inbox.length ? `${state}: ${detail}; ${inbox.length} steer(s) never delivered` : `${state}: ${detail}`).catch(() => {});
 	// A tmp whose writer still runs is an in-flight rename by a racing finalizer, not a leftover; deleting it makes that rename ENOENT and crashes the other process.
 	for (const name of await readdir(jobDir).catch(() => [])) {
 		const writer = /\.(\d+)\.[0-9a-f]+\.tmp$/.exec(name);
