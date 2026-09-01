@@ -467,7 +467,7 @@ test("hosted start finalizes failed after two pane-shell failures", async (conte
 	const job = join(scratch.root, ".limen/jobs", id);
 	await waitForState(scratch.root, id, "failed");
 	assert.equal((await readFile(join(job, "state"), "utf8")).trim(), "failed");
-	assert.match(await readFile(join(job, "log"), "utf8"), /failed: hosted start failed: agent target pane w1:p1 is not an available shell/);
+	await waitForFile(join(job, "log"), /failed: hosted start failed: agent target pane w1:p1 is not an available shell/);
 	assert.equal([...(await readFile(herdr.calls, "utf8")).matchAll(/^agent start /gm)].length, 2);
 });
 
@@ -632,7 +632,7 @@ test("a hosted session error fails with its stop reason", async (context) => {
 	await waitForState(scratch.root, id, "failed");
 	assert.equal(await readFile(join(job, "stop-reason"), "utf8"), "error: usage limit reached\n");
 	assert.equal((await readFile(join(job, "state"), "utf8")).trim(), "failed");
-	assert.match(await readFile(join(job, "log"), "utf8"), /failed: error: usage limit reached/);
+	await waitForFile(join(job, "log"), /failed: error: usage limit reached/);
 });
 
 test("supervisor does not stamp wait over a hook tool write", async (context) => {
@@ -797,7 +797,7 @@ test("hosted stop before pi starts finalizes with the requested reason", async (
 	const stopped = limenWithEnv(scratch, env, "stop", id, "cancel during start");
 	assert.equal(stopped.status, 0, stopped.stderr);
 	await waitForState(scratch.root, id, "stopped");
-	assert.match(await readFile(join(job, "log"), "utf8"), /stopped: cancel during start/);
+	await waitForFile(join(job, "log"), /stopped: cancel during start/);
 	assert.doesNotMatch(await readFile(herdr.calls, "utf8"), /agent start /);
 });
 
@@ -836,11 +836,12 @@ test("hosted stop records stopped after two interrupts", async (context) => {
 	assert.equal(launched.status, 0, launched.stderr);
 	const id = onlyJobId(launched.stdout);
 	const job = join(scratch.root, ".limen/jobs", id);
+	await waitForFile(join(job, "herdr/agent"), /w1:p1/);
 	const stopped = limenWithEnv(scratch, env, "stop", id, "please stop");
 	assert.equal(stopped.status, 0, stopped.stderr);
 	await waitForState(scratch.root, id, "stopped");
 	assert.equal((await readFile(join(job, "stop-requested"), "utf8")).trim(), "please stop");
-	assert.match(await readFile(join(job, "log"), "utf8"), /stopped: please stop/);
+	await waitForFile(join(job, "log"), /stopped: please stop/);
 	assert.equal([...(await readFile(herdr.calls, "utf8")).matchAll(/agent send-keys \S+ ctrl\+c/g)].length, 2);
 });
 
@@ -862,6 +863,7 @@ test("hosted stop leaves running when the agent ignores interrupts", async (cont
 	assert.equal(launched.status, 0, launched.stderr);
 	const id = onlyJobId(launched.stdout);
 	const job = join(scratch.root, ".limen/jobs", id);
+	await waitForFile(join(job, "herdr/agent"), /w1:p1/);
 	const stopped = limenWithEnv(scratch, env, "stop", id, "please stop");
 	assert.equal(stopped.status, 1, stopped.stdout);
 	assert.match(stopped.stderr, /agent is still up; closing the tab ends it/);

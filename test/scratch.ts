@@ -19,7 +19,7 @@ export async function scratchRepo(fakePi = defaultFakePi): Promise<Scratch> {
 	await createRepository(root);
 	await mkdir(fakeBin);
 	await writeFakePi(fakeBin, fakePi);
-	return { root, fakeBin, cleanup: () => rm(parent, { recursive: true, force: true }) };
+	return { root, fakeBin, cleanup: () => rm(parent, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }) };
 }
 export async function scratchWorkspace(fakePi = defaultFakePi): Promise<Scratch & { readonly repositories: Readonly<Record<"api" | "web", string>> }> {
 	const parent = await mkdtemp(join(tmpdir(), "limen-workspace-"));
@@ -30,7 +30,7 @@ export async function scratchWorkspace(fakePi = defaultFakePi): Promise<Scratch 
 	await Promise.all(Object.values(repositories).map(createRepository));
 	await mkdir(fakeBin);
 	await writeFakePi(fakeBin, fakePi);
-	return { root, fakeBin, repositories, cleanup: () => rm(parent, { recursive: true, force: true }) };
+	return { root, fakeBin, repositories, cleanup: () => rm(parent, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }) };
 }
 async function createRepository(root: string): Promise<void> {
 	await mkdir(root);
