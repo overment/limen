@@ -103,7 +103,7 @@ test("steer reports unavailable when the worker extension never loaded", async (
 async function snapshot(job: string): Promise<string[]> {
 	const { readdir } = await import("node:fs/promises");
 	const names = await readdir(job);
-	return names.filter((name) => name !== "log" && name !== "activity" && name !== "last-tool" && name !== "tool-calls" && !name.endsWith(".tmp")).sort();
+	return names.filter((name) => name !== "log" && name !== "activity" && name !== "last-tool" && name !== "tool-calls" && name !== "born" && !name.endsWith(".tmp")).sort();
 }
 
 async function waitUntil(predicate: () => Promise<boolean>): Promise<void> {

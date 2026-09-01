@@ -123,6 +123,12 @@ test("a reaped hosted job keeps the session jsonl handoff", async (context) => {
 	context.after(scratch.cleanup);
 	limen(scratch, "init");
 	const herdr = await writeFakeHerdr(scratch.fakeBin, "missing");
+	const previous = process.env.LIMEN_HERDR;
+	process.env.LIMEN_HERDR = herdr;
+	context.after(() => {
+		if (previous === undefined) delete process.env.LIMEN_HERDR;
+		else process.env.LIMEN_HERDR = previous;
+	});
 	const job = await writeRunning(scratch.root, "hosted-gone", {
 		pid: DEAD_PID,
 		startedMsAgo: STARTUP_GRACE_MS + 60_000,
