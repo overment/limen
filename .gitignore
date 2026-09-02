@@ -4,4 +4,4 @@ coverage/
 /.limen/
 
 # operator-local Linear mirror config (per-project, never shared)
-spec/linear.md
+spec/linear.md*
