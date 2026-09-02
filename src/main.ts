@@ -2,6 +2,7 @@ import { closeCommand } from "./commands/close.ts";
 import { continueCommand } from "./commands/continue.ts";
 import { initCommand, workspaceCommand } from "./commands/init.ts";
 import { jobsCommand } from "./commands/jobs.ts";
+import { linearCommand } from "./commands/linear.ts";
 import { openCommand } from "./commands/open.ts";
 import { pruneCommand } from "./commands/prune.ts";
 import { spawnCommand } from "./commands/spawn.ts";
@@ -29,7 +30,11 @@ const COMMANDS = {
 	open: openCommand,
 	close: closeCommand,
 	sweep: sweepCommand,
-} as const satisfies Record<"init" | "workspace" | "spawn" | "continue" | "steer" | "stop" | "wait" | "jobs" | "prune" | "watch" | "unwatch" | "open" | "close" | "sweep", Command>;
+	linear: linearCommand,
+} as const satisfies Record<
+	"init" | "workspace" | "spawn" | "continue" | "steer" | "stop" | "wait" | "jobs" | "prune" | "watch" | "unwatch" | "open" | "close" | "sweep" | "linear",
+	Command
+>;
 const HELP = `limen — isolated coding jobs with files and git
 usage:
   limen init
@@ -53,6 +58,7 @@ usage:
   limen open <id|suffix|label>
   limen close <FNNN>
   limen sweep [--install|--uninstall]
+  limen linear [on|off|status]                     # Linear mirror toggle — renames spec/linear.md ↔ spec/linear.md.off
 Pass a short coordinator instruction, not $(cat ticket.md). The ticket is a pointer, not the prompt.`;
 export async function main(args: readonly string[], cwd = process.cwd()): Promise<void> {
 	try {

@@ -16,11 +16,11 @@ The filesystem is the source of truth, always: `spec/build.md` and the `spec/fea
 
 The file is operator config, not project truth — typically gitignored so a shared repository never carries someone's workspace names. Never hardcode a team, project, or issue ID anywhere else; resolve them from this file on the fly, every time.
 
-Switching is a file operation and nothing more:
+Switching is a file operation and nothing more — `limen linear on|off|status` performs it, and a bare rename is equivalent:
 
-- **Off**: rename `spec/linear.md` → `spec/linear.md.off`. The config survives; the mirror goes silent. Nothing in Linear and nothing in the folders changes — issues simply stop receiving updates.
-- **On**: rename `spec/linear.md.off` back if it exists; otherwise write the file fresh (create the Linear project first if needed) and offer a backfill for folders that gained state while the mirror was off.
-- **Status**: name which state the project is in, and the configured team/project when on.
+- **Off** (`limen linear off`): renames `spec/linear.md` → `spec/linear.md.off`. The config survives; the mirror goes silent. Nothing in Linear and nothing in the folders changes — issues simply stop receiving updates.
+- **On** (`limen linear on`): renames `spec/linear.md.off` back when it exists; with no config anywhere, the command refuses — write the file fresh (create the Linear project first if needed) and offer a backfill for folders that gained state while the mirror was off.
+- **Status** (`limen linear status`, the bare default): names which state the project is in, and the configured team/project when on.
 
 Enabling for a project is one session: create the project in Linear if needed, write `spec/linear.md`, then backfill — one issue per `spec/features/**/FNNN-*` folder, status mapped from its lane, ticket as description, reviews and outcome as comments. Disabling is deleting the file. Folders and the board are never rewritten by either direction.
 

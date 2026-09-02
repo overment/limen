@@ -15,13 +15,14 @@ test("architecture stays small, pure, direct, and dependency-free", async () => 
 	assert.deepEqual(await readdir(join(ROOT, "bin")), ["limen"]);
 	const source = await filesBelow(join(ROOT, "src"));
 	const sourceLines = (await Promise.all(source.map((path) => readFile(path, "utf8")))).reduce((sum, text) => sum + text.split("\n").length - 1, 0);
-	assert.ok(sourceLines <= 2860, `src has ${sourceLines} lines; audit against first principles`);
+	assert.ok(sourceLines <= 2902, `src has ${sourceLines} lines; audit against first principles`);
 	assert.doesNotMatch(await readFile(join(ROOT, "src/job.ts"), "utf8"), /from ["']node:/);
 	assert.deepEqual((await readdir(join(ROOT, "src/commands"))).sort(), [
 		"close.ts",
 		"continue.ts",
 		"init.ts",
 		"jobs.ts",
+		"linear.ts",
 		"open.ts",
 		"prune.ts",
 		"spawn.ts",
@@ -41,7 +42,7 @@ test("architecture stays small, pure, direct, and dependency-free", async () => 
 	const main = await readFile(join(ROOT, "src/main.ts"), "utf8");
 	assert.match(
 		main,
-		/satisfies\s+Record<\s*"init" \| "workspace" \| "spawn" \| "continue" \| "steer" \| "stop" \| "wait" \| "jobs" \| "prune" \| "watch" \| "unwatch" \| "open" \| "close" \| "sweep"\s*,?\s*Command\s*>/,
+		/satisfies\s+Record<\s*"init" \| "workspace" \| "spawn" \| "continue" \| "steer" \| "stop" \| "wait" \| "jobs" \| "prune" \| "watch" \| "unwatch" \| "open" \| "close" \| "sweep" \| "linear"\s*,?\s*Command\s*>/,
 	);
 });
 

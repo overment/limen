@@ -1,0 +1,34 @@
+import assert from "node:assert/strict";
+import { writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import test from "node:test";
+import { limen, scratchRepo } from "./scratch.ts";
+
+test("linear toggle renames the config file and reports state", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	limen(scratch, "init");
+	const bare = limen(scratch, "linear");
+	assert.equal(bare.status, 0, bare.stderr);
+	assert.match(bare.stdout, /linear mirror off \(no config\)/);
+	const refused = limen(scratch, "linear", "on");
+	assert.equal(refused.status, 1);
+	assert.match(refused.stderr, /no linear config/);
+	await writeFile(join(scratch.root, "spec/linear.md"), "# Linear mirror\nTeam: acme\nProject: Widget\n");
+	const on = limen(scratch, "linear", "status");
+	assert.equal(on.status, 0, on.stderr);
+	assert.match(on.stdout, /linear mirror on/);
+	assert.match(on.stdout, /Team: acme/);
+	const off = limen(scratch, "linear", "off");
+	assert.equal(off.status, 0, off.stderr);
+	assert.match(off.stdout, /config kept at spec\/linear\.md\.off/);
+	assert.match(limen(scratch, "linear", "status").stdout, /parked at spec\/linear\.md\.off/);
+	const restored = limen(scratch, "linear", "on");
+	assert.equal(restored.status, 0, restored.stderr);
+	assert.match(restored.stdout, /Project: Widget/);
+	assert.match(limen(scratch, "linear", "on").stdout, /linear mirror on/);
+	limen(scratch, "linear", "off");
+	assert.match(limen(scratch, "linear", "off").stdout, /already off/);
+	assert.equal(limen(scratch, "linear", "sideways").status, 1);
+	assert.equal(limen(scratch, "linear", "on", "extra").status, 1);
+});
