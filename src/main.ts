@@ -58,7 +58,7 @@ usage:
   limen open <id|suffix|label>
   limen close <FNNN>
   limen sweep [--install|--uninstall]
-  limen linear [on|off|status]                     # Linear mirror toggle — renames spec/linear.md ↔ spec/linear.md.off
+  limen linear [on [--team T --project P]|off|status]   # Linear mirror toggle — renames spec/linear.md ↔ .off; --team/--project write a fresh config
 Pass a short coordinator instruction, not $(cat ticket.md). The ticket is a pointer, not the prompt.`;
 export async function main(args: readonly string[], cwd = process.cwd()): Promise<void> {
 	try {
