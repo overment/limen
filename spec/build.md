@@ -7,6 +7,7 @@
 ## NOW
 
 - `F048-hosted-runtime-start` (🟠 ACTIVE): spawn prints the ID in seconds; the detached supervisor starts pi and owns the job. This closes the live 2026-08-27 caller-timeout orphaning before F049.
+- `F050-hunk-diff-tab` (🟠 ACTIVE): `limen diff <id>` reviews the branch in hunk when present; clean `git diff` fallback otherwise. Independent; runs beside the NOW set.
 
 ## NEXT
 
