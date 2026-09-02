@@ -18,10 +18,10 @@ import {
 	worktreeForBranch,
 } from "../git.ts";
 import { herdrAvailable, openHostedTab, openWatchTab } from "../herdr.ts";
-import { hunkBinary } from "./diff.ts";
 import { parseDuration } from "../job.ts";
 import { liveJob } from "../reap.ts";
 import { atomicWrite, finalizeJob, launchHostedSupervisor, launchWrapper } from "../wrapper.ts";
+import { hunkBinary } from "./diff.ts";
 import { pruneFinishedWorktrees } from "./prune.ts";
 
 type SpawnOptions = {

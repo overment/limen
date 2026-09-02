@@ -22,7 +22,7 @@ export async function diffCommand(args: readonly string[], cwd: string): Promise
 	const fallback = `git diff ${shellArg(range)}`;
 	const hunk = hunkBinary();
 	const herdr = herdrAvailable();
-	if (!hunk || (!process.stdin.isTTY && !herdr)) {
+	if (!hunk || ((!process.stdin.isTTY || !process.stdout.isTTY) && !herdr)) {
 		console.log(fallback);
 		return;
 	}
