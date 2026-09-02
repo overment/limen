@@ -22,9 +22,9 @@ export default function limenCommunication(pi: PiApi): void {
 	pi.on("before_agent_start", (event, context) => {
 		const root = process.env.LIMEN_CONTEXT_ROOT ?? context.cwd;
 		// Wakes are extension prompts that already carry the job record. Re-attaching vision/build
-		// on every completion is noise; speech still appends so the reply keeps its register.
+		// on every completion is noise; speech still appends, and names the wake so the reply opens with what the job did.
 		const message = isWakePrompt(event.prompt) ? undefined : readProjectContext(root);
-		const speech = readCommunication(root);
+		const speech = readCommunication(root, isWakePrompt(event.prompt));
 		if (!message && !speech) return;
 		return {
 			...(message ? { message: { customType: CONTEXT_TYPE, content: message, display: false } } : {}),
@@ -55,15 +55,18 @@ function readProjectContext(cwd: string): string {
 	].join("\n\n");
 }
 
-function readCommunication(cwd: string): string {
+function readCommunication(cwd: string, wake: boolean): string {
 	const inherited = inheritFile(cwd, ".agents/limen/communication.md", "templates/communication.md");
 	if (!inherited) return "";
 	const body = boundText(inherited.text, inherited.path, "Communication");
 	if (!body) return "";
 	const audience = process.env.LIMEN_JOB === "1" ? "agent" : "human";
+	const situation = wake
+		? " This turn was opened by a job wake, not by the human. They have not seen the job's work or its state: say which job it was and what it did before what comes next."
+		: "";
 	return [
 		"<limen-communication>",
-		`Audience for this reply: ${audience}. Use that register. Switch only for the part another agent will execute.`,
+		`Audience for this reply: ${audience}. Use that register.${situation} Switch only for the part another agent will execute.`,
 		body,
 		"</limen-communication>",
 	].join("\n\n");

@@ -48,6 +48,7 @@ test("a wake prompt skips project context and still appends speech", async (cont
 	assert.equal(result.message, undefined);
 	assert.match(result.systemPrompt ?? "", /<limen-communication>/);
 	assert.match(result.systemPrompt ?? "", /Write for a person\./);
+	assert.match(result.systemPrompt ?? "", /opened by a job wake/);
 });
 
 test("vision, build board, and styleguide attach after every user message for every role", async (context) => {
@@ -154,6 +155,7 @@ test("a project overlay wins over the package speech register", async (context) 
 	const result = start(root, { systemPrompt: "base" });
 	assert.match(result.systemPrompt ?? "", /<limen-communication>/);
 	assert.match(result.systemPrompt ?? "", /Audience for this reply: human/);
+	assert.doesNotMatch(result.systemPrompt ?? "", /opened by a job wake/);
 	assert.match(result.systemPrompt ?? "", /## Communication \(.agents\/limen\/communication\.md\)\nWrite for a person\./);
 	assert.match(result.systemPrompt ?? "", /<\/limen-communication>$/);
 });
