@@ -14,8 +14,6 @@ export async function stopCommand(args: readonly string[], cwd: string): Promise
 	}
 	const reason = args.slice(1).join(" ").trim() || "stopped by request";
 	await appendLimenLog(jobDir, `stop requested: ${reason}`);
-	const session = process.env.PI_SESSION_ID?.trim();
-	if (session && /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(session)) await mkdir(`${jobDir}/notify/delivered/${session}`, { recursive: true });
 	const hostedTarget = await text(`${jobDir}/herdr/agent`);
 	if (hostedTarget || (await text(`${jobDir}/hosted`))) {
 		await writeFile(`${jobDir}/stop-requested`, `${reason}\n`);
@@ -32,6 +30,7 @@ export async function stopCommand(args: readonly string[], cwd: string): Promise
 		}
 		const ended = await text(`${jobDir}/state`);
 		if (ended === "running") throw new Error(`${id} agent is still up; closing the tab ends it`);
+		await markCallerDelivered(jobDir);
 		console.log(`${ended} ${id}: ${reason}`);
 		return;
 	}
@@ -54,11 +53,17 @@ export async function stopCommand(args: readonly string[], cwd: string): Promise
 	await new Promise((resolve) => setTimeout(resolve, 25));
 	const settledState = (await readFile(`${jobDir}/state`, "utf8")).trim();
 	if (settledState !== "running") {
+		await markCallerDelivered(jobDir);
 		console.log(`${id} is already ${settledState}`);
 		return;
 	}
 	await finalizeJob(jobDir, requestedTerminal(reason), reason);
+	await markCallerDelivered(jobDir);
 	console.log(`${requestedTerminal(reason)} ${id}: ${reason}`);
+}
+async function markCallerDelivered(jobDir: string): Promise<void> {
+	const session = process.env.PI_SESSION_ID?.trim();
+	if (session && /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(session)) await mkdir(`${jobDir}/notify/delivered/${session}`, { recursive: true });
 }
 function text(path: string): Promise<string> {
 	return readFile(path, "utf8").then(
