@@ -313,11 +313,17 @@ test("communication is reread each turn and bounded like other project files", a
 test("missing communication inherits the package register", async (context) => {
 	const root = await projectRoot(context);
 	const result = start(root, { systemPrompt: "base" });
-	assert.match(result.systemPrompt ?? "", /## Communication \(limen\/templates\/communication\.md\)/);
-	assert.match(result.systemPrompt ?? "", /did not write this code/);
-	assert.match(result.systemPrompt ?? "", /When the previous turn failed, the first line says it failed and what is being redone/);
-	assert.match(result.systemPrompt ?? "", /## Human/);
-	assert.match(result.systemPrompt ?? "", /## Agent/);
+	const prompt = result.systemPrompt ?? "";
+	assert.match(prompt, /## Communication \(limen\/templates\/communication\.md\)/);
+	assert.match(prompt, /did not write this code/);
+	assert.match(prompt, /When the previous turn failed, the first line says it failed and what is being redone/);
+	assert.match(prompt, /## Human/);
+	assert.match(prompt, /## Agent/);
+	assert.match(prompt, /\*\*An explanation\.\*\* They asked why, or what happened\. Past tense, no new action: no tool call, no next step/);
+	assert.match(prompt, /what works now; what is being built and by whom; what is blocked and on what/);
+	assert.match(prompt, /what you can try now/);
+	assert.match(prompt, /A pasted style instruction governs the rest of the conversation/);
+	assert.match(prompt, /A wake for a job already closed is not news: one line, or nothing/);
 	assert.match(result.message?.content ?? "", /Audience for this reply: human/);
 });
 
