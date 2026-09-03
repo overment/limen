@@ -7,7 +7,6 @@
 ## NOW
 
 - `F048-hosted-runtime-start` (🟠 ACTIVE): spawn prints the ID in seconds; the detached supervisor starts pi and owns the job. This closes the live 2026-08-27 caller-timeout orphaning before F049.
-- `F050-hunk-diff-tab` (🟠 ACTIVE): `limen diff <id>` reviews the branch in hunk when present; clean `git diff` fallback otherwise. Independent; runs beside the NOW set.
 
 ## NEXT
 
@@ -17,6 +16,7 @@
 
 ## PROVEN
 
+- `F050-hunk-diff-tab` (🟢 PROVEN): `limen diff <id>` opens the job's changeset in hunk when present, else prints the git fallback. Landed `17012f8`. Review PASS of `0c8925e`.
 - `F047-reload-keeps-wakes` (🟢 PROVEN): reloaded coordinator tab keeps wakes for jobs it started. Landed `a70cf2a`.
 - `F028-provider-error-is-failed` (🟢 PROVEN): last-turn `error`/`aborted` records `failed`. Landed `967ab4b`. Signed off 2026-08-26.
 - `F046-optional-speech-command` (🟢 PROVEN): `/speak` reads the latest response without another agent turn; brief by default, full on request.
