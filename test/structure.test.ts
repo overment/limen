@@ -61,7 +61,11 @@ test("strict TypeScript and templates preserve the capability-judgment line", as
 	for (const name of ["agents.md", "communication.md", "reviewer.md", "worker.md"]) {
 		const text = await readFile(join(ROOT, "templates", name), "utf8");
 		const history = await readFile(join(ROOT, "templates/.history", name), "utf8");
-		assert.equal(history.split("\n")[0]?.split(" ")[0], createHash("sha256").update(text, "utf8").digest("hex"), `templates/.history/${name} must start with the current template hash`);
+		assert.equal(
+			history.split("\n")[0]?.split(" ")[0],
+			createHash("sha256").update(text, "utf8").digest("hex"),
+			`templates/.history/${name} must start with the current template hash`,
+		);
 	}
 	const agents = await readFile(join(ROOT, "templates/agents.md"), "utf8");
 	for (const phrase of [

@@ -101,9 +101,7 @@ test("init names a stale copy and --drop-leftovers leaves it", async (context) =
 	const scratch = await scratchRepo();
 	context.after(scratch.cleanup);
 	assert.equal(limen(scratch, "init").status, 0);
-	const lines = execFileSync("git", ["log", "-2", "--format=%H %cs", "--", "templates/reviewer.md"], { cwd: ROOT, encoding: "utf8" })
-		.trim()
-		.split("\n");
+	const lines = execFileSync("git", ["log", "-2", "--format=%H %cs", "--", "templates/reviewer.md"], { cwd: ROOT, encoding: "utf8" }).trim().split("\n");
 	const latest = lines[0];
 	const previous = lines[1];
 	assert.ok(latest && previous, "need two revisions of templates/reviewer.md");

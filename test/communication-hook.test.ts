@@ -32,9 +32,9 @@ function extension(): { readonly handlers: Handlers; readonly events: string[] }
 	limenCommunication({
 		on(event, handler) {
 			events.push(event);
-			if (event === "before_agent_start") handlers.before_agent_start = handler as Handlers["before_agent_start"];
-			if (event === "message_end") handlers.message_end = handler as Handlers["message_end"];
-			if (event === "tool_result") handlers.tool_result = handler as Handlers["tool_result"];
+			if (event === "before_agent_start") handlers.before_agent_start = handler as NonNullable<Handlers["before_agent_start"]>;
+			if (event === "message_end") handlers.message_end = handler as NonNullable<Handlers["message_end"]>;
+			if (event === "tool_result") handlers.tool_result = handler as NonNullable<Handlers["tool_result"]>;
 		},
 	});
 	return { handlers, events };
@@ -396,9 +396,7 @@ test("a stale copy is named with both dates in the drift section", async (contex
 });
 
 function gitLogPair(source: string): readonly [{ readonly hash: string; readonly date: string }, { readonly hash: string; readonly date: string }] {
-	const lines = execFileSync("git", ["log", "-2", "--format=%H %cs", "--", source], { cwd: ROOT, encoding: "utf8" })
-		.trim()
-		.split("\n");
+	const lines = execFileSync("git", ["log", "-2", "--format=%H %cs", "--", source], { cwd: ROOT, encoding: "utf8" }).trim().split("\n");
 	const parsed = lines.map((line) => ({ hash: line.slice(0, 40), date: line.slice(41) }));
 	const latest = parsed[0];
 	const previous = parsed[1];

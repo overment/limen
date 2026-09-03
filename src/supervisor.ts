@@ -241,7 +241,10 @@ async function lastHostedAssistant(jobDir: string): Promise<{ text: string; stop
 	let text = "",
 		stop = "";
 	try {
-		const newest = (await readdir(`${jobDir}/session`)).filter((name) => name.endsWith(".jsonl")).sort().at(-1);
+		const newest = (await readdir(`${jobDir}/session`))
+			.filter((name) => name.endsWith(".jsonl"))
+			.sort()
+			.at(-1);
 		if (!newest) return { text, stop };
 		for (const line of (await readFile(`${jobDir}/session/${newest}`, "utf8")).split("\n")) {
 			if (!line.trim()) continue;
