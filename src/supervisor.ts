@@ -191,17 +191,23 @@ export async function noteHostedIdle(jobDir: string, status: HostedAgentStatus, 
 	if (watch.leftWorkingAt === undefined) watch.leftWorkingAt = now;
 	const stalled = status === "blocked" || now - watch.leftWorkingAt >= thresholdMs;
 	if (!stalled) return;
-	if (status !== "blocked" && (await textFile(`${jobDir}/last-turn-tools`)) === "0") {
+	const stop = (await lastHostedAssistant(jobDir)).stop;
+	const errored = stop === "error" || stop.startsWith("error: ");
+	if (!errored && status !== "blocked" && (await textFile(`${jobDir}/last-turn-tools`)) === "0") {
 		const tree = await textFile(`${jobDir}/worktree`);
 		if (tree && cleanWorktree(tree)) return "hosted session ended";
 	}
 	const tools = Number(await textFile(`${jobDir}/tool-calls`));
 	const count = Number.isSafeInteger(tools) && tools > 0 ? tools : 0;
-	if (status !== "blocked" && count < 1) return;
+	if (!errored && status !== "blocked" && count < 1) return;
 	const elapsed = now - watch.leftWorkingAt;
 	const duration = elapsed < 60_000 ? `${Math.max(1, Math.round(elapsed / 1000))}s` : `${Math.round(elapsed / 60_000)}m`;
 	if (watch.armed) {
-		const line = status === "blocked" ? `blocked after ${count} tool calls, session still open` : `idle ${duration} after ${count} tool calls, session still open`;
+		const line = errored
+			? `errored: last turn failed with ${stop}, session still open`
+			: status === "blocked"
+				? `blocked after ${count} tool calls, session still open`
+				: `idle ${duration} after ${count} tool calls, session still open`;
 		await writeHostedResult(jobDir);
 		await recordCommits(jobDir).catch(() => {});
 		await atomicWrite(`${jobDir}/advisory`, `${line}\n`);
@@ -231,15 +237,12 @@ async function clearHostedAdvisory(jobDir: string): Promise<void> {
 	const pane = await textFile(`${jobDir}/herdr/pane`);
 	if (pane) restoreHostedPane(pane, process.env.LIMEN_ROLE === "reviewer" ? "reviewer" : "worker");
 }
-export async function writeHostedResult(jobDir: string): Promise<void> {
+async function lastHostedAssistant(jobDir: string): Promise<{ text: string; stop: string }> {
+	let text = "",
+		stop = "";
 	try {
-		const newest = (await readdir(`${jobDir}/session`))
-			.filter((name) => name.endsWith(".jsonl"))
-			.sort()
-			.at(-1);
-		if (!newest) return;
-		let last = "",
-			stop = "";
+		const newest = (await readdir(`${jobDir}/session`)).filter((name) => name.endsWith(".jsonl")).sort().at(-1);
+		if (!newest) return { text, stop };
 		for (const line of (await readFile(`${jobDir}/session/${newest}`, "utf8")).split("\n")) {
 			if (!line.trim()) continue;
 			try {
@@ -247,12 +250,17 @@ export async function writeHostedResult(jobDir: string): Promise<void> {
 				if (typeof entry !== "object" || entry === null || (entry as Record<string, unknown>).type !== "message") continue;
 				const message = (entry as Record<string, unknown>).message;
 				if (typeof message !== "object" || message === null || !("role" in message) || message.role !== "assistant") continue;
-				const text = assistantText(message);
-				const reason = assistantStopReason(message);
-				if (text) last = text;
-				stop = reason;
+				const next = assistantText(message);
+				if (next) text = next;
+				stop = assistantStopReason(message);
 			} catch {}
 		}
+	} catch {}
+	return { text, stop };
+}
+export async function writeHostedResult(jobDir: string): Promise<void> {
+	try {
+		const { text: last, stop } = await lastHostedAssistant(jobDir);
 		if (!(await textFile(`${jobDir}/result`)) && last) await atomicWrite(`${jobDir}/result`, `${last}\n`);
 		if (stop) await atomicWrite(`${jobDir}/stop-reason`, `${stop}\n`);
 	} catch {

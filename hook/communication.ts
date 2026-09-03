@@ -1,4 +1,5 @@
 import { join } from "node:path";
+import { assistantStopReason } from "../src/stream.ts";
 import { formatDrift, inheritFile, listDrift, readOptional } from "./inherit.ts";
 import { registerSpeak, type SpeakPiApi } from "./speak.ts";
 
@@ -23,6 +24,7 @@ type ToolEvent = {
 type ToolPatch = { readonly content: ToolContent[] };
 type PiApi = SpeakPiApi & {
 	on(event: "before_agent_start", handler: (event: StartEvent, context: Context) => StartResult | undefined): void;
+	on(event: "message_end", handler: (event: unknown) => void): void;
 	on(event: "tool_result", handler: (event: ToolEvent, context: Context) => ToolPatch | undefined): void;
 };
 
@@ -32,15 +34,18 @@ type ReminderKind = "specs" | "style" | "vision";
 export default function limenCommunication(pi: PiApi): void {
 	registerSpeak(pi);
 	let lastTouch: string | undefined;
+	let lastFailure: string | undefined;
 	pi.on("before_agent_start", (event, context) => {
 		const root = process.env.LIMEN_CONTEXT_ROOT ?? context.cwd;
 		const job = process.env.LIMEN_JOB === "1";
 		const touched = lastTouch;
+		const failed = lastFailure;
 		lastTouch = undefined;
+		lastFailure = undefined;
 		const extra = guidancePrompt(root, job);
 		const message = {
 			customType: CONTEXT_TYPE,
-			content: turnCue(root, job, isWakePrompt(event.prompt), touched),
+			content: turnCue(root, job, isWakePrompt(event.prompt), touched, failed),
 			display: false,
 		};
 		if (!extra) return { message };
@@ -48,6 +53,12 @@ export default function limenCommunication(pi: PiApi): void {
 			message,
 			systemPrompt: event.systemPrompt ? `${event.systemPrompt}\n\n${extra}` : extra,
 		};
+	});
+	pi.on("message_end", (event) => {
+		if (!event || typeof event !== "object" || !("message" in event)) return;
+		const message = event.message;
+		if (!message || typeof message !== "object" || !("role" in message) || message.role !== "assistant") return;
+		lastFailure = assistantStopReason(message) || undefined;
 	});
 	pi.on("tool_result", (event) => {
 		const kind = reminderKind(event);
@@ -83,9 +94,10 @@ function guidancePrompt(cwd: string, job: boolean): string {
 	return parts.join("\n\n");
 }
 
-function turnCue(cwd: string, job: boolean, wake: boolean, lastTouch: string | undefined): string {
+function turnCue(cwd: string, job: boolean, wake: boolean, lastTouch: string | undefined, failed: string | undefined): string {
 	const audience = job ? "agent" : "human";
 	const lines = [`Audience for this reply: ${audience}. Use that register. Switch only for the part another agent will execute.`];
+	if (failed) lines.push(`The previous turn failed with ${failed} and nothing reached the human.`);
 	if (wake) {
 		lines.push(
 			"This turn was opened by a job wake, not by the human. They have not seen the job's work or its state: say which job it was and what it did before what comes next.",

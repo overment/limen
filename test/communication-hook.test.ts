@@ -20,6 +20,7 @@ type ToolEvent = {
 type ToolPatch = { readonly content?: ToolContent[] };
 type Handlers = {
 	before_agent_start?: (event: StartEvent, context: Context) => StartResult | undefined;
+	message_end?: (event: unknown) => void;
 	tool_result?: (event: ToolEvent, context: Context) => ToolPatch | undefined;
 };
 
@@ -32,6 +33,7 @@ function extension(): { readonly handlers: Handlers; readonly events: string[] }
 		on(event, handler) {
 			events.push(event);
 			if (event === "before_agent_start") handlers.before_agent_start = handler as Handlers["before_agent_start"];
+			if (event === "message_end") handlers.message_end = handler as Handlers["message_end"];
 			if (event === "tool_result") handlers.tool_result = handler as Handlers["tool_result"];
 		},
 	});
@@ -138,7 +140,7 @@ test("the per-turn cue names the audience and the three reply rules and stays un
 	assert.doesNotMatch(result.message.content, /Vision one\.|Prefer small functions\.|now item/);
 	assert.match(result.message.content, /<\/limen-project-context>$/);
 	assert.ok(Buffer.byteLength(result.message.content) < 1024);
-	assert.deepEqual(extension().events, ["before_agent_start", "tool_result"]);
+	assert.deepEqual(extension().events, ["before_agent_start", "message_end", "tool_result"]);
 });
 
 test("a wake turn puts the wake cue in the per-turn note, not the system prompt", async (context) => {
@@ -195,6 +197,23 @@ test("a write under spec/, an edit of code, and limen spawn recall the matching 
 		content: [{ type: "text", text: "created" }],
 	});
 	assert.match(textOf(planned.content), /\[limen\] Vision:/);
+});
+
+test("an errored previous assistant turn puts the error on the next cue, a successful one does not", async (context) => {
+	const root = await projectRoot(context);
+	await coordinatorFiles(root);
+	const { handlers } = extension();
+	handlers.message_end?.({ message: { role: "assistant", content: [], stopReason: "error", errorMessage: "usage limit reached" } });
+	const failed = handlers.before_agent_start?.({}, { cwd: root })?.message?.content ?? "";
+	assert.match(failed, /The previous turn failed with error: usage limit reached and nothing reached the human/);
+	const again = handlers.before_agent_start?.({}, { cwd: root })?.message?.content ?? "";
+	assert.doesNotMatch(again, /previous turn failed/);
+	handlers.message_end?.({ message: { role: "assistant", content: [{ type: "text", text: "ok" }], stopReason: "stop" } });
+	const ok = handlers.before_agent_start?.({}, { cwd: root })?.message?.content ?? "";
+	assert.doesNotMatch(ok, /previous turn failed/);
+	handlers.message_end?.({ message: { role: "assistant", content: [], stopReason: "aborted" } });
+	const aborted = handlers.before_agent_start?.({}, { cwd: root })?.message?.content ?? "";
+	assert.match(aborted, /The previous turn failed with aborted and nothing reached the human/);
 });
 
 test("the next turn names what the last turn touched", async (context) => {
@@ -282,6 +301,7 @@ test("missing communication inherits the package register", async (context) => {
 	const result = start(root, { systemPrompt: "base" });
 	assert.match(result.systemPrompt ?? "", /## Communication \(limen\/templates\/communication\.md\)/);
 	assert.match(result.systemPrompt ?? "", /did not write this code/);
+	assert.match(result.systemPrompt ?? "", /When the previous turn failed, the first line says it failed and what is being redone/);
 	assert.match(result.systemPrompt ?? "", /## Human/);
 	assert.match(result.systemPrompt ?? "", /## Agent/);
 	assert.match(result.message?.content ?? "", /Audience for this reply: human/);
