@@ -8,25 +8,26 @@
 ## NOW
 
 - `F048-hosted-runtime-start` (🟠 ACTIVE): spawn prints the ID in seconds; the detached supervisor starts pi and owns the job. This closes the live 2026-08-27 caller-timeout orphaning before F049.
-- `F051-readable-jobs` (🟠 ACTIVE): at a TTY `limen jobs` renders aligned human rows and sectioned detail; piped output stays byte-identical for the coordinator. Groundwork for a later board tab.
-- `F052-context-by-reference` (🟠 ACTIVE): the project-context message carries file pointers and presence rules instead of vision/board/styleguide bodies; the note rides every user message so the obligation survives compaction.
+- `F054-stale-overlay-notice` (🟠 ACTIVE): drift names a project copy of an older package template with both dates.
+- `F053-guidance-recall` (🟠 ACTIVE): shop manual, register, vision, and styleguide ride the system prompt once per call; a short per-turn cue and tool-result reminders at the moment of use.
+- `F055-hosted-finish` (🟠 ACTIVE): a `finish` tool ends a hosted job as done; `done:` stops record done.
+- `F058-spawn-hardening` (🟠 ACTIVE): task from a file or stdin, validate before the job dir, optional prepare step, orphans named and pruned.
+- `F063-reviewer-verdict-discipline` (🟠 ACTIVE): reviews open PASS/FAIL, block only on acceptance, never on the environment.
 
 ## NEXT
 
-- `F054-stale-overlay-notice` (🔴 PLANNED): drift names a project copy of an older package template with both dates. First; it unblocks every project running stale prompts.
-- `F053-guidance-recall` (🔴 PLANNED): shop manual, register, vision, and styleguide ride the system prompt once per call; a small per-turn cue and tool-result reminders recall the rule at the moment of use. After F052 lands.
-- `F059-board-compression` (🔴 PLANNED): PROVEN keeps ten entries and folds older months into one highlight line; the F053 digest reads NOW and NEXT. Beside F053.
-- `F055-hosted-finish` (🔴 PLANNED): a `finish` tool ends a hosted job as done, `done:` stops record done, and the stopping session gets no echo wake.
-- `F056-wake-routing-truth` (🔴 PLANNED): fallback waits minutes and goes only to sessions that own jobs; an errored turn keeps the wake; facts before instructions.
-- `F057-failed-turn-visible` (🔴 PLANNED): the coordinator says its previous turn failed; the hosted supervisor raises an errored advisory.
-- `F058-spawn-hardening` (🔴 PLANNED): task from a file or stdin, validation before the job dir, a prepare step, orphan dirs named and pruned. Beside F049.
-- `F060-reply-shapes`, `F061-coordinator-ceilings`, `F062-worker-budgets`, `F063-reviewer-verdict-discipline` (🔴 PLANNED): prose only, one template each; after F054 so projects inherit them.
+- `F056-wake-routing-truth` (🔴 PLANNED): fallback waits minutes and goes only to sessions that own jobs; an errored turn keeps the wake; facts before instructions. After F055.
+- `F057-failed-turn-visible` (🔴 PLANNED): the coordinator says its previous turn failed; the hosted supervisor raises an errored advisory. After F053.
+- `F059-board-compression` (🔴 PLANNED): PROVEN keeps ten entries and folds older months into one highlight line. Beside F053.
+- `F060-reply-shapes`, `F061-coordinator-ceilings`, `F062-worker-budgets` (🔴 PLANNED): prose only; after F054 so projects inherit them.
 - `F049-running-owner-truth` (🔴 PLANNED): reaper adopts a hosted job that lost its supervisor, fails one with no live owner; no shape-based skips. Before F013.
 - `F013-remote-seat` (PLANNED): one disk, attach don’t clone; docs and seat-shaped guarantees. Before F014.
 - `F014-github-doorbell` (PLANNED): mention or label starts a job on the seat; comment back evidence; merge stays human.
 
 ## PROVEN
 
+- `F052-context-by-reference` (🟢 PROVEN): the per-turn note points at vision, board, and styleguide instead of attaching bodies. Landed `67c0c70`.
+- `F051-readable-jobs` (🟢 PROVEN): at a TTY `limen jobs` prints aligned human rows; piped output stays compact. Landed `1077419`.
 - `F050-hunk-diff-tab` (🟢 PROVEN): `limen diff <id>` opens the job's changeset in hunk when present, else prints the git fallback. Landed `17012f8`. Review PASS of `0c8925e`.
 - `F047-reload-keeps-wakes` (🟢 PROVEN): reloaded coordinator tab keeps wakes for jobs it started. Landed `a70cf2a`.
 - `F028-provider-error-is-failed` (🟢 PROVEN): last-turn `error`/`aborted` records `failed`. Landed `967ab4b`. Signed off 2026-08-26.
