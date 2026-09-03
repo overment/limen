@@ -75,6 +75,8 @@ test("strict TypeScript and templates preserve the capability-judgment line", as
 		"genuine ambiguity",
 		"never blocks",
 		"recovery",
+		"last ten landed",
+		"month line",
 	])
 		assert.match(agents.toLowerCase(), new RegExp(phrase));
 });
