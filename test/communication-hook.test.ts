@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import test from "node:test";
 import limenCommunication from "../hook/communication.ts";
+
+const ROOT = new URL("..", import.meta.url).pathname;
 
 type Context = { readonly cwd: string };
 type Message = { readonly customType: string; readonly content: string; readonly display: boolean };
@@ -216,3 +219,31 @@ test("identical leftover copies are named as leftovers, overlays as overlays", a
 	assert.match(content, /overlay \(differs; keep, drop, or edit\): AGENTS\.md/);
 	assert.doesNotMatch(content, /## Shop manual/);
 });
+
+test("a stale copy is named with both dates in the drift section", async (context) => {
+	const root = await projectRoot(context);
+	const inherited = { job: process.env.LIMEN_JOB, contextRoot: process.env.LIMEN_CONTEXT_ROOT };
+	delete process.env.LIMEN_JOB;
+	delete process.env.LIMEN_CONTEXT_ROOT;
+	context.after(() => {
+		if (inherited.job === undefined) delete process.env.LIMEN_JOB;
+		else process.env.LIMEN_JOB = inherited.job;
+		if (inherited.contextRoot === undefined) delete process.env.LIMEN_CONTEXT_ROOT;
+		else process.env.LIMEN_CONTEXT_ROOT = inherited.contextRoot;
+	});
+	const [latest, previous] = gitLogPair("templates/reviewer.md");
+	await writeFile(join(root, ".agents/limen/reviewer.md"), execFileSync("git", ["show", `${previous.hash}:templates/reviewer.md`], { cwd: ROOT, encoding: "utf8" }));
+	const content = start(root).message?.content ?? "";
+	assert.equal(content.includes(`stale (package text as of ${previous.date}; package changed ${latest.date}): .agents/limen/reviewer.md`), true);
+});
+
+function gitLogPair(source: string): readonly [{ readonly hash: string; readonly date: string }, { readonly hash: string; readonly date: string }] {
+	const lines = execFileSync("git", ["log", "-2", "--format=%H %cs", "--", source], { cwd: ROOT, encoding: "utf8" })
+		.trim()
+		.split("\n");
+	const parsed = lines.map((line) => ({ hash: line.slice(0, 40), date: line.slice(41) }));
+	const latest = parsed[0];
+	const previous = parsed[1];
+	assert.ok(latest && previous, `need two revisions of ${source}`);
+	return [latest, previous];
+}
