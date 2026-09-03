@@ -12,7 +12,6 @@
 - `F053-guidance-recall` (🟠 ACTIVE): shop manual, register, vision, and styleguide ride the system prompt once per call; a short per-turn cue and tool-result reminders at the moment of use.
 - `F055-hosted-finish` (🟠 ACTIVE): a `finish` tool ends a hosted job as done; `done:` stops record done.
 - `F058-spawn-hardening` (🟠 ACTIVE): task from a file or stdin, validate before the job dir, optional prepare step, orphans named and pruned.
-- `F063-reviewer-verdict-discipline` (🟠 ACTIVE): reviews open PASS/FAIL, block only on acceptance, never on the environment.
 
 ## NEXT
 
@@ -26,6 +25,7 @@
 
 ## PROVEN
 
+- `F063-reviewer-verdict-discipline` (🟢 PROVEN): reviews open `PASS`/`FAIL` with the sha, block only on acceptance, never on the environment. Landed `3ecafa0`. Review PASS of `f556f14`.
 - `F052-context-by-reference` (🟢 PROVEN): the per-turn note points at vision, board, and styleguide instead of attaching bodies. Landed `67c0c70`.
 - `F051-readable-jobs` (🟢 PROVEN): at a TTY `limen jobs` prints aligned human rows; piped output stays compact. Landed `1077419`.
 - `F050-hunk-diff-tab` (🟢 PROVEN): `limen diff <id>` opens the job's changeset in hunk when present, else prints the git fallback. Landed `17012f8`. Review PASS of `0c8925e`.
