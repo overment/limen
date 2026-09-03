@@ -29,7 +29,7 @@ type PiApi = {
 };
 
 const SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"] as const;
-const FALLBACK_GRACE_MS = 2_000;
+const DEFAULT_FALLBACK_GRACE_MS = 5 * 60_000;
 const CLAIM_STALE_MS = 30_000;
 type HerdrPane = { readonly binary: string; readonly pane: string };
 
@@ -65,6 +65,7 @@ export default function limenWake(pi: PiApi): void {
 		accepted: boolean;
 		entered: boolean;
 		answered: boolean;
+		errored: boolean;
 		settled: boolean;
 	};
 	const pendingDeliveries = new Map<string, PendingDelivery>();
@@ -189,7 +190,7 @@ export default function limenWake(pi: PiApi): void {
 			return Boolean(pending && (pending.entered || session?.isIdle() !== true));
 		},
 		pending(claim, delivered) {
-			pendingDeliveries.set(claim, { claim, delivered, message, blocked, accepted: false, entered: false, answered: false, settled: false });
+			pendingDeliveries.set(claim, { claim, delivered, message, blocked, accepted: false, entered: false, answered: false, errored: false, settled: false });
 			refreshClaim(claim);
 		},
 		accepted(claim) {
@@ -209,7 +210,8 @@ export default function limenWake(pi: PiApi): void {
 		const branch = text(join(job, "branch"));
 		const repo = text(join(job, "repo"));
 		const slot = fallback ? "_fallback" : sessionId;
-		if (fallback && (completionSlots(deliveredSlots(job)).length > 0 || session.isIdle() !== true || muted)) return false;
+		if (!fallback && deliveryExists(job, sessionId)) return false;
+		if (fallback && (completionSlots(deliveredSlots(job)).length > 0 || session.isIdle() !== true || muted || !sessionOwnsJobs(jobs, sessionId))) return false;
 		const blocked = () => {
 			try {
 				session?.ui.notify(`limen: ${label} wake was unconfirmed twice; automatic delivery stopped (${id})`, "info");
@@ -223,16 +225,15 @@ export default function limenWake(pi: PiApi): void {
 			// Read claims before delivered records: rename moves atomically between them, so one side is always visible.
 			if (fallback)
 				return (
-					session?.isIdle() === true && !muted && completionSlots(claimSlots(job)).every((claim) => claim === "_fallback") && completionSlots(deliveredSlots(job)).length === 0
+					session?.isIdle() === true &&
+					!muted &&
+					sessionOwnsJobs(jobs, sessionId) &&
+					completionSlots(claimSlots(job)).every((claim) => claim === "_fallback") &&
+					completionSlots(deliveredSlots(job)).length === 0
 				);
 			return subscribed(job, sessionId) && !existsSync(join(job, "notify", "claims", "_fallback")) && !existsSync(join(job, "notify", "delivered", "_fallback"));
 		};
-		const route = fallback ? " This completion was routed here because no subscribed coordinator received it." : "";
-		const location = repo ? ` in repository ${repo}` : "";
-		const next = jobProducedNothing(job)
-			? " It produced nothing (0 tool calls, no commits). Inspect the job record and log/session to understand why, then resume focused work if the ticket remains open."
-			: " Inspect the job record, branch diff and commits, log/session, and relevant checks. Use the accepted ticket intent to take the next safe step: merge acceptable reviewed work, or resume focused fixes and re-review.";
-		const message = `Limen job ${JSON.stringify(label)} is ${state} (${id}) on branch ${branch}${location}.${route}${next} Keep the user informed; ask only when genuine product ambiguity, a scope or risk tradeoff, or an irreversible action needs a human decision.${handoffExcerpt(job)}`;
+		const message = completionWake(job, label, state, id, branch, repo, fallback);
 		const routed = claimDelivery(
 			job,
 			slot,
@@ -260,7 +261,8 @@ export default function limenWake(pi: PiApi): void {
 		const branch = text(join(job, "branch"));
 		const repo = text(join(job, "repo"));
 		const slot = fallback ? "_advisory._fallback" : `_advisory.${sessionId}`;
-		if (fallback && (advisorySlots(deliveredSlots(job)).length > 0 || session.isIdle() !== true || muted)) return false;
+		if (!fallback && deliveryExists(job, slot)) return false;
+		if (fallback && (advisorySlots(deliveredSlots(job)).length > 0 || session.isIdle() !== true || muted || !sessionOwnsJobs(jobs, sessionId))) return false;
 		const kind = advisory.startsWith("blocked") ? "blocked" : advisory.startsWith("errored:") ? "errored" : "idle";
 		const blocked = () => {
 			try {
@@ -276,6 +278,7 @@ export default function limenWake(pi: PiApi): void {
 				return (
 					session?.isIdle() === true &&
 					!muted &&
+					sessionOwnsJobs(jobs, sessionId) &&
 					advisorySlots(claimSlots(job)).every((claim) => claim === "_advisory._fallback") &&
 					advisorySlots(deliveredSlots(job)).length === 0
 				);
@@ -283,9 +286,7 @@ export default function limenWake(pi: PiApi): void {
 				subscribed(job, sessionId) && !existsSync(join(job, "notify", "claims", "_advisory._fallback")) && !existsSync(join(job, "notify", "delivered", "_advisory._fallback"))
 			);
 		};
-		const route = fallback ? " This advisory was routed here because no subscribed coordinator received it." : "";
-		const location = repo ? ` in repository ${repo}` : "";
-		const message = `Limen job ${JSON.stringify(label)} is still running (${id}) on branch ${branch}${location}: ${advisory}.${route} Inspect the job record and continue the loop; steer; or open the tab and exit if you mean the session to end.${handoffExcerpt(job)}`;
+		const message = advisoryWake(job, label, id, branch, repo, advisory, fallback);
 		const routed = claimDelivery(
 			job,
 			slot,
@@ -332,7 +333,8 @@ export default function limenWake(pi: PiApi): void {
 	const confirmDeliveries = () => {
 		for (const pending of pendingDeliveries.values()) {
 			if (!pending.accepted || !pending.settled) continue;
-			if (pending.entered && pending.answered) confirmClaim(pending.claim, pending.delivered);
+			if (pending.errored) releaseUncounted(pending.claim);
+			else if (pending.entered && pending.answered) confirmClaim(pending.claim, pending.delivered);
 			else if (recordUnconfirmed(pending.claim)) pending.blocked();
 			pendingDeliveries.delete(pending.claim);
 		}
@@ -445,10 +447,13 @@ export default function limenWake(pi: PiApi): void {
 	});
 	pi.on("message_end", (event) => {
 		const message = eventMessage(event);
-		if (!message || message.role !== "assistant" || message.stopReason === "error" || message.stopReason === "aborted") return;
+		if (!message || message.role !== "assistant") return;
+		const failed = message.stopReason === "error" || message.stopReason === "aborted";
 		for (const claim of activeDeliveries) {
 			const pending = pendingDeliveries.get(claim);
-			if (pending) pending.answered = true;
+			if (!pending) continue;
+			if (failed) pending.errored = true;
+			else pending.answered = true;
 		}
 	});
 	pi.on("agent_settled", () => {
@@ -514,6 +519,46 @@ function handoffExcerpt(job: string): string {
 		// Inbox may be absent; that is not an undelivered steer.
 	}
 	return sections.length ? `\n\n${sections.join("\n\n")}` : "";
+}
+function completionWake(job: string, label: string, state: string, id: string, branch: string, repo: string, fallback: boolean): string {
+	const location = repo ? ` in repository ${repo}` : "";
+	const task = firstSentence(text(join(job, "task.md")));
+	const lead = task
+		? `Limen job ${JSON.stringify(label)}: ${task}\nis ${state} (${id}) on branch ${branch}${location}.`
+		: `Limen job ${JSON.stringify(label)} is ${state} (${id}) on branch ${branch}${location}.`;
+	const empty = jobProducedNothing(job);
+	const facts = empty ? "It produced nothing (0 tool calls, no commits)." : "";
+	const instruction = fallback
+		? "The subscribed coordinator is busy. Do not spawn, stop, or steer on this wake unless the human asks."
+		: empty
+			? "Inspect the job record and log/session to understand why, then resume focused work if the ticket remains open. Keep the user informed; ask only when genuine product ambiguity, a scope or risk tradeoff, or an irreversible action needs a human decision."
+			: "Inspect the job record, branch diff and commits, log/session, and relevant checks. Use the accepted ticket intent to take the next safe step: merge acceptable reviewed work, or resume focused fixes and re-review. Keep the user informed; ask only when genuine product ambiguity, a scope or risk tradeoff, or an irreversible action needs a human decision.";
+	return joinWake(lead, handoffExcerpt(job), facts, instruction);
+}
+function advisoryWake(job: string, label: string, id: string, branch: string, repo: string, advisory: string, fallback: boolean): string {
+	const location = repo ? ` in repository ${repo}` : "";
+	const task = firstSentence(text(join(job, "task.md")));
+	const lead = task
+		? `Limen job ${JSON.stringify(label)}: ${task}\nis still running (${id}) on branch ${branch}${location}: ${advisory}.`
+		: `Limen job ${JSON.stringify(label)} is still running (${id}) on branch ${branch}${location}: ${advisory}.`;
+	const instruction = fallback
+		? "The subscribed coordinator is busy. Do not spawn, stop, or steer on this wake unless the human asks."
+		: "Inspect the job record and continue the loop; steer; or open the tab and exit if you mean the session to end.";
+	return joinWake(lead, handoffExcerpt(job), "", instruction);
+}
+function joinWake(lead: string, excerpt: string, facts: string, instruction: string): string {
+	const parts = [lead];
+	if (excerpt) parts.push(excerpt.trim());
+	if (facts) parts.push(facts);
+	parts.push(instruction);
+	return parts.join("\n\n");
+}
+function firstSentence(body: string): string {
+	const paragraph = body.trim().split(/\n\n/, 1)[0]?.replaceAll("\n", " ").trim() ?? "";
+	if (!paragraph) return "";
+	const cut = paragraph.search(/[.!?](?:\s|$)/);
+	const sentence = (cut === -1 ? paragraph : paragraph.slice(0, cut + 1)).trim();
+	return sentence.length > 240 ? `${sentence.slice(0, 239)}…` : sentence;
 }
 function jobProducedNothing(job: string): boolean {
 	const commits = existsSync(join(job, "commits")) ? text(join(job, "commits")) : undefined;
@@ -583,6 +628,15 @@ function claimDelivery(job: string, slot: string, eligible: () => boolean, send:
 		mkdirSync(claim);
 		writeFileSync(join(claim, "owner"), `${process.pid}\n${new Date().toISOString()}\n`);
 	} catch {
+		return false;
+	}
+	if (existsSync(delivered)) {
+		try {
+			appendFileSync(join(job, "log"), `[limen ${new Date().toISOString()}] dropped duplicate wake for ${slot}\n`);
+		} catch {
+			// The released claim is the durable fact.
+		}
+		rmSync(claim, { recursive: true, force: true });
 		return false;
 	}
 	if (!eligible()) {
@@ -734,7 +788,36 @@ function subscribeSession(job: string, session: string): void {
 function oldEnoughForFallback(job: string, stamp = join(job, "finished-at")): boolean {
 	const finished = Date.parse(text(stamp));
 	const since = Number.isFinite(finished) ? finished : statSync(existsSync(stamp) ? stamp : join(job, "state")).mtimeMs;
-	return Date.now() - since >= FALLBACK_GRACE_MS;
+	return Date.now() - since >= fallbackGraceMs();
+}
+function fallbackGraceMs(): number {
+	const raw = Number(process.env.LIMEN_WAKE_FALLBACK_MS);
+	return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_FALLBACK_GRACE_MS;
+}
+function sessionOwnsJobs(jobs: string, session: string): boolean {
+	try {
+		for (const id of readdirSync(jobs)) {
+			if (existsSync(join(jobs, id, "notify", "subscribers", session))) return true;
+		}
+	} catch {
+		// Missing jobs directory means this session owns nothing here.
+	}
+	return false;
+}
+function releaseUncounted(claim: string): void {
+	try {
+		rmSync(claim, { recursive: true, force: true });
+	} catch {
+		// Already recovered or confirmed.
+	}
+	try {
+		appendFileSync(
+			join(dirname(dirname(dirname(claim))), "log"),
+			`[limen ${new Date().toISOString()}] wake turn ended error or aborted; claim released without counting an attempt\n`,
+		);
+	} catch {
+		// The released claim is the durable fact.
+	}
 }
 function isAdvisorySlot(slot: string): boolean {
 	return slot.startsWith("_advisory.");

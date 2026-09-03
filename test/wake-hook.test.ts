@@ -77,7 +77,9 @@ test("wake ignores history, announces start, and steers once on terminal change"
 	assert.equal(statuses.at(-1), undefined);
 	// Idle coordinators get a normal user message (visible turn), not a buried steer.
 	assert.equal(messages[0]?.deliverAs, undefined);
-	assert.match(messages[0]?.content ?? "", /Limen job "F001 implementation" is done \(new\).*take the next safe step.*ask only when genuine product ambiguity/);
+	assert.match(messages[0]?.content ?? "", /Limen job "F001 implementation" is done \(new\)/);
+	assert.match(messages[0]?.content ?? "", /take the next safe step/);
+	assert.match(messages[0]?.content ?? "", /ask only when genuine product ambiguity/);
 	assert.ok(notifications.some((value) => value.includes("is done (new)")));
 	await writeFile(join(jobs, "new/state"), "failed\n");
 	await new Promise((resolve) => setTimeout(resolve, 100));
@@ -130,6 +132,12 @@ test("a completion wake carries bounded commits and the worker's final message",
 	assert.match(wake, /result line 15\n…/);
 	assert.doesNotMatch(wake, /result line 16/);
 	assert.match(wake, /Inspect the job record/, "the pointer sentence stays");
+	const labelAt = wake.indexOf("F017 handoff");
+	const stateAt = wake.indexOf("is done (handoff)");
+	const commitsAt = wake.indexOf("Commits:");
+	const excerptAt = wake.indexOf("Final message:");
+	const instructionAt = wake.indexOf("Inspect the job record");
+	assert.ok(labelAt >= 0 && labelAt < stateAt && stateAt < commitsAt && commitsAt < excerptAt && excerptAt < instructionAt, "facts precede the instruction");
 	// A stopped job without commits or result keeps a plain state-only wake.
 	await mkdir(join(jobs, "bare"), { recursive: true });
 	await writeFile(join(jobs, "bare/label"), "F017 bare\n");
@@ -171,7 +179,8 @@ test("a completion wake says when a terminal job produced nothing", async (conte
 	await subscribe(jobs, "empty", "coordinator-a");
 	await writeFile(join(empty, "state"), "done\n");
 	await waitUntil(() => messages.length === 1);
-	assert.match(messages[0] ?? "", /is done \(empty\).*It produced nothing \(0 tool calls, no commits\)/);
+	assert.match(messages[0] ?? "", /is done \(empty\)/);
+	assert.match(messages[0] ?? "", /It produced nothing \(0 tool calls, no commits\)/);
 	assert.match(messages[0] ?? "", /Stop reason: error: usage limit reached/);
 
 	const survey = join(jobs, "survey");
@@ -525,8 +534,9 @@ test("subscriptions scope wakes and one idle coordinator receives fallback", asy
 	await writeFile(join(jobs, "fallback/finished-at"), "2000-01-01T00:00:00.000Z\n");
 	await writeFile(join(jobs, "fallback/state"), "done\n");
 	await waitUntil(() => messagesA.length + messagesB.length === 4);
-	const fallback = [...messagesA, ...messagesB].find((message) => message.includes("routed here"));
-	assert.ok(fallback, "one idle unrelated coordinator must receive the fallback handoff");
+	const fallback = [...messagesA, ...messagesB].find((message) => message.includes("subscribed coordinator is busy"));
+	assert.ok(fallback, "one idle coordinator that owns jobs must receive the fallback handoff");
+	assert.match(fallback ?? "", /Do not spawn, stop, or steer on this wake unless the human asks/);
 
 	handlersA.get("session_shutdown")?.({}, sessionA);
 	handlersB.get("session_shutdown")?.({}, sessionB);
@@ -549,8 +559,15 @@ test("subscriptions scope wakes and one idle coordinator receives fallback", asy
 	const sessionC = { cwd: root, isIdle: () => true, sessionManager: sessionManager("coordinator-c"), ui: { notify() {}, setStatus() {} } };
 	handlersC.get("session_start")?.({}, sessionC);
 	context.after(() => handlersC.get("session_shutdown")?.({}, sessionC));
-	await waitUntil(() => messagesC.length === 1);
-	assert.match(messagesC[0] ?? "", /F013 pending.*routed here/);
+	await new Promise((resolve) => setTimeout(resolve, 200));
+	assert.equal(messagesC.length, 0, "a session that owns no jobs must not take fallback");
+	await mkdir(join(jobs, "c-owned"), { recursive: true });
+	await writeFile(join(jobs, "c-owned/label"), "C owned\n");
+	await writeFile(join(jobs, "c-owned/branch"), "c-owned\n");
+	await subscribe(jobs, "c-owned", "coordinator-c");
+	await writeFile(join(jobs, "c-owned/state"), "running\n");
+	await waitUntil(() => messagesC.some((message) => message.includes("F013 pending")));
+	assert.match(messagesC.find((message) => message.includes("F013 pending")) ?? "", /subscribed coordinator is busy/);
 });
 
 test("already-delivered jobs never re-enter the fallback claim path", async (context) => {
@@ -1324,7 +1341,7 @@ test("another listener does not recover a live accepted claim", async (context) 
 	assert.equal(existsSync(join(job, "notify/delivered/coordinator-a")), true);
 });
 
-test("a provider-error turn is unconfirmed and retries before delivery", async (context) => {
+test("a provider-error turn releases the claim without spending an attempt", async (context) => {
 	stashEnv(context, "LIMEN_JOB", undefined);
 	stashEnv(context, "LIMEN_HERDR", "0");
 	const root = await import("node:fs/promises").then(({ mkdtemp }) => mkdtemp(join(process.env.TMPDIR ?? "/tmp", "limen-wake-error-turn-")));
@@ -1354,9 +1371,12 @@ test("a provider-error turn is unconfirmed and retries before delivery", async (
 	emitWakeTurn(handlers, session, messages[0] ?? "", "error");
 	const { existsSync } = await import("node:fs");
 	assert.equal(existsSync(join(job, "notify/delivered/coordinator-a")), false);
+	assert.equal(existsSync(join(job, "notify/unconfirmed/_completion")), false, "error must not spend a confirmation attempt");
 	await waitUntil(() => messages.length === 2);
+	assert.match(await readFile(join(job, "log"), "utf8"), /without counting an attempt/);
 	emitWakeTurn(handlers, session, messages[1] ?? "");
 	assert.equal(existsSync(join(job, "notify/delivered/coordinator-a")), true);
+	assert.equal(existsSync(join(job, "notify/unconfirmed/_completion")), false);
 	await new Promise((resolve) => setTimeout(resolve, 550));
 	assert.equal(messages.length, 2, "confirmation prevents a third injection");
 });
@@ -1564,6 +1584,118 @@ test("a stop-marked session receives no completion wake", async (context) => {
 	await waitUntil(() => otherMessages.length === 1);
 	assert.match(otherMessages[0] ?? "", /Final message:\nhandoff from the worker/);
 	assert.equal(messages.length, 0);
+});
+
+test("fallback waits out the grace window and skips sessions that own no jobs", async (context) => {
+	stashEnv(context, "LIMEN_JOB", undefined);
+	stashEnv(context, "LIMEN_HERDR", "0");
+	stashEnv(context, "LIMEN_WAKE_FALLBACK_MS", "60000");
+	const root = await import("node:fs/promises").then(({ mkdtemp }) => mkdtemp(join(process.env.TMPDIR ?? "/tmp", "limen-wake-grace-")));
+	context.after(() => import("node:fs/promises").then(({ rm }) => rm(root, { recursive: true, force: true })));
+	await mkdir(join(root, ".agents/limen"), { recursive: true });
+	const jobs = join(root, ".limen/jobs");
+	const handlersA = new Map<string, (event: unknown, context: TestContext) => void>();
+	const handlersB = new Map<string, (event: unknown, context: TestContext) => void>();
+	const handlersC = new Map<string, (event: unknown, context: TestContext) => void>();
+	const messagesA: string[] = [];
+	const messagesB: string[] = [];
+	const messagesC: string[] = [];
+	for (const [handlers, messages] of [
+		[handlersA, messagesA],
+		[handlersB, messagesB],
+		[handlersC, messagesC],
+	] as const) {
+		limenWake({
+			on(event, handler) {
+				handlers.set(event, handler);
+			},
+			sendUserMessage(content) {
+				messages.push(content);
+			},
+		});
+	}
+	const sessionA = { cwd: root, isIdle: () => false, sessionManager: sessionManager("coordinator-a"), ui: { notify() {}, setStatus() {} } };
+	const sessionB = { cwd: root, isIdle: () => true, sessionManager: sessionManager("coordinator-b"), ui: { notify() {}, setStatus() {} } };
+	const sessionC = { cwd: root, isIdle: () => true, sessionManager: sessionManager("coordinator-c"), ui: { notify() {}, setStatus() {} } };
+	handlersA.get("session_start")?.({}, sessionA);
+	handlersB.get("session_start")?.({}, sessionB);
+	handlersC.get("session_start")?.({}, sessionC);
+	context.after(() => {
+		handlersA.get("session_shutdown")?.({}, sessionA);
+		handlersB.get("session_shutdown")?.({}, sessionB);
+		handlersC.get("session_shutdown")?.({}, sessionC);
+	});
+	await mkdir(join(jobs, "mine"), { recursive: true });
+	await writeFile(join(jobs, "mine/label"), "F056 mine\n");
+	await writeFile(join(jobs, "mine/branch"), "limen/mine\n");
+	await subscribe(jobs, "mine", "coordinator-a");
+	await writeFile(join(jobs, "mine/state"), "running\n");
+	await mkdir(join(jobs, "other"), { recursive: true });
+	await writeFile(join(jobs, "other/label"), "F056 other\n");
+	await writeFile(join(jobs, "other/branch"), "limen/other\n");
+	await subscribe(jobs, "other", "coordinator-b");
+	await writeFile(join(jobs, "other/state"), "running\n");
+	await writeFile(join(jobs, "mine/state"), "done\n");
+	await waitUntil(() => messagesA.some((message) => message.includes("is done (mine)")));
+	await new Promise((resolve) => setTimeout(resolve, 250));
+	assert.equal(messagesB.filter((message) => message.includes("is done (mine)")).length, 0, "an idle helper must not take fallback inside the grace window");
+	assert.equal(messagesC.length, 0);
+	await mkdir(join(jobs, "orphan"), { recursive: true });
+	await writeFile(join(jobs, "orphan/label"), "F056 orphan\n");
+	await writeFile(join(jobs, "orphan/branch"), "limen/orphan\n");
+	await subscribe(jobs, "orphan", "closed-session");
+	await writeFile(join(jobs, "orphan/finished-at"), "2000-01-01T00:00:00.000Z\n");
+	await writeFile(join(jobs, "orphan/state"), "done\n");
+	await waitUntil(() => messagesB.some((message) => message.includes("is done (orphan)")));
+	assert.match(messagesB.find((message) => message.includes("is done (orphan)")) ?? "", /subscribed coordinator is busy/);
+	assert.equal(messagesC.filter((message) => message.includes("is done (orphan)")).length, 0, "a session with no subscriber or watch record must not take fallback");
+});
+
+test("a wake opens with label and task and ends with the instruction", async (context) => {
+	stashEnv(context, "LIMEN_JOB", undefined);
+	stashEnv(context, "LIMEN_HERDR", "0");
+	const root = await import("node:fs/promises").then(({ mkdtemp }) => mkdtemp(join(process.env.TMPDIR ?? "/tmp", "limen-wake-order-text-")));
+	context.after(() => import("node:fs/promises").then(({ rm }) => rm(root, { recursive: true, force: true })));
+	await mkdir(join(root, ".agents/limen"), { recursive: true });
+	const jobs = join(root, ".limen/jobs");
+	const handlers = new Map<string, (event: unknown, context: TestContext) => void>();
+	const messages: string[] = [];
+	limenWake({
+		on(event, handler) {
+			handlers.set(event, handler);
+		},
+		sendUserMessage(content) {
+			messages.push(content);
+		},
+	});
+	const session = { cwd: root, isIdle: () => true, sessionManager: sessionManager("coordinator-a"), ui: { notify() {}, setStatus() {} } };
+	handlers.get("session_start")?.({}, session);
+	context.after(() => handlers.get("session_shutdown")?.({}, session));
+	await mkdir(join(jobs, "order"), { recursive: true });
+	await writeFile(join(jobs, "order/label"), "F056 order\n");
+	await writeFile(join(jobs, "order/branch"), "limen/order\n");
+	await writeFile(join(jobs, "order/task.md"), "Implement the routing truth. Then inspect the rest of the ticket.\n");
+	await writeFile(join(jobs, "order/commits"), "abc1234 routing work\n");
+	await writeFile(join(jobs, "order/result"), "worker final\n");
+	await subscribe(jobs, "order", "coordinator-a");
+	await writeFile(join(jobs, "order/state"), "done\n");
+	await waitUntil(() => messages.length === 1);
+	const wake = messages[0] ?? "";
+	const labelAt = wake.indexOf("F056 order");
+	const taskAt = wake.indexOf("Implement the routing truth.");
+	const stateAt = wake.indexOf("is done (order)");
+	const commitsAt = wake.indexOf("Commits:");
+	const excerptAt = wake.indexOf("Final message:");
+	const instructionAt = wake.indexOf("Inspect the job record");
+	assert.ok(
+		labelAt >= 0 && labelAt < taskAt && taskAt < stateAt && stateAt < commitsAt && commitsAt < excerptAt && excerptAt < instructionAt,
+		"label, task sentence, state, commits, excerpt, then instruction",
+	);
+	assert.doesNotMatch(wake, /Then inspect the rest of the ticket/);
+	assert.match(wake.slice(instructionAt), /Keep the user informed/);
+	emitWakeTurn(handlers, session, wake);
+	await new Promise((resolve) => setTimeout(resolve, 650));
+	assert.equal(messages.length, 1, "two sweeps cannot deliver one completion twice to one session");
 });
 
 function emitWakeTurn(handlers: Map<string, (event: unknown, context: TestContext) => void>, session: TestContext, content: string, stopReason = "stop"): void {
