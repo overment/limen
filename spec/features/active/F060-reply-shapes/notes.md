@@ -35,4 +35,4 @@ Isolated `pi -p --no-tools --no-session --no-extensions --no-skills --no-context
 
 ## Open
 
-`templates/.history/communication.md` refresh after the register commit (`LIMEN_WRITE_HISTORY=1 node --test test/inherit.test.ts`).
+None. History refreshed in `a5f95d6`.
