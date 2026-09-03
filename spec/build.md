@@ -3,13 +3,24 @@
 ## TRACK
 
 - Reliable in-flight control on one seat; a laptop is a window; GitHub may ring the doorbell later.
+- 2026-09-03 Alice audit: guidance present once per call and recalled at the moment of use; hosted jobs end themselves; review loops stop at the ceiling. F053–F063.
 
 ## NOW
 
 - `F048-hosted-runtime-start` (🟠 ACTIVE): spawn prints the ID in seconds; the detached supervisor starts pi and owns the job. This closes the live 2026-08-27 caller-timeout orphaning before F049.
+- `F051-readable-jobs` (🟠 ACTIVE): at a TTY `limen jobs` renders aligned human rows and sectioned detail; piped output stays byte-identical for the coordinator. Groundwork for a later board tab.
+- `F052-context-by-reference` (🟠 ACTIVE): the project-context message carries file pointers and presence rules instead of vision/board/styleguide bodies; the note rides every user message so the obligation survives compaction.
 
 ## NEXT
 
+- `F054-stale-overlay-notice` (🔴 PLANNED): drift names a project copy of an older package template with both dates. First; it unblocks every project running stale prompts.
+- `F053-guidance-recall` (🔴 PLANNED): shop manual, register, vision, and styleguide ride the system prompt once per call; a small per-turn cue and tool-result reminders recall the rule at the moment of use. After F052 lands.
+- `F059-board-compression` (🔴 PLANNED): PROVEN keeps ten entries and folds older months into one highlight line; the F053 digest reads NOW and NEXT. Beside F053.
+- `F055-hosted-finish` (🔴 PLANNED): a `finish` tool ends a hosted job as done, `done:` stops record done, and the stopping session gets no echo wake.
+- `F056-wake-routing-truth` (🔴 PLANNED): fallback waits minutes and goes only to sessions that own jobs; an errored turn keeps the wake; facts before instructions.
+- `F057-failed-turn-visible` (🔴 PLANNED): the coordinator says its previous turn failed; the hosted supervisor raises an errored advisory.
+- `F058-spawn-hardening` (🔴 PLANNED): task from a file or stdin, validation before the job dir, a prepare step, orphan dirs named and pruned. Beside F049.
+- `F060-reply-shapes`, `F061-coordinator-ceilings`, `F062-worker-budgets`, `F063-reviewer-verdict-discipline` (🔴 PLANNED): prose only, one template each; after F054 so projects inherit them.
 - `F049-running-owner-truth` (🔴 PLANNED): reaper adopts a hosted job that lost its supervisor, fails one with no live owner; no shape-based skips. Before F013.
 - `F013-remote-seat` (PLANNED): one disk, attach don’t clone; docs and seat-shaped guarantees. Before F014.
 - `F014-github-doorbell` (PLANNED): mention or label starts a job on the seat; comment back evidence; merge stays human.

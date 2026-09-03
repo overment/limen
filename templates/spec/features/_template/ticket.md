@@ -1,27 +1,23 @@
-# FNNN-slug · Feature title
+# FNNN · What becomes true
 
-> Allocate the next unused feature number. Keep it for the feature's whole life and never reuse it.
-
-[YYYY-MM-DD] [🔴] [STATUS] [COORDINATOR] PLANNED · FNNN-slug
-
-Status marks are prose: 🔴 PLANNED · 🟠 ACTIVE · 🟢 PROVEN · ⚪ DROPPED. Update the line when the folder moves. Nothing in `limen` parses it.
+> Allocate the next unused feature number and keep it for life. The folder name is the slug and the lane it sits in is the status, so the ticket carries neither. Write for a worker in a cold worktree and an owner deciding whether this is worth doing: about three hundred words, per the speech register's Specs rules. Delete this note.
 
 ## Outcome
 
-<!-- What becomes true for a user or operator? -->
+<!-- Two to four sentences. What a user or operator can do or see afterwards; why now, if the board does not say. Product terms, no mechanism. -->
 
 ## Scope
 
-- <!-- Work this feature owns. -->
+- <!-- The boundary and the starting seam, one line each. Not the edit list. -->
 
 ## Out of scope
 
-- <!-- Nearby work deliberately excluded. -->
+- <!-- Only nearby work someone would plausibly do by mistake. -->
 
 ## Acceptance
 
-- <!-- Observable behavior or checks that demonstrate the outcome. -->
+- <!-- One observable behavior or check per line, verifiable with a command or a look. -->
 
 ## Notes
 
-<!-- Context, decisions, worker questions, and review notes may live beside this ticket. -->
+<!-- Optional. Decisions and open questions only. Never progress. -->
