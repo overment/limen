@@ -51,7 +51,7 @@ test("a wake prompt skips project context and still appends speech", async (cont
 	assert.match(result.systemPrompt ?? "", /opened by a job wake/);
 });
 
-test("vision, build board, and styleguide attach after every user message for every role", async (context) => {
+test("the note references vision, board, and styleguide with their rules instead of attaching bodies", async (context) => {
 	const root = await projectRoot(context);
 	await mkdir(join(root, "spec/features/active/F001-auth"), { recursive: true });
 	await writeFile(join(root, "spec/vision.md"), "\nVision one.\n\n");
@@ -68,10 +68,19 @@ test("vision, build board, and styleguide attach after every user message for ev
 	assert.equal(result.message.customType, "limen-project-context");
 	assert.equal(result.message.display, false);
 	assert.match(result.message.content, /^<limen-project-context>/);
-	assert.match(result.message.content, /how to write and organize code here/);
-	assert.match(result.message.content, /## Vision \(spec\/vision\.md\)\nVision one\./);
-	assert.match(result.message.content, /## Build board \(spec\/build\.md\)\n`F001-auth`/);
-	assert.match(result.message.content, /## Styleguide \(.agents\/limen\/styleguide\.md\)\nPrefer small functions\./);
+	assert.match(result.message.content, /referenced, not attached/);
+	assert.match(result.message.content, /re-read them after compaction/);
+	assert.match(result.message.content, /## Governing files/);
+	assert.match(
+		result.message.content,
+		/- `spec\/vision\.md` — durable intent\. Keep it present in the interaction at all times; load it before any touch of the feature specifications\./,
+	);
+	assert.match(result.message.content, /- `spec\/build\.md` — the current state of work/);
+	assert.match(
+		result.message.content,
+		/- `\.agents\/limen\/styleguide\.md` — project coding practice\. Load it before writing or modifying feature specifications, and have it in context whenever you modify files\./,
+	);
+	assert.doesNotMatch(result.message.content, /Vision one\.|`F001-auth`|Prefer small functions\./);
 	assert.doesNotMatch(result.message.content, /Shop manual/);
 	assert.match(result.message.content, /<\/limen-project-context>$/);
 	assert.deepEqual(extension().events, ["before_agent_start"]);
@@ -91,42 +100,21 @@ test("workspace jobs resolve project context from their workspace root", async (
 		else process.env.LIMEN_CONTEXT_ROOT = inheritedContextRoot;
 	});
 	const content = start(worktree).message?.content ?? "";
-	assert.match(content, /Workspace direction\./);
-	assert.match(content, /# Build/);
-	assert.match(content, /Workspace code style\./);
+	assert.match(content, /- `spec\/vision\.md` — durable intent/);
+	assert.match(content, /- `spec\/build\.md` — the current state of work/);
+	assert.match(content, /- `\.agents\/limen\/styleguide\.md` — project coding practice/);
+	assert.doesNotMatch(content, /Workspace direction\.|Workspace code style\./);
 });
 
-test("project context reads fresh file contents for each user message", async (context) => {
+test("the note re-evaluates each turn, so a file planted mid-session appears on the next message", async (context) => {
 	const root = await projectRoot(context);
-	await writeFile(join(root, "spec/vision.md"), "First direction.\n");
 	const { handlers } = extension();
 	const first = handlers.before_agent_start?.({}, { cwd: root })?.message?.content;
-	await writeFile(join(root, "spec/vision.md"), "Second direction.\n");
+	await writeFile(join(root, "spec/vision.md"), "First direction.\n");
 	const second = handlers.before_agent_start?.({}, { cwd: root })?.message?.content;
-	assert.match(first ?? "", /First direction\./);
-	assert.doesNotMatch(first ?? "", /Second direction\./);
-	assert.match(second ?? "", /Second direction\./);
+	assert.doesNotMatch(first ?? "", /## Governing files/);
+	assert.match(second ?? "", /## Governing files\n- `spec\/vision\.md` — durable intent/);
 	assert.doesNotMatch(second ?? "", /First direction\./);
-});
-
-test("vision, build, and styleguide share a bounded loader with a remaining-context notice", async (context) => {
-	const root = await projectRoot(context);
-	const vision = Array.from({ length: 1001 }, (_, index) => `vision ${index + 1}`).join("\n");
-	const build = Array.from({ length: 1001 }, (_, index) => `build ${index + 1}`).join("\n");
-	const styleguide = Array.from({ length: 1001 }, (_, index) => `style ${index + 1}`).join("\n");
-	await writeFile(join(root, "spec/vision.md"), vision);
-	await writeFile(join(root, "spec/build.md"), build);
-	await writeFile(join(root, ".agents/limen/styleguide.md"), styleguide);
-	const content = start(root).message?.content ?? "";
-	for (const [prefix, path] of [
-		["vision", "spec/vision.md"],
-		["build", "spec/build.md"],
-		["style", ".agents/limen/styleguide.md"],
-	] as const) {
-		assert.match(content, new RegExp(`${prefix} 1000`));
-		assert.doesNotMatch(content, new RegExp(`${prefix} 1001\\n`));
-		assert.match(content, new RegExp(`\\[${path.replaceAll(".", "\\.").replaceAll("/", "\\/")} truncated to 1000 of 1001 lines; read the file for remaining context\\.\\]`));
-	}
 });
 
 test("build-board advice is non-blocking and names missing board or feature references", async (context) => {
@@ -138,7 +126,8 @@ test("build-board advice is non-blocking and names missing board or feature refe
 	await mkdir(join(root, "spec/features/planned/F002-api"), { recursive: true });
 	await writeFile(join(root, "spec/build.md"), "# Build\n- `F002-api-v2`\n");
 	const drifting = start(root).message?.content ?? "";
-	assert.match(drifting, /## Build board \(spec\/build\.md\)\n# Build/);
+	assert.match(drifting, /- `spec\/build\.md` — the current state of work/);
+	assert.doesNotMatch(drifting, /`spec\/build\.md` is unavailable/);
 	assert.match(drifting, /planned: F002-api/);
 	assert.match(drifting, /advisory, not a gate/);
 });

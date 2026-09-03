@@ -16,7 +16,7 @@ type PiApi = SpeakPiApi & {
 	on(event: "before_agent_start", handler: (event: StartEvent, context: Context) => StartResult | undefined): void;
 };
 
-/** Attach project context after each user message. Append speech to the system prompt so it never appears in the thread. */
+/** Attach a governing-files note after each user message; bodies stay on disk. Append speech to the system prompt so it never appears in the thread. */
 export default function limenCommunication(pi: PiApi): void {
 	registerSpeak(pi);
 	pi.on("before_agent_start", (event, context) => {
@@ -37,22 +37,26 @@ function isWakePrompt(prompt: string | undefined): boolean {
 	return typeof prompt === "string" && prompt.startsWith("Limen job ");
 }
 
+const GOVERNING_FILES = [
+	["spec/vision.md", "durable intent. Keep it present in the interaction at all times; load it before any touch of the feature specifications."],
+	["spec/build.md", "the current state of work (TRACK / NOW / NEXT / PROVEN). Consult it before selecting, starting, or reporting work, and keep it aligned as work moves."],
+	[".agents/limen/styleguide.md", "project coding practice. Load it before writing or modifying feature specifications, and have it in context whenever you modify files."],
+] as const;
+
 function readProjectContext(cwd: string): string {
-	const sections = [
-		readBoundedFile(cwd, "spec/vision.md", "Vision"),
-		readBoundedFile(cwd, "spec/build.md", "Build board"),
-		readBoundedFile(cwd, ".agents/limen/styleguide.md", "Styleguide"),
-		readInheritedAgents(cwd),
-		buildAdvisory(cwd),
-		formatDrift(listDrift(cwd)),
-	].filter((section): section is string => Boolean(section));
+	const sections = [governingFileNotes(cwd), readInheritedAgents(cwd), buildAdvisory(cwd), formatDrift(listDrift(cwd))].filter((section): section is string => Boolean(section));
 	if (!sections.length) return "";
 	return [
 		"<limen-project-context>",
-		"Project-owned context attached to this user message. Follow the current human request and accepted ticket; use the vision for durable intent, the build board for current state, and the styleguide for how to write and organize code here.",
+		"Important note: the project files below govern this work and are referenced, not attached. This note rides on every user message; the file bodies do not. Having their current contents in context is your responsibility — read them with your tools, and re-read them after compaction or when work has landed since your last read. Follow the current human request and the accepted ticket.",
 		...sections,
 		"</limen-project-context>",
 	].join("\n\n");
+}
+
+function governingFileNotes(cwd: string): string {
+	const lines = GOVERNING_FILES.filter(([path]) => readOptional(join(cwd, path)) !== undefined).map(([path, rule]) => `- \`${path}\` — ${rule}`);
+	return lines.length ? `## Governing files\n${lines.join("\n")}` : "";
 }
 
 function readCommunication(cwd: string, wake: boolean): string {
@@ -76,12 +80,6 @@ function readInheritedAgents(cwd: string): string {
 	if (process.env.LIMEN_JOB === "1" || readOptional(join(cwd, "AGENTS.md")) !== undefined) return "";
 	const inherited = inheritFile(cwd, "AGENTS.md", "templates/agents.md");
 	return inherited ? boundText(inherited.text, inherited.path, "Shop manual") : "";
-}
-
-function readBoundedFile(cwd: string, path: string, label: string): string {
-	const text = readOptional(join(cwd, path));
-	if (text === undefined) return "";
-	return boundText(text, path, label);
 }
 
 function boundText(text: string, path: string, label: string): string {
