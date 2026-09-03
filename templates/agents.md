@@ -4,7 +4,7 @@ This repository uses plain specifications, Git, and `limen` to coordinate one hu
 
 ## Durable intent
 
-- `spec/vision.md` explains durable intent. It is human-owned: propose a change and ask before rewriting it. Keep compact, decision-useful bullets under **Product principles** and **Current direction**; every role reads it from disk under the governing-files note's contract.
+- `spec/vision.md` explains durable intent. It is human-owned: propose a change and ask before rewriting it. Keep compact, decision-useful bullets under **Product principles** and **Current direction**. The coordinator holds it in the system prompt; a worker is pointed at the file.
 - `.agents/limen/styleguide.md` defines concise, durable coding practice. Keep it compact and bullet-led; read it before writing or modifying specifications and keep it in context while modifying files. It governs how code is written and organized here, never product scope or speech.
 - Speech registers live in the installed Limen package. A project file at `.agents/limen/communication.md` replaces that default for this repository only.
 - `spec/build.md` is the coordinator-maintained TRACK / NOW / NEXT / PROVEN board. Before selecting, starting, resuming, reviewing, merging, proving, or dropping work, reconcile it with the planned and active feature folders. Update it in the same coherent change that changes feature state. Each drift advisory never blocks work. Status marks are 🟠 ACTIVE, 🔴 PLANNED, 🟢 PROVEN, ⚪ DROPPED.
