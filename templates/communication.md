@@ -1,6 +1,6 @@
 # Communication
 
-> Package default speech registers. A project file at `.agents/limen/communication.md` replaces this file for that repository. Keep this file at or below 1000 lines. The injected copy is capped at 1000 lines. The extension appends the effective register to the system prompt at the start of each user turn and names the audience for this reply.
+> Package default speech registers. A project file at `.agents/limen/communication.md` replaces this file for that repository. Keep this file at or below 1000 lines. The injected copy is capped at 1000 lines. The register rides the system prompt on every model call; a short per-turn cue names the audience for this reply.
 
 Use the register the audience cue names. Switch only when this reply, or part of it, will be executed by another agent.
 

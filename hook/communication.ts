@@ -1,35 +1,60 @@
-import { readdirSync } from "node:fs";
 import { join } from "node:path";
 import { formatDrift, inheritFile, listDrift, readOptional } from "./inherit.ts";
 import { registerSpeak, type SpeakPiApi } from "./speak.ts";
 
 const CONTEXT_TYPE = "limen-project-context";
 const MAX_CONTEXT_LINES = 1000;
-const FEATURE_NAME = /^F\d+-[A-Za-z0-9][A-Za-z0-9._-]*$/;
-const BOARD_FEATURE = /(?:^|[^A-Za-z0-9._-])(F\d+-[A-Za-z0-9][A-Za-z0-9._-]*)/g;
+const REPLY_RULES = "First line is the answer. No identifier without its meaning. Size the reply to the question.";
+const SPECS_REMINDER =
+	"[limen] Specs: a ticket is about 300 words: outcome, scope, out of scope, acceptance. No status line, no bare feature numbers, no progress markers. Title is `FNNN · what becomes true`.";
+const STYLE_REMINDER = "[limen] Styleguide: small, direct TypeScript. One file, one job. No index.ts, types.ts, utils.ts, barrels, or enums. Inform, do not gate.";
+const VISION_REMINDER = "[limen] Vision: one human; many focused sessions; one coordinator. One short job; one isolated worktree. Fresh review before trust. Inform; do not gate.";
 
 type Context = { readonly cwd: string };
 type Message = { readonly customType: string; readonly content: string; readonly display: boolean };
 type StartEvent = { readonly prompt?: string; readonly systemPrompt?: string };
 type StartResult = { readonly message?: Message; readonly systemPrompt?: string };
+type ToolContent = { readonly type: string; readonly text?: string };
+type ToolEvent = {
+	readonly toolName?: string;
+	readonly input?: Record<string, unknown>;
+	readonly content?: readonly ToolContent[];
+};
+type ToolPatch = { readonly content: ToolContent[] };
 type PiApi = SpeakPiApi & {
 	on(event: "before_agent_start", handler: (event: StartEvent, context: Context) => StartResult | undefined): void;
+	on(event: "tool_result", handler: (event: ToolEvent, context: Context) => ToolPatch | undefined): void;
 };
 
-/** Attach a governing-files note after each user message; bodies stay on disk. Append speech to the system prompt so it never appears in the thread. */
+type ReminderKind = "specs" | "style" | "vision";
+
+/** Stable guidance rides the system prompt once per call. The per-turn note is a short cue; tool results recall the rule that applies. */
 export default function limenCommunication(pi: PiApi): void {
 	registerSpeak(pi);
+	let lastTouch: string | undefined;
 	pi.on("before_agent_start", (event, context) => {
 		const root = process.env.LIMEN_CONTEXT_ROOT ?? context.cwd;
-		// Wakes are extension prompts that already carry the job record. Re-attaching vision/build
-		// on every completion is noise; speech still appends, and names the wake so the reply opens with what the job did.
-		const message = isWakePrompt(event.prompt) ? undefined : readProjectContext(root);
-		const speech = readCommunication(root, isWakePrompt(event.prompt));
-		if (!message && !speech) return;
-		return {
-			...(message ? { message: { customType: CONTEXT_TYPE, content: message, display: false } } : {}),
-			...(speech ? { systemPrompt: `${event.systemPrompt ?? ""}\n\n${speech}` } : {}),
+		const job = process.env.LIMEN_JOB === "1";
+		const touched = lastTouch;
+		lastTouch = undefined;
+		const extra = guidancePrompt(root, job);
+		const message = {
+			customType: CONTEXT_TYPE,
+			content: turnCue(root, job, isWakePrompt(event.prompt), touched),
+			display: false,
 		};
+		if (!extra) return { message };
+		return {
+			message,
+			systemPrompt: event.systemPrompt ? `${event.systemPrompt}\n\n${extra}` : extra,
+		};
+	});
+	pi.on("tool_result", (event) => {
+		const kind = reminderKind(event);
+		if (!kind) return;
+		lastTouch = touchLine(event, kind);
+		const reminder = kind === "specs" ? SPECS_REMINDER : kind === "style" ? STYLE_REMINDER : VISION_REMINDER;
+		return { content: appendText(event.content, reminder) };
 	});
 }
 
@@ -37,49 +62,68 @@ function isWakePrompt(prompt: string | undefined): boolean {
 	return typeof prompt === "string" && prompt.startsWith("Limen job ");
 }
 
-const GOVERNING_FILES = [
-	["spec/vision.md", "durable intent. Keep it present in the interaction at all times; load it before any touch of the feature specifications."],
-	["spec/build.md", "the current state of work (TRACK / NOW / NEXT / PROVEN). Consult it before selecting, starting, or reporting work, and keep it aligned as work moves."],
-	[".agents/limen/styleguide.md", "project coding practice. Load it before writing or modifying feature specifications, and have it in context whenever you modify files."],
-] as const;
-
-function readProjectContext(cwd: string): string {
-	const sections = [governingFileNotes(cwd), readInheritedAgents(cwd), buildAdvisory(cwd), formatDrift(listDrift(cwd))].filter((section): section is string => Boolean(section));
-	if (!sections.length) return "";
-	return [
-		"<limen-project-context>",
-		"Important note: the project files below govern this work and are referenced, not attached. This note rides on every user message; the file bodies do not. Having their current contents in context is your responsibility — read them with your tools, and re-read them after compaction or when work has landed since your last read. Follow the current human request and the accepted ticket.",
-		...sections,
-		"</limen-project-context>",
-	].join("\n\n");
+function guidancePrompt(cwd: string, job: boolean): string {
+	const parts: string[] = [];
+	if (!job) {
+		const shop = readInheritedAgents(cwd);
+		if (shop) parts.push(shop);
+	}
+	const register = readRegister(cwd);
+	if (register) parts.push(register);
+	if (!job) {
+		const vision = boundFile(cwd, "spec/vision.md", "Vision");
+		if (vision) parts.push(vision);
+	}
+	const style = boundFile(cwd, ".agents/limen/styleguide.md", "Styleguide");
+	if (style) parts.push(style);
+	if (!job) {
+		const digest = boardDigest(cwd);
+		if (digest) parts.push(digest);
+	}
+	return parts.join("\n\n");
 }
 
-function governingFileNotes(cwd: string): string {
-	const lines = GOVERNING_FILES.filter(([path]) => readOptional(join(cwd, path)) !== undefined).map(([path, rule]) => `- \`${path}\` — ${rule}`);
-	return lines.length ? `## Governing files\n${lines.join("\n")}` : "";
+function turnCue(cwd: string, job: boolean, wake: boolean, lastTouch: string | undefined): string {
+	const audience = job ? "agent" : "human";
+	const lines = [`Audience for this reply: ${audience}. Use that register. Switch only for the part another agent will execute.`];
+	if (wake) {
+		lines.push(
+			"This turn was opened by a job wake, not by the human. They have not seen the job's work or its state: say which job it was and what it did before what comes next.",
+		);
+	}
+	if (job) {
+		const ticket = jobTicket(cwd);
+		if (ticket) lines.push(`Ticket: ${ticket}`);
+		if (readOptional(join(cwd, "spec/vision.md")) !== undefined) {
+			lines.push("Vision (read-only): `spec/vision.md` — durable intent. Load it before choosing or starting work.");
+		}
+		if (readOptional(join(cwd, "spec/build.md")) !== undefined) {
+			lines.push("Board (read-only): `spec/build.md` — consult before reporting work; do not edit.");
+		}
+	}
+	lines.push(REPLY_RULES);
+	if (lastTouch) lines.push(lastTouch);
+	if (!job) {
+		const drift = formatDrift(listDrift(cwd));
+		if (drift) lines.push(drift);
+	}
+	return ["<limen-project-context>", ...lines, "</limen-project-context>"].join("\n\n");
 }
 
-function readCommunication(cwd: string, wake: boolean): string {
+function readRegister(cwd: string): string {
 	const inherited = inheritFile(cwd, ".agents/limen/communication.md", "templates/communication.md");
-	if (!inherited) return "";
-	const body = boundText(inherited.text, inherited.path, "Communication");
-	if (!body) return "";
-	const audience = process.env.LIMEN_JOB === "1" ? "agent" : "human";
-	const situation = wake
-		? " This turn was opened by a job wake, not by the human. They have not seen the job's work or its state: say which job it was and what it did before what comes next."
-		: "";
-	return [
-		"<limen-communication>",
-		`Audience for this reply: ${audience}. Use that register.${situation} Switch only for the part another agent will execute.`,
-		body,
-		"</limen-communication>",
-	].join("\n\n");
+	return inherited ? boundText(inherited.text, inherited.path, "Communication") : "";
 }
 
 function readInheritedAgents(cwd: string): string {
-	if (process.env.LIMEN_JOB === "1" || readOptional(join(cwd, "AGENTS.md")) !== undefined) return "";
+	if (readOptional(join(cwd, "AGENTS.md")) !== undefined) return "";
 	const inherited = inheritFile(cwd, "AGENTS.md", "templates/agents.md");
 	return inherited ? boundText(inherited.text, inherited.path, "Shop manual") : "";
+}
+
+function boundFile(cwd: string, relative: string, label: string): string {
+	const text = readOptional(join(cwd, relative));
+	return text === undefined ? "" : boundText(text, relative, label);
 }
 
 function boundText(text: string, path: string, label: string): string {
@@ -90,27 +134,98 @@ function boundText(text: string, path: string, label: string): string {
 	return `## ${label} (${path})\n${content}${notice}`;
 }
 
-function buildAdvisory(cwd: string): string {
+function boardDigest(cwd: string): string {
 	const board = readOptional(join(cwd, "spec/build.md"));
-	if (board === undefined) return "## Build-board advisory\n`spec/build.md` is unavailable. Reconcile the board before proceeding; this is an advisory, not a gate.";
-	const boardFeatures = new Set(Array.from(board.matchAll(BOARD_FEATURE), (match) => match[1]));
-	const missing = ["active", "planned"].flatMap((lane) =>
-		featureNames(cwd, lane)
-			.filter((feature) => !boardFeatures.has(feature))
-			.map((feature) => `${lane}: ${feature}`),
-	);
-	if (!missing.length) return "";
-	return `## Build-board advisory\nThese feature folders are not referenced by \`spec/build.md\`: ${missing.join(", ")}. Reconcile the board before proceeding; this is an advisory, not a gate.`;
+	if (board === undefined) return "";
+	const body = ["NOW", "NEXT"]
+		.map((heading) => markdownSection(board, heading))
+		.filter(Boolean)
+		.join("\n\n");
+	return body ? boundText(body, "spec/build.md", "Board digest") : "";
 }
 
-function featureNames(cwd: string, lane: string): readonly string[] {
-	try {
-		return readdirSync(join(cwd, "spec/features", lane), { withFileTypes: true })
-			.filter((entry) => entry.isDirectory() && FEATURE_NAME.test(entry.name))
-			.map((entry) => entry.name);
-	} catch {
-		return [];
+function markdownSection(text: string, heading: string): string {
+	const lines = text.replaceAll("\r\n", "\n").split("\n");
+	const start = lines.findIndex((line) => /^##\s+/.test(line) && line.replace(/^##\s+/, "").trim() === heading);
+	if (start < 0) return "";
+	let end = lines.length;
+	for (let index = start + 1; index < lines.length; index++) {
+		if (/^##\s+/.test(lines[index] ?? "")) {
+			end = index;
+			break;
+		}
 	}
+	return lines.slice(start, end).join("\n").trim();
+}
+
+function jobTicket(cwd: string): string {
+	const id = process.env.LIMEN_JOB_ID?.trim();
+	if (!id) return "";
+	const task = readOptional(join(cwd, ".limen/jobs", id, "task.md"));
+	if (task === undefined) return "";
+	const match = task.match(/Ticket:\s+(\S+)/);
+	return (match?.[1] ?? "").replace(/[.,;]+$/, "");
+}
+
+function reminderKind(event: ToolEvent): ReminderKind | undefined {
+	const name = event.toolName ?? "";
+	if (name === "write" || name === "edit") {
+		const path = toolPath(event);
+		if (isSpecPath(path)) return "specs";
+		if (isCodePath(path)) return "style";
+		return;
+	}
+	if ((name === "bash" || name === "powershell") && isVisionCommand(stringField(event.input, "command"))) return "vision";
+}
+
+function touchLine(event: ToolEvent, kind: ReminderKind): string {
+	if (kind === "specs") {
+		const verb = event.toolName === "edit" ? "edited" : "wrote";
+		return `Last turn ${verb} ${toolPath(event)}; the Specs register governs tickets and board lines.`;
+	}
+	if (kind === "style") {
+		const verb = event.toolName === "edit" ? "edited" : "wrote";
+		return `Last turn ${verb} ${toolPath(event)}; the styleguide governs how files are written.`;
+	}
+	return "Last turn started or merged work; the vision governs choosing and starting work.";
+}
+
+function toolPath(event: ToolEvent): string {
+	return stringField(event.input, "path") || stringField(event.input, "file_path");
+}
+
+function stringField(input: Record<string, unknown> | undefined, key: string): string {
+	const value = input?.[key];
+	return typeof value === "string" ? value : "";
+}
+
+function posixPath(path: string): string {
+	return path.replaceAll("\\", "/");
+}
+
+function isSpecPath(path: string): boolean {
+	return /(?:^|\/)spec\//.test(posixPath(path));
+}
+
+function isCodePath(path: string): boolean {
+	return /\.(?:[cm]?[jt]sx?)$/.test(posixPath(path));
+}
+
+function isVisionCommand(command: string): boolean {
+	if (/\blimen\s+spawn\b/.test(command)) return true;
+	if (/\bgit\s+merge\b/.test(command)) return true;
+	return /\b(?:mkdir|cp|mv|touch|install)\b/.test(command) && /spec\/features\/planned\//.test(command);
+}
+
+function appendText(content: readonly ToolContent[] | undefined, text: string): ToolContent[] {
+	const parts: ToolContent[] = content ? content.map((part) => ({ ...part })) : [];
+	const last = parts.at(-1);
+	if (last?.type === "text" && typeof last.text === "string") {
+		parts[parts.length - 1] = { type: "text", text: `${last.text}\n\n${text}` };
+		return parts;
+	}
+	parts.push({ type: "text", text });
+	return parts;
 }
 
 function trimmedLines(text: string): readonly string[] {
