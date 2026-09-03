@@ -81,6 +81,42 @@ test("strict TypeScript and templates preserve the capability-judgment line", as
 		assert.match(agents.toLowerCase(), new RegExp(phrase));
 });
 
+test("shop manual holds review and merge ceilings", async () => {
+	const agents = (await readFile(join(ROOT, "templates/agents.md"), "utf8")).toLowerCase();
+	for (const phrase of [
+		"appetite the owner states",
+		"holds for the conversation",
+		"second fail",
+		"labelled proven",
+		"what remains and what it cost",
+		"ticket line, not a repair",
+		"names the findings file and the commit",
+		"no probe list",
+		"no verdict word",
+		"no hash typed by hand",
+		"one check that would prove",
+		"on the candidate branch",
+		"trailing whitespace",
+		"zero changed files",
+		"names the file and the first edit",
+		"steer is ignored",
+		"posted its handoff",
+		"ends committed",
+		"five minutes",
+		"becomes a survey job",
+		"only merge target",
+		"stays clean",
+		"render check",
+		"two hundred words",
+		"ticket problem",
+		"file and the first edit",
+		"rides on every later spawn",
+		"board's decisions",
+		"called `finish` is finished",
+	])
+		assert.match(agents, new RegExp(phrase));
+});
+
 test("worker stays off the board and inside reading and check budgets", async () => {
 	const worker = (await readFile(join(ROOT, "templates/worker.md"), "utf8")).toLowerCase();
 	for (const phrase of [
