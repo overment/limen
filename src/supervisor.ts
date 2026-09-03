@@ -238,14 +238,11 @@ async function clearHostedAdvisory(jobDir: string): Promise<void> {
 	if (pane) restoreHostedPane(pane, process.env.LIMEN_ROLE === "reviewer" ? "reviewer" : "worker");
 }
 async function lastHostedAssistant(jobDir: string): Promise<{ text: string; stop: string }> {
+	let text = "",
+		stop = "";
 	try {
-		const newest = (await readdir(`${jobDir}/session`))
-			.filter((name) => name.endsWith(".jsonl"))
-			.sort()
-			.at(-1);
-		if (!newest) return { text: "", stop: "" };
-		let text = "",
-			stop = "";
+		const newest = (await readdir(`${jobDir}/session`)).filter((name) => name.endsWith(".jsonl")).sort().at(-1);
+		if (!newest) return { text, stop };
 		for (const line of (await readFile(`${jobDir}/session/${newest}`, "utf8")).split("\n")) {
 			if (!line.trim()) continue;
 			try {
@@ -258,10 +255,8 @@ async function lastHostedAssistant(jobDir: string): Promise<{ text: string; stop
 				stop = assistantStopReason(message);
 			} catch {}
 		}
-		return { text, stop };
-	} catch {
-		return { text: "", stop: "" };
-	}
+	} catch {}
+	return { text, stop };
 }
 export async function writeHostedResult(jobDir: string): Promise<void> {
 	try {
