@@ -347,6 +347,60 @@ test("stop with a done: reason records done and silences the stopping session", 
 	assert.ok((await readdir(join(job, "notify/delivered"))).includes("coordinator-a"));
 });
 
+test("a successful hosted stop marks the caller delivered after terminal state", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	limen(scratch, "init");
+	const id = "hosted-dead";
+	const job = join(scratch.root, ".limen/jobs", id);
+	await mkdir(job);
+	await writeFile(join(job, "state"), "running\n");
+	await writeFile(join(job, "branch"), "main\n");
+	await writeFile(join(job, "task.md"), "hosted\n");
+	await writeFile(join(job, "log"), "");
+	await writeFile(join(job, "hosted"), "hosted\n");
+	const stopped = limenWithSession(scratch, "coordinator-a", "stop", id, "hosted stop");
+	assert.equal(stopped.status, 0, stopped.stderr);
+	assert.equal((await readFile(join(job, "state"), "utf8")).trim(), "stopped");
+	assert.ok((await readdir(join(job, "notify/delivered"))).includes("coordinator-a"));
+});
+
+test("a hosted stop that is still running does not mark the caller delivered", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	limen(scratch, "init");
+	const id = "hosted-live";
+	const job = join(scratch.root, ".limen/jobs", id);
+	await mkdir(job);
+	await writeFile(join(job, "state"), "running\n");
+	await writeFile(join(job, "branch"), "main\n");
+	await writeFile(join(job, "task.md"), "hosted\n");
+	await writeFile(join(job, "log"), "");
+	await writeFile(join(job, "hosted"), "hosted\n");
+	const child = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000);"], { detached: true, stdio: "ignore" });
+	const pid = child.pid;
+	assert.ok(pid);
+	child.unref();
+	context.after(() => {
+		try {
+			process.kill(-pid, "SIGKILL");
+		} catch {}
+	});
+	await writeFile(join(job, "pid"), `${pid}\n`);
+	const stopped = limenWithEnv(
+		scratch,
+		{ PI_SESSION_ID: "coordinator-a", PI_SESSION_FILE: "/sessions/coordinator-a.jsonl", LIMEN_HOSTED_STOP_WAIT_MS: "200" },
+		"stop",
+		id,
+		"still up",
+	);
+	assert.notEqual(stopped.status, 0);
+	assert.match(stopped.stderr, /agent is still up/);
+	assert.equal((await readFile(join(job, "state"), "utf8")).trim(), "running");
+	const delivered = await readdir(join(job, "notify/delivered")).catch(() => [] as string[]);
+	assert.equal(delivered.includes("coordinator-a"), false);
+});
+
 test("stop interrupts a process group and is idempotent", async (context) => {
 	// Emit a last assistant message, then hang: stop must not copy that text into result.
 	const talkThenWait = `#!/usr/bin/env node
