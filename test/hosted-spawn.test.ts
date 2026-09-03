@@ -252,6 +252,33 @@ test("noteHostedIdle ignores idle while activity is think or tool", async () => 
 	}
 });
 
+test("noteHostedIdle writes an errored advisory when the last assistant turn failed", async (context) => {
+	const dir = await mkdtemp(join(tmpdir(), "limen-idle-errored-"));
+	context.after(() => rm(dir, { recursive: true, force: true }));
+	const tree = join(dir, "tree");
+	await mkdir(tree);
+	git(tree, "init", "-b", "main");
+	git(tree, "config", "user.email", "limen@example.test");
+	git(tree, "config", "user.name", "Limen Test");
+	await writeFile(join(tree, "README.md"), "ok\n");
+	git(tree, "add", ".");
+	git(tree, "commit", "-m", "initial");
+	await mkdir(join(dir, "session"));
+	await writeFile(join(dir, "worktree"), `${tree}\n`);
+	await writeFile(join(dir, "last-turn-tools"), "0\n");
+	await writeFile(join(dir, "activity"), "wait\n");
+	await writeFile(
+		join(dir, "session/run.jsonl"),
+		`${JSON.stringify({ type: "message", message: { role: "assistant", content: [], stopReason: "error", errorMessage: "usage limit reached" } })}\n`,
+	);
+	const watch: HostedIdleWatch = { leftWorkingAt: undefined, armed: true };
+	assert.equal(await noteHostedIdle(dir, "idle", watch, 0, 1_000), undefined);
+	assert.equal(await noteHostedIdle(dir, "idle", watch, 1_000, 1_000), undefined);
+	assert.equal(await readFile(join(dir, "advisory"), "utf8"), "errored: last turn failed with error: usage limit reached, session still open\n");
+	assert.equal(watch.armed, false);
+	await assert.rejects(readFile(join(dir, "finished-at")), "an errored turn must not finalize the job");
+});
+
 test("noteHostedIdle snapshots result and commits without finishing", async () => {
 	const parent = await mkdtemp(join(tmpdir(), "limen-idle-snap-"));
 	const repo = join(parent, "repo");

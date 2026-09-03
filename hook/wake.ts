@@ -261,7 +261,7 @@ export default function limenWake(pi: PiApi): void {
 		const repo = text(join(job, "repo"));
 		const slot = fallback ? "_advisory._fallback" : `_advisory.${sessionId}`;
 		if (fallback && (advisorySlots(deliveredSlots(job)).length > 0 || session.isIdle() !== true || muted)) return false;
-		const kind = advisory.startsWith("blocked") ? "blocked" : "idle";
+		const kind = advisory.startsWith("blocked") ? "blocked" : advisory.startsWith("errored:") ? "errored" : "idle";
 		const blocked = () => {
 			try {
 				session?.ui.notify(`limen: ${label} advisory wake was unconfirmed twice; automatic delivery stopped (${id})`, "info");
@@ -292,7 +292,7 @@ export default function limenWake(pi: PiApi): void {
 			eligible,
 			() => {
 				try {
-					session?.ui.notify(`limen: ${label} is ${kind} (${id})`, "info");
+					session?.ui.notify(kind === "errored" ? `limen: ${label} last turn failed (${id})` : `limen: ${label} is ${kind} (${id})`, "info");
 				} catch {
 					dropFooter("ui.notify failed");
 				}

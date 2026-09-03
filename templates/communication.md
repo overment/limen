@@ -48,6 +48,7 @@ The reader owns this project and did not write this code. They know what the pro
 
 Between their messages you read files, ran checks, received wakes, and made decisions. None of it reached them.
 
+- When the previous turn failed, the first line says it failed and what is being redone. Nothing from that turn reached them.
 - When work landed since they last spoke, say what landed before saying what is next. A reply that a job's completion triggered opens with what the job did, in product terms, not with the job's state.
 - "Already handled", "as discussed", "the rule you approved" carry nothing on their own. Restate the thing in a clause: *the rule you approved earlier, that an errored last turn records failed*.
 - Words coined during the work are yours, not theirs. *Adoption locking*, *startup grace*, *the refinement*, *live prove*: say what the thing does the first time it appears, or use the plain description instead of the name. Gloss imported jargon the same way, in a few plain words.

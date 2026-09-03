@@ -896,6 +896,48 @@ test("an idle advisory wakes once, stays running, and does not block completion"
 	assert.equal(existsSync(join(jobs, "stall/notify/delivered/_advisory.coordinator-a")), true);
 });
 
+test("an errored advisory wake says the last turn failed", async (context) => {
+	stashEnv(context, "LIMEN_JOB", undefined);
+	stashEnv(context, "LIMEN_HERDR", "0");
+	const root = await import("node:fs/promises").then(({ mkdtemp }) => mkdtemp(join(process.env.TMPDIR ?? "/tmp", "limen-wake-errored-")));
+	context.after(() => import("node:fs/promises").then(({ rm }) => rm(root, { recursive: true, force: true })));
+	await mkdir(join(root, ".agents/limen"), { recursive: true });
+	const jobs = join(root, ".limen/jobs");
+	const handlers = new Map<string, (event: unknown, context: TestContext) => void>();
+	const messages: string[] = [];
+	const notifications: string[] = [];
+	limenWake({
+		on(event, handler) {
+			handlers.set(event, handler);
+		},
+		sendUserMessage(content) {
+			messages.push(content);
+		},
+	});
+	const session = {
+		cwd: root,
+		isIdle: () => true,
+		sessionManager: sessionManager("coordinator-a"),
+		ui: { notify: (message: string) => notifications.push(message), setStatus() {} },
+	};
+	handlers.get("session_start")?.({}, session);
+	context.after(() => handlers.get("session_shutdown")?.({}, session));
+	await mkdir(join(jobs, "fail"), { recursive: true });
+	await writeFile(join(jobs, "fail/label"), "F057 fail\n");
+	await writeFile(join(jobs, "fail/branch"), "limen/fail\n");
+	await subscribe(jobs, "fail", "coordinator-a");
+	await writeFile(join(jobs, "fail/state"), "running\n");
+	await writeFile(join(jobs, "fail/advisory"), "errored: last turn failed with error: usage limit reached, session still open\n");
+	await waitUntil(() => messages.length === 1);
+	assert.match(messages[0] ?? "", /last turn failed with error: usage limit reached/);
+	assert.doesNotMatch(messages[0] ?? "", /is idle/);
+	assert.ok(notifications.some((value) => value.includes("last turn failed (fail)")));
+	assert.equal(
+		notifications.some((value) => value.includes("is idle")),
+		false,
+	);
+});
+
 test("work resuming then stalling again re-arms one further advisory wake", async (context) => {
 	stashEnv(context, "LIMEN_JOB", undefined);
 	stashEnv(context, "LIMEN_HERDR", "0");
