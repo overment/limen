@@ -118,7 +118,7 @@ function terminalDetail(job: Job): string {
 	if (job.phase === "stopped") return job.reason;
 	return "";
 }
-function formatDuration(milliseconds: number): string {
+export function formatDuration(milliseconds: number): string {
 	const seconds = Math.max(0, Math.floor(milliseconds / 1_000));
 	if (seconds < 60) return `${seconds}s`;
 	const minutes = Math.floor(seconds / 60);

@@ -105,7 +105,7 @@ spec/features/                        planned, active, done, and dropped work
 
 Optional overlays replace a package default for that file only: `AGENTS.md`, `.agents/limen/worker.md`, `.agents/limen/reviewer.md`, `.agents/limen/communication.md`. A file that still matches the package is a leftover copy; the coordinator names it. Different bytes are an overlay — keep, drop, or edit. Never overwrite an overlay.
 
-The project-context extension attaches vision, board, and styleguide after each user message, and appends the speech register (overlay or package) to the system prompt at the start of each user turn; on a turn a job wake opened, it also notes that the human has not yet seen the job's work. Updating the clone updates every project on that machine.
+The project-context extension attaches a short note after each user message naming vision, board, and styleguide and the moments their contents must be read — the bodies stay on disk, and the coordinator re-reads them after compaction or when they may have changed. The speech register (overlay or package) is appended to the system prompt at the start of each user turn; on a turn a job wake opened, it also notes that the human has not yet seen the job's work. Updating the clone updates every project on that machine.
 
 If the optional `speak` CLI is executable on `PATH`, Pi also gets a `/speak` command. It reads the latest assistant response as a compressed spoken brief without starting another model turn; `/speak full` skips compression. The command is absent when the CLI is unavailable, and Limen never starts audio on its own.
 
@@ -142,6 +142,8 @@ limen close <FNNN>
 ```
 
 IDs, unique suffixes, and unique labels are interchangeable where shown.
+
+At a terminal, `jobs` renders an aligned table for eyes; piped, it prints the compact format tools parse. `LIMEN_VIEW=human|compact` forces a view; `NO_COLOR` drops the paint.
 
 ## Develop
 

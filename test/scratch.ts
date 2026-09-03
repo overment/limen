@@ -90,6 +90,7 @@ function runLimen(scratch: Scratch, addedEnvironment: NodeJS.ProcessEnv, args: r
 		"LIMEN_HERDR",
 		"LIMEN_HUNK",
 		"LIMEN_HOME",
+		"LIMEN_VIEW",
 		"PI_SESSION_ID",
 		"PI_SESSION_FILE",
 		"PI_PROVIDER",
