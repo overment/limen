@@ -55,7 +55,15 @@ export function limenWithEnv(
 ): { readonly stdout: string; readonly stderr: string; readonly status: number } {
 	return runLimen(scratch, added, args);
 }
-function runLimen(scratch: Scratch, addedEnvironment: NodeJS.ProcessEnv, args: readonly string[]): { readonly stdout: string; readonly stderr: string; readonly status: number } {
+export function limenWithInput(scratch: Scratch, input: string, ...args: readonly string[]): { readonly stdout: string; readonly stderr: string; readonly status: number } {
+	return runLimen(scratch, {}, args, input);
+}
+function runLimen(
+	scratch: Scratch,
+	addedEnvironment: NodeJS.ProcessEnv,
+	args: readonly string[],
+	input?: string,
+): { readonly stdout: string; readonly stderr: string; readonly status: number } {
 	const environment: NodeJS.ProcessEnv = {
 		...process.env,
 		PATH: `${scratch.fakeBin}:${process.env.PATH}`,
@@ -87,6 +95,8 @@ function runLimen(scratch: Scratch, addedEnvironment: NodeJS.ProcessEnv, args: r
 		"LIMEN_CONTEXT_ROOT",
 		"LIMEN_PACKAGE",
 		"LIMEN_PREFLIGHT",
+		"LIMEN_PREPARE",
+		"LIMEN_PREPARE_MS",
 		"LIMEN_HERDR",
 		"LIMEN_HUNK",
 		"LIMEN_HOME",
@@ -110,6 +120,7 @@ function runLimen(scratch: Scratch, addedEnvironment: NodeJS.ProcessEnv, args: r
 		cwd: scratch.root,
 		encoding: "utf8",
 		env: environment,
+		...(input !== undefined ? { input } : {}),
 	});
 	if (result.error) throw result.error;
 	return { stdout: result.stdout ?? "", stderr: result.stderr ?? "", status: result.status ?? 1 };

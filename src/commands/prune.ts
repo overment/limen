@@ -14,6 +14,7 @@ export async function pruneFinishedWorktrees(root: string, keep: readonly string
 	const keepPaths = new Set<string>();
 	for (const path of keep) keepPaths.add(await resolved(path));
 	const repositories = new Set<string>();
+	let removed = 0;
 	const entries = await readdir(jobsRoot, { withFileTypes: true }).catch((error: unknown) => {
 		if (typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT") return [];
 		throw error;
@@ -21,6 +22,11 @@ export async function pruneFinishedWorktrees(root: string, keep: readonly string
 	for (const entry of entries) {
 		if (!entry.isDirectory()) continue;
 		const jobDir = `${jobsRoot}/${entry.name}`;
+		if (!(await text(`${jobDir}/state`))) {
+			await rm(jobDir, { recursive: true, force: true });
+			removed += 1;
+			continue;
+		}
 		const repo = (await text(`${jobDir}/repo`)) || undefined;
 		const repository = repo ? workspaceRepository(root, repo) : root;
 		repositories.add(repository);
@@ -30,7 +36,6 @@ export async function pruneFinishedWorktrees(root: string, keep: readonly string
 		}
 	}
 	if (repositories.size === 0) repositories.add(root);
-	let removed = 0;
 	for (const repository of repositories) {
 		const worktreeRoot = await resolved(`${dirname(repository)}/.${basename(repository)}-limen-worktrees`);
 		const primary = await resolved(repository);

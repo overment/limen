@@ -278,6 +278,19 @@ test("jobs rejects ambiguous option shapes", async (context) => {
 	}
 });
 
+test("jobs names a directory with no state as an orphan", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	limen(scratch, "init");
+	const job = join(scratch.root, ".limen/jobs/half-written");
+	await mkdir(job);
+	const listed = limen(scratch, "jobs");
+	assert.equal(listed.status, 0, listed.stderr);
+	assert.match(listed.stdout, /ORPHAN half-written · no state/);
+	const all = limen(scratch, "jobs", "--all");
+	assert.match(all.stdout, /ORPHAN half-written · no state/);
+});
+
 test("jobs reports an empty set before init", async (context) => {
 	const scratch = await scratchRepo();
 	context.after(scratch.cleanup);
