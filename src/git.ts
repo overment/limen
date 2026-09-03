@@ -76,6 +76,11 @@ export function commitList(cwd: string, base: string, branch: string): string | 
 	const result = git(cwd, ["log", "--oneline", `${base}..${branch}`]);
 	return result.status === 0 ? result.stdout.trimEnd() : undefined;
 }
+export function cleanWorktree(cwd: string): boolean {
+	if (!existsSync(cwd)) return false;
+	const result = git(cwd, ["status", "--porcelain"]);
+	return result.status === 0 && result.stdout.trim() === "";
+}
 export function liveDiffstat(cwd: string, branch: string): string {
 	const result = git(cwd, ["diff", "--stat", `HEAD...${branch}`]);
 	return result.status === 0 ? result.stdout.trim() : `(unavailable: ${result.stderr.trim() || "git diff failed"})`;

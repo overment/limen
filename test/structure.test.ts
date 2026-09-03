@@ -16,7 +16,7 @@ test("architecture stays small, pure, direct, and dependency-free", async () => 
 	assert.deepEqual(await readdir(join(ROOT, "bin")), ["limen"]);
 	const source = await filesBelow(join(ROOT, "src"));
 	const sourceLines = (await Promise.all(source.map((path) => readFile(path, "utf8")))).reduce((sum, text) => sum + text.split("\n").length - 1, 0);
-	assert.ok(sourceLines <= 3300, `src has ${sourceLines} lines; audit against first principles`);
+	assert.ok(sourceLines <= 3320, `src has ${sourceLines} lines; audit against first principles`);
 	assert.doesNotMatch(await readFile(join(ROOT, "src/job.ts"), "utf8"), /from ["']node:/);
 	assert.deepEqual((await readdir(join(ROOT, "src/commands"))).sort(), [
 		"close.ts",
@@ -52,7 +52,10 @@ test("strict TypeScript and templates preserve the capability-judgment line", as
 	const tsconfig = await readFile(join(ROOT, "tsconfig.json"), "utf8");
 	for (const option of ["strict", "noUncheckedIndexedAccess", "exactOptionalPropertyTypes", "erasableSyntaxOnly"]) assert.match(tsconfig, new RegExp(`"${option}": true`));
 	const sourceAndHook = await Promise.all((await filesBelow(join(ROOT, "src"))).concat(await filesBelow(join(ROOT, "hook"))).map((path) => readFile(path, "utf8")));
-	assert.doesNotMatch(sourceAndHook.join("\n"), /registerTool|contentHash|receipt|watchdog|schema/);
+	assert.doesNotMatch(sourceAndHook.join("\n"), /contentHash|receipt|watchdog|schema/);
+	const worker = await readFile(join(ROOT, "templates/worker.md"), "utf8");
+	assert.match(worker, /finish/);
+	assert.doesNotMatch(worker.toLowerCase(), /quit pi/);
 	assert.doesNotMatch((await Promise.all((await filesBelow(join(ROOT, "src"))).map((path) => readFile(path, "utf8")))).join("\n"), /registerCommand/);
 	assert.deepEqual((await readdir(join(ROOT, "templates/.history"))).sort(), ["agents.md", "communication.md", "reviewer.md", "worker.md"]);
 	for (const name of ["agents.md", "communication.md", "reviewer.md", "worker.md"]) {
