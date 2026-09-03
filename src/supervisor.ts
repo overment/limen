@@ -191,12 +191,10 @@ export async function noteHostedIdle(jobDir: string, status: HostedAgentStatus, 
 	if (watch.leftWorkingAt === undefined) watch.leftWorkingAt = now;
 	const stalled = status === "blocked" || now - watch.leftWorkingAt >= thresholdMs;
 	if (!stalled) return;
-	const stop = (await lastHostedAssistant(jobDir)).stop;
+	const { text, stop } = await lastHostedAssistant(jobDir);
 	const errored = stop === "error" || stop.startsWith("error: ");
-	if (!errored && status !== "blocked" && (await textFile(`${jobDir}/last-turn-tools`)) === "0") {
-		const tree = await textFile(`${jobDir}/worktree`);
-		if (tree && cleanWorktree(tree)) return "hosted session ended";
-	}
+	const tree = await textFile(`${jobDir}/worktree`);
+	if (!errored && status !== "blocked" && text && tree && cleanWorktree(tree)) return "closed a clean idle session";
 	const tools = Number(await textFile(`${jobDir}/tool-calls`));
 	const count = Number.isSafeInteger(tools) && tools > 0 ? tools : 0;
 	if (!errored && status !== "blocked" && count < 1) return;
