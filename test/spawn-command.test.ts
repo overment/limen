@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { access, chmod, readdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import test from "node:test";
-import { defaultFakePi, git, limen, limenWithEnv, limenWithSession, onlyJobId, scratchRepo, waitForState } from "./scratch.ts";
+import { defaultFakePi, git, limen, limenWithEnv, limenWithInput, limenWithSession, onlyJobId, scratchRepo, waitForState } from "./scratch.ts";
 
 test("spawn creates isolated branch, canonical record, runs pi, and resumes its worktree", async (context) => {
 	const scratch = await scratchRepo();
@@ -318,4 +318,64 @@ test("LIMEN_PREFLIGHT=auth proceeds when check passes", async (context) => {
 	const id = onlyJobId(launched.stdout);
 	await waitForState(scratch.root, id, "done");
 	assert.equal(await readFile(join(scratch.root, ".limen/jobs", id, "versions"), "utf8"), "pi 0.0.0-test\n");
+});
+
+test("task-file and stdin write task.md bytes untouched", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	assert.equal(limen(scratch, "init").status, 0);
+	const bytes = Buffer.from("do `echo` and $(date)\n\nkeep trailing\n");
+	await writeFile(join(scratch.root, "hand.md"), bytes);
+	const fromFile = limen(scratch, "spawn", "--task-file", "hand.md", "--label", "file task");
+	assert.equal(fromFile.status, 0, fromFile.stderr);
+	const fileId = onlyJobId(fromFile.stdout);
+	await waitForState(scratch.root, fileId, "done");
+	assert.deepEqual(await readFile(join(scratch.root, ".limen/jobs", fileId, "task.md")), bytes);
+	const fromStdin = limenWithInput(scratch, bytes.toString("utf8"), "spawn", "--task-file", "-", "--label", "stdin task");
+	assert.equal(fromStdin.status, 0, fromStdin.stderr);
+	const stdinId = onlyJobId(fromStdin.stdout);
+	await waitForState(scratch.root, stdinId, "done");
+	assert.equal(await readFile(join(scratch.root, ".limen/jobs", stdinId, "task.md"), "utf8"), bytes.toString("utf8"));
+});
+
+test("positional empty backticks or doubled spaces warn once", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	assert.equal(limen(scratch, "init").status, 0);
+	const launched = limen(scratch, "spawn", "--label", "warn", "fix `` and  gaps");
+	assert.equal(launched.status, 0, launched.stderr);
+	assert.match(launched.stdout, /warning: empty backticks or doubled spaces/);
+	await waitForState(scratch.root, onlyJobId(launched.stdout), "done");
+});
+
+test("git missing from PATH falls back or leaves no job dir", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	assert.equal(limen(scratch, "init").status, 0);
+	const launched = limenWithEnv(scratch, { PATH: `${scratch.fakeBin}:${dirname(process.execPath)}` }, "spawn", "--label", "no path git", "do work");
+	if (launched.status === 0) {
+		const id = onlyJobId(launched.stdout);
+		await waitForState(scratch.root, id, "done");
+		return;
+	}
+	assert.match(launched.stderr, /git is not on PATH/);
+	assert.deepEqual(await readdir(join(scratch.root, ".limen/jobs")).catch(() => []), []);
+});
+
+test("LIMEN_PREPARE runs in the worktree before Pi and is logged", async (context) => {
+	const scratch = await scratchRepo(`#!/usr/bin/env node
+const { existsSync } = require("node:fs");
+if (!existsSync("prepared")) process.exit(9);
+console.log(JSON.stringify({ type: "agent_start" }));
+console.log(JSON.stringify({ type: "message_end", message: { role: "assistant", content: [{ type: "text", text: "ok" }] } }));
+`);
+	context.after(scratch.cleanup);
+	assert.equal(limen(scratch, "init").status, 0);
+	const launched = limenWithEnv(scratch, { LIMEN_PREPARE: "touch prepared" }, "spawn", "--label", "prep", "do work");
+	assert.equal(launched.status, 0, launched.stderr);
+	const id = onlyJobId(launched.stdout);
+	await waitForState(scratch.root, id, "done");
+	const worktree = (await readFile(join(scratch.root, ".limen/jobs", id, "worktree"), "utf8")).trim();
+	await access(join(worktree, "prepared"));
+	assert.match(await readFile(join(scratch.root, ".limen/jobs", id, "log"), "utf8"), /prepare: touch prepared/);
 });

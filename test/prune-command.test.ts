@@ -95,3 +95,16 @@ test("startup window is live; expired running-without-pid is not", async (contex
 	assert.equal(allowed.status, 0, allowed.stderr);
 	await waitForState(scratch.root, onlyJobId(allowed.stdout), "done");
 });
+
+test("prune deletes a job directory with no state", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	limen(scratch, "init");
+	const job = join(scratch.root, ".limen/jobs/half-written");
+	await mkdir(job);
+	await writeFile(join(job, "task.md"), "half\n");
+	const pruned = limen(scratch, "prune");
+	assert.equal(pruned.status, 0, pruned.stderr);
+	assert.match(pruned.stdout, /pruned /);
+	await assert.rejects(access(job));
+});

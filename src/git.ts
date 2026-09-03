@@ -85,8 +85,16 @@ function requireGit(cwd: string, args: readonly string[]): GitResult {
 	if (result.status !== 0) throw new Error(result.stderr.trim() || result.stdout.trim() || `git ${args[0]} failed`);
 	return result;
 }
+let gitBin = "";
 function git(cwd: string, args: readonly string[]): GitResult {
-	const result = spawnSync("git", args, { cwd: resolve(cwd), encoding: "utf8" });
-	if (result.error) throw result.error;
+	const run = (bin: string) => spawnSync(bin, args, { cwd: resolve(cwd), encoding: "utf8" });
+	const miss = (error: Error | undefined) => !!error && "code" in error && error.code === "ENOENT";
+	let result = run(gitBin || "git");
+	if (miss(result.error)) result = run(gitBin || "git");
+	if (miss(result.error) && !gitBin) {
+		const fallback = ["/usr/bin/git", "/usr/local/bin/git", "/opt/homebrew/bin/git"].find((path) => existsSync(path));
+		if (fallback) result = run((gitBin = fallback));
+	} else if (!gitBin && !result.error) gitBin = "git";
+	if (result.error) throw miss(result.error) ? new Error("git is not on PATH") : result.error;
 	return { stdout: result.stdout ?? "", stderr: result.stderr ?? "", status: result.status ?? 1 };
 }

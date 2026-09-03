@@ -54,7 +54,7 @@ export async function jobsCommand(args: readonly string[], cwd: string): Promise
 		return;
 	}
 	const terminal = order.filter(([, state]) => state !== "running");
-	const observed = await Promise.all(terminal.map(async (entry) => ({ entry, empty: await jobProducedNothing(`${jobsRoot}/${entry[0]}`) })));
+	const observed = await Promise.all(terminal.map(async (entry) => ({ entry, empty: !entry[1] || (await jobProducedNothing(`${jobsRoot}/${entry[0]}`)) })));
 	const empty = observed.filter(({ empty }) => empty).map(({ entry }) => entry);
 	const emptyRendered = await Promise.all(empty.map(async ([id]) => (await renderJobDirectory(root, jobsRoot, id, false)).compact));
 	const summary = [...rendered, ...emptyRendered].join("\n") || "no running jobs";
@@ -80,6 +80,7 @@ async function renderJobDirectory(root: string, jobsRoot: string, id: string, de
 		await Promise.all(
 			"state label branch repo pid started-at finished-at tool-calls last-tool activity hosted candidate advisory parent".split(" ").map((field) => text(`${jobDir}/${field}`)),
 		);
+	if (!state) return { compact: `ORPHAN ${id} · no state`, record: { id, invalid: "orphan · no state" } };
 	const agent = await text(`${jobDir}/herdr/agent`);
 	const [commits, commitsStat] = await Promise.all([text(`${jobDir}/commits`), optionalStat(`${jobDir}/commits`)]);
 	const [result, stopReason, versions] = detailed ? await Promise.all([text(`${jobDir}/result`), text(`${jobDir}/stop-reason`), text(`${jobDir}/versions`)]) : ["", "", ""];
