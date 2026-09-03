@@ -8,20 +8,21 @@
 ## NOW
 
 - `F048-hosted-runtime-start` (🟠 ACTIVE): spawn prints the ID in seconds; the detached supervisor starts pi and owns the job. This closes the live 2026-08-27 caller-timeout orphaning before F049.
-- `F055-hosted-finish` (🟠 ACTIVE): a `finish` tool ends a hosted job as done; `done:` stops record done.
+- `F056-wake-routing-truth` (🟠 ACTIVE): fallback waits minutes and goes only to sessions that own jobs; an errored turn keeps the wake; facts before instructions.
+- `F057-failed-turn-visible` (🟠 ACTIVE): the coordinator says its previous turn failed; the hosted supervisor raises an errored advisory.
+- `F062-worker-budgets` (🟠 ACTIVE): workers stay off the board and inside reading and check budgets.
 
 ## NEXT
 
-- `F056-wake-routing-truth` (🔴 PLANNED): fallback waits minutes and goes only to sessions that own jobs; an errored turn keeps the wake; facts before instructions. After F055.
-- `F057-failed-turn-visible` (🔴 PLANNED): the coordinator says its previous turn failed; the hosted supervisor raises an errored advisory. After F053.
 - `F059-board-compression` (🔴 PLANNED): PROVEN keeps ten entries and folds older months into one highlight line. Beside F053.
-- `F060-reply-shapes`, `F061-coordinator-ceilings`, `F062-worker-budgets` (🔴 PLANNED): prose only; after F054 so projects inherit them.
+- `F060-reply-shapes`, `F061-coordinator-ceilings` (🔴 PLANNED): prose only; after F054 so projects inherit them.
 - `F049-running-owner-truth` (🔴 PLANNED): reaper adopts a hosted job that lost its supervisor, fails one with no live owner; no shape-based skips. Before F013.
 - `F013-remote-seat` (PLANNED): one disk, attach don’t clone; docs and seat-shaped guarantees. Before F014.
 - `F014-github-doorbell` (PLANNED): mention or label starts a job on the seat; comment back evidence; merge stays human.
 
 ## PROVEN
 
+- `F055-hosted-finish` (🟢 PROVEN): a hosted worker ends its job with `finish`; `done:` stops record done. Landed `40873ed`. Review PASS of `b220dcf`.
 - `F058-spawn-hardening` (🟢 PROVEN): spawn takes the task from a file, retries git, prepares the worktree, and prunes orphans. Landed `6b7cdb4`. Review PASS of `17fee8d`.
 - `F054-stale-overlay-notice` (🟢 PROVEN): a copy of an older package template is named stale with both dates. Landed `6228859`. Review PASS of `0ae402b`.
 - `F053-guidance-recall` (🟢 PROVEN): shop manual, register, vision, and styleguide ride the system prompt once per call. Landed `ea537ba`. Review PASS of `3043809`.
