@@ -58,11 +58,13 @@ test("noteHostedIdle finalizes a clean idle turn with no tool call and writes no
 	git(tree, "add", ".");
 	git(tree, "commit", "-m", "initial");
 	await writeFile(join(dir, "worktree"), `${tree}\n`);
+	await mkdir(join(dir, "session"));
+	await writeFile(join(dir, "session/run.jsonl"), `${JSON.stringify({ type: "message", message: { role: "assistant", content: [{ type: "text", text: "done." }] } })}\n`);
 	await writeFile(join(dir, "last-turn-tools"), "0\n");
 	await writeFile(join(dir, "activity"), "wait\n");
 	const watch: HostedIdleWatch = { leftWorkingAt: undefined, armed: true };
 	assert.equal(await noteHostedIdle(dir, "idle", watch, 0, 1_000), undefined);
-	assert.equal(await noteHostedIdle(dir, "idle", watch, 1_000, 1_000), "hosted session ended");
+	assert.equal(await noteHostedIdle(dir, "idle", watch, 1_000, 1_000), "closed a clean idle session");
 	await assert.rejects(readFile(join(dir, "advisory")), "a clean idle turn must not write an advisory");
 	await writeFile(join(tree, "dirty.txt"), "left behind\n");
 	const dirty: HostedIdleWatch = { leftWorkingAt: undefined, armed: true };
@@ -74,6 +76,75 @@ test("noteHostedIdle finalizes a clean idle turn with no tool call and writes no
 	assert.equal(await noteHostedIdle(dir, "idle", stalled, 0, 1_000), undefined);
 	assert.equal(await noteHostedIdle(dir, "idle", stalled, 1_000, 1_000), undefined);
 	assert.match(await readFile(join(dir, "advisory"), "utf8"), /idle 1s after 2 tool calls/);
+});
+
+test("noteHostedIdle finalizes a clean tool-using turn without claiming the session ended", async (context) => {
+	const dir = await mkdtemp(join(tmpdir(), "limen-idle-tools-"));
+	context.after(() => rm(dir, { recursive: true, force: true }));
+	const tree = join(dir, "tree");
+	await mkdir(tree);
+	git(tree, "init", "-b", "main");
+	git(tree, "config", "user.email", "limen@example.test");
+	git(tree, "config", "user.name", "Limen Test");
+	await writeFile(join(tree, "README.md"), "ok\n");
+	git(tree, "add", ".");
+	git(tree, "commit", "-m", "initial");
+	await writeFile(join(dir, "worktree"), `${tree}\n`);
+	await mkdir(join(dir, "session"));
+	await writeFile(join(dir, "session/run.jsonl"), `${JSON.stringify({ type: "message", message: { role: "assistant", content: [{ type: "text", text: "handoff." }] } })}\n`);
+	await writeFile(join(dir, "last-turn-tools"), "3\n");
+	await writeFile(join(dir, "tool-calls"), "3\n");
+	await writeFile(join(dir, "activity"), "wait\n");
+	const watch: HostedIdleWatch = { leftWorkingAt: undefined, armed: true };
+	assert.equal(await noteHostedIdle(dir, "idle", watch, 0, 1_000), undefined);
+	const reason = await noteHostedIdle(dir, "idle", watch, 1_000, 1_000);
+	assert.equal(reason, "closed a clean idle session");
+	assert.notEqual(reason, "hosted session ended");
+	await assert.rejects(readFile(join(dir, "advisory")), "a clean tool-using turn must not write an advisory");
+
+	await rm(join(dir, "session/run.jsonl"));
+	const missing: HostedIdleWatch = { leftWorkingAt: undefined, armed: true };
+	assert.equal(await noteHostedIdle(dir, "idle", missing, 0, 1_000), undefined);
+	assert.equal(await noteHostedIdle(dir, "idle", missing, 1_000, 1_000), undefined, "no assistant response is not a clean idle close");
+	assert.match(await readFile(join(dir, "advisory"), "utf8"), /idle 1s after 3 tool calls/);
+
+	await writeFile(join(dir, "session/run.jsonl"), `${JSON.stringify({ type: "message", message: { role: "assistant", content: [{ type: "text", text: "handoff." }] } })}\n`);
+	await rm(join(dir, "advisory"), { force: true });
+	await writeFile(join(tree, "dirty.txt"), "left behind\n");
+	const dirty: HostedIdleWatch = { leftWorkingAt: undefined, armed: true };
+	assert.equal(await noteHostedIdle(dir, "idle", dirty, 0, 1_000), undefined);
+	assert.equal(await noteHostedIdle(dir, "idle", dirty, 1_000, 1_000), undefined, "a dirty worktree is not a clean idle close");
+	assert.match(await readFile(join(dir, "advisory"), "utf8"), /idle 1s after 3 tool calls/);
+
+	await rm(join(tree, "dirty.txt"));
+	await rm(join(dir, "advisory"), { force: true });
+	await writeFile(join(dir, "activity"), "think\n");
+	const thinking: HostedIdleWatch = { leftWorkingAt: undefined, armed: true };
+	assert.equal(await noteHostedIdle(dir, "idle", thinking, 0, 1_000), undefined);
+	assert.equal(await noteHostedIdle(dir, "idle", thinking, 1_000, 1_000), undefined, "think is not a clean idle close");
+	await assert.rejects(readFile(join(dir, "advisory")), "think must not advisory");
+	assert.equal(thinking.leftWorkingAt, undefined);
+
+	await writeFile(join(dir, "activity"), "tool\n");
+	const tooling: HostedIdleWatch = { leftWorkingAt: undefined, armed: true };
+	assert.equal(await noteHostedIdle(dir, "idle", tooling, 1_000, 1_000), undefined, "tool activity is not a clean idle close");
+	await assert.rejects(readFile(join(dir, "advisory")), "tool must not advisory");
+
+	await writeFile(join(dir, "activity"), "wait\n");
+	await writeFile(
+		join(dir, "session/run.jsonl"),
+		`${JSON.stringify({ type: "message", message: { role: "assistant", content: [], stopReason: "error", errorMessage: "usage limit reached" } })}\n`,
+	);
+	const failed: HostedIdleWatch = { leftWorkingAt: undefined, armed: true };
+	assert.equal(await noteHostedIdle(dir, "idle", failed, 0, 1_000), undefined);
+	assert.equal(await noteHostedIdle(dir, "idle", failed, 1_000, 1_000), undefined, "a failed last response is not a clean idle close");
+	assert.match(await readFile(join(dir, "advisory"), "utf8"), /errored: last turn failed/);
+
+	await rm(join(dir, "advisory"), { force: true });
+	await writeFile(join(dir, "session/run.jsonl"), `${JSON.stringify({ type: "message", message: { role: "assistant", content: [{ type: "text", text: "handoff." }] } })}\n`);
+	const blocked: HostedIdleWatch = { leftWorkingAt: undefined, armed: true };
+	assert.equal(await noteHostedIdle(dir, "blocked", blocked, 0, 1_000), undefined, "blocked is not a clean idle close");
+	assert.match(await readFile(join(dir, "advisory"), "utf8"), /blocked after 3 tool calls/);
 });
 
 test("noteHostedIdle writes one stall marker, skips zero tools, and re-arms after working", async () => {
@@ -307,6 +378,7 @@ test("noteHostedIdle snapshots result and commits without finishing", async () =
 		await writeFile(join(repo, "stall.txt"), "done\n");
 		git(repo, "add", "stall.txt");
 		git(repo, "commit", "-m", "stall work");
+		await writeFile(join(repo, "dirty.txt"), "left behind\n");
 		const watch: HostedIdleWatch = { leftWorkingAt: undefined, armed: true };
 		await noteHostedIdle(dir, "idle", watch, 0, 60_000);
 		await assert.rejects(readFile(join(dir, "advisory")));
@@ -587,6 +659,7 @@ test("hosted supervisor writes one idle advisory and stays running", async (cont
 	await writeFile(join(worktree, "stall.txt"), "done\n");
 	git(worktree, "add", "stall.txt");
 	git(worktree, "commit", "-m", "stall work");
+	await writeFile(join(worktree, "dirty.txt"), "left behind\n");
 	await writeFile(join(job, "tool-calls"), "14\n");
 	await writeFile(join(job, "activity"), "wait\n");
 	const deadline = Date.now() + 5_000;
@@ -608,6 +681,40 @@ test("hosted supervisor writes one idle advisory and stays running", async (cont
 	assert.equal((await readFile(join(job, "advisory"), "utf8")).trim(), advisory, "same stall must not rewrite");
 	await writeFile(join(job, "session-ended"), `${new Date().toISOString()}\n`);
 	await waitForState(scratch.root, id, "done");
+});
+
+test("hosted supervisor finalizes a clean tool-using idle without claiming the session ended", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	assert.equal(limen(scratch, "init").status, 0);
+	const herdr = await installHostedFakeHerdr(scratch.root, scratch.fakeBin);
+	const env = {
+		HERDR_ENV: "1",
+		LIMEN_HERDR: herdr.bin,
+		FAKE_HERDR_STATE: herdr.dir,
+		FAKE_HERDR_PERSIST: "1",
+		HERDR_TAB_ID: "coord:t0",
+		LIMEN_HOSTED_IDLE_MS: "200",
+	};
+	const launched = limenWithEnv(scratch, env, "spawn", "--label", "F065 idle", "finish the work");
+	assert.equal(launched.status, 0, launched.stderr);
+	const id = onlyJobId(launched.stdout);
+	const job = join(scratch.root, ".limen/jobs", id);
+	await waitForFile(join(job, "herdr/agent"), /./);
+	await mkdir(join(job, "session"), { recursive: true });
+	await writeFile(
+		join(job, "session/2026-01-01T00-00-00-000Z_abc.jsonl"),
+		`${JSON.stringify({ type: "message", message: { role: "assistant", content: [{ type: "text", text: "hosted idle handoff" }] } })}\n`,
+	);
+	await writeFile(join(job, "tool-calls"), "4\n");
+	await writeFile(join(job, "last-turn-tools"), "4\n");
+	await writeFile(join(job, "activity"), "wait\n");
+	await waitForState(scratch.root, id, "done");
+	const log = await readFile(join(job, "log"), "utf8");
+	assert.match(log, /done: closed a clean idle session/);
+	assert.doesNotMatch(log, /hosted session ended/);
+	assert.equal(await readFile(join(job, "result"), "utf8"), "hosted idle handoff\n");
+	await assert.rejects(readFile(join(job, "advisory")), "a clean tool-using idle must not write an advisory");
 });
 
 test("spawn --review in Herdr is hosted; --detached keeps a watch tab", async (context) => {
