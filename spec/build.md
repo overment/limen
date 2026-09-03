@@ -9,7 +9,6 @@
 
 - `F048-hosted-runtime-start` (🟠 ACTIVE): spawn prints the ID in seconds; the detached supervisor starts pi and owns the job. This closes the live 2026-08-27 caller-timeout orphaning before F049.
 - `F055-hosted-finish` (🟠 ACTIVE): a `finish` tool ends a hosted job as done; `done:` stops record done.
-- `F058-spawn-hardening` (🟠 ACTIVE): task from a file or stdin, validate before the job dir, optional prepare step, orphans named and pruned.
 
 ## NEXT
 
@@ -23,6 +22,7 @@
 
 ## PROVEN
 
+- `F058-spawn-hardening` (🟢 PROVEN): spawn takes the task from a file, retries git, prepares the worktree, and prunes orphans. Landed `6b7cdb4`. Review PASS of `17fee8d`.
 - `F054-stale-overlay-notice` (🟢 PROVEN): a copy of an older package template is named stale with both dates. Landed `6228859`. Review PASS of `0ae402b`.
 - `F053-guidance-recall` (🟢 PROVEN): shop manual, register, vision, and styleguide ride the system prompt once per call. Landed `ea537ba`. Review PASS of `3043809`.
 - `F063-reviewer-verdict-discipline` (🟢 PROVEN): reviews open `PASS`/`FAIL` with the sha, block only on acceptance, never on the environment. Landed `3ecafa0`. Review PASS of `f556f14`.
