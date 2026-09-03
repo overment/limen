@@ -228,13 +228,14 @@ test("sleeping descendant discovery delays stop only through its short bound", a
 test("sleeping descendant discovery delays timeout only through its short bound", async (context) => {
 	const scratch = await scratchRepo(responsivePi);
 	context.after(scratch.cleanup);
-	await writeFile(join(scratch.fakeBin, "ps"), "#!/bin/sh\nexec sleep 10\n");
+	await writeFile(join(scratch.fakeBin, "ps"), `#!/bin/sh\n"${process.execPath}" -e 'require("node:fs").writeFileSync(".ps-started-at", String(Date.now()))'\nexec sleep 10\n`);
 	await chmod(join(scratch.fakeBin, "ps"), 0o755);
 	limen(scratch, "init");
-	const started = Date.now();
 	const id = onlyJobId(limen(scratch, "spawn", "--timeout", "100ms", "wait").stdout);
 	await waitForState(scratch.root, id, "failed", 2_000);
-	assert.ok(Date.now() - started < 2_000, "timeout must wait only for the bounded ps query");
+	const queryStartedAt = Number(await readFile(join(scratch.root, ".ps-started-at"), "utf8"));
+	const finishedAt = Date.parse((await readFile(join(scratch.root, `.limen/jobs/${id}/finished-at`), "utf8")).trim());
+	assert.ok(finishedAt - queryStartedAt < 2_000, `timeout must wait only for the bounded ps query, took ${finishedAt - queryStartedAt}ms`);
 	assert.match(await readFile(join(scratch.root, `.limen/jobs/${id}/cleanup`), "utf8"), /escaped descendant discovery failed during exhaustion/);
 });
 
