@@ -185,8 +185,8 @@ test("a write under spec/, an edit of code, and limen spawn recall the matching 
 	});
 	const codeText = textOf(code.content);
 	assert.match(codeText, /edited file/);
-	assert.match(codeText, /\[limen\] Styleguide:/);
-	assert.ok(codeText.endsWith("Inform, do not gate."));
+	assert.match(codeText, /\[limen\] Styleguide: no project file at \.agents\/limen\/styleguide\.md\./);
+	assert.doesNotMatch(codeText, /TypeScript|index\.ts|one human|Inform, do not gate/);
 
 	const spawn = tool(root, {
 		toolName: "bash",
@@ -195,8 +195,8 @@ test("a write under spec/, an edit of code, and limen spawn recall the matching 
 	});
 	const spawnText = textOf(spawn.content);
 	assert.match(spawnText, /started/);
-	assert.match(spawnText, /\[limen\] Vision:/);
-	assert.ok(spawnText.endsWith("Inform; do not gate."));
+	assert.match(spawnText, /\[limen\] Vision: no project file at spec\/vision\.md\./);
+	assert.doesNotMatch(spawnText, /one human|one coordinator|Inform; do not gate/);
 
 	const merge = tool(root, {
 		toolName: "bash",
@@ -366,6 +366,68 @@ test("over fifty simulated turns custom messages stay under fifty kilobytes", as
 		total += Buffer.byteLength(content);
 	}
 	assert.ok(total < 50 * 1024, `fifty turns accumulated ${total} bytes`);
+});
+
+test("style and vision reminders name the project files and their headings", async (context) => {
+	const root = await projectRoot(context);
+	await writeFile(join(root, ".agents/limen/styleguide.md"), ["# Rust house style", "", "## No unwrap in libraries", "", "## Prefer iterators", ""].join("\n"));
+	await writeFile(join(root, "spec/vision.md"), ["# Product", "", "## Ships on Friday", "", "## One binary", ""].join("\n"));
+
+	const code = tool(root, {
+		toolName: "edit",
+		input: { path: "src/main.rs" },
+		content: [{ type: "text", text: "edited rust" }],
+	});
+	const codeText = textOf(code.content);
+	assert.match(codeText, /edited rust/);
+	assert.match(codeText, /\[limen\] Styleguide \(\.agents\/limen\/styleguide\.md\): Rust house style; No unwrap in libraries; Prefer iterators\./);
+	assert.doesNotMatch(codeText, /TypeScript|index\.ts|one human|Inform, do not gate/);
+
+	const spawn = tool(root, {
+		toolName: "bash",
+		input: { command: 'limen spawn --label "F999 x" "Implement F999."' },
+		content: [{ type: "text", text: "started" }],
+	});
+	const spawnText = textOf(spawn.content);
+	assert.match(spawnText, /\[limen\] Vision \(spec\/vision\.md\): Product; Ships on Friday; One binary\./);
+	assert.doesNotMatch(spawnText, /one human|one coordinator|Inform; do not gate/);
+
+	await writeFile(join(root, ".agents/limen/styleguide.md"), "Prefer small functions.\n");
+	const bare = tool(root, {
+		toolName: "edit",
+		input: { path: "src/x.ts" },
+		content: [{ type: "text", text: "edited file" }],
+	});
+	assert.match(textOf(bare.content), /\[limen\] Styleguide \(\.agents\/limen\/styleguide\.md\): no headings; read the file\./);
+});
+
+test("a write or edit outside spec/ recalls the styleguide unless the path is Markdown", async (context) => {
+	const root = await projectRoot(context);
+	await writeFile(join(root, ".agents/limen/styleguide.md"), "## Keep functions small\n");
+
+	for (const path of ["src/main.rs", "ui/App.svelte", "styles/app.css"]) {
+		const result = tool(root, {
+			toolName: "edit",
+			input: { path },
+			content: [{ type: "text", text: "ok" }],
+		});
+		assert.match(textOf(result.content), /\[limen\] Styleguide \(\.agents\/limen\/styleguide\.md\): Keep functions small\./);
+	}
+
+	const markdown = tool(root, {
+		toolName: "write",
+		input: { path: "docs/note.md" },
+		content: [{ type: "text", text: "notes" }],
+	});
+	assert.equal(markdown.content, undefined);
+
+	const spec = tool(root, {
+		toolName: "edit",
+		input: { path: "spec/features/planned/F999-x/ticket.md" },
+		content: [{ type: "text", text: "ticket" }],
+	});
+	assert.match(textOf(spec.content), /\[limen\] Specs:/);
+	assert.doesNotMatch(textOf(spec.content), /Styleguide/);
 });
 
 test("unrelated tools are not patched", async (context) => {
