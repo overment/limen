@@ -5,6 +5,7 @@ import { registerSpeak, type SpeakPiApi } from "./speak.ts";
 
 const CONTEXT_TYPE = "limen-project-context";
 const MAX_CONTEXT_LINES = 1000;
+const BOARD_ADVISORY_LINES = 120;
 const REPLY_RULES = "First line is the answer. No identifier without its meaning. Size the reply to the question.";
 const SPECS_REMINDER =
 	"[limen] Specs: a ticket is about 300 words: outcome, scope, out of scope, acceptance. No status line, no bare feature numbers, no progress markers. Title is `FNNN · what becomes true`.";
@@ -118,6 +119,8 @@ function turnCue(cwd: string, job: boolean, wake: boolean, lastTouch: string | u
 	if (!job) {
 		const drift = formatDrift(listDrift(cwd));
 		if (drift) lines.push(drift);
+		const board = boardAdvisory(cwd);
+		if (board) lines.push(board);
 	}
 	return ["<limen-project-context>", ...lines, "</limen-project-context>"].join("\n\n");
 }
@@ -144,6 +147,14 @@ function boundText(text: string, path: string, label: string): string {
 	const content = lines.slice(0, MAX_CONTEXT_LINES).join("\n");
 	const notice = lines.length > MAX_CONTEXT_LINES ? `\n\n[${path} truncated to ${MAX_CONTEXT_LINES} of ${lines.length} lines; read the file for remaining context.]` : "";
 	return `## ${label} (${path})\n${content}${notice}`;
+}
+
+function boardAdvisory(cwd: string): string {
+	const board = readOptional(join(cwd, "spec/build.md"));
+	if (board === undefined) return "";
+	const count = trimmedLines(board).length;
+	if (count <= BOARD_ADVISORY_LINES) return "";
+	return `spec/build.md is ${count} lines; fold older PROVEN entries into monthly highlights.`;
 }
 
 function boardDigest(cwd: string): string {

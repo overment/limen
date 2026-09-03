@@ -143,6 +143,20 @@ test("the per-turn cue names the audience and the three reply rules and stays un
 	assert.deepEqual(extension().events, ["before_agent_start", "message_end", "tool_result"]);
 });
 
+test("a 130-line board adds one advisory line; an 80-line board does not", async (context) => {
+	const root = await projectRoot(context);
+	await coordinatorFiles(root);
+	await writeFile(join(root, "spec/build.md"), `${Array.from({ length: 80 }, (_, index) => `- item ${index + 1}`).join("\n")}\n`);
+	const short = start(root, { systemPrompt: "base" });
+	assert.doesNotMatch(short.message?.content ?? "", /fold older PROVEN/);
+	assert.doesNotMatch(short.systemPrompt ?? "", /fold older PROVEN/);
+	await writeFile(join(root, "spec/build.md"), `${Array.from({ length: 130 }, (_, index) => `- item ${index + 1}`).join("\n")}\n`);
+	const long = start(root, { systemPrompt: "base" });
+	assert.match(long.message?.content ?? "", /spec\/build\.md is 130 lines; fold older PROVEN entries into monthly highlights\./);
+	assert.equal((long.message?.content.match(/fold older PROVEN/g) ?? []).length, 1);
+	assert.doesNotMatch(long.systemPrompt ?? "", /fold older PROVEN/);
+});
+
 test("a wake turn puts the wake cue in the per-turn note, not the system prompt", async (context) => {
 	const root = await projectRoot(context);
 	await coordinatorFiles(root);
