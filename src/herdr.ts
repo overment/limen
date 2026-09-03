@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import { appendFile, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { basename } from "node:path";
 
-export type HerdrPlace = { readonly workspace: string; readonly tab: string; readonly pane: string; readonly mode: "watch" | "log" | "hosted" };
+export type HerdrPlace = { readonly workspace: string; readonly tab: string; readonly pane: string; readonly mode: "watch" | "log" | "hosted" | "diff" };
 export type HostedAgentStatus = "idle" | "working" | "blocked" | "done" | "unknown" | "missing";
 
 export function herdrAvailable(): boolean {
@@ -277,6 +277,38 @@ export async function settleJobTab(jobDir: string): Promise<void> {
 	}
 }
 
+export async function openDiffTab(input: {
+	readonly jobDir: string;
+	readonly label: string;
+	readonly cwd: string;
+	readonly workspaceCwd: string;
+	readonly hunk: string;
+	readonly args: readonly string[];
+}): Promise<string> {
+	const herdr = requireHerdr();
+	const recorded = await readPlace(input.jobDir, "diff");
+	if (recorded && tabExists(herdr, recorded.tab)) {
+		call(herdr, ["tab", "focus", recorded.tab]);
+		return `focused ${input.label} diff`;
+	}
+	const place = await createTab({
+		jobDir: input.jobDir,
+		label: `${input.label} · diff`,
+		cwd: input.cwd,
+		workspaceCwd: input.workspaceCwd,
+		logPath: `${input.jobDir}/log`,
+		mode: "diff",
+		follow: false,
+		focus: true,
+		herdr,
+		shellOnly: true,
+		record: "diff",
+	});
+	if (!place) throw new Error("herdr skipped opening the diff tab");
+	call(herdr, ["pane", "run", place.pane, input.hunk, ...input.args]);
+	return `opened ${input.label} diff`;
+}
+
 export async function openJobPlace(input: { readonly jobDir: string; readonly cwd: string; readonly running: boolean }): Promise<string> {
 	const herdr = herdrBinary();
 	if (!herdr) throw new Error("herdr is not available");
@@ -321,13 +353,15 @@ export async function closeFeatureTabs(input: { readonly root: string; readonly 
 		if (!entry.isDirectory()) continue;
 		const jobDir = `${input.root}/.limen/jobs/${entry.name}`;
 		if (!new RegExp(`^${feature}(?:\\b|[- ])`, "i").test(await text(`${jobDir}/label`))) continue;
-		const place = await readPlace(jobDir);
-		if (!place || place.tab === coordinator) continue;
-		try {
-			call(herdr, ["tab", "close", place.tab]);
-			closed += 1;
-		} catch (error) {
-			await skip(jobDir, error instanceof Error ? error.message : String(error));
+		const places = await Promise.all([readPlace(jobDir), readPlace(jobDir, "diff")]);
+		for (const place of places) {
+			if (!place || place.tab === coordinator) continue;
+			try {
+				call(herdr, ["tab", "close", place.tab]);
+				closed += 1;
+			} catch (error) {
+				await skip(jobDir, error instanceof Error ? error.message : String(error));
+			}
 		}
 	}
 	return `closed ${closed} leftover tab${closed === 1 ? "" : "s"} for ${feature}`;
@@ -345,6 +379,7 @@ async function createTab(input: {
 	readonly herdr?: string;
 	readonly env?: Readonly<Record<string, string>>;
 	readonly shellOnly?: boolean;
+	readonly record?: "diff";
 }): Promise<HerdrPlace | undefined> {
 	const herdr = input.herdr ?? herdrBinary();
 	if (!herdr) {
@@ -356,7 +391,7 @@ async function createTab(input: {
 		const envArgs = Object.entries(input.env ?? {}).flatMap(([key, value]) => ["--env", `${key}=${value}`]);
 		const created = call(herdr, ["tab", "create", "--workspace", workspace, "--label", input.label, "--cwd", input.cwd, ...envArgs, input.focus ? "--focus" : "--no-focus"]);
 		const place: HerdrPlace = { workspace, tab: id(created, "tab", "tab_id"), pane: id(created, "root_pane", "pane_id"), mode: input.mode };
-		await recordPlace(input.jobDir, place);
+		await recordPlace(input.jobDir, place, input.record);
 		if (!input.shellOnly) {
 			call(herdr, input.follow ? ["pane", "run", place.pane, "tail", "-f", input.logPath] : ["pane", "run", place.pane, "tail", "-n", "+1", input.logPath]);
 		}
@@ -447,14 +482,16 @@ function asRecord(value: unknown): Record<string, unknown> {
 	return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
 }
 
-async function recordPlace(jobDir: string, place: HerdrPlace): Promise<void> {
-	await mkdir(`${jobDir}/herdr`, { recursive: true });
-	await Promise.all((["workspace", "tab", "pane", "mode"] as const).map((name) => writeFile(`${jobDir}/herdr/${name}`, `${place[name]}\n`)));
+async function recordPlace(jobDir: string, place: HerdrPlace, record?: "diff"): Promise<void> {
+	const directory = record ? `${jobDir}/herdr/${record}` : `${jobDir}/herdr`;
+	await mkdir(directory, { recursive: true });
+	await Promise.all((["workspace", "tab", "pane", "mode"] as const).map((name) => writeFile(`${directory}/${name}`, `${place[name]}\n`)));
 }
 
-async function readPlace(jobDir: string): Promise<HerdrPlace | undefined> {
-	const [workspace, tab, pane, mode] = await Promise.all((["workspace", "tab", "pane", "mode"] as const).map((name) => text(`${jobDir}/herdr/${name}`)));
-	if (!workspace || !tab || !pane || (mode !== "watch" && mode !== "log" && mode !== "hosted")) return;
+async function readPlace(jobDir: string, record?: "diff"): Promise<HerdrPlace | undefined> {
+	const directory = record ? `${jobDir}/herdr/${record}` : `${jobDir}/herdr`;
+	const [workspace, tab, pane, mode] = await Promise.all((["workspace", "tab", "pane", "mode"] as const).map((name) => text(`${directory}/${name}`)));
+	if (!workspace || !tab || !pane || (mode !== "watch" && mode !== "log" && mode !== "hosted" && mode !== "diff")) return;
 	return { workspace, tab, pane, mode };
 }
 

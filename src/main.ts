@@ -1,5 +1,6 @@
 import { closeCommand } from "./commands/close.ts";
 import { continueCommand } from "./commands/continue.ts";
+import { diffCommand } from "./commands/diff.ts";
 import { initCommand, workspaceCommand } from "./commands/init.ts";
 import { jobsCommand } from "./commands/jobs.ts";
 import { linearCommand } from "./commands/linear.ts";
@@ -20,6 +21,7 @@ const COMMANDS = {
 	workspace: workspaceCommand,
 	spawn: spawnCommand,
 	continue: continueCommand,
+	diff: diffCommand,
 	steer: steerCommand,
 	stop: stopCommand,
 	wait: waitCommand,
@@ -32,7 +34,7 @@ const COMMANDS = {
 	sweep: sweepCommand,
 	linear: linearCommand,
 } as const satisfies Record<
-	"init" | "workspace" | "spawn" | "continue" | "steer" | "stop" | "wait" | "jobs" | "prune" | "watch" | "unwatch" | "open" | "close" | "sweep" | "linear",
+	"init" | "workspace" | "spawn" | "continue" | "diff" | "steer" | "stop" | "wait" | "jobs" | "prune" | "watch" | "unwatch" | "open" | "close" | "sweep" | "linear",
 	Command
 >;
 const HELP = `limen — isolated coding jobs with files and git
@@ -49,6 +51,7 @@ usage:
   limen continue <id|suffix|label> "follow-up instruction" [--review] [--label L] [--model X] [--tab|--detached]
                                   # resume a finished job in its own pi session — full context, same worktree; Herdr default is hosted
   limen steer <id|suffix|label> "correction"
+  limen diff <id|suffix|label>
   limen wait <id|suffix|label>
   limen stop <id|suffix|label> [reason]
   limen jobs [--running|--active|--all|<id|suffix|label>]

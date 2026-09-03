@@ -130,6 +130,7 @@ limen spawn "instruction" [--label L] [--model M] [--branch B] [--timeout 20m]
 limen spawn --repo R "instruction" [--label L] [--model M]
 limen spawn --review --branch B --label L "instruction"
 limen jobs [--running|--active|--all|<id|suffix|label>]
+limen diff <id|suffix|label>
 limen prune
 limen steer <id|suffix|label> "correction"
 limen stop <id|suffix|label> [reason]

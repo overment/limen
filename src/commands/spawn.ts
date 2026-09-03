@@ -21,6 +21,7 @@ import { herdrAvailable, openHostedTab, openWatchTab } from "../herdr.ts";
 import { parseDuration } from "../job.ts";
 import { liveJob } from "../reap.ts";
 import { atomicWrite, finalizeJob, launchHostedSupervisor, launchWrapper } from "../wrapper.ts";
+import { hunkBinary } from "./diff.ts";
 import { pruneFinishedWorktrees } from "./prune.ts";
 
 type SpawnOptions = {
@@ -321,9 +322,11 @@ function probeVersion(command: string): Promise<string> {
 }
 export async function capturedVersions(): Promise<string> {
 	const herdr = process.env.LIMEN_HERDR?.trim();
+	const hunk = hunkBinary();
 	const pi = (await probeVersion(process.env.LIMEN_PI || "pi")) || "unavailable";
 	const extra = herdr !== "0" && (await probeVersion(herdr || "herdr"));
-	return extra ? `pi ${pi}\nherdr ${extra}\n` : `pi ${pi}\n`;
+	const hunkVersion = hunk && (await probeVersion(hunk));
+	return `pi ${pi}\n${extra ? `herdr ${extra}\n` : ""}${hunkVersion ? `hunk ${hunkVersion}\n` : ""}`;
 }
 function workspaceTask(task: string, root: string, repo: string): string {
 	const pointer = task.replace(/\bTicket: (spec\/\S+)/g, (_all, path: string) => `Ticket: ${root}/${path}`);

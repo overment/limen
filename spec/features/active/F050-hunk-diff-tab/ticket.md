@@ -36,3 +36,5 @@ At the merge decision the human runs (or the coordinator opens for them) `limen 
 ## Notes
 
 hunk invocation details (patch pipe vs in-repo range, watch flags) are the worker's to pin against the installed hunk's actual CLI — record what was tested, mirror `versions`, and prefer the invocation that survives hunk's own releases. hunk 0.20.0 is current at writing.
+
+Implementation probe: hunk 0.21.0 accepts `hunk diff <base>...<branch>` for the finished snapshot and `hunk diff <base> --watch` from the live worktree. Both invocations opened and exited cleanly in a pseudo-terminal; `limen diff` itself was also exercised in place against 0.21.0. Hunk's Git-backed single-revision diff includes committed, staged, unstaged, and untracked work.
