@@ -10,7 +10,6 @@
 - `F048-hosted-runtime-start` (🟠 ACTIVE): spawn prints the ID in seconds; the detached supervisor starts pi and owns the job. This closes the live 2026-08-27 caller-timeout orphaning before F049.
 - `F056-wake-routing-truth` (🟠 ACTIVE): fallback waits minutes and goes only to sessions that own jobs; an errored turn keeps the wake; facts before instructions.
 - `F057-failed-turn-visible` (🟠 ACTIVE): the coordinator says its previous turn failed; the hosted supervisor raises an errored advisory.
-- `F062-worker-budgets` (🟠 ACTIVE): workers stay off the board and inside reading and check budgets.
 
 ## NEXT
 
@@ -22,6 +21,7 @@
 
 ## PROVEN
 
+- `F062-worker-budgets` (🟢 PROVEN): workers stay off the board and inside reading and check budgets. Landed `85a26c2`. Review PASS of `ab6331d`.
 - `F055-hosted-finish` (🟢 PROVEN): a hosted worker ends its job with `finish`; `done:` stops record done. Landed `40873ed`. Review PASS of `b220dcf`.
 - `F058-spawn-hardening` (🟢 PROVEN): spawn takes the task from a file, retries git, prepares the worktree, and prunes orphans. Landed `6b7cdb4`. Review PASS of `17fee8d`.
 - `F054-stale-overlay-notice` (🟢 PROVEN): a copy of an older package template is named stale with both dates. Landed `6228859`. Review PASS of `0ae402b`.
