@@ -79,6 +79,32 @@ test("strict TypeScript and templates preserve the capability-judgment line", as
 		assert.match(agents.toLowerCase(), new RegExp(phrase));
 });
 
+test("worker stays off the board and inside reading and check budgets", async () => {
+	const worker = (await readFile(join(ROOT, "templates/worker.md"), "utf8")).toLowerCase();
+	for (const phrase of [
+		"never edit the board",
+		"ticket status",
+		"outcome files",
+		"progress lives in the commit and the final message",
+		"before the first edit",
+		"findings file if any",
+		"ten reads without a changed file",
+		"reproducing the finding with the named test",
+		"discriminating check first",
+		"scoped to the diff",
+		"full native lane once",
+		"repo-wide formatter over untouched files",
+		"no two lanes in parallel",
+		"install from the lockfile",
+		"never a symlink to another checkout",
+		"more than the seam the handoff names",
+		"write the question to a plain file",
+	])
+		assert.match(worker, new RegExp(phrase));
+	assert.doesNotMatch(worker, /quit pi/);
+	assert.doesNotMatch(worker, /as far as this slice earns/);
+});
+
 test("reviewer verdict opens PASS or FAIL and never fails the environment", async () => {
 	const reviewer = (await readFile(join(ROOT, "templates/reviewer.md"), "utf8")).toLowerCase();
 	for (const phrase of [
