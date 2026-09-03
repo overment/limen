@@ -8,6 +8,9 @@
 ## NOW
 
 - `F048-hosted-runtime-start` (🟠 ACTIVE): spawn prints the ID in seconds; the detached supervisor starts pi and owns the job. This closes the live 2026-08-27 caller-timeout orphaning before F049.
+- `F064-project-reminders` (🟠 ACTIVE): moment-of-use reminders name the project files and headings across languages.
+- `F065-idle-backstop` (🟠 ACTIVE): a clean hosted worker reaches terminal state after its ordinary tool-using turn goes idle.
+- `F066-stop-wake-integrity` (🟠 ACTIVE): stop suppresses the caller wake only after terminal state is confirmed.
 
 ## NEXT
 
