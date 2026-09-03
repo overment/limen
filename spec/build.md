@@ -8,7 +8,6 @@
 ## NOW
 
 - `F048-hosted-runtime-start` (🟠 ACTIVE): spawn prints the ID in seconds; the detached supervisor starts pi and owns the job. This closes the live 2026-08-27 caller-timeout orphaning before F049.
-- `F064-project-reminders` (🟠 ACTIVE): moment-of-use reminders name the project files and headings across languages.
 - `F065-idle-backstop` (🟠 ACTIVE): a clean hosted worker reaches terminal state after its ordinary tool-using turn goes idle.
 
 ## NEXT
@@ -19,6 +18,7 @@
 
 ## PROVEN
 
+- `F064-project-reminders` (🟢 PROVEN): reminders name project styleguide and vision headings across languages. Landed `91ea670`. Review PASS of `b929056`.
 - `F066-stop-wake-integrity` (🟢 PROVEN): stop suppresses the caller wake only after terminal state. Landed `08e63c5`. Review PASS of `50d0b07`.
 - `F060-reply-shapes` (🟢 PROVEN): human register gains explanation, where-we-are, and wave-report shapes. Landed `e805a68`. Review PASS of `3001bd9`.
 - `F061-coordinator-ceilings` (🟢 PROVEN): shop manual holds review appetite, second-FAIL stop, and clean merge. Landed `6cf752f`. Review PASS of `216115f`.
@@ -28,6 +28,5 @@
 - `F062-worker-budgets` (🟢 PROVEN): workers stay off the board and inside reading and check budgets. Landed `85a26c2`. Review PASS of `ab6331d`.
 - `F055-hosted-finish` (🟢 PROVEN): a hosted worker ends its job with `finish`; `done:` stops record done. Landed `40873ed`. Review PASS of `b220dcf`.
 - `F058-spawn-hardening` (🟢 PROVEN): spawn takes the task from a file, retries git, prepares the worktree, and prunes orphans. Landed `6b7cdb4`. Review PASS of `17fee8d`.
-- `F054-stale-overlay-notice` (🟢 PROVEN): a copy of an older package template is named stale with both dates. Landed `6228859`. Review PASS of `0ae402b`.
-- 2026-09: 5 landed. Jobs list reads at a glance; guidance rides the prompt; reviews open PASS/FAIL. spec/features/done/2026-09/
+- 2026-09: 6 landed. Jobs list reads at a glance; guidance rides the prompt; stale overlays are named. spec/features/done/2026-09/
 - 2026-08: 44 landed. Hosted jobs run in a named tab; wakes retry; the process tree is contained. spec/features/done/2026-08/
