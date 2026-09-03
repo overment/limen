@@ -69,6 +69,27 @@ test("strict TypeScript and templates preserve the capability-judgment line", as
 		assert.match(agents.toLowerCase(), new RegExp(phrase));
 });
 
+test("reviewer verdict opens PASS or FAIL and never fails the environment", async () => {
+	const reviewer = (await readFile(join(ROOT, "templates/reviewer.md"), "utf8")).toLowerCase();
+	for (const phrase of [
+		"the first line",
+		"one word with the sha",
+		"nothing before it",
+		"pass carries notes",
+		"acceptance bullet",
+		"plausible is never blocking",
+		"unverified is never blocking",
+		"install from the lockfile",
+		"bounded by the findings file",
+		"outside the diff",
+		"one full proof",
+		"transient failure is reported as transient",
+	])
+		assert.match(reviewer, new RegExp(phrase));
+	assert.doesNotMatch(reviewer, /installing is not reviewing/);
+	assert.doesNotMatch(reviewer, /only when no substantive finding remains/);
+});
+
 test("pulse law is one function", async () => {
 	const job = await readFile(join(ROOT, "src/job.ts"), "utf8");
 	const wake = await readFile(join(ROOT, "hook/wake.ts"), "utf8");
