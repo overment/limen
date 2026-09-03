@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
+import { cleanWorktree } from "./git.ts";
 import {
 	type HerdrPlace,
 	type HostedAgentStatus,
@@ -13,7 +14,7 @@ import {
 	stopHostedAgent,
 } from "./herdr.ts";
 import { assistantStopReason, assistantText } from "./stream.ts";
-import { appendLimenLog, atomicWrite, finalizeJob, isFailedStopReason, recordCommits, textFile, writeHandshake } from "./wrapper.ts";
+import { appendLimenLog, atomicWrite, finalizeJob, isFailedStopReason, recordCommits, requestedTerminal, textFile, writeHandshake } from "./wrapper.ts";
 
 const PACKAGE_ROOT = fileURLToPath(new URL("..", import.meta.url));
 const HOSTED_UNKNOWN_SAMPLES = 5;
@@ -92,26 +93,27 @@ export async function runHostedSupervisor(): Promise<void> {
 				unknownStreak = 0;
 			}
 		}
-		const reason = sessionEnded ? hostedTerminalReason(status, true) : missingStreak >= 3 ? hostedTerminalReason(status, false) : undefined;
+		let reason: string | undefined = sessionEnded ? hostedTerminalReason(status, true) : missingStreak >= 3 ? hostedTerminalReason(status, false) : undefined;
+		if (!reason) reason = await noteHostedIdle(jobDir, status, idle);
 		if (reason) {
 			const requested = await textFile(`${jobDir}/stop-requested`);
-			if (!requested) await writeHostedResult(jobDir);
+			await writeHostedResult(jobDir);
 			const stopReason = requested ? "" : await textFile(`${jobDir}/stop-reason`);
 			const failedReason = isFailedStopReason(stopReason) ? stopReason : "";
-			await finalizeJob(jobDir, requested ? "stopped" : failedReason ? "failed" : "done", requested || failedReason || reason);
+			await finalizeJob(jobDir, requested ? requestedTerminal(requested) : failedReason ? "failed" : "done", requested || failedReason || reason);
 			return;
 		}
-		await noteHostedIdle(jobDir, status, idle);
 		await delay(1_000);
 	}
-	await finalizeJob(jobDir, "stopped", (await textFile(`${jobDir}/stop-requested`)) || "hosted supervisor interrupted");
+	const halt = (await textFile(`${jobDir}/stop-requested`)) || "hosted supervisor interrupted";
+	await finalizeJob(jobDir, requestedTerminal(halt), halt);
 }
 
 async function startHostedAgent(jobDir: string): Promise<string | undefined> {
 	const stopped = () => existsSync(`${jobDir}/stop-requested`);
 	const requestedBeforeStart = await textFile(`${jobDir}/stop-requested`);
 	if (requestedBeforeStart) {
-		await finalizeJob(jobDir, "stopped", requestedBeforeStart);
+		await finalizeJob(jobDir, requestedTerminal(requestedBeforeStart), requestedBeforeStart);
 		return;
 	}
 	const [workspace, tab, pane, coordinatorTab] = await Promise.all(
@@ -161,7 +163,7 @@ async function startHostedAgent(jobDir: string): Promise<string | undefined> {
 				stopHostedAgent(live);
 				return live;
 			}
-			await finalizeJob(jobDir, "stopped", requested);
+			await finalizeJob(jobDir, requestedTerminal(requested), requested);
 			return;
 		}
 		const message = error instanceof Error ? error.message : String(error);
@@ -170,7 +172,7 @@ async function startHostedAgent(jobDir: string): Promise<string | undefined> {
 	}
 }
 /** Publish a stall while the hosted session stays open. Re-arm only after the agent works again. */
-export async function noteHostedIdle(jobDir: string, status: HostedAgentStatus, watch: HostedIdleWatch, now = Date.now(), thresholdMs = hostedIdleMs()): Promise<void> {
+export async function noteHostedIdle(jobDir: string, status: HostedAgentStatus, watch: HostedIdleWatch, now = Date.now(), thresholdMs = hostedIdleMs()) {
 	if (status === "working") {
 		watch.leftWorkingAt = undefined;
 		delete watch.lastRingAt;
@@ -189,6 +191,10 @@ export async function noteHostedIdle(jobDir: string, status: HostedAgentStatus, 
 	if (watch.leftWorkingAt === undefined) watch.leftWorkingAt = now;
 	const stalled = status === "blocked" || now - watch.leftWorkingAt >= thresholdMs;
 	if (!stalled) return;
+	if (status !== "blocked" && (await textFile(`${jobDir}/last-turn-tools`)) === "0") {
+		const tree = await textFile(`${jobDir}/worktree`);
+		if (tree && cleanWorktree(tree)) return "hosted session ended";
+	}
 	const tools = Number(await textFile(`${jobDir}/tool-calls`));
 	const count = Number.isSafeInteger(tools) && tools > 0 ? tools : 0;
 	if (status !== "blocked" && count < 1) return;
@@ -247,7 +253,7 @@ export async function writeHostedResult(jobDir: string): Promise<void> {
 				stop = reason;
 			} catch {}
 		}
-		if (last) await atomicWrite(`${jobDir}/result`, `${last}\n`);
+		if (!(await textFile(`${jobDir}/result`)) && last) await atomicWrite(`${jobDir}/result`, `${last}\n`);
 		if (stop) await atomicWrite(`${jobDir}/stop-reason`, `${stop}\n`);
 	} catch {
 		// Result capture is advisory; the job record and branch remain the source of truth.

@@ -31,9 +31,49 @@ test("hosted result capture follows the last assistant stop reason", async (cont
 	await assert.rejects(readFile(join(root, "stop-reason")));
 });
 
+test("hosted result capture keeps a tool-written result over later assistant text", async (context) => {
+	const root = await mkdtemp(join(tmpdir(), "limen-hosted-finish-result-"));
+	context.after(() => rm(root, { recursive: true, force: true }));
+	await mkdir(join(root, "session"));
+	await writeFile(join(root, "result"), "handoff from finish\n");
+	await writeFile(join(root, "session/run.jsonl"), `${JSON.stringify({ type: "message", message: { role: "assistant", content: [{ type: "text", text: "Done." }] } })}\n`);
+	await writeHostedResult(root);
+	assert.equal(await readFile(join(root, "result"), "utf8"), "handoff from finish\n");
+});
+
 test("hosted idle bound defaults to 60s and re-ring to 15m", () => {
 	assert.equal(DEFAULT_HOSTED_IDLE_MS, 60_000);
 	assert.equal(DEFAULT_STALL_RERING_MS, 15 * 60_000);
+});
+
+test("noteHostedIdle finalizes a clean idle turn with no tool call and writes no advisory", async (context) => {
+	const dir = await mkdtemp(join(tmpdir(), "limen-idle-clean-"));
+	context.after(() => rm(dir, { recursive: true, force: true }));
+	const tree = join(dir, "tree");
+	await mkdir(tree);
+	git(tree, "init", "-b", "main");
+	git(tree, "config", "user.email", "limen@example.test");
+	git(tree, "config", "user.name", "Limen Test");
+	await writeFile(join(tree, "README.md"), "ok\n");
+	git(tree, "add", ".");
+	git(tree, "commit", "-m", "initial");
+	await writeFile(join(dir, "worktree"), `${tree}\n`);
+	await writeFile(join(dir, "last-turn-tools"), "0\n");
+	await writeFile(join(dir, "activity"), "wait\n");
+	const watch: HostedIdleWatch = { leftWorkingAt: undefined, armed: true };
+	assert.equal(await noteHostedIdle(dir, "idle", watch, 0, 1_000), undefined);
+	assert.equal(await noteHostedIdle(dir, "idle", watch, 1_000, 1_000), "hosted session ended");
+	await assert.rejects(readFile(join(dir, "advisory")), "a clean idle turn must not write an advisory");
+	await writeFile(join(tree, "dirty.txt"), "left behind\n");
+	const dirty: HostedIdleWatch = { leftWorkingAt: undefined, armed: true };
+	assert.equal(await noteHostedIdle(dir, "idle", dirty, 0, 1_000), undefined);
+	assert.equal(await noteHostedIdle(dir, "idle", dirty, 1_000, 1_000), undefined);
+	await writeFile(join(dir, "last-turn-tools"), "2\n");
+	await writeFile(join(dir, "tool-calls"), "2\n");
+	const stalled: HostedIdleWatch = { leftWorkingAt: undefined, armed: true };
+	assert.equal(await noteHostedIdle(dir, "idle", stalled, 0, 1_000), undefined);
+	assert.equal(await noteHostedIdle(dir, "idle", stalled, 1_000, 1_000), undefined);
+	assert.match(await readFile(join(dir, "advisory"), "utf8"), /idle 1s after 2 tool calls/);
 });
 
 test("noteHostedIdle writes one stall marker, skips zero tools, and re-arms after working", async () => {
@@ -843,6 +883,24 @@ test("hosted stop records stopped after two interrupts", async (context) => {
 	assert.equal((await readFile(join(job, "stop-requested"), "utf8")).trim(), "please stop");
 	await waitForFile(join(job, "log"), /stopped: please stop/);
 	assert.equal([...(await readFile(herdr.calls, "utf8")).matchAll(/agent send-keys \S+ ctrl\+c/g)].length, 2);
+});
+
+test("hosted stop with a done: reason records done", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	assert.equal(limen(scratch, "init").status, 0);
+	const herdr = await installHostedFakeHerdr(scratch.root, scratch.fakeBin);
+	const env = { HERDR_ENV: "1", LIMEN_HERDR: herdr.bin, FAKE_HERDR_STATE: herdr.dir, FAKE_HERDR_PERSIST: "1", HERDR_TAB_ID: "coord:t0", PI_SESSION_ID: "coordinator-a" };
+	const launched = limenWithEnv(scratch, env, "spawn", "--label", "F055 done stop", "stay hosted");
+	assert.equal(launched.status, 0, launched.stderr);
+	const id = onlyJobId(launched.stdout);
+	const job = join(scratch.root, ".limen/jobs", id);
+	await waitForFile(join(job, "herdr/agent"), /w1:p1/);
+	const stopped = limenWithEnv(scratch, env, "stop", id, "done: merged as abc123");
+	assert.equal(stopped.status, 0, stopped.stderr);
+	await waitForState(scratch.root, id, "done");
+	assert.match(await readFile(join(job, "log"), "utf8"), /done: done: merged as abc123/);
+	assert.ok((await readdir(join(job, "notify/delivered"))).includes("coordinator-a"));
 });
 
 test("hosted stop leaves running when the agent ignores interrupts", async (context) => {

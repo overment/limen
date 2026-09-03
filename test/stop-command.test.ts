@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import test from "node:test";
 import { containEscapedDescendants, processInfo, recordCleanup } from "../src/contain.ts";
-import { limen, limenWithEnv, onlyJobId, scratchRepo, waitForState } from "./scratch.ts";
+import { limen, limenWithEnv, limenWithSession, onlyJobId, scratchRepo, waitForState } from "./scratch.ts";
 
 const stubbornPi = `#!/usr/bin/env node
 process.on("SIGTERM", () => {});
@@ -332,6 +332,19 @@ test("confirmed absence after TERM needs neither KILL nor cleanup", async (conte
 	});
 	assert.deepEqual(signals, [[4242, "SIGTERM"]]);
 	await assert.rejects(readFile(join(job, "cleanup")), "confirmed absence must not write cleanup");
+});
+
+test("stop with a done: reason records done and silences the stopping session", async (context) => {
+	const scratch = await scratchRepo(stubbornPi);
+	context.after(scratch.cleanup);
+	limen(scratch, "init");
+	const id = onlyJobId(limen(scratch, "spawn", "wait").stdout);
+	const job = join(scratch.root, `.limen/jobs/${id}`);
+	const stopped = limenWithSession(scratch, "coordinator-a", "stop", id, "done: merged as abc123");
+	assert.equal(stopped.status, 0, stopped.stderr);
+	await waitForState(scratch.root, id, "done");
+	assert.match(await readFile(join(job, "log"), "utf8"), /done: done: merged as abc123/);
+	assert.ok((await readdir(join(job, "notify/delivered"))).includes("coordinator-a"));
 });
 
 test("stop interrupts a process group and is idempotent", async (context) => {

@@ -6,6 +6,19 @@ type PiApi = {
 	on(event: "session_start" | "session_shutdown", handler: (event: unknown, context: unknown) => void): void;
 	on(event: "tool_execution_start", handler: (event: { readonly toolName?: string }, context: unknown) => void): void;
 	on(event: "turn_start" | "turn_end", handler: (event: unknown, context: unknown) => void): void;
+	registerTool?(tool: {
+		readonly name: string;
+		readonly label: string;
+		readonly description: string;
+		readonly parameters: object;
+		execute(
+			toolCallId: string,
+			params: { readonly handoff?: string },
+			signal: unknown,
+			onUpdate: unknown,
+			ctx: { shutdown(): void },
+		): Promise<{ content: Array<{ type: "text"; text: string }>; details: object }>;
+	}): void;
 };
 
 /** Keep `.limen/jobs/<id>/` truthful for a Herdr-hosted pi (no JSON stream). */
@@ -17,6 +30,7 @@ export default function limenHosted(pi: PiApi): void {
 	const jobDir = join(root, ".limen", "jobs", id);
 	if (!existsSync(jobDir)) return;
 	let tools = 0;
+	let turnTools = 0;
 	const write = (name: string, content: string) => {
 		try {
 			writeFileSync(join(jobDir, name), content.endsWith("\n") ? content : `${content}\n`);
@@ -31,6 +45,22 @@ export default function limenHosted(pi: PiApi): void {
 			// Advisory.
 		}
 	};
+	pi.registerTool?.({
+		name: "finish",
+		label: "Finish",
+		description: "End this hosted job. Pass the handoff text; the job is recorded done and the session exits.",
+		parameters: {
+			type: "object",
+			properties: { handoff: { type: "string", description: "Handoff for the coordinator" } },
+			required: ["handoff"],
+		},
+		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+			const handoff = typeof params?.handoff === "string" ? params.handoff.trim() : "";
+			if (handoff) write("result", handoff);
+			ctx.shutdown();
+			return { content: [{ type: "text", text: "done" }], details: {} };
+		},
+	});
 	pi.on("session_start", () => {
 		mkdirSync(join(jobDir, "session"), { recursive: true });
 		write("activity", "think");
@@ -48,12 +78,14 @@ export default function limenHosted(pi: PiApi): void {
 		}
 	});
 	pi.on("turn_start", () => {
+		turnTools = 0;
 		write("activity", "think");
 		log("think");
 	});
 	pi.on("tool_execution_start", (event) => {
 		const name = event.toolName?.trim() || "tool";
 		tools += 1;
+		turnTools += 1;
 		write("activity", "tool");
 		write("last-tool", name);
 		write("tool-calls", String(tools));
@@ -61,6 +93,7 @@ export default function limenHosted(pi: PiApi): void {
 	});
 	pi.on("turn_end", () => {
 		// A turn end is not job completion — hosted jobs are multi-turn.
+		write("last-turn-tools", String(turnTools));
 		write("activity", "wait");
 		log("wait");
 	});

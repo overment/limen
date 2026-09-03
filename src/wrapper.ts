@@ -167,6 +167,7 @@ export async function failInternalJob(error: unknown): Promise<void> {
 export function isFailedStopReason(reason: string): boolean {
 	return reason === "error" || reason.startsWith("error: ") || reason === "aborted" || reason.startsWith("aborted: ");
 }
+export const requestedTerminal = (reason: string): "done" | "stopped" => (reason.startsWith("done:") ? "done" : "stopped");
 export async function finalizeJob(jobDir: string, state: "done" | "failed" | "stopped", detail: string): Promise<void> {
 	if (["done", "failed", "stopped"].includes(await textFile(`${jobDir}/state`))) return;
 	await recordCommits(jobDir).catch(() => {});

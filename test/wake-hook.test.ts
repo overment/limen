@@ -1476,6 +1476,54 @@ test("an open coordinator stamps last-sweep and shutdown stops refreshing it", a
 	assert.equal((await stat(stamp)).mtimeMs, firstMtime, "no session means the liveness stamp starts going stale");
 });
 
+test("a stop-marked session receives no completion wake", async (context) => {
+	stashEnv(context, "LIMEN_JOB", undefined);
+	stashEnv(context, "LIMEN_HERDR", "0");
+	const root = await import("node:fs/promises").then(({ mkdtemp }) => mkdtemp(join(process.env.TMPDIR ?? "/tmp", "limen-wake-stop-echo-")));
+	context.after(() => import("node:fs/promises").then(({ rm }) => rm(root, { recursive: true, force: true })));
+	await mkdir(join(root, ".agents/limen"), { recursive: true });
+	const jobs = join(root, ".limen/jobs");
+	const handlers = new Map<string, (event: unknown, context: TestContext) => void>();
+	const messages: string[] = [];
+	limenWake({
+		on(event, handler) {
+			handlers.set(event, handler);
+		},
+		sendUserMessage(content) {
+			messages.push(content);
+		},
+	});
+	const session = { cwd: root, isIdle: () => true, sessionManager: sessionManager("coordinator-a"), ui: { notify() {}, setStatus() {} } };
+	handlers.get("session_start")?.({}, session);
+	context.after(() => handlers.get("session_shutdown")?.({}, session));
+	await mkdir(join(jobs, "ended"), { recursive: true });
+	await writeFile(join(jobs, "ended/label"), "F055 ended\n");
+	await writeFile(join(jobs, "ended/branch"), "limen/ended\n");
+	await subscribe(jobs, "ended", "coordinator-a");
+	await mkdir(join(jobs, "ended/notify/delivered/coordinator-a"), { recursive: true });
+	await writeFile(join(jobs, "ended/result"), "handoff from the worker\n");
+	await writeFile(join(jobs, "ended/state"), "done\n");
+	await new Promise((resolve) => setTimeout(resolve, 200));
+	assert.equal(messages.length, 0);
+	await subscribe(jobs, "ended", "coordinator-b");
+	const other = new Map<string, (event: unknown, context: TestContext) => void>();
+	const otherMessages: string[] = [];
+	limenWake({
+		on(event, handler) {
+			other.set(event, handler);
+		},
+		sendUserMessage(content) {
+			otherMessages.push(content);
+		},
+	});
+	const sessionB = { cwd: root, isIdle: () => true, sessionManager: sessionManager("coordinator-b"), ui: { notify() {}, setStatus() {} } };
+	other.get("session_start")?.({}, sessionB);
+	context.after(() => other.get("session_shutdown")?.({}, sessionB));
+	await waitUntil(() => otherMessages.length === 1);
+	assert.match(otherMessages[0] ?? "", /Final message:\nhandoff from the worker/);
+	assert.equal(messages.length, 0);
+});
+
 function emitWakeTurn(handlers: Map<string, (event: unknown, context: TestContext) => void>, session: TestContext, content: string, stopReason = "stop"): void {
 	const user = { role: "user", content: [{ type: "text", text: content }] };
 	handlers.get("message_start")?.({ message: user }, session);

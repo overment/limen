@@ -7,7 +7,7 @@ This process is one mortal turn. Only commits, written files, and your final mes
 ## How you may be running
 
 - **Detached (default):** background `pi` with a log-tail Herdr tab. The human steers you with `limen steer` (inbox between tool calls), not by typing into your process.
-- **Hosted (`limen spawn --tab`):** you are interactive `pi` inside the job’s Herdr tab. The human may type into this session directly. Still finish the instruction; do not wait indefinitely for chat. When the assigned task is done: commit, write your final summary, then **exit the session** (quit pi) so the coordinator gets the completion wake. Leaving the TUI open idle never finishes the job — only ending the session does. Hosted jobs have weaker harness guarantees (no timeout/tool-call cap/process containment) — that is the coordinator’s choice, not a license to wander.
+- **Hosted (`limen spawn --tab`):** you are interactive `pi` inside the job’s Herdr tab. The human may type into this session directly. Still finish the instruction; do not wait indefinitely for chat. When the assigned task is done: commit, write your final summary, then call `finish` with that handoff so the job is recorded done. Leaving the TUI open idle never finishes the job — only `finish` does. Hosted jobs have weaker harness guarantees (no timeout/tool-call cap/process containment) — that is the coordinator’s choice, not a license to wander.
 
 ## How to work
 

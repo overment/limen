@@ -1,8 +1,8 @@
-import { readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { containEscapedDescendants, discoverEscapedDescendants, processGroupAlive, signalProcessGroup, waitForProcessGroup } from "../contain.ts";
 import { hostedAgentStatus, stopHostedAgent } from "../herdr.ts";
 import { resolveJob } from "../lookup.ts";
-import { appendLimenLog, finalizeJob } from "../wrapper.ts";
+import { appendLimenLog, finalizeJob, requestedTerminal } from "../wrapper.ts";
 export async function stopCommand(args: readonly string[], cwd: string): Promise<void> {
 	const query = args[0];
 	if (!query) throw new Error("stop requires a job id");
@@ -14,6 +14,8 @@ export async function stopCommand(args: readonly string[], cwd: string): Promise
 	}
 	const reason = args.slice(1).join(" ").trim() || "stopped by request";
 	await appendLimenLog(jobDir, `stop requested: ${reason}`);
+	const session = process.env.PI_SESSION_ID?.trim();
+	if (session && /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(session)) await mkdir(`${jobDir}/notify/delivered/${session}`, { recursive: true });
 	const hostedTarget = await text(`${jobDir}/herdr/agent`);
 	if (hostedTarget || (await text(`${jobDir}/hosted`))) {
 		await writeFile(`${jobDir}/stop-requested`, `${reason}\n`);
@@ -23,13 +25,14 @@ export async function stopCommand(args: readonly string[], cwd: string): Promise
 		while ((await text(`${jobDir}/state`)) === "running" && Date.now() < deadline) {
 			const dead = !Number.isSafeInteger(pid) || pid <= 0 || !processGroupAlive(pid);
 			if (dead && (!hostedTarget || hostedAgentStatus(hostedTarget) === "missing")) {
-				await finalizeJob(jobDir, "stopped", reason);
+				await finalizeJob(jobDir, requestedTerminal(reason), reason);
 				break;
 			}
 			await new Promise((resolve) => setTimeout(resolve, 100));
 		}
-		if ((await text(`${jobDir}/state`)) === "running") throw new Error(`${id} agent is still up; closing the tab ends it`);
-		console.log(`stopped ${id}: ${reason}`);
+		const ended = await text(`${jobDir}/state`);
+		if (ended === "running") throw new Error(`${id} agent is still up; closing the tab ends it`);
+		console.log(`${ended} ${id}: ${reason}`);
 		return;
 	}
 	const pid = Number((await readFile(`${jobDir}/pid`, "utf8")).trim());
@@ -54,8 +57,8 @@ export async function stopCommand(args: readonly string[], cwd: string): Promise
 		console.log(`${id} is already ${settledState}`);
 		return;
 	}
-	await finalizeJob(jobDir, "stopped", reason);
-	console.log(`stopped ${id}: ${reason}`);
+	await finalizeJob(jobDir, requestedTerminal(reason), reason);
+	console.log(`${requestedTerminal(reason)} ${id}: ${reason}`);
 }
 function text(path: string): Promise<string> {
 	return readFile(path, "utf8").then(
