@@ -9,8 +9,9 @@ const BOARD_ADVISORY_LINES = 120;
 const REPLY_RULES = "First line is the answer. No identifier without its meaning. Size the reply to the question.";
 const SPECS_REMINDER =
 	"[limen] Specs: a ticket is about 300 words: outcome, scope, out of scope, acceptance. No status line, no bare feature numbers, no progress markers. Title is `FNNN · what becomes true`.";
-const STYLE_REMINDER = "[limen] Styleguide: small, direct TypeScript. One file, one job. No index.ts, types.ts, utils.ts, barrels, or enums. Inform, do not gate.";
-const VISION_REMINDER = "[limen] Vision: one human; many focused sessions; one coordinator. One short job; one isolated worktree. Fresh review before trust. Inform; do not gate.";
+const STYLE_FILE = ".agents/limen/styleguide.md";
+const VISION_FILE = "spec/vision.md";
+const MAX_REMINDER_HEADINGS = 8;
 
 type Context = { readonly cwd: string };
 type Message = { readonly customType: string; readonly content: string; readonly display: boolean };
@@ -61,11 +62,12 @@ export default function limenCommunication(pi: PiApi): void {
 		if (!message || typeof message !== "object" || !("role" in message) || message.role !== "assistant") return;
 		lastFailure = assistantStopReason(message) || undefined;
 	});
-	pi.on("tool_result", (event) => {
+	pi.on("tool_result", (event, context) => {
 		const kind = reminderKind(event);
 		if (!kind) return;
 		lastTouch = touchLine(event, kind);
-		const reminder = kind === "specs" ? SPECS_REMINDER : kind === "style" ? STYLE_REMINDER : VISION_REMINDER;
+		const root = process.env.LIMEN_CONTEXT_ROOT ?? context.cwd;
+		const reminder = kind === "specs" ? SPECS_REMINDER : projectReminder(root, kind);
 		return { content: appendText(event.content, reminder) };
 	});
 }
@@ -231,7 +233,31 @@ function isSpecPath(path: string): boolean {
 }
 
 function isCodePath(path: string): boolean {
-	return /\.(?:[cm]?[jt]sx?)$/.test(posixPath(path));
+	if (!path) return false;
+	return !/\.md$/i.test(posixPath(path));
+}
+
+function projectReminder(cwd: string, kind: "style" | "vision"): string {
+	const relative = kind === "style" ? STYLE_FILE : VISION_FILE;
+	const label = kind === "style" ? "Styleguide" : "Vision";
+	const text = readOptional(join(cwd, relative));
+	if (text === undefined) return `[limen] ${label}: no project file at ${relative}.`;
+	const headings = markdownHeadings(text);
+	if (!headings.length) return `[limen] ${label} (${relative}): no headings; read the file.`;
+	const shown = headings.slice(0, MAX_REMINDER_HEADINGS);
+	const more = headings.length > MAX_REMINDER_HEADINGS ? "; read the file" : "";
+	return `[limen] ${label} (${relative}): ${shown.join("; ")}${more}.`;
+}
+
+function markdownHeadings(text: string): readonly string[] {
+	const headings: string[] = [];
+	for (const line of text.replaceAll("\r\n", "\n").split("\n")) {
+		const match = /^#{1,6}\s+(\S.*)$/.exec(line.trim());
+		if (!match) continue;
+		const title = (match[1] ?? "").replace(/\s+#+\s*$/, "").trim();
+		if (title) headings.push(title);
+	}
+	return headings;
 }
 
 function isVisionCommand(command: string): boolean {
