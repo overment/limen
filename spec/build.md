@@ -8,8 +8,6 @@
 ## NOW
 
 - `F048-hosted-runtime-start` (🟠 ACTIVE): spawn prints the ID in seconds; the detached supervisor starts pi and owns the job. This closes the live 2026-08-27 caller-timeout orphaning before F049.
-- `F067-job-workspaces` (🟠 ACTIVE): worker and reviewer tabs open in their own space, so the space you talk in holds only your conversation and your own tabs. Slice: role-aware workspace lookup and focus restore across spaces.
-- `F068-legible-tab-titles` (🟠 ACTIVE): a tab says what the work changes in plain words; the feature number rides at the end and the job id still hoists it. Slice: the label rule and id derivation.
 
 ## NEXT
 
@@ -19,6 +17,8 @@
 
 ## PROVEN
 
+- `F067-job-workspaces` (🟢 PROVEN): worker and reviewer tabs open in their own space; the first job tab replaces the seeded one. Landed `63a9179`, fix `7f9408d`. Coordinator-inspected.
+- `F068-legible-tab-titles` (🟢 PROVEN): a tab title says what the work changes, feature number last; ids still hoist it. Landed `01ab5dc`. Coordinator-inspected.
 - `F065-idle-backstop` (🟢 PROVEN): clean hosted tool-using turns close after the idle bound. Landed `12d533a`. Review PASS of `76e0895`.
 - `F064-project-reminders` (🟢 PROVEN): reminders name project styleguide and vision headings across languages. Landed `91ea670`. Review PASS of `b929056`.
 - `F066-stop-wake-integrity` (🟢 PROVEN): stop suppresses the caller wake only after terminal state. Landed `08e63c5`. Review PASS of `50d0b07`.
@@ -27,7 +27,5 @@
 - `F059-board-compression` (🟢 PROVEN): PROVEN keeps ten entries; older months fold to one highlight line. Landed `38767bc`. Review PASS of `2e23053`.
 - `F056-wake-routing-truth` (🟢 PROVEN): wakes wait minutes before fallback and only to a session that owns a job; facts first. Landed `5ac67d3`. Review PASS of `99356b3`.
 - `F057-failed-turn-visible` (🟢 PROVEN): a failed model turn is said on the next cue; hosted idle after `error` is `errored:`, not idle. Landed `d05b7fa`. Review PASS of `8520633`.
-- `F062-worker-budgets` (🟢 PROVEN): workers stay off the board and inside reading and check budgets. Landed `85a26c2`. Review PASS of `ab6331d`.
-- `F055-hosted-finish` (🟢 PROVEN): a hosted worker ends its job with `finish`; `done:` stops record done. Landed `40873ed`. Review PASS of `b220dcf`.
-- 2026-09: 7 landed. Spawn prepares worktrees; guidance rides the prompt; stale overlays are named. spec/features/done/2026-09/
+- 2026-09: 9 landed. Hosted jobs end themselves; guidance rides the prompt; stale overlays are named. spec/features/done/2026-09/
 - 2026-08: 44 landed. Hosted jobs run in a named tab; wakes retry; the process tree is contained. spec/features/done/2026-08/

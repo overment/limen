@@ -12,7 +12,7 @@ That is typecheck, Biome format check, and the real-Git test suite. Each test ha
 
 ## What belongs in source
 
-`src/` is capped at 3325 lines (`test/structure.test.ts`). Runtime dependencies must stay empty. Do not add `index.ts`, `types.ts`, `utils.ts`, barrels, enums, or a shared helper bag.
+`src/` is capped at 3348 lines (`test/structure.test.ts`). Runtime dependencies must stay empty. Do not add `index.ts`, `types.ts`, `utils.ts`, barrels, enums, or a shared helper bag.
 
 - Capability — start, wait, stop, observe — belongs in `src/`
 - Operating advice belongs in `templates/`
