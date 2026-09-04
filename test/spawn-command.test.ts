@@ -413,6 +413,21 @@ test("spawn --role loads that overlay preamble and persists the name", async (co
 	assert.equal(argv[argv.indexOf("--append-system-prompt") + 1], "RESEARCH PREAMBLE\n");
 });
 
+test("spawn --role picture loads the packaged preamble", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	assert.equal(limen(scratch, "init").status, 0);
+	const launched = limen(scratch, "spawn", "--role", "picture", "--detached", "--label", "living diagram", "shape that moved: a job kind");
+	assert.equal(launched.status, 0, launched.stderr);
+	const id = onlyJobId(launched.stdout);
+	await waitForState(scratch.root, id, "done");
+	const job = join(scratch.root, ".limen/jobs", id);
+	assert.equal(await readFile(join(job, "role"), "utf8"), "picture\n");
+	const worktree = (await readFile(join(job, "worktree"), "utf8")).trim();
+	const argv = JSON.parse(await readFile(join(worktree, "pi-args.json"), "utf8")) as string[];
+	assert.equal(argv[argv.indexOf("--append-system-prompt") + 1], await readFile(new URL("../templates/picture.md", import.meta.url), "utf8"));
+});
+
 test("spawn --role without a preamble or with --review plants no job", async (context) => {
 	const scratch = await scratchRepo();
 	context.after(scratch.cleanup);
