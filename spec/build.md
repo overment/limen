@@ -7,13 +7,13 @@
 
 ## NOW
 
+- `F070-research-fan-out` (🟠 ACTIVE): human-asked research on different models, then a judge that names divergence. Named sources only.
+- `F072-quality-pass` (🟠 ACTIVE): one findings file over a stretch of landed work; never a rewrite or a merge gate.
+- `F073-picture-pass` (🟠 ACTIVE): after a merge that moved a shape, rewrite one living diagram.
 - `F048-hosted-runtime-start` (🟠 ACTIVE): spawn prints the ID in seconds; the detached supervisor starts pi and owns the job. This closes the live 2026-08-27 caller-timeout orphaning before F049.
 
 ## NEXT
 
-- `F070-research-fan-out` (🔴 PLANNED): human-asked research on different models, then a judge that names divergence. Named sources only.
-- `F072-quality-pass` (🔴 PLANNED): one findings file over a stretch of landed work; never a rewrite or a merge gate.
-- `F073-picture-pass` (🔴 PLANNED): after a merge that moved a shape, rewrite one living diagram.
 - `F049-running-owner-truth` (🔴 PLANNED): reaper adopts a hosted job that lost its supervisor, fails one with no live owner; no shape-based skips. Before F013.
 - `F013-remote-seat` (PLANNED): one disk, attach don’t clone; docs and seat-shaped guarantees. Before F014.
 - `F014-github-doorbell` (PLANNED): mention or label starts a job on the seat; comment back evidence; merge stays human.
