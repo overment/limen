@@ -10,7 +10,13 @@ export function herdrAvailable(): boolean {
 	return process.env.HERDR_ENV === "1" && Boolean(herdrBinary());
 }
 
-export async function openWatchTab(input: { readonly jobDir: string; readonly label: string; readonly cwd: string; readonly logPath: string }): Promise<HerdrPlace | undefined> {
+export async function openWatchTab(input: {
+	readonly jobDir: string;
+	readonly label: string;
+	readonly cwd: string;
+	readonly logPath: string;
+	readonly role: "worker" | "reviewer";
+}): Promise<HerdrPlace | undefined> {
 	if (process.env.HERDR_ENV !== "1") return;
 	return createTab({ ...input, mode: "watch", follow: true, focus: false });
 }
@@ -20,6 +26,7 @@ export async function openHostedTab(input: {
 	readonly label: string;
 	readonly cwd: string;
 	readonly workspaceCwd?: string;
+	readonly role: "worker" | "reviewer";
 	readonly env: Readonly<Record<string, string>>;
 }): Promise<HerdrPlace> {
 	if (!herdrAvailable()) throw new Error("hosted spawn requires Herdr (HERDR_ENV=1); use an ordinary job instead");
@@ -32,6 +39,7 @@ export async function openHostedTab(input: {
 		mode: "hosted",
 		follow: false,
 		focus: false,
+		role: input.role,
 		env: input.env,
 		shellOnly: true,
 	});
@@ -112,6 +120,8 @@ function restoreCoordinatorFocus(herdr: string, jobTab: string, coordinatorTab: 
 		return;
 	}
 	try {
+		const sep = coordinatorTab.indexOf(":");
+		if (sep > 0) call(herdr, ["workspace", "focus", coordinatorTab.slice(0, sep)]);
 		call(herdr, ["tab", "focus", coordinatorTab]);
 		log?.(`coordinator tab restored${focused === undefined ? " (focus state unknown)" : ""}`);
 	} catch (error) {
@@ -376,6 +386,7 @@ async function createTab(input: {
 	readonly mode: HerdrPlace["mode"];
 	readonly follow: boolean;
 	readonly focus: boolean;
+	readonly role?: "worker" | "reviewer";
 	readonly herdr?: string;
 	readonly env?: Readonly<Record<string, string>>;
 	readonly shellOnly?: boolean;
@@ -387,7 +398,11 @@ async function createTab(input: {
 		return;
 	}
 	try {
-		const workspace = ensureWorkspace(herdr, input.workspaceCwd ?? input.cwd);
+		const workspace = ensureWorkspace(
+			herdr,
+			input.workspaceCwd ?? input.cwd,
+			input.role ?? ((await text(`${input.jobDir}/role`)) === "reviewer" || (await text(`${input.jobDir}/candidate`)) ? "reviewer" : "worker"),
+		);
 		const envArgs = Object.entries(input.env ?? {}).flatMap(([key, value]) => ["--env", `${key}=${value}`]);
 		const created = call(herdr, ["tab", "create", "--workspace", workspace, "--label", input.label, "--cwd", input.cwd, ...envArgs, input.focus ? "--focus" : "--no-focus"]);
 		const place: HerdrPlace = { workspace, tab: id(created, "tab", "tab_id"), pane: id(created, "root_pane", "pane_id"), mode: input.mode };
@@ -417,8 +432,8 @@ function requireHerdr(): string {
 	return herdr;
 }
 
-function ensureWorkspace(herdr: string, cwd: string): string {
-	const name = basename(cwd);
+function ensureWorkspace(herdr: string, cwd: string, role: "worker" | "reviewer"): string {
+	const name = `${basename(cwd)} ${role}s`;
 	const listed = asRecord(call(herdr, ["workspace", "list"])).workspaces;
 	if (Array.isArray(listed)) {
 		for (const item of listed) {

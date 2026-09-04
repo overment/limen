@@ -131,7 +131,7 @@ export async function continueCommand(args: readonly string[], cwd: string): Pro
 		console.log(id);
 		return;
 	}
-	await openWatchTab({ jobDir, label: finalLabel, cwd: root, logPath: `${jobDir}/log` });
+	await openWatchTab({ jobDir, label: finalLabel, cwd: root, logPath: `${jobDir}/log`, role });
 	const environment: Record<string, string> = {
 		LIMEN_JOB_DIR: jobDir,
 		LIMEN_WORKTREE: worktree,

@@ -511,10 +511,13 @@ test("spawn in Herdr is hosted without --tab; --detached keeps a watch tab", asy
 	const focusNew = lines.findIndex((line) => line === "tab focus w1:t1");
 	const start = lines.findIndex((line) => line.startsWith("agent start "));
 	const focusCoord = lines.findIndex((line) => line === "tab focus coord:t0");
+	assert.match(calls, /workspace create .*--label repo workers/);
 	assert.match(calls, /tab create /);
 	assert.match(calls, /--no-focus/);
 	assert.doesNotMatch(calls, /tab create .*--focus/);
-	assert.ok(focusNew >= 0 && start > focusNew && focusCoord > start, calls);
+	const focusSpace = lines.findIndex((line) => line === "workspace focus coord");
+	assert.ok(focusNew >= 0 && start > focusNew && focusSpace > start && focusCoord > focusSpace, calls);
+	assert.equal(await readFile(join(job, "herdr/workspace"), "utf8"), "w1\n");
 	assert.match(calls, /--kind pi/);
 	assert.doesNotMatch(calls, /pane run .*tail/);
 	await waitForState(scratch.root, id, "done");
@@ -735,6 +738,7 @@ test("spawn --review in Herdr is hosted; --detached keeps a watch tab", async (c
 	assert.equal(await readFile(join(hostedJob, "herdr/mode"), "utf8"), "hosted\n");
 	assert.equal(await waitForFile(join(hostedJob, "herdr/agent"), /w1:p1/), "w1:p1\n");
 	const hostedCalls = await readFile(herdr.calls, "utf8");
+	assert.match(hostedCalls, /workspace create .*--label repo reviewers/);
 	assert.match(hostedCalls, /--kind pi/);
 	assert.doesNotMatch(hostedCalls, /pane run .*tail/);
 	const hostedTree = git(scratch.root, "worktree", "list", "--porcelain")
@@ -1108,6 +1112,7 @@ test("two long hosted labels keep distinct agent names", async (context) => {
 	const first = onlyJobId(limenWithEnv(scratch, env, "spawn", "--label", label, "stay hosted").stdout);
 	const second = onlyJobId(limenWithEnv(scratch, env, "spawn", "--label", label, "stay hosted").stdout);
 	const calls = await waitForFile(herdr.calls, (value) => [...value.matchAll(/agent start (\S+)/g)].length === 2);
+	assert.equal([...calls.matchAll(/^workspace create /gm)].length, 1);
 	const names = [...calls.matchAll(/agent start (\S+)/g)].map((match) => match[1]);
 	assert.equal(names.length, 2);
 	assert.notEqual(names[0], names[1]);
@@ -1174,6 +1179,8 @@ if (args[0] === "workspace" && args[1] === "list") {
   state.workspaceLabel = args[args.indexOf("--label") + 1];
   writeFileSync(path, JSON.stringify(state));
   ok({ type: "workspace_created", workspace: { workspace_id: "w1" } });
+} else if (args[0] === "workspace" && args[1] === "focus") {
+  ok({ type: "workspace_focused", workspace: { workspace_id: args[2] } });
 } else if (args[0] === "tab" && args[1] === "create") {
   state.n = (state.n || 0) + 1;
   const tab = "w1:t" + state.n;

@@ -150,7 +150,7 @@ export async function spawnCommand(args: readonly string[], cwd: string): Promis
 		console.log(id);
 		return;
 	}
-	await openWatchTab({ jobDir, label: options.label, cwd: root, logPath: `${jobDir}/log` });
+	await openWatchTab({ jobDir, label: options.label, cwd: root, logPath: `${jobDir}/log`, role });
 	const environment: Record<string, string> = {
 		LIMEN_JOB_DIR: jobDir,
 		LIMEN_WORKTREE: worktree,
@@ -203,6 +203,7 @@ export async function startHosted(input: {
 			label: input.label,
 			cwd: input.worktree,
 			workspaceCwd: input.root,
+			role: input.role,
 			env: {
 				LIMEN_JOB: "1",
 				LIMEN_HOSTED: "1",

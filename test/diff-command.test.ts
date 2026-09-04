@@ -67,6 +67,7 @@ test("diff opens one Herdr review tab, focuses it again, and close sweeps it", a
 	const opened = limenWithEnv(scratch, env, "diff", "F050 review");
 	assert.equal(opened.status, 0, opened.stderr);
 	assert.match(opened.stdout, /opened F050 review diff/);
+	assert.match(await readFile(herdr.calls, "utf8"), /workspace create .*--label repo workers/);
 	assert.equal(await readFile(join(job, "herdr/diff/mode"), "utf8"), "diff\n");
 	assert.equal(await readFile(join(job, "herdr/diff/tab"), "utf8"), "w1:t1\n");
 	let calls = await readFile(herdr.calls, "utf8");
