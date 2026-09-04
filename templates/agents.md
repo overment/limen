@@ -41,6 +41,8 @@ Herdr is the visible layout when it is running. Job files under `.limen/jobs/` a
 
 **`--role <name>`** loads that preamble (`templates/<name>.md` or `.agents/limen/<name>.md`) and opens the space `<project> <name>s`. Default is worker. Still pass `--detached` when a later ritual says so — the name does not pick the spawn mode.
 
+**Quality pass.** After ten proven landings since the last findings file under `spec/quality/` — the same window PROVEN keeps — or when the human asks, start one unprompted with `--role quality --detached`. Interleave it with seat work; do not wait. Not after every merge, not on a calendar, never as a condition of landing. The job writes `spec/quality/YYYY-MM.md` (or `YYYY-MM-2.md` if that month already has a file) and does not rewrite the tree. Turn the findings into planned tickets or one small slice; the quality job does not. Not a merge gate.
+
 **Hosted weaker guarantees** (recorded in the job’s `hosted` file): no 90-minute timeout, no tool-call cap, no F007 process containment. Herdr owns that process tree. Closing the hosted tab ends the worker. After the tab is gone, `limen open <id>` reopens a **log** view only — it does not resurrect the agent; respawn for a new one. Spawn returns the job ID quickly; moments later the hosted runtime focuses the new tab, starts `pi` there, then restores the recorded coordinator tab. Herdr 0.8 will not start an agent in a background pane.
 
 **Other job controls:**
