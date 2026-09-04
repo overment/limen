@@ -116,6 +116,45 @@ test("close leftover tabs for a proven feature and leaves job files", async (con
 	await access(join(scratch.root, ".limen/jobs", other, "task.md"));
 });
 
+test("close matches a feature number anywhere in the label or job id", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	limen(scratch, "init");
+	const herdr = await installFakeHerdr(scratch.root, scratch.fakeBin);
+	const env = { ...herdrEnv(herdr), HERDR_TAB_ID: "coord:tab" };
+	const keep = onlyJobId(limenWithEnv(scratch, env, "spawn", "--detached", "--label", "job spaces · F012", "make commit").stdout);
+	const other = onlyJobId(limenWithEnv(scratch, env, "spawn", "--detached", "--label", "other work · F010", "make commit").stdout);
+	await Promise.all([waitForState(scratch.root, keep, "done"), waitForState(scratch.root, other, "done")]);
+	assert.match(keep, /^\d{4}-\d{2}-\d{2}-f012-job-spaces-[0-9a-f]{8}$/);
+	await mkdir(join(scratch.root, "spec/features/done/2026-08/F012-herdr-job-spaces"), { recursive: true });
+	const reopened = limenWithEnv(scratch, env, "open", keep);
+	assert.match(reopened.stdout, /opened job spaces · F012/);
+	const planted = join(scratch.root, ".limen/jobs", "2026-08-15-f012-legacy-aaaaaaaa");
+	await mkdir(join(planted, "herdr"), { recursive: true });
+	await writeFile(join(planted, "label"), "unrelated leftover\n");
+	await Promise.all(
+		(
+			[
+				["workspace", "w1"],
+				["tab", "w1:t9"],
+				["pane", "w1:p9"],
+				["mode", "log"],
+			] as const
+		).map(([name, value]) => writeFile(join(planted, "herdr", name), `${value}\n`)),
+	);
+	const statePath = join(herdr.dir, "state.json");
+	const state = JSON.parse(await readFile(statePath, "utf8")) as { tabs: Record<string, { label: string; pane: string }> };
+	state.tabs["w1:t9"] = { label: "unrelated leftover", pane: "w1:p9" };
+	await writeFile(statePath, JSON.stringify(state));
+	const swept = limenWithEnv(scratch, env, "close", "F012");
+	assert.equal(swept.status, 0, swept.stderr);
+	assert.match(swept.stdout, /closed 2 leftover tabs for F012/);
+	assert.match(await readFile(herdr.calls, "utf8"), /tab close w1:t9/);
+	assert.doesNotMatch(await readFile(herdr.calls, "utf8"), /tab close coord:tab/);
+	await access(join(scratch.root, ".limen/jobs", keep, "task.md"));
+	await access(join(scratch.root, ".limen/jobs", other, "task.md"));
+});
+
 async function installFakeHerdr(root: string, fakeBin: string): Promise<{ readonly dir: string; readonly bin: string; readonly calls: string }> {
 	const dir = join(root, "fake-herdr");
 	await mkdir(dir);

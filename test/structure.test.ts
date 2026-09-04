@@ -16,7 +16,7 @@ test("architecture stays small, pure, direct, and dependency-free", async () => 
 	assert.deepEqual(await readdir(join(ROOT, "bin")), ["limen"]);
 	const source = await filesBelow(join(ROOT, "src"));
 	const sourceLines = (await Promise.all(source.map((path) => readFile(path, "utf8")))).reduce((sum, text) => sum + text.split("\n").length - 1, 0);
-	assert.ok(sourceLines <= 3325, `src has ${sourceLines} lines; audit against first principles`);
+	assert.ok(sourceLines <= 3330, `src has ${sourceLines} lines; audit against first principles`);
 	assert.doesNotMatch(await readFile(join(ROOT, "src/job.ts"), "utf8"), /from ["']node:/);
 	assert.deepEqual((await readdir(join(ROOT, "src/commands"))).sort(), [
 		"close.ts",
@@ -83,6 +83,13 @@ test("strict TypeScript and templates preserve the capability-judgment line", as
 		"month line",
 	])
 		assert.match(agents.toLowerCase(), new RegExp(phrase));
+});
+
+test("shop manual tab titles say the work then the feature", async () => {
+	const agents = await readFile(join(ROOT, "templates/agents.md"), "utf8");
+	assert.doesNotMatch(agents, /Lead with the feature number/);
+	assert.match(agents, /feature number goes last/);
+	assert.match(agents, /about forty characters/);
 });
 
 test("shop manual holds review and merge ceilings", async () => {

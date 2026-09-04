@@ -352,7 +352,7 @@ export async function closeFeatureTabs(input: { readonly root: string; readonly 
 	for (const entry of entries) {
 		if (!entry.isDirectory()) continue;
 		const jobDir = `${input.root}/.limen/jobs/${entry.name}`;
-		if (!new RegExp(`^${feature}(?:\\b|[- ])`, "i").test(await text(`${jobDir}/label`))) continue;
+		if (!new RegExp(`\\b${feature}\\b`, "i").test(`${await text(`${jobDir}/label`)}\n${entry.name}`)) continue;
 		const places = await Promise.all([readPlace(jobDir), readPlace(jobDir, "diff")]);
 		for (const place of places) {
 			if (!place || place.tab === coordinator) continue;

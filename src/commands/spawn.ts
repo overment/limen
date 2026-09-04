@@ -76,8 +76,14 @@ export async function spawnCommand(args: readonly string[], cwd: string): Promis
 	const id = makeJobId(options.label);
 	const jobsRoot = `${root}/.limen/jobs`;
 	await mkdir(jobsRoot, { recursive: true });
-	const running = await countRunning(jobsRoot);
+	let running = 0,
+		held = false;
+	for (const entry of await readdir(jobsRoot, { withFileTypes: true })) {
+		if (entry.isDirectory() && (await liveJob(`${jobsRoot}/${entry.name}`))) (running += 1), (held ||= (await text(`${jobsRoot}/${entry.name}/label`)) === options.label);
+	}
 	if (running > 0) console.log(`note: ${running} job${running === 1 ? "" : "s"} already running; starting another`);
+	if (/^F\d{3,}$/i.test(options.label)) console.log("warning: label is only a feature number");
+	if (held) console.log("warning: a live job already holds this label");
 	const branch = options.branch ?? `limen/${id}`;
 	const worktreeRoot = `${dirname(repository)}/.${basename(repository)}-limen-worktrees`;
 	const requestedPath = `${worktreeRoot}/${id}`;
@@ -355,8 +361,10 @@ export function normalizeLabel(value: string): string {
 	return label;
 }
 export function makeJobId(label: string): string {
-	const slug = label.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-	return `${new Date().toISOString().slice(0, 10)}-${slug.replace(/^-|-$/g, "").slice(0, 32) || "job"}-${randomBytes(4).toString("hex")}`;
+	const feature = /\bf(\d{3,})\b/i.exec(label)?.[0]?.toLowerCase();
+	const rest = label.toLowerCase().replace(/\bf\d{3,}\b|[^a-z0-9]+/gi, "-");
+	const slug = `${feature ? `${feature}-` : ""}${rest.replace(/^-+|-+$/g, "")}`.replace(/-+$/, "").slice(0, 32) || "job";
+	return `${new Date().toISOString().slice(0, 10)}-${slug}-${randomBytes(4).toString("hex")}`;
 }
 export function hostedAgentName(jobId: string): string {
 	const hex = /[0-9a-f]{8}$/.exec(jobId)?.[0] ?? "";
@@ -371,11 +379,6 @@ export function currentNotificationSession(): string | undefined {
 	const value = process.env.PI_SESSION_ID?.trim();
 	if (value && !/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(value)) throw new Error("PI_SESSION_ID is not safe for notification routing");
 	return value || undefined;
-}
-async function countRunning(jobsRoot: string): Promise<number> {
-	let count = 0;
-	for (const entry of await readdir(jobsRoot, { withFileTypes: true })) if (entry.isDirectory() && (await liveJob(`${jobsRoot}/${entry.name}`))) count += 1;
-	return count;
 }
 async function liveJobUsesBranch(jobsRoot: string, branch: string, repo?: string): Promise<boolean> {
 	for (const entry of await readdir(jobsRoot, { withFileTypes: true })) {

@@ -338,6 +338,39 @@ test("task-file and stdin write task.md bytes untouched", async (context) => {
 	assert.equal(await readFile(join(scratch.root, ".limen/jobs", stdinId, "task.md"), "utf8"), bytes.toString("utf8"));
 });
 
+test("spawn warns on a number-only or live-duplicate label and still starts", async (context) => {
+	const scratch = await scratchRepo(`#!/usr/bin/env node
+process.on("SIGTERM", () => process.exit(0));
+setInterval(() => {}, 1000);
+`);
+	context.after(scratch.cleanup);
+	assert.equal(limen(scratch, "init").status, 0);
+	const numberOnly = limen(scratch, "spawn", "--label", "F068", "do work");
+	assert.equal(numberOnly.status, 0, numberOnly.stderr);
+	assert.match(numberOnly.stdout, /warning: label is only a feature number/);
+	assert.match(numberOnly.stdout, /started F068/);
+	const numberId = onlyJobId(numberOnly.stdout);
+	assert.match(numberId, /^\d{4}-\d{2}-\d{2}-f068-[0-9a-f]{8}$/);
+	const label = "idle backstop · F065";
+	const first = limen(scratch, "spawn", "--label", label, "long work");
+	assert.equal(first.status, 0, first.stderr);
+	assert.doesNotMatch(first.stdout, /already holds this label/);
+	const firstId = onlyJobId(first.stdout);
+	assert.match(firstId, /^\d{4}-\d{2}-\d{2}-f065-idle-backstop-[0-9a-f]{8}$/);
+	const duplicate = limen(scratch, "spawn", "--label", label, "long work");
+	assert.equal(duplicate.status, 0, duplicate.stderr);
+	assert.match(duplicate.stdout, /warning: a live job already holds this label/);
+	assert.match(duplicate.stdout, /started idle backstop · F065/);
+	assert.doesNotMatch(duplicate.stdout, /only a feature number/);
+	const duplicateId = onlyJobId(duplicate.stdout);
+	assert.notEqual(duplicateId, firstId);
+	assert.match(duplicateId, /^\d{4}-\d{2}-\d{2}-f065-idle-backstop-[0-9a-f]{8}$/);
+	for (const id of [numberId, firstId, duplicateId]) {
+		assert.equal(limen(scratch, "stop", id, "test cleanup").status, 0);
+		await waitForState(scratch.root, id, "stopped");
+	}
+});
+
 test("positional empty backticks or doubled spaces warn once", async (context) => {
 	const scratch = await scratchRepo();
 	context.after(scratch.cleanup);
