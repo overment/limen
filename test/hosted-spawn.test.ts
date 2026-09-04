@@ -3,7 +3,7 @@ import { chmod, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { hostedAgentName } from "../src/commands/spawn.ts";
+import { hostedAgentName, makeJobId } from "../src/commands/spawn.ts";
 import { hostedAgentStatus, hostedTerminalReason, startHostedPi, stopHostedAgent } from "../src/herdr.ts";
 import { DEFAULT_HOSTED_IDLE_MS, DEFAULT_STALL_RERING_MS, type HostedIdleWatch, noteHostedIdle, writeHostedResult } from "../src/supervisor.ts";
 import { git, limen, limenWithEnv, onlyJobId, scratchRepo, waitForState } from "./scratch.ts";
@@ -910,6 +910,18 @@ console.log(JSON.stringify({ type: "message_end", message: { role: "assistant", 
 	assert.match(calls, /--continue now refine the seam/);
 	assert.doesNotMatch(calls, /@/);
 	await waitForState(scratch.root, id, "done");
+});
+
+test("makeJobId hoists a feature number from anywhere in the label", () => {
+	const trailing = makeJobId("inline model setup in chat · F422");
+	assert.match(trailing, /^\d{4}-\d{2}-\d{2}-f422-inline-model-setup-in-chat-[0-9a-f]{8}$/);
+	assert.match(hostedAgentName(trailing), /^limen-f422-[0-9a-f]{8}$/);
+	const leading = makeJobId("F001 implementation");
+	assert.match(leading, /^\d{4}-\d{2}-\d{2}-f001-implementation-[0-9a-f]{8}$/);
+	assert.match(hostedAgentName(leading), /^limen-f001-[0-9a-f]{8}$/);
+	const only = makeJobId("F068");
+	assert.match(only, /^\d{4}-\d{2}-\d{2}-f068-[0-9a-f]{8}$/);
+	assert.match(hostedAgentName(only), /^limen-f068-[0-9a-f]{8}$/);
 });
 
 test("hostedAgentName keeps the hex suffix when the slug is long", () => {
