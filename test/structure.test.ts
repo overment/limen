@@ -95,7 +95,7 @@ test("shop manual tab titles say the work then the feature", async () => {
 test("shop manual states the picture pass after a shape moves", async () => {
 	const agents = (await readFile(join(ROOT, "templates/agents.md"), "utf8")).toLowerCase();
 	for (const phrase of [
-		"--role picture --detached",
+		"--role picture --detached --model gpt-5.6-sol",
 		"shape that moved",
 		"one clause in the handoff",
 		"spec/picture.md",
@@ -175,7 +175,7 @@ test("worker stays off the board and inside reading and check budgets", async ()
 
 test("shop manual states the quality pass", async () => {
 	const agents = (await readFile(join(ROOT, "templates/agents.md"), "utf8")).toLowerCase();
-	for (const phrase of ["ten proven landings", "human asks", "--role quality", "--detached", "spec/quality/", "does not rewrite"]) assert.match(agents, new RegExp(phrase));
+	for (const phrase of ["ten proven landings", "human asks", "--role quality --detached --model gpt-5.6-sol:xhigh", "spec/quality/", "does not rewrite"]) assert.match(agents, new RegExp(phrase));
 });
 
 test("quality prompt judges, forbids rewriting, and names the only outputs", async () => {
@@ -188,8 +188,9 @@ test("shop manual holds the research fan-out ritual", async () => {
 	const agents = (await readFile(join(ROOT, "templates/agents.md"), "utf8")).toLowerCase();
 	for (const phrase of [
 		"never start research unprompted",
-		"at least two researcher",
-		"--role researcher --detached --model",
+		"two researcher jobs on these models",
+		"--role researcher --detached --model gpt-5.6-sol:xhigh",
+		"--role researcher --detached --model grok-4.6:xhigh",
 		"--role judge --detached",
 		"report-1.md",
 		"judgment.md",

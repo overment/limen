@@ -4,6 +4,7 @@
 
 - Reliable in-flight control on one seat; a laptop is a window; GitHub may ring the doorbell later.
 - 2026-09-03 Alice audit: guidance present once per call and recalled at the moment of use; hosted jobs end themselves; review loops stop at the ceiling. F053–F063.
+- Research default pair: `gpt-5.6-sol:xhigh` and `grok-4.6:xhigh`. Quality: `gpt-5.6-sol:xhigh`. Picture: `gpt-5.6-sol`.
 
 ## NOW
 
