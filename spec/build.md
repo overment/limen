@@ -8,6 +8,8 @@
 ## NOW
 
 - `F048-hosted-runtime-start` (🟠 ACTIVE): spawn prints the ID in seconds; the detached supervisor starts pi and owns the job. This closes the live 2026-08-27 caller-timeout orphaning before F049.
+- `F067-job-workspaces` (🟠 ACTIVE): worker and reviewer tabs open in their own space, so the space you talk in holds only your conversation and your own tabs. Slice: role-aware workspace lookup and focus restore across spaces.
+- `F068-legible-tab-titles` (🟠 ACTIVE): a tab says what the work changes in plain words; the feature number rides at the end and the job id still hoists it. Slice: the label rule and id derivation.
 
 ## NEXT
 
