@@ -7,7 +7,6 @@
 
 ## NOW
 
-- `F070-research-fan-out` (🟠 ACTIVE): human-asked research on different models, then a judge that names divergence. Named sources only.
 - `F048-hosted-runtime-start` (🟠 ACTIVE): spawn prints the ID in seconds; the detached supervisor starts pi and owns the job. This closes the live 2026-08-27 caller-timeout orphaning before F049.
 
 ## NEXT
@@ -18,6 +17,7 @@
 
 ## PROVEN
 
+- `F070-research-fan-out` (🟢 PROVEN): human-asked research on different models, then a judge that names divergence. Named sources only. Landed `8233fb1`. Review PASS of `c02f8f8`.
 - `F073-picture-pass` (🟢 PROVEN): after a merge that moved a shape, rewrite one living diagram. Landed `8259cb1`. Review PASS of `adf6542`.
 - `F072-quality-pass` (🟢 PROVEN): one findings file over a stretch of landed work; never a rewrite or a merge gate. Landed `cb61dec`. Review PASS of `cb61dec`.
 - `F069-named-role` (🟢 PROVEN): a job kind is a name plus a prompt; spawn opens its own space. Landed `3ec3f21`. Review PASS of `3ec3f21`.
@@ -27,6 +27,5 @@
 - `F064-project-reminders` (🟢 PROVEN): reminders name project styleguide and vision headings across languages. Landed `91ea670`. Review PASS of `b929056`.
 - `F066-stop-wake-integrity` (🟢 PROVEN): stop suppresses the caller wake only after terminal state. Landed `08e63c5`. Review PASS of `50d0b07`.
 - `F060-reply-shapes` (🟢 PROVEN): human register gains explanation, where-we-are, and wave-report shapes. Landed `e805a68`. Review PASS of `3001bd9`.
-- `F061-coordinator-ceilings` (🟢 PROVEN): shop manual holds review appetite, second-FAIL stop, and clean merge. Landed `6cf752f`. Review PASS of `216115f`.
-- 2026-09: 22 landed. Hosted jobs end themselves; a failed turn is visible; the board folds old proven work to a month line. spec/features/done/2026-09/
+- 2026-09: 23 landed. Hosted jobs end themselves; review loops stop at a ceiling; a failed turn is visible. spec/features/done/2026-09/
 - 2026-08: 44 landed. Hosted jobs run in a named tab; wakes retry; the process tree is contained. spec/features/done/2026-08/
