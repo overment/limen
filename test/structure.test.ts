@@ -57,8 +57,8 @@ test("strict TypeScript and templates preserve the capability-judgment line", as
 	assert.match(worker, /finish/);
 	assert.doesNotMatch(worker.toLowerCase(), /quit pi/);
 	assert.doesNotMatch((await Promise.all((await filesBelow(join(ROOT, "src"))).map((path) => readFile(path, "utf8")))).join("\n"), /registerCommand/);
-	assert.deepEqual((await readdir(join(ROOT, "templates/.history"))).sort(), ["agents.md", "communication.md", "reviewer.md", "worker.md"]);
-	for (const name of ["agents.md", "communication.md", "reviewer.md", "worker.md"]) {
+	assert.deepEqual((await readdir(join(ROOT, "templates/.history"))).sort(), ["agents.md", "communication.md", "quality.md", "reviewer.md", "worker.md"]);
+	for (const name of ["agents.md", "communication.md", "quality.md", "reviewer.md", "worker.md"]) {
 		const text = await readFile(join(ROOT, "templates", name), "utf8");
 		const history = await readFile(join(ROOT, "templates/.history", name), "utf8");
 		assert.equal(
@@ -152,6 +152,17 @@ test("worker stays off the board and inside reading and check budgets", async ()
 		assert.match(worker, new RegExp(phrase));
 	assert.doesNotMatch(worker, /quit pi/);
 	assert.doesNotMatch(worker, /as far as this slice earns/);
+});
+
+test("shop manual states the quality pass", async () => {
+	const agents = (await readFile(join(ROOT, "templates/agents.md"), "utf8")).toLowerCase();
+	for (const phrase of ["ten proven landings", "human asks", "--role quality", "--detached", "spec/quality/", "does not rewrite"]) assert.match(agents, new RegExp(phrase));
+});
+
+test("quality prompt judges, forbids rewriting, and names the only outputs", async () => {
+	const quality = (await readFile(join(ROOT, "templates/quality.md"), "utf8")).toLowerCase();
+	for (const phrase of ["vision", "styleguide", "do not rewrite the tree", "spec/quality/yyyy-mm.md", "drop-candidate", "ticket", "slice", "only outputs"])
+		assert.match(quality, new RegExp(phrase));
 });
 
 test("reviewer verdict opens PASS or FAIL and never fails the environment", async () => {

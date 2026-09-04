@@ -397,6 +397,21 @@ test("git missing from PATH falls back or leaves no job dir", async (context) =>
 	assert.deepEqual(await readdir(join(scratch.root, ".limen/jobs")).catch(() => []), []);
 });
 
+test("spawn --role quality loads the packaged preamble", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	assert.equal(limen(scratch, "init").status, 0);
+	const launched = limen(scratch, "spawn", "--role", "quality", "--label", "quality pass", "write findings");
+	assert.equal(launched.status, 0, launched.stderr);
+	const id = onlyJobId(launched.stdout);
+	await waitForState(scratch.root, id, "done");
+	const job = join(scratch.root, ".limen/jobs", id);
+	assert.equal(await readFile(join(job, "role"), "utf8"), "quality\n");
+	const worktree = (await readFile(join(job, "worktree"), "utf8")).trim();
+	const argv = JSON.parse(await readFile(join(worktree, "pi-args.json"), "utf8")) as string[];
+	assert.equal(argv[argv.indexOf("--append-system-prompt") + 1], await readFile(new URL("../templates/quality.md", import.meta.url), "utf8"));
+});
+
 test("spawn --role loads that overlay preamble and persists the name", async (context) => {
 	const scratch = await scratchRepo();
 	context.after(scratch.cleanup);

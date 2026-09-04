@@ -8,7 +8,7 @@ import test from "node:test";
 import { formatDrift, listDrift, templateHistoryText } from "../hook/inherit.ts";
 
 const ROOT = new URL("..", import.meta.url).pathname;
-const HISTORY = ["agents.md", "communication.md", "reviewer.md", "worker.md"] as const;
+const HISTORY = ["agents.md", "communication.md", "quality.md", "reviewer.md", "worker.md"] as const;
 
 test("a git package root classifies leftover, stale, and overlay", async (context) => {
 	const packaged = await gitPackage(context);
