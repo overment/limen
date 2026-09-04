@@ -57,8 +57,8 @@ test("strict TypeScript and templates preserve the capability-judgment line", as
 	assert.match(worker, /finish/);
 	assert.doesNotMatch(worker.toLowerCase(), /quit pi/);
 	assert.doesNotMatch((await Promise.all((await filesBelow(join(ROOT, "src"))).map((path) => readFile(path, "utf8")))).join("\n"), /registerCommand/);
-	assert.deepEqual((await readdir(join(ROOT, "templates/.history"))).sort(), ["agents.md", "communication.md", "picture.md", "quality.md", "reviewer.md", "worker.md"]);
-	for (const name of ["agents.md", "communication.md", "picture.md", "quality.md", "reviewer.md", "worker.md"]) {
+	assert.deepEqual((await readdir(join(ROOT, "templates/.history"))).sort(), ["agents.md", "communication.md", "judge.md", "picture.md", "quality.md", "researcher.md", "reviewer.md", "worker.md"]);
+	for (const name of ["agents.md", "communication.md", "judge.md", "picture.md", "quality.md", "researcher.md", "reviewer.md", "worker.md"]) {
 		const text = await readFile(join(ROOT, "templates", name), "utf8");
 		const history = await readFile(join(ROOT, "templates/.history", name), "utf8");
 		assert.equal(
@@ -182,6 +182,33 @@ test("quality prompt judges, forbids rewriting, and names the only outputs", asy
 	const quality = (await readFile(join(ROOT, "templates/quality.md"), "utf8")).toLowerCase();
 	for (const phrase of ["vision", "styleguide", "do not rewrite the tree", "spec/quality/yyyy-mm.md", "drop-candidate", "ticket", "slice", "only outputs"])
 		assert.match(quality, new RegExp(phrase));
+});
+
+test("shop manual holds the research fan-out ritual", async () => {
+	const agents = (await readFile(join(ROOT, "templates/agents.md"), "utf8")).toLowerCase();
+	for (const phrase of [
+		"never start research unprompted",
+		"at least two researcher",
+		"--role researcher --detached --model",
+		"--role judge --detached",
+		"report-1.md",
+		"judgment.md",
+		"spec/research/",
+		"ticket, a decision, or a vision paragraph",
+		"never merges",
+	])
+		assert.match(agents, new RegExp(phrase));
+});
+
+test("researcher requires a named source and forbids recalled API", async () => {
+	const researcher = (await readFile(join(ROOT, "templates/researcher.md"), "utf8")).toLowerCase();
+	for (const phrase of ["recalled api is not a source", "names no source", "say so", "stop", "verdict", "tradeoff", "source that proves", "never merge"])
+		assert.match(researcher, new RegExp(phrase));
+});
+
+test("judge names divergence and forbids averaging", async () => {
+	const judge = (await readFile(join(ROOT, "templates/judge.md"), "utf8")).toLowerCase();
+	for (const phrase of ["diverged", "do not average", "blending", "ticket", "decision", "vision paragraph", "never merge"]) assert.match(judge, new RegExp(phrase));
 });
 
 test("reviewer verdict opens PASS or FAIL and never fails the environment", async () => {

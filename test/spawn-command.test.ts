@@ -443,13 +443,32 @@ test("spawn --role picture loads the packaged preamble", async (context) => {
 	assert.equal(argv[argv.indexOf("--append-system-prompt") + 1], await readFile(new URL("../templates/picture.md", import.meta.url), "utf8"));
 });
 
+test("spawn --role researcher and --role judge load the packaged preambles", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	assert.equal(limen(scratch, "init").status, 0);
+	for (const [role, needle] of [
+		["researcher", /Recalled API is not a source/],
+		["judge", /naming where they diverged/],
+	] as const) {
+		const launched = limen(scratch, "spawn", "--role", role, "--detached", "--label", `F070 ${role}`, "named source");
+		assert.equal(launched.status, 0, launched.stderr);
+		const id = onlyJobId(launched.stdout);
+		await waitForState(scratch.root, id, "done");
+		assert.equal(await readFile(join(scratch.root, ".limen/jobs", id, "role"), "utf8"), `${role}\n`);
+		const worktree = (await readFile(join(scratch.root, ".limen/jobs", id, "worktree"), "utf8")).trim();
+		const argv = JSON.parse(await readFile(join(worktree, "pi-args.json"), "utf8")) as string[];
+		assert.match(argv[argv.indexOf("--append-system-prompt") + 1] ?? "", needle);
+	}
+});
+
 test("spawn --role without a preamble or with --review plants no job", async (context) => {
 	const scratch = await scratchRepo();
 	context.after(scratch.cleanup);
 	assert.equal(limen(scratch, "init").status, 0);
-	const missing = limen(scratch, "spawn", "--role", "researcher", "look around");
+	const missing = limen(scratch, "spawn", "--role", "ghost", "look around");
 	assert.equal(missing.status, 1);
-	assert.match(missing.stderr, /no preamble for role researcher/);
+	assert.match(missing.stderr, /no preamble for role ghost/);
 	const combined = limen(scratch, "spawn", "--role", "researcher", "--review", "--branch", "limen/ghost", "inspect candidate");
 	assert.equal(combined.status, 1);
 	assert.match(combined.stderr, /--role and --review cannot be combined/);
