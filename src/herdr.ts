@@ -398,7 +398,7 @@ async function createTab(input: {
 		return;
 	}
 	try {
-		const workspace = ensureWorkspace(
+		const { workspace, seeded } = ensureWorkspace(
 			herdr,
 			input.workspaceCwd ?? input.cwd,
 			input.role ?? ((await text(`${input.jobDir}/role`)) === "reviewer" || (await text(`${input.jobDir}/candidate`)) ? "reviewer" : "worker"),
@@ -407,6 +407,7 @@ async function createTab(input: {
 		const created = call(herdr, ["tab", "create", "--workspace", workspace, "--label", input.label, "--cwd", input.cwd, ...envArgs, input.focus ? "--focus" : "--no-focus"]);
 		const place: HerdrPlace = { workspace, tab: id(created, "tab", "tab_id"), pane: id(created, "root_pane", "pane_id"), mode: input.mode };
 		await recordPlace(input.jobDir, place, input.record);
+		if (seeded) advisoryCall(herdr, ["tab", "close", seeded]);
 		if (!input.shellOnly) {
 			call(herdr, input.follow ? ["pane", "run", place.pane, "tail", "-f", input.logPath] : ["pane", "run", place.pane, "tail", "-n", "+1", input.logPath]);
 		}
@@ -432,16 +433,19 @@ function requireHerdr(): string {
 	return herdr;
 }
 
-function ensureWorkspace(herdr: string, cwd: string, role: "worker" | "reviewer"): string {
+/** A created workspace is seeded with one empty tab; `seeded` names it so the first job tab can replace it. */
+function ensureWorkspace(herdr: string, cwd: string, role: "worker" | "reviewer"): { readonly workspace: string; readonly seeded?: string } {
 	const name = `${basename(cwd)} ${role}s`;
 	const listed = asRecord(call(herdr, ["workspace", "list"])).workspaces;
 	if (Array.isArray(listed)) {
 		for (const item of listed) {
 			const row = asRecord(item);
-			if (row.label === name && typeof row.workspace_id === "string") return row.workspace_id;
+			if (row.label === name && typeof row.workspace_id === "string") return { workspace: row.workspace_id };
 		}
 	}
-	return id(call(herdr, ["workspace", "create", "--cwd", cwd, "--label", name, "--no-focus"]), "workspace", "workspace_id");
+	const created = call(herdr, ["workspace", "create", "--cwd", cwd, "--label", name, "--no-focus"]);
+	const seeded = asRecord(asRecord(created).tab).tab_id;
+	return { workspace: id(created, "workspace", "workspace_id"), ...(typeof seeded === "string" && seeded ? { seeded } : {}) };
 }
 
 function tabExists(herdr: string, tab: string): boolean {
