@@ -57,8 +57,8 @@ test("strict TypeScript and templates preserve the capability-judgment line", as
 	assert.match(worker, /finish/);
 	assert.doesNotMatch(worker.toLowerCase(), /quit pi/);
 	assert.doesNotMatch((await Promise.all((await filesBelow(join(ROOT, "src"))).map((path) => readFile(path, "utf8")))).join("\n"), /registerCommand/);
-	assert.deepEqual((await readdir(join(ROOT, "templates/.history"))).sort(), ["agents.md", "communication.md", "quality.md", "reviewer.md", "worker.md"]);
-	for (const name of ["agents.md", "communication.md", "quality.md", "reviewer.md", "worker.md"]) {
+	assert.deepEqual((await readdir(join(ROOT, "templates/.history"))).sort(), ["agents.md", "communication.md", "picture.md", "quality.md", "reviewer.md", "worker.md"]);
+	for (const name of ["agents.md", "communication.md", "picture.md", "quality.md", "reviewer.md", "worker.md"]) {
 		const text = await readFile(join(ROOT, "templates", name), "utf8");
 		const history = await readFile(join(ROOT, "templates/.history", name), "utf8");
 		assert.equal(
@@ -90,6 +90,25 @@ test("shop manual tab titles say the work then the feature", async () => {
 	assert.doesNotMatch(agents, /Lead with the feature number/);
 	assert.match(agents, /feature number goes last/);
 	assert.match(agents, /about forty characters/);
+});
+
+test("shop manual states the picture pass after a shape moves", async () => {
+	const agents = (await readFile(join(ROOT, "templates/agents.md"), "utf8")).toLowerCase();
+	for (const phrase of [
+		"--role picture --detached",
+		"shape that moved",
+		"one clause in the handoff",
+		"spec/picture.md",
+		"if that clause will not form",
+		"do not spawn",
+		"never block the next slice",
+	])
+		assert.match(agents, new RegExp(phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+});
+
+test("picture prompt rewrites one living file and forbids invented state", async () => {
+	const picture = (await readFile(join(ROOT, "templates/picture.md"), "utf8")).toLowerCase();
+	for (const phrase of ["spec/picture.md", "human register", "invent state", "second file", "the board", "feature folders", "git"]) assert.match(picture, new RegExp(phrase));
 });
 
 test("shop manual holds review and merge ceilings", async () => {
