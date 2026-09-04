@@ -100,7 +100,10 @@ function templateRevisions(packaged: string, source: string): readonly Revision[
 	const key = `${packaged}\0${source}`;
 	const cached = revisionCache.get(key);
 	if (cached) return cached;
-	const loaded = existsSync(join(packaged, ".git")) ? gitRevisions(packaged, source) : parseRevisions(readOptional(join(packaged, "templates/.history", basename(source))) ?? "");
+	const shipped = parseRevisions(readOptional(join(packaged, "templates/.history", basename(source))) ?? "");
+	const tracked = existsSync(join(packaged, ".git")) ? gitRevisions(packaged, source) : [];
+	// A shallow clone has `.git` and almost no history; the shipped list is then the fuller record.
+	const loaded = tracked.length >= shipped.length ? tracked : shipped;
 	revisionCache.set(key, loaded);
 	return loaded;
 }

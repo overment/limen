@@ -15,6 +15,9 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Stale-overlay detection reads template history; a shallow clone has none.
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 24
