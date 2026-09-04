@@ -7,11 +7,11 @@
 
 ## NOW
 
+- `F069-named-role` (🟠 ACTIVE): a job kind is a name plus a prompt; spawn opens its own space. Gates research, quality, picture.
 - `F048-hosted-runtime-start` (🟠 ACTIVE): spawn prints the ID in seconds; the detached supervisor starts pi and owns the job. This closes the live 2026-08-27 caller-timeout orphaning before F049.
 
 ## NEXT
 
-- `F069-named-role` (🔴 PLANNED): a job kind is a name plus a prompt; spawn opens its own space. Gates research, quality, picture.
 - `F070-research-fan-out` (🔴 PLANNED): human-asked research on different models, then a judge that names divergence. Named sources only.
 - `F072-quality-pass` (🔴 PLANNED): one findings file over a stretch of landed work; never a rewrite or a merge gate.
 - `F073-picture-pass` (🔴 PLANNED): after a merge that moved a shape, rewrite one living diagram.
