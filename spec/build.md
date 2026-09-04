@@ -8,7 +8,6 @@
 ## NOW
 
 - `F070-research-fan-out` (🟠 ACTIVE): human-asked research on different models, then a judge that names divergence. Named sources only.
-- `F073-picture-pass` (🟠 ACTIVE): after a merge that moved a shape, rewrite one living diagram.
 - `F048-hosted-runtime-start` (🟠 ACTIVE): spawn prints the ID in seconds; the detached supervisor starts pi and owns the job. This closes the live 2026-08-27 caller-timeout orphaning before F049.
 
 ## NEXT
@@ -19,6 +18,7 @@
 
 ## PROVEN
 
+- `F073-picture-pass` (🟢 PROVEN): after a merge that moved a shape, rewrite one living diagram. Landed `8259cb1`. Review PASS of `adf6542`.
 - `F072-quality-pass` (🟢 PROVEN): one findings file over a stretch of landed work; never a rewrite or a merge gate. Landed `cb61dec`. Review PASS of `cb61dec`.
 - `F069-named-role` (🟢 PROVEN): a job kind is a name plus a prompt; spawn opens its own space. Landed `3ec3f21`. Review PASS of `3ec3f21`.
 - `F067-job-workspaces` (🟢 PROVEN): worker and reviewer tabs open in their own space; the first job tab replaces the seeded one. Landed `63a9179`, fix `7f9408d`. Coordinator-inspected.
@@ -28,6 +28,5 @@
 - `F066-stop-wake-integrity` (🟢 PROVEN): stop suppresses the caller wake only after terminal state. Landed `08e63c5`. Review PASS of `50d0b07`.
 - `F060-reply-shapes` (🟢 PROVEN): human register gains explanation, where-we-are, and wave-report shapes. Landed `e805a68`. Review PASS of `3001bd9`.
 - `F061-coordinator-ceilings` (🟢 PROVEN): shop manual holds review appetite, second-FAIL stop, and clean merge. Landed `6cf752f`. Review PASS of `216115f`.
-- `F059-board-compression` (🟢 PROVEN): PROVEN keeps ten entries; older months fold to one highlight line. Landed `38767bc`. Review PASS of `2e23053`.
-- 2026-09: 21 landed. Hosted jobs end themselves; a failed turn is visible; wakes wait before fallback; stale overlays are named. spec/features/done/2026-09/
+- 2026-09: 22 landed. Hosted jobs end themselves; a failed turn is visible; the board folds old proven work to a month line. spec/features/done/2026-09/
 - 2026-08: 44 landed. Hosted jobs run in a named tab; wakes retry; the process tree is contained. spec/features/done/2026-08/
