@@ -15,7 +15,7 @@ export async function openWatchTab(input: {
 	readonly label: string;
 	readonly cwd: string;
 	readonly logPath: string;
-	readonly role: "worker" | "reviewer";
+	readonly role: string;
 }): Promise<HerdrPlace | undefined> {
 	if (process.env.HERDR_ENV !== "1") return;
 	return createTab({ ...input, mode: "watch", follow: true, focus: false });
@@ -26,7 +26,7 @@ export async function openHostedTab(input: {
 	readonly label: string;
 	readonly cwd: string;
 	readonly workspaceCwd?: string;
-	readonly role: "worker" | "reviewer";
+	readonly role: string;
 	readonly env: Readonly<Record<string, string>>;
 }): Promise<HerdrPlace> {
 	if (!herdrAvailable()) throw new Error("hosted spawn requires Herdr (HERDR_ENV=1); use an ordinary job instead");
@@ -267,7 +267,7 @@ export function reportHostedStall(input: { readonly pane: string; readonly label
 }
 
 /** Restore the role description installed by the hosted hook after a stall recovers. */
-export function restoreHostedPane(pane: string, role: "worker" | "reviewer"): void {
+export function restoreHostedPane(pane: string, role: string): void {
 	const herdr = herdrBinary();
 	if (!herdr) return;
 	advisoryCall(herdr, ["pane", "report-metadata", pane, "--source", "limen", "--display-agent", `limen ${role}`, "--clear-state-labels"]);
@@ -386,7 +386,7 @@ async function createTab(input: {
 	readonly mode: HerdrPlace["mode"];
 	readonly follow: boolean;
 	readonly focus: boolean;
-	readonly role?: "worker" | "reviewer";
+	readonly role?: string;
 	readonly herdr?: string;
 	readonly env?: Readonly<Record<string, string>>;
 	readonly shellOnly?: boolean;
@@ -401,7 +401,7 @@ async function createTab(input: {
 		const { workspace, seeded } = ensureWorkspace(
 			herdr,
 			input.workspaceCwd ?? input.cwd,
-			input.role ?? ((await text(`${input.jobDir}/role`)) === "reviewer" || (await text(`${input.jobDir}/candidate`)) ? "reviewer" : "worker"),
+			input.role ?? ((await text(`${input.jobDir}/role`)) || ((await text(`${input.jobDir}/candidate`)) ? "reviewer" : "worker")),
 		);
 		const envArgs = Object.entries(input.env ?? {}).flatMap(([key, value]) => ["--env", `${key}=${value}`]);
 		const created = call(herdr, ["tab", "create", "--workspace", workspace, "--label", input.label, "--cwd", input.cwd, ...envArgs, input.focus ? "--focus" : "--no-focus"]);
@@ -434,7 +434,7 @@ function requireHerdr(): string {
 }
 
 /** A created workspace is seeded with one empty tab; `seeded` names it so the first job tab can replace it. */
-function ensureWorkspace(herdr: string, cwd: string, role: "worker" | "reviewer"): { readonly workspace: string; readonly seeded?: string } {
+function ensureWorkspace(herdr: string, cwd: string, role: string): { readonly workspace: string; readonly seeded?: string } {
 	const name = `${basename(cwd)} ${role}s`;
 	const listed = asRecord(call(herdr, ["workspace", "list"])).workspaces;
 	if (Array.isArray(listed)) {

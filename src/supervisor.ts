@@ -233,7 +233,7 @@ async function clearHostedAdvisory(jobDir: string): Promise<void> {
 		}
 	}
 	const pane = await textFile(`${jobDir}/herdr/pane`);
-	if (pane) restoreHostedPane(pane, process.env.LIMEN_ROLE === "reviewer" ? "reviewer" : "worker");
+	if (pane) restoreHostedPane(pane, process.env.LIMEN_ROLE?.trim() || "worker");
 }
 async function lastHostedAssistant(jobDir: string): Promise<{ text: string; stop: string }> {
 	let text = "",

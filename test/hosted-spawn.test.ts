@@ -720,6 +720,26 @@ test("hosted supervisor finalizes a clean tool-using idle without claiming the s
 	await assert.rejects(readFile(join(job, "advisory")), "a clean tool-using idle must not write an advisory");
 });
 
+test("spawn --role opens that Herdr space and a second spawn reuses it", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	assert.equal(limen(scratch, "init").status, 0);
+	await writeFile(join(scratch.root, ".agents/limen/researcher.md"), "RESEARCH PREAMBLE\n");
+	const herdr = await installHostedFakeHerdr(scratch.root, scratch.fakeBin);
+	const env = { HERDR_ENV: "1", LIMEN_HERDR: herdr.bin, FAKE_HERDR_STATE: herdr.dir };
+	const first = limenWithEnv(scratch, env, "spawn", "--detached", "--role", "researcher", "--label", "F069 role", "look around");
+	assert.equal(first.status, 0, first.stderr);
+	const id = onlyJobId(first.stdout);
+	await waitForState(scratch.root, id, "done");
+	assert.equal(await readFile(join(scratch.root, ".limen/jobs", id, "role"), "utf8"), "researcher\n");
+	const second = limenWithEnv(scratch, env, "spawn", "--detached", "--role", "researcher", "--label", "F069 role 2", "look again");
+	assert.equal(second.status, 0, second.stderr);
+	await waitForState(scratch.root, onlyJobId(second.stdout), "done");
+	const calls = await readFile(herdr.calls, "utf8");
+	assert.match(calls, /workspace create .*--label repo researchers/);
+	assert.equal([...calls.matchAll(/^workspace create /gm)].length, 1);
+});
+
 test("spawn --review in Herdr is hosted; --detached keeps a watch tab", async (context) => {
 	const scratch = await scratchRepo();
 	context.after(scratch.cleanup);

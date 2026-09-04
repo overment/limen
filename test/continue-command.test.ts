@@ -68,6 +68,23 @@ test("continue resumes a finished job in its own session and links the record", 
 	assert.match(detail.stdout, new RegExp(`parent ${parent}`));
 });
 
+test("continue without --review loads the parent role preamble", async (context) => {
+	const scratch = await scratchRepo(continuingFakePi);
+	context.after(scratch.cleanup);
+	assert.equal(limen(scratch, "init").status, 0);
+	await writeFile(join(scratch.root, ".agents/limen/researcher.md"), "RESEARCH PREAMBLE\n");
+	const parent = onlyJobId(limen(scratch, "spawn", "--role", "researcher", "--label", "F069 research", "first slice").stdout);
+	await waitForState(scratch.root, parent, "done");
+	const launched = limen(scratch, "continue", parent, "keep looking");
+	assert.equal(launched.status, 0, launched.stderr);
+	const id = onlyJobId(launched.stdout);
+	await waitForState(scratch.root, id, "done");
+	const job = join(scratch.root, ".limen/jobs", id);
+	assert.equal(await readFile(join(job, "role"), "utf8"), "researcher\n");
+	const argv = JSON.parse(await readFile(join((await readFile(join(job, "worktree"), "utf8")).trim(), "pi-args.json"), "utf8")) as string[];
+	assert.equal(argv[argv.indexOf("--append-system-prompt") + 1], "RESEARCH PREAMBLE\n");
+});
+
 test("continue refuses a running job and a pruned worktree without writing records", async (context) => {
 	const scratch = await scratchRepo(sleeperFakePi);
 	context.after(scratch.cleanup);

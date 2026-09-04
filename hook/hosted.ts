@@ -69,7 +69,7 @@ export default function limenHosted(pi: PiApi): void {
 		const herdr = process.env.LIMEN_HERDR?.trim() || "herdr";
 		const pane = process.env.HERDR_PANE_ID?.trim();
 		if (process.env.HERDR_ENV === "1" && herdr !== "0" && pane) {
-			const role = process.env.LIMEN_ROLE === "reviewer" ? "limen reviewer" : "limen worker";
+			const role = `limen ${process.env.LIMEN_ROLE?.trim() || "worker"}`;
 			try {
 				execFile(herdr, ["pane", "report-metadata", pane, "--source", "limen", "--display-agent", role], { timeout: 2_000 }, () => {}).unref();
 			} catch {

@@ -36,8 +36,13 @@ type SpawnOptions = {
 	review: boolean;
 	tab: boolean;
 	detached: boolean;
+	role?: string;
 };
 const PACKAGE_ROOT = fileURLToPath(new URL("../..", import.meta.url));
+export function resolvePreamble(root: string, role: string): string {
+	for (const path of [`${root}/.agents/limen/${role}.md`, `${PACKAGE_ROOT}/templates/${role}.md`]) if (existsSync(path)) return path;
+	throw new Error(`no preamble for role ${role}`);
+}
 export const HOSTED_NOTE =
 	"Hosted job: weaker guarantees. No 90-minute timeout, no tool-call cap, no F007 process containment. Herdr owns the process tree. Closing the tab ends the worker.\n";
 export function preflightPi(model?: string): void {
@@ -66,13 +71,14 @@ export async function spawnCommand(args: readonly string[], cwd: string): Promis
 	preflightPi(model);
 	const notificationSession = currentNotificationSession();
 	const coordinatorTab = process.env.HERDR_TAB_ID?.trim();
-	const role = options.review ? "reviewer" : "worker";
 	const workspace = workspaceRoot(cwd);
 	const root = workspace ?? repoRoot(cwd);
 	if (workspace && !options.repo) throw new Error("workspace spawn requires --repo <immediate-child>");
 	if (!workspace && options.repo) throw new Error("--repo is available only from a non-Git workspace coordinator");
 	const repository = workspace ? workspaceRepository(root, options.repo ?? "") : root;
 	const task = loaded.raw ? loaded.text : workspace ? workspaceTask(options.task, root, options.repo ?? "") : options.task;
+	const role = options.review ? "reviewer" : (options.role ?? "worker");
+	const preamble = resolvePreamble(root, role);
 	const id = makeJobId(options.label);
 	const jobsRoot = `${root}/.limen/jobs`;
 	await mkdir(jobsRoot, { recursive: true });
@@ -121,12 +127,9 @@ export async function spawnCommand(args: readonly string[], cwd: string): Promis
 			writeFile(`${jobDir}/last-tool`, "", { flag: "wx", flush: true }),
 			writeFile(`${jobDir}/activity`, "think\n", { flag: "wx", flush: true }),
 			writeFile(`${jobDir}/log`, "", { flag: "wx", flush: true }),
+			writeFile(`${jobDir}/role`, `${role}\n`, { flag: "wx", flush: true }),
 			...(options.tab
-				? [
-						writeFile(`${jobDir}/hosted`, HOSTED_NOTE, { flag: "wx", flush: true }),
-						writeFile(`${jobDir}/role`, `${role}\n`, { flag: "wx", flush: true }),
-						writeFile(`${jobDir}/agent-name`, `${hostedAgentName(id)}\n`, { flag: "wx", flush: true }),
-					]
+				? [writeFile(`${jobDir}/hosted`, HOSTED_NOTE, { flag: "wx", flush: true }), writeFile(`${jobDir}/agent-name`, `${hostedAgentName(id)}\n`, { flag: "wx", flush: true })]
 				: []),
 			...(notificationSession
 				? [
@@ -144,11 +147,6 @@ export async function spawnCommand(args: readonly string[], cwd: string): Promis
 	}
 	const versions = capturedVersions().then((text) => writeFile(`${jobDir}/versions`, text, { flag: "wx", flush: true }));
 	await atomicWrite(`${jobDir}/state`, "running\n");
-	const localPreamble = `${root}/.agents/limen/${role}.md`;
-	const preamble = await readFile(localPreamble).then(
-		() => localPreamble,
-		() => `${PACKAGE_ROOT}/templates/${role}.md`,
-	);
 	if (options.tab) {
 		await startHosted({ jobDir, id, label: options.label, root, worktree, preamble, taskFile: `${jobDir}/task.md`, role, ...(model ? { model } : {}) });
 		await versions.catch(() => {});
@@ -198,7 +196,7 @@ export async function startHosted(input: {
 	readonly worktree: string;
 	readonly preamble: string;
 	readonly taskFile: string;
-	readonly role: "worker" | "reviewer";
+	readonly role: string;
 	readonly model?: string;
 	readonly continueFile?: string;
 }): Promise<void> {
@@ -269,7 +267,7 @@ function executeWorktree(root: string, plan: WorktreePlan): string {
 }
 function parseSpawnArgs(args: readonly string[]): SpawnOptions {
 	let branch: string | undefined, repo: string | undefined, label: string | undefined, model: string | undefined;
-	let timeoutMs: number | undefined, taskFile: string | undefined, prepare: string | undefined;
+	let timeoutMs: number | undefined, taskFile: string | undefined, prepare: string | undefined, role: string | undefined;
 	let review = false,
 		tab = false,
 		detached = false,
@@ -283,8 +281,7 @@ function parseSpawnArgs(args: readonly string[]): SpawnOptions {
 		else if (!positional && value === "--tab") tab = true;
 		else if (!positional && value === "--detached") detached = true;
 		else if (!positional && value.startsWith("--")) {
-			if (value !== "--branch" && value !== "--repo" && value !== "--label" && value !== "--model" && value !== "--timeout" && value !== "--task-file" && value !== "--prepare")
-				throw new Error(`unknown spawn option ${value}`);
+			if (!["--branch", "--repo", "--label", "--model", "--timeout", "--task-file", "--prepare", "--role"].includes(value)) throw new Error(`unknown spawn option ${value}`);
 			const optionValue = args[index + 1];
 			if (!optionValue) throw new Error(`${value} requires a value`);
 			index += 1;
@@ -294,12 +291,16 @@ function parseSpawnArgs(args: readonly string[]): SpawnOptions {
 			else if (value === "--model") model = once(model, value, optionValue);
 			else if (value === "--task-file") taskFile = once(taskFile, value, optionValue);
 			else if (value === "--prepare") prepare = once(prepare, value, optionValue);
-			else timeoutMs = once(timeoutMs, value, parseDuration(optionValue));
+			else if (value === "--role") {
+				role = once(role, value, optionValue.trim());
+				if (!/^[a-z][a-z0-9-]*$/.test(role)) throw new Error("--role must be a lowercase name");
+			} else timeoutMs = once(timeoutMs, value, parseDuration(optionValue));
 		} else task.push(value);
 	}
+	if (review && role) throw new Error("--role and --review cannot be combined");
 	if (taskFile && task.length) throw new Error("spawn accepts a positional task or --task-file, not both");
 	if (!taskFile && (task.length === 0 || !task.join(" ").trim())) throw new Error("spawn requires task text");
-	const out: SpawnOptions = { task: task.join(" "), review, tab, detached };
+	const out: SpawnOptions = { task: task.join(" "), review, tab, detached, ...(role ? { role } : {}) };
 	if (label) out.label = label;
 	if (taskFile) out.taskFile = taskFile;
 	if (prepare) out.prepare = prepare;

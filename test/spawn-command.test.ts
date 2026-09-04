@@ -27,6 +27,7 @@ test("spawn creates isolated branch, canonical record, runs pi, and resumes its 
 	assert.equal(await readFile(join(job, "branch"), "utf8"), `limen/${id}\n`);
 	assert.equal(await readFile(join(job, "task.md"), "utf8"), "make commit\n");
 	assert.equal(await readFile(join(job, "label"), "utf8"), "F001 implementation\n");
+	assert.equal(await readFile(join(job, "role"), "utf8"), "worker\n");
 	assert.equal(await readFile(join(job, "origin-session"), "utf8"), "coordinator-a\n");
 	await access(join(job, "notify/subscribers/coordinator-a"));
 	assert.equal(await readFile(join(job, "notify/ready"), "utf8"), "1\n");
@@ -124,6 +125,7 @@ test("review gets fresh detached worktree and reviewer birth text", async (conte
 	const reviewJob = join(scratch.root, ".limen/jobs", review);
 	await assert.rejects(readFile(join(reviewJob, "hosted")));
 	assert.equal(await readFile(join(reviewJob, "candidate"), "utf8"), `${candidateSha}\n`);
+	assert.equal(await readFile(join(reviewJob, "role"), "utf8"), "reviewer\n");
 	const reviewTask = await readFile(join(reviewJob, "task.md"), "utf8");
 	assert.equal(reviewTask, `inspect candidate\n\nCandidate commit: ${candidateSha}.\n`);
 	await assert.rejects(readFile(join(scratch.root, ".limen/jobs", worker, "candidate")));
@@ -393,6 +395,36 @@ test("git missing from PATH falls back or leaves no job dir", async (context) =>
 	}
 	assert.match(launched.stderr, /git is not on PATH/);
 	assert.deepEqual(await readdir(join(scratch.root, ".limen/jobs")).catch(() => []), []);
+});
+
+test("spawn --role loads that overlay preamble and persists the name", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	assert.equal(limen(scratch, "init").status, 0);
+	await writeFile(join(scratch.root, ".agents/limen/researcher.md"), "RESEARCH PREAMBLE\n");
+	const launched = limen(scratch, "spawn", "--role", "researcher", "--label", "F069 research", "look around");
+	assert.equal(launched.status, 0, launched.stderr);
+	const id = onlyJobId(launched.stdout);
+	await waitForState(scratch.root, id, "done");
+	const job = join(scratch.root, ".limen/jobs", id);
+	assert.equal(await readFile(join(job, "role"), "utf8"), "researcher\n");
+	const worktree = (await readFile(join(job, "worktree"), "utf8")).trim();
+	const argv = JSON.parse(await readFile(join(worktree, "pi-args.json"), "utf8")) as string[];
+	assert.equal(argv[argv.indexOf("--append-system-prompt") + 1], "RESEARCH PREAMBLE\n");
+});
+
+test("spawn --role without a preamble or with --review plants no job", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	assert.equal(limen(scratch, "init").status, 0);
+	const missing = limen(scratch, "spawn", "--role", "researcher", "look around");
+	assert.equal(missing.status, 1);
+	assert.match(missing.stderr, /no preamble for role researcher/);
+	const combined = limen(scratch, "spawn", "--role", "researcher", "--review", "--branch", "limen/ghost", "inspect candidate");
+	assert.equal(combined.status, 1);
+	assert.match(combined.stderr, /--role and --review cannot be combined/);
+	assert.deepEqual(await readdir(join(scratch.root, ".limen/jobs")).catch(() => []), []);
+	assert.doesNotMatch(git(scratch.root, "worktree", "list"), /limen-worktrees/);
 });
 
 test("LIMEN_PREPARE runs in the worktree before Pi and is logged", async (context) => {

@@ -1,13 +1,21 @@
 import { existsSync } from "node:fs";
 import { copyFile, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
 import { headCommit, repoRoot, workspaceRoot } from "../git.ts";
 import { herdrAvailable, openWatchTab } from "../herdr.ts";
 import { resolveJob } from "../lookup.ts";
 import { atomicWrite, finalizeJob, launchWrapper } from "../wrapper.ts";
-import { capturedVersions, currentNotificationSession, HOSTED_NOTE, hostedAgentName, makeJobId, normalizeLabel, preflightPi, startHosted, waitForHandshake } from "./spawn.ts";
-
-const PACKAGE_ROOT = fileURLToPath(new URL("../..", import.meta.url));
+import {
+	capturedVersions,
+	currentNotificationSession,
+	HOSTED_NOTE,
+	hostedAgentName,
+	makeJobId,
+	normalizeLabel,
+	preflightPi,
+	resolvePreamble,
+	startHosted,
+	waitForHandshake,
+} from "./spawn.ts";
 
 /** F034/F037: resume a finished job's own pi session — full context, same worktree. */
 export async function continueCommand(args: readonly string[], cwd: string): Promise<void> {
@@ -58,11 +66,12 @@ export async function continueCommand(args: readonly string[], cwd: string): Pro
 	const finalLabel = label ?? `${(await text(`${parentDir}/label`)) || parentId} · continue`;
 	const id = makeJobId(finalLabel);
 	const jobDir = `${root}/.limen/jobs/${id}`;
+	const role = review ? "reviewer" : (await text(`${parentDir}/role`)) || "worker";
+	const preamble = resolvePreamble(root, role);
 	await mkdir(jobDir, { recursive: false });
 	await mkdir(`${jobDir}/notify/subscribers`, { recursive: true });
 	const notificationSession = currentNotificationSession();
 	const coordinatorTab = process.env.HERDR_TAB_ID?.trim();
-	const role = review ? "reviewer" : "worker";
 	await Promise.all([
 		writeFile(`${jobDir}/task.md`, `${instruction}\n`, { flag: "wx", flush: true }),
 		writeFile(`${jobDir}/label`, `${finalLabel}\n`, { flag: "wx", flush: true }),
@@ -75,11 +84,11 @@ export async function continueCommand(args: readonly string[], cwd: string): Pro
 		writeFile(`${jobDir}/last-tool`, "", { flag: "wx", flush: true }),
 		writeFile(`${jobDir}/activity`, "think\n", { flag: "wx", flush: true }),
 		writeFile(`${jobDir}/log`, "", { flag: "wx", flush: true }),
+		writeFile(`${jobDir}/role`, `${role}\n`, { flag: "wx", flush: true }),
 		...(repo ? [writeFile(`${jobDir}/repo`, `${repo}\n`, { flag: "wx", flush: true })] : []),
 		...(hosted
 			? [
 					writeFile(`${jobDir}/hosted`, HOSTED_NOTE, { flag: "wx", flush: true }),
-					writeFile(`${jobDir}/role`, `${role}\n`, { flag: "wx", flush: true }),
 					writeFile(`${jobDir}/agent-name`, `${hostedAgentName(id)}\n`, { flag: "wx", flush: true }),
 					writeFile(`${jobDir}/continue`, `${instruction}\n`, { flag: "wx", flush: true }),
 				]
@@ -99,11 +108,6 @@ export async function continueCommand(args: readonly string[], cwd: string): Pro
 	await mkdir(`${jobDir}/session`, { recursive: true });
 	await copyFile(`${parentDir}/session/${inheritedSession}`, `${jobDir}/session/${inheritedSession}`);
 	await atomicWrite(`${jobDir}/state`, "running\n");
-	const localPreamble = `${root}/.agents/limen/${role}.md`;
-	const preamble = await readFile(localPreamble).then(
-		() => localPreamble,
-		() => `${PACKAGE_ROOT}/templates/${role}.md`,
-	);
 	if (hosted) {
 		try {
 			await startHosted({
