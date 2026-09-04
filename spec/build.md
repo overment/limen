@@ -11,6 +11,10 @@
 
 ## NEXT
 
+- `F069-named-role` (🔴 PLANNED): a job kind is a name plus a prompt; spawn opens its own space. Gates research, quality, picture.
+- `F070-research-fan-out` (🔴 PLANNED): human-asked research on different models, then a judge that names divergence. Named sources only.
+- `F072-quality-pass` (🔴 PLANNED): one findings file over a stretch of landed work; never a rewrite or a merge gate.
+- `F073-picture-pass` (🔴 PLANNED): after a merge that moved a shape, rewrite one living diagram.
 - `F049-running-owner-truth` (🔴 PLANNED): reaper adopts a hosted job that lost its supervisor, fails one with no live owner; no shape-based skips. Before F013.
 - `F013-remote-seat` (PLANNED): one disk, attach don’t clone; docs and seat-shaped guarantees. Before F014.
 - `F014-github-doorbell` (PLANNED): mention or label starts a job on the seat; comment back evidence; merge stays human.
