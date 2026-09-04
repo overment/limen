@@ -7,7 +7,6 @@
 
 ## NOW
 
-- `F069-named-role` (🟠 ACTIVE): a job kind is a name plus a prompt; spawn opens its own space. Gates research, quality, picture.
 - `F048-hosted-runtime-start` (🟠 ACTIVE): spawn prints the ID in seconds; the detached supervisor starts pi and owns the job. This closes the live 2026-08-27 caller-timeout orphaning before F049.
 
 ## NEXT
@@ -21,6 +20,7 @@
 
 ## PROVEN
 
+- `F069-named-role` (🟢 PROVEN): a job kind is a name plus a prompt; spawn opens its own space. Landed `3ec3f21`. Review PASS of `3ec3f21`.
 - `F067-job-workspaces` (🟢 PROVEN): worker and reviewer tabs open in their own space; the first job tab replaces the seeded one. Landed `63a9179`, fix `7f9408d`. Coordinator-inspected.
 - `F068-legible-tab-titles` (🟢 PROVEN): a tab title says what the work changes, feature number last; ids still hoist it. Landed `01ab5dc`. Coordinator-inspected.
 - `F065-idle-backstop` (🟢 PROVEN): clean hosted tool-using turns close after the idle bound. Landed `12d533a`. Review PASS of `76e0895`.
@@ -30,6 +30,5 @@
 - `F061-coordinator-ceilings` (🟢 PROVEN): shop manual holds review appetite, second-FAIL stop, and clean merge. Landed `6cf752f`. Review PASS of `216115f`.
 - `F059-board-compression` (🟢 PROVEN): PROVEN keeps ten entries; older months fold to one highlight line. Landed `38767bc`. Review PASS of `2e23053`.
 - `F056-wake-routing-truth` (🟢 PROVEN): wakes wait minutes before fallback and only to a session that owns a job; facts first. Landed `5ac67d3`. Review PASS of `99356b3`.
-- `F057-failed-turn-visible` (🟢 PROVEN): a failed model turn is said on the next cue; hosted idle after `error` is `errored:`, not idle. Landed `d05b7fa`. Review PASS of `8520633`.
-- 2026-09: 9 landed. Hosted jobs end themselves; guidance rides the prompt; stale overlays are named. spec/features/done/2026-09/
+- 2026-09: 20 landed. Hosted jobs end themselves; a failed turn is visible; guidance rides the prompt; stale overlays are named. spec/features/done/2026-09/
 - 2026-08: 44 landed. Hosted jobs run in a named tab; wakes retry; the process tree is contained. spec/features/done/2026-08/
