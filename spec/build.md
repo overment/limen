@@ -11,7 +11,6 @@
 
 - `F048-hosted-runtime-start` (🟠 ACTIVE): spawn prints the ID in seconds; the detached supervisor starts pi and owns the job. This closes the live 2026-08-27 caller-timeout orphaning before F049.
 - `F074-claude-perspective` (🟠 ACTIVE): a detached job runs on Claude instead of Pi, so the coordinator can buy a perspective on interface and feature shape. Interleaves with the seat work; gates nothing.
-- `F076-worker-attacks-its-own-candidate` (🟠 ACTIVE): the worker names the acceptance line most likely to be false and writes that check before the final commit.
 - `F079-job-line-shows-changed-files` (🟠 ACTIVE): `limen jobs` shows a running job's changed-file count; a missing worktree leaves the count absent.
 - `F080-one-correction-reaches-every-job` (🟠 ACTIVE): `limen steer --running` delivers one correction to every watched live job.
 - `F081-spawn-refuses-an-unusable-route` (🟠 ACTIVE): spawn fails on a model it cannot serve and hosted start encodes its arguments; no job directory is left behind.
@@ -29,6 +28,7 @@
 
 ## PROVEN
 
+- `F076-worker-attacks-its-own-candidate` (🟢 PROVEN): the worker names the acceptance line most likely to be false, writes that check, and reports what it showed. Landed `81f85ae`. Coordinator-inspected.
 - `F070-research-fan-out` (🟢 PROVEN): human-asked research on different models, then a judge that names divergence. Named sources only. Landed `8233fb1`. Review PASS of `c02f8f8`.
 - `F073-picture-pass` (🟢 PROVEN): after a merge that moved a shape, rewrite one living diagram. Landed `8259cb1`. Review PASS of `adf6542`.
 - `F072-quality-pass` (🟢 PROVEN): one findings file over a stretch of landed work; never a rewrite or a merge gate. Landed `cb61dec`. Review PASS of `cb61dec`.
@@ -38,6 +38,5 @@
 - `F065-idle-backstop` (🟢 PROVEN): clean hosted tool-using turns close after the idle bound. Landed `12d533a`. Review PASS of `76e0895`.
 - `F064-project-reminders` (🟢 PROVEN): reminders name project styleguide and vision headings across languages. Landed `91ea670`. Review PASS of `b929056`.
 - `F066-stop-wake-integrity` (🟢 PROVEN): stop suppresses the caller wake only after terminal state. Landed `08e63c5`. Review PASS of `50d0b07`.
-- `F060-reply-shapes` (🟢 PROVEN): human register gains explanation, where-we-are, and wave-report shapes. Landed `e805a68`. Review PASS of `3001bd9`.
-- 2026-09: 23 landed. Hosted jobs end themselves; review loops stop at a ceiling; a failed turn is visible. spec/features/done/2026-09/
+- 2026-09: 24 landed. Hosted jobs end themselves; review loops stop at a ceiling; a failed turn is visible. spec/features/done/2026-09/
 - 2026-08: 44 landed. Hosted jobs run in a named tab; wakes retry; the process tree is contained. spec/features/done/2026-08/
