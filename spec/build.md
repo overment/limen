@@ -13,6 +13,7 @@
 - `F074-claude-perspective` (🟠 ACTIVE): a detached job runs on Claude instead of Pi, so the coordinator can buy a perspective on interface and feature shape. Interleaves with the seat work; gates nothing.
 - `F079-job-line-shows-changed-files` (🟠 ACTIVE): `limen jobs` shows a running job's changed-file count; a missing worktree leaves the count absent.
 - `F081-spawn-refuses-an-unusable-route` (🟠 ACTIVE): spawn fails on a model it cannot serve and hosted start encodes its arguments; no job directory is left behind.
+- `F077-evidence-outlives-the-worktree` (🟠 ACTIVE): proof runs at the clean candidate commit and retained artifacts reach review; boundary: `templates/worker.md`, `templates/agents.md`, and `templates/reviewer.md`, with no artifact store.
 
 ## NEXT
 
@@ -20,7 +21,6 @@
 - `F013-remote-seat` (PLANNED): one disk, attach don’t clone; docs and seat-shaped guarantees. Before F014.
 - `F014-github-doorbell` (PLANNED): mention or label starts a job on the seat; comment back evidence; merge stays human.
 - `F075-closing-overview` (🔴 PLANNED): the coordinator closes with where we are whenever it hands back with work in flight. Register rule plus the per-turn cue; no new state.
-- `F077-evidence-outlives-the-worktree` (🔴 PLANNED): the deciding proof runs at the candidate commit and its artifacts survive the checkout. Sequenced after F076; same template.
 - `F078-a-picture-is-evidence-when-seen` (🔴 PLANNED): a cited screenshot was opened, and frames that should differ and do not are a failed check. Sequenced after F077; same templates.
 - `F083-spec-folder-says-one-thing-once` (🔴 PLANNED): one check per acceptance line, one constraint per handoff line, and a superseded file is deleted.
 
