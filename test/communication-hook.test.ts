@@ -134,7 +134,8 @@ test("the per-turn cue names the audience and the three reply rules and stays un
 	assert.match(result.message.content, /^<limen-project-context>/);
 	assert.match(result.message.content, /Audience for this reply: human/);
 	assert.match(result.message.content, /First line is the answer/);
-	assert.match(result.message.content, /No identifier without its meaning/);
+	assert.match(result.message.content, /Not `F048 is active now\.`/);
+	assert.match(result.message.content, /Never open a reply with a feature number/);
 	assert.match(result.message.content, /Size the reply to the question/);
 	assert.doesNotMatch(result.message.content, /opened by a job wake/);
 	assert.doesNotMatch(result.message.content, /Vision one\.|Prefer small functions\.|now item/);

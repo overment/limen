@@ -44,18 +44,6 @@ The same rules govern the rest of the folder. An outcome file is three to six se
 
 The reader owns this project and did not write this code. They know what the project is for and the words it uses — job, worktree, ticket, board, wake, spawn, review, coordinator, worker — and those need no gloss. They do not know this feature, this file, what just changed, or what you decided three turns ago, and they will not open a diff or scroll back to find out.
 
-### Their clock stopped at their last message
-
-Between their messages you read files, ran checks, received wakes, and made decisions. None of it reached them.
-
-- When the previous turn failed, the first line says it failed and what is being redone. Nothing from that turn reached them.
-- When work landed since they last spoke, say what landed before saying what is next. A reply that a job's completion triggered opens with what the job did, in product terms, not with the job's state.
-- "Already handled", "as discussed", "the rule you approved" carry nothing on their own. Restate the thing in a clause: *the rule you approved earlier, that an errored last turn records failed*.
-- Words coined during the work are yours, not theirs. *Adoption locking*, *startup grace*, *the refinement*, *live prove*: say what the thing does the first time it appears, or use the plain description instead of the name. Gloss imported jargon the same way, in a few plain words.
-- Describe a change by what a user of the product would notice, not by the function that implements it. Name code only when the reader must go there, at most one path per sentence, and it rides beside the plain description, never in place of it.
-- A short question after a long silence still gets a short answer. If the honest answer depends on something they missed, one sentence of what they missed comes first.
-- A wake for a job already closed is not news: one line, or nothing.
-
 ### An identifier is an address, not a description
 
 A feature number, slug, commit hash, job ID, branch, tab label, or path says where something is filed. It does not say what it is. Every identifier travels with its meaning. The meaning comes first, in one short clause a stranger could use; the identifier follows in parentheses or backticks, and only when filing, a command, or a later lookup needs it. A slug is a filing name, not a description.
@@ -67,6 +55,18 @@ A feature number, slug, commit hash, job ID, branch, tab label, or path says whe
 - Not *Already handled, that was the F032 live prove.* Say *That job was the live check that a hosted job's supervisor keeps following its pane after the pane moves (F032). It passed; I stopped the job and filed the feature as proven.*
 
 Do not mirror the register of the code, the specs, the commit log, or the board. The board says `F039-split-proc`; the reader hears *the process code split into four files*.
+
+### Their clock stopped at their last message
+
+Between their messages you read files, ran checks, received wakes, and made decisions. None of it reached them.
+
+- When the previous turn failed, the first line says it failed and what is being redone. Nothing from that turn reached them.
+- When work landed since they last spoke, say what landed before saying what is next. A reply that a job's completion triggered opens with what the job did, in product terms, not with the job's state.
+- "Already handled", "as discussed", "the rule you approved" carry nothing on their own. Restate the thing in a clause: *the rule you approved earlier, that an errored last turn records failed*.
+- Words coined during the work are yours, not theirs. *Adoption locking*, *startup grace*, *the refinement*, *live prove*: say what the thing does the first time it appears, or use the plain description instead of the name. Gloss imported jargon the same way, in a few plain words.
+- Describe a change by what a user of the product would notice, not by the function that implements it. Name code only when the reader must go there, at most one path per sentence, and it rides beside the plain description, never in place of it.
+- A short question after a long silence still gets a short answer. If the honest answer depends on something they missed, one sentence of what they missed comes first.
+- A wake for a job already closed is not news: one line, or nothing.
 
 ### The reply is as big as the question
 

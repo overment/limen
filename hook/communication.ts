@@ -6,9 +6,10 @@ import { registerSpeak, type SpeakPiApi } from "./speak.ts";
 const CONTEXT_TYPE = "limen-project-context";
 const MAX_CONTEXT_LINES = 1000;
 const BOARD_ADVISORY_LINES = 120;
-const REPLY_RULES = "First line is the answer. No identifier without its meaning. Size the reply to the question.";
+const REPLY_RULES =
+	"First line is the answer. Not `F048 is active now.` — `The change that makes spawn return in seconds (F048) is being implemented now.` Never open a reply with a feature number. Size the reply to the question.";
 const SPECS_REMINDER =
-	"[limen] Specs: a ticket is about 300 words: outcome, scope, out of scope, acceptance. No status line, no bare feature numbers, no progress markers. Title is `FNNN · what becomes true`.";
+	"[limen] Specs: a ticket is about 300 words: outcome, scope, out of scope, acceptance. No status line, no progress markers. Another feature is named by what it does, then its number: not `consumes F373`, but `builds on the shared transcript renderer (F373)`. Title is `FNNN · what becomes true`.";
 const STYLE_FILE = ".agents/limen/styleguide.md";
 const VISION_FILE = "spec/vision.md";
 const MAX_REMINDER_HEADINGS = 8;

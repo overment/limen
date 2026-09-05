@@ -77,6 +77,11 @@ test("strict TypeScript and templates preserve the capability-judgment line", as
 			`templates/.history/${name} must start with the current template hash`,
 		);
 	}
+	const register = await readFile(join(ROOT, "templates/communication.md"), "utf8");
+	assert.ok(
+		register.indexOf("### An identifier is an address") < register.indexOf("### Their clock stopped"),
+		"the identifier rule leads the Human register",
+	);
 	const agents = await readFile(join(ROOT, "templates/agents.md"), "utf8");
 	for (const phrase of [
 		"human-owned",
