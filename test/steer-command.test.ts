@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import test from "node:test";
-import { limen, onlyJobId, scratchRepo, waitForState } from "./scratch.ts";
+import { limen, limenWithSession, onlyJobId, scratchRepo, waitForState } from "./scratch.ts";
 
 const waitingPi = `#!/usr/bin/env node
 process.on("SIGTERM", () => process.exit(0));
@@ -85,6 +85,55 @@ test("steer refuses a finished job and writes nothing", async (context) => {
 	assert.deepEqual(await snapshot(job), before);
 });
 
+test("steer --running places the same message in every live watched inbox", async (context) => {
+	const scratch = await scratchRepo(steeringPi);
+	context.after(scratch.cleanup);
+	limen(scratch, "init");
+	const session = "coordinator-f080";
+	const first = onlyJobId(limenWithSession(scratch, session, "spawn", "--label", "one", "wait for steer").stdout);
+	const second = onlyJobId(limenWithSession(scratch, session, "spawn", "--label", "two", "wait for steer").stdout);
+	const unwatched = onlyJobId(limen(scratch, "spawn", "--label", "other", "wait for steer").stdout);
+	const result = limenWithSession(scratch, session, "steer", "--running", "same correction");
+	assert.equal(result.status, 0, result.stderr);
+	assert.match(result.stdout, new RegExp(`steered ${first}`));
+	assert.match(result.stdout, new RegExp(`steered ${second}`));
+	assert.doesNotMatch(result.stdout, new RegExp(unwatched));
+	await waitUntil(async () => (await steeredText(join(scratch.root, ".limen/jobs", first))) === "same correction\n");
+	await waitUntil(async () => (await steeredText(join(scratch.root, ".limen/jobs", second))) === "same correction\n");
+	assert.equal(await steeredText(join(scratch.root, ".limen/jobs", unwatched)), "");
+	limen(scratch, "stop", first, "done");
+	limen(scratch, "stop", second, "done");
+	limen(scratch, "stop", unwatched, "done");
+});
+
+test("steer --running with no live watched job says nothing was reached", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	limen(scratch, "init");
+	const result = limenWithSession(scratch, "coordinator-f080", "steer", "--running", "unused");
+	assert.equal(result.status, 0, result.stderr);
+	assert.match(result.stdout, /nothing was reached/);
+});
+
+test("steer --running reports a job that ended between selection and delivery", async (context) => {
+	const scratch = await scratchRepo(steeringPi);
+	context.after(scratch.cleanup);
+	limen(scratch, "init");
+	const session = "coordinator-f080";
+	const live = onlyJobId(limenWithSession(scratch, session, "spawn", "--label", "live", "wait for steer").stdout);
+	const ended = "ended-before-delivery";
+	const endedDir = join(scratch.root, ".limen/jobs", ended);
+	await mkdir(join(endedDir, "notify/subscribers"), { recursive: true });
+	await writeFile(join(endedDir, "state"), "running\n");
+	await writeFile(join(endedDir, "notify/subscribers", session), "1\n");
+	const result = limenWithSession(scratch, session, "steer", "--running", "keep going");
+	assert.equal(result.status, 0, result.stderr);
+	assert.match(result.stdout, new RegExp(`steered ${live}`));
+	assert.match(result.stdout, new RegExp(`not reached ${ended}`));
+	await waitUntil(async () => (await steeredText(join(scratch.root, ".limen/jobs", live))) === "keep going\n");
+	limen(scratch, "stop", live, "done");
+});
+
 test("steer reports unavailable when the worker extension never loaded", async (context) => {
 	const scratch = await scratchRepo(waitingPi);
 	context.after(scratch.cleanup);
@@ -99,6 +148,10 @@ test("steer reports unavailable when the worker extension never loaded", async (
 	limen(scratch, "stop", id, "no extension");
 	await waitForState(scratch.root, id, "stopped");
 });
+
+async function steeredText(job: string): Promise<string> {
+	return (await readFile(join(job, "steer/inbox/0001"), "utf8").catch(() => "")) || (await readFile(join(job, "steer/delivered/0001/text"), "utf8").catch(() => ""));
+}
 
 async function snapshot(job: string): Promise<string[]> {
 	const { readdir } = await import("node:fs/promises");

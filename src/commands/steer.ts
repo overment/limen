@@ -1,21 +1,50 @@
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { processGroupAlive } from "../contain.ts";
+import { limenRoot } from "../git.ts";
 import { resolveJob } from "../lookup.ts";
 
 const READY_WAIT_MS = 2_000;
 
 export async function steerCommand(args: readonly string[], cwd: string): Promise<void> {
-	const query = args[0];
+	const running = args[0] === "--running";
 	const message = args.slice(1).join(" ").trim();
-	if (!query || !message) throw new Error("steer requires a job id and a message");
-	const { id, jobDir } = await resolveJob(cwd, query);
+	if (!message || (!running && !args[0])) throw new Error(running ? "steer requires a message" : "steer requires a job id and a message");
+	const targets = running ? await watchedRunning(cwd) : [await resolveJob(cwd, args[0] ?? "")];
+	if (!targets.length) {
+		console.log("nothing was reached");
+		return;
+	}
+	for (const target of targets) {
+		try {
+			console.log(`steered ${target.id} · ${await deliver(target, message)}`);
+		} catch (error: unknown) {
+			if (!running) throw error;
+			console.log(`not reached ${target.id}`);
+		}
+	}
+}
+
+async function deliver(target: { readonly id: string; readonly jobDir: string }, message: string): Promise<string> {
+	const { id, jobDir } = target;
 	const state = (await text(`${jobDir}/state`)) || "missing";
 	if (state !== "running") throw new Error(`${id} is already ${state}; not steered`);
 	const pid = Number(await text(`${jobDir}/pid`));
 	if (!Number.isSafeInteger(pid) || pid <= 0 || !processGroupAlive(pid)) throw new Error(`${id} is not running; not steered`);
 	if (!(await waitForReady(jobDir))) throw new Error(`steering is unavailable for ${id}; the worker extension is not loaded`);
-	const seq = await enqueue(jobDir, message);
-	console.log(`steered ${id} · ${seq}`);
+	return enqueue(jobDir, message);
+}
+
+async function watchedRunning(cwd: string): Promise<ReadonlyArray<{ readonly id: string; readonly jobDir: string }>> {
+	const session = process.env.PI_SESSION_ID?.trim();
+	if (!session || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(session)) throw new Error("steer --running requires a Pi session; ask the coordinator to steer through its bash tool");
+	const jobsRoot = `${limenRoot(cwd)}/.limen/jobs`;
+	const selected: Array<{ id: string; jobDir: string }> = [];
+	for (const entry of await readdir(jobsRoot, { withFileTypes: true }).catch(() => [])) {
+		if (!entry.isDirectory()) continue;
+		const jobDir = `${jobsRoot}/${entry.name}`;
+		if ((await text(`${jobDir}/state`)) === "running" && (await text(`${jobDir}/notify/subscribers/${session}`))) selected.push({ id: entry.name, jobDir });
+	}
+	return selected;
 }
 
 async function enqueue(jobDir: string, message: string): Promise<string> {

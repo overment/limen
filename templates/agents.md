@@ -49,7 +49,7 @@ Herdr is the visible layout when it is running. Job files under `.limen/jobs/` a
 
 **Other job controls:**
 
-- `limen steer <id|label> "correction"` — deliver one mid-flight correction between tool calls (works for detached workers with the steering extension; hosted tabs you can also type into directly).
+- `limen steer <id|label> "correction"` — deliver one mid-flight correction between tool calls (works for detached workers with the steering extension; hosted tabs you can also type into directly). `limen steer --running "correction"` delivers that text to every live job this conversation watches.
 - `limen open <id|label>` — focus the job’s Herdr tab, or recreate a log/watch place if it was closed.
 - `limen close FNNN` — close leftover tabs for a feature already in `done/` or `dropped/`.
 - `limen stop <id|label> [reason]` — stop a running job.
