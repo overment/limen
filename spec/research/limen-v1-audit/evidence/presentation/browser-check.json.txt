@@ -1,0 +1,78 @@
+{
+  "roles": [
+    {
+      "name": "coordinator",
+      "title": "The human's one conversation",
+      "selected": true
+    },
+    {
+      "name": "worker",
+      "title": "One outcome, one isolated candidate",
+      "selected": true
+    },
+    {
+      "name": "reviewer",
+      "title": "An independent verdict on one commit",
+      "selected": true
+    },
+    {
+      "name": "researcher",
+      "title": "Independent answers, then a judgment",
+      "selected": true
+    },
+    {
+      "name": "quality",
+      "title": "Reflection outside the merge path",
+      "selected": true
+    }
+  ],
+  "scenarios": [
+    {
+      "name": "normal",
+      "distinct": 5
+    },
+    {
+      "name": "busy",
+      "distinct": 5
+    },
+    {
+      "name": "lost",
+      "distinct": 5
+    },
+    {
+      "name": "moved",
+      "distinct": 5
+    }
+  ],
+  "filters": [
+    {
+      "name": "all",
+      "visible": 18
+    },
+    {
+      "name": "runtime",
+      "visible": 9
+    },
+    {
+      "name": "communication",
+      "visible": 7
+    },
+    {
+      "name": "contract",
+      "visible": 2
+    }
+  ],
+  "brokenAnchors": [],
+  "desktopOverflow": false,
+  "findings": 18,
+  "judgedText": "The judge retained 15 technical findings with explicit limits and classified the review rubric as a policy choice. Two coordinator observations are also shown. These are counterexamples to reliability—not measurements of production frequency, and not shipped fixes.",
+  "mobile": {
+    "width": 390,
+    "overflow": false
+  },
+  "exceptions": [],
+  "network": [
+    "file:///Users/overment/Desktop/Limen-v1.0.html"
+  ],
+  "pass": true
+}

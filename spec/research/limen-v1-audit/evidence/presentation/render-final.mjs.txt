@@ -1,0 +1,50 @@
+import { spawn } from 'node:child_process';
+import { mkdtemp, writeFile } from 'node:fs/promises';
+import { once } from 'node:events';
+const root='/tmp/limen-v1-audit.sUTvC8';
+const profile=await mkdtemp(`${root}/chrome-`);
+const chrome=spawn('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',[
+ '--headless=new','--disable-gpu','--no-first-run','--no-default-browser-check',
+ '--disable-background-networking','--remote-debugging-address=127.0.0.1','--remote-debugging-port=0',
+ `--user-data-dir=${profile}`,'about:blank'
+],{stdio:['ignore','ignore','pipe']});
+let socket;
+const deadline=setTimeout(()=>{chrome.kill('SIGKILL');process.exitCode=1;},45000);
+try{
+ const endpoint=await new Promise((resolve,reject)=>{
+  let text='';chrome.stderr.on('data',chunk=>{text+=chunk;const match=text.match(/DevTools listening on (ws:\/\/\S+)/);if(match)resolve(match[1]);});chrome.once('error',reject);chrome.once('exit',code=>reject(new Error(`Chrome exited ${code}`)));
+ });
+ socket=new WebSocket(endpoint);await once(socket,'open');
+ let counter=0;const pending=new Map();const listeners=new Map();
+ const events=[];
+ socket.addEventListener('message',event=>{
+  const message=JSON.parse(event.data);
+  if(message.id){const entry=pending.get(message.id);if(!entry)return;pending.delete(message.id);message.error?entry.reject(new Error(JSON.stringify(message.error))):entry.resolve(message.result);}
+  else {events.push(message);const callbacks=listeners.get(message.method);if(callbacks){listeners.delete(message.method);callbacks.forEach(resolve=>resolve(message));}}
+ });
+ const call=(method,params={},sessionId)=>new Promise((resolve,reject)=>{const id=++counter;pending.set(id,{resolve,reject});socket.send(JSON.stringify({id,method,params,...(sessionId?{sessionId}:{})}));});
+ const event=method=>new Promise(resolve=>listeners.set(method,[...(listeners.get(method)??[]),resolve]));
+ const {targetId}=await call('Target.createTarget',{url:'about:blank'});
+ const {sessionId}=await call('Target.attachToTarget',{targetId,flatten:true});
+ const page=(method,params={})=>call(method,params,sessionId);
+ await page('Page.enable');await page('Runtime.enable');await page('Network.enable');
+ await page('Emulation.setDeviceMetricsOverride',{width:1440,height:1050,deviceScaleFactor:1,mobile:false});
+ const loaded=event('Page.loadEventFired');await page('Page.navigate',{url:'file:///Users/overment/Desktop/Limen-v1.0.html'});await loaded;
+ const evaluate=async expression=>{const r=await page('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true});if(r.exceptionDetails)throw new Error(JSON.stringify(r.exceptionDetails));return r.result.value;};
+ const tests=await evaluate(`(()=>{const out={roles:[],scenarios:[],filters:[],brokenAnchors:[]};document.querySelectorAll('[data-role]').forEach(b=>{b.click();out.roles.push({name:b.dataset.role,title:document.querySelector('#role-title').textContent,selected:document.querySelectorAll('[data-role][aria-pressed="true"]').length===1});});const select=document.querySelector('#scenario');for(const o of select.options){select.value=o.value;select.dispatchEvent(new Event('change'));const stages=[];for(let i=0;i<5;i++){document.querySelectorAll('.step')[i].click();stages.push(document.querySelector('#flow-title').textContent);}out.scenarios.push({name:o.value,distinct:new Set(stages).size});}document.querySelectorAll('[data-filter]').forEach(b=>{b.click();out.filters.push({name:b.dataset.filter,visible:Array.from(document.querySelectorAll('.finding')).filter(f=>!f.hidden).length});});document.querySelectorAll('a[href^="#"]').forEach(a=>{if(!document.querySelector(a.getAttribute('href')))out.brokenAnchors.push(a.getAttribute('href'));});document.querySelector('[data-role="coordinator"]').click();select.value='normal';select.dispatchEvent(new Event('change'));document.querySelector('[data-filter="all"]').click();out.desktopOverflow=document.documentElement.scrollWidth>innerWidth;out.findings=document.querySelectorAll('.finding').length;out.judgedText=document.querySelector('#findings-intro').textContent;document.documentElement.style.scrollBehavior='auto';scrollTo(0,0);return out;})()`);
+ const capture=async name=>{const image=await page('Page.captureScreenshot',{format:'png',captureBeyondViewport:false});await writeFile(`${root}/${name}.png`,Buffer.from(image.data,'base64'));};
+ await capture('final-desktop');
+ await evaluate(`document.querySelector('#handoff').scrollIntoView();document.querySelectorAll('.step')[3].click();`);
+ await capture('final-handoff');
+ await evaluate(`document.querySelector('#findings').scrollIntoView();document.querySelector('[data-filter="communication"]').click();`);
+ await capture('final-findings');
+ await page('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:false});
+ tests.mobile=await evaluate(`(()=>{document.querySelector('[data-filter="all"]').click();scrollTo(0,0);return {width:innerWidth,overflow:document.documentElement.scrollWidth>innerWidth};})()`);
+ await capture('final-mobile');
+ tests.exceptions=events.filter(e=>e.method==='Runtime.exceptionThrown').map(e=>e.params);
+ tests.network=events.filter(e=>e.method==='Network.requestWillBeSent').map(e=>e.params.request.url);
+ tests.pass=tests.findings===18&&!tests.desktopOverflow&&!tests.mobile.overflow&&!tests.exceptions.length&&!tests.brokenAnchors.length&&tests.roles.every(r=>r.selected)&&tests.scenarios.every(s=>s.distinct===5)&&tests.filters.map(f=>f.visible).join(',')==='18,9,7,2';
+ await writeFile(`${root}/final-browser-check.json`,JSON.stringify(tests,null,2)+'\n');console.log(JSON.stringify(tests,null,2));
+ if(!tests.pass)process.exitCode=1;
+ await call('Browser.close');
+}catch(error){console.error(error);process.exitCode=1;}finally{clearTimeout(deadline);socket?.close();if(chrome.exitCode===null){chrome.kill('SIGTERM');}}

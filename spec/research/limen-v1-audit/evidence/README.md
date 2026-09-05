@@ -10,10 +10,16 @@ To reconstruct the research layout in a new temporary directory, clone Limen int
 
 The coordinator inspected the probe sources and reran `node /tmp/limen-runtime-audit.s79R5Y/reproduce.ts`. It exited 0 and reproduced four cases: two synchronized spawns lost both worktrees; two sequential continuations ran in the same checkout; a successful hosted transcript retained an earlier error/result; and stop killed a fixture process group whose recorded birth did not match. In this rerun, `liveJobBefore` was false, yet direct stop still signalled that fixture group. The researcher had observed true for that auxiliary liveness check; neither run observed natural OS PID recycling. Output: `runtime/coordinator-reprobe.txt`.
 
-Other runtime findings were checked against their original raw outputs and cited source; the coordinator did not rerun every fixture. A fresh judge still needs to assess the findings' scope and conclusions.
+Other runtime findings were checked against their original raw outputs and cited source; the coordinator did not rerun every fixture. The final [judgment](../judgment.md) assesses every numbered finding and narrows several claims.
 
 ## Pi report
 
 `pi/` holds the original installed-Pi reproduction source, output, lockfile install log, and the 77-passing-test hook log. The probe source is retained as `repro.mjs.txt`; it names the original temporary pinned checkout and installed Pi package paths. Inspect and adapt those paths before reusing it elsewhere. It instantiates the real installed extension binding, session and agent loop with in-memory sessions and synthetic model/authentication behavior; it does not call a real provider.
 
 The coordinator inspected the source and reran `PI_OFFLINE=1 node /tmp/limen-hooks-audit.BqRlq2/repro.mjs`. It exited 0. The rerun reproduced the stuck wake after authentication rejection, false steering delivery, duplicate response after provider recovery, restart after abort, receipt failure after input transformation, reload's false terminal marker, and the missing queued-wake cue. The finish comparison again made two model calls without `terminate: true` and one with it, retaining the same handoff and one shutdown request. Raw rerun output: `pi/coordinator-reprobe.txt`. This does not prove real TUI teardown or provider behavior; those remain outside the fixture.
+
+## Presentation
+
+The completed HTML is on the Desktop, with an identical retained copy at `../presentation.html`. Its final browser check and screenshots are in `presentation/`. A fresh, temporary headless Chrome profile was used after the shared MCP browser profile became unavailable; no existing browser process was interrupted.
+
+The final check exercised five role choices, all twenty stages across four handoff scenarios, four finding filters (18 total entries: nine runtime, seven communication, two role-contract), and local anchors. At 1440 × 1050 and 390 × 844 there was no document overflow. Chrome reported no runtime exceptions and requested only the local HTML. HTML tag/ID/local-file-link checks and `node --check` on the inline script passed. The coordinator opened all four retained screenshots: the desktop introduction, a selected handoff stage, filtered communication findings, and the stacked mobile introduction were readable and visibly distinct. This proves the presentation's checked behavior, not the proposed Limen runtime behavior it explains.
