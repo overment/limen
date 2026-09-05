@@ -26,7 +26,7 @@ An ordinary ticket is about three hundred words and fits on one screen; a hard o
 - **Outcome.** Two to four sentences: what a user or operator can do or see afterwards that they could not before, and why now if the board does not say. Product terms, no mechanism.
 - **Scope.** Three to six one-line bullets: the boundary of this feature and the seam the worker starts at, offered as a lead. Not the edit list. The worker maps dependencies by editing; a scope that enumerates files and functions is stale before the first commit and takes the worker's judgment with it.
 - **Out of scope.** Two to four bullets naming only the nearby work someone would plausibly do by mistake.
-- **Acceptance.** Three to six bullets, each one observable behavior or check a reviewer can verify with a command or a look. Not scope restated, not "tests pass".
+- **Acceptance.** Three to six bullets, each one observable behavior or check a reviewer can verify with a command or a look. Not scope restated, not "tests pass". A line holding several checks is several lines. A line a reviewer cannot cite whole is two lines.
 - **Notes.** Optional. Decisions and open questions only.
 
 What never goes in a ticket:
@@ -39,6 +39,8 @@ What never goes in a ticket:
 - Anything the worker will learn faster by editing than by reading.
 
 The same rules govern the rest of the folder. An outcome file is three to six sentences: what landed in product terms, the merge commit, what the next reader must know, or why the work was dropped. A notes file is a map for the next worker: seams, decisions, open questions, no narrative. A review is the reviewer's verdict verbatim. Board lines are one clause each.
+
+A handoff carries one constraint per line. Its length ceiling stays as it is.
 
 ## Human
 

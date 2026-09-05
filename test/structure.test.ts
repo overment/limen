@@ -190,6 +190,22 @@ test("shop manual handoff points at the board line", async () => {
 		assert.match(agents, new RegExp(phrase));
 });
 
+test("specs keep one check per line and delete superseded feature files", async () => {
+	const register = await readFile(join(ROOT, "templates/communication.md"), "utf8");
+	const specs = register.slice(register.indexOf("## Specs"), register.indexOf("## Human")).toLowerCase();
+	for (const phrase of [
+		"a line holding several checks is several lines",
+		"a line a reviewer cannot cite whole is two lines",
+		"a handoff carries one constraint per line",
+		"its length ceiling stays as it is",
+	])
+		assert.match(specs, new RegExp(phrase));
+	const agents = (await readFile(join(ROOT, "templates/agents.md"), "utf8")).toLowerCase();
+	for (const phrase of ["the ticket, the notes, the numbered reviews, and the outcome", "a file that stops being true is deleted", "in the change that supersedes it"])
+		assert.match(agents, new RegExp(phrase));
+	assert.doesNotMatch(agents, /notes, questions, and review text/);
+});
+
 test("worker stays off the board and inside reading and check budgets", async () => {
 	const worker = (await readFile(join(ROOT, "templates/worker.md"), "utf8")).toLowerCase();
 	for (const phrase of [
