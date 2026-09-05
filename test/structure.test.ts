@@ -16,7 +16,7 @@ test("architecture stays small, pure, direct, and dependency-free", async () => 
 	assert.deepEqual(await readdir(join(ROOT, "bin")), ["limen"]);
 	const source = await filesBelow(join(ROOT, "src"));
 	const sourceLines = (await Promise.all(source.map((path) => readFile(path, "utf8")))).reduce((sum, text) => sum + text.split("\n").length - 1, 0);
-	assert.ok(sourceLines <= 3353, `src has ${sourceLines} lines; named role: --role parse, preamble check, persist role on every job`);
+	assert.ok(sourceLines <= 3464, `src has ${sourceLines} lines; claude engine: a second stream parser, --engine parse, engine on every job`);
 	assert.doesNotMatch(await readFile(join(ROOT, "src/job.ts"), "utf8"), /from ["']node:/);
 	assert.deepEqual((await readdir(join(ROOT, "src/commands"))).sort(), [
 		"close.ts",
@@ -57,8 +57,18 @@ test("strict TypeScript and templates preserve the capability-judgment line", as
 	assert.match(worker, /finish/);
 	assert.doesNotMatch(worker.toLowerCase(), /quit pi/);
 	assert.doesNotMatch((await Promise.all((await filesBelow(join(ROOT, "src"))).map((path) => readFile(path, "utf8")))).join("\n"), /registerCommand/);
-	assert.deepEqual((await readdir(join(ROOT, "templates/.history"))).sort(), ["agents.md", "communication.md", "judge.md", "picture.md", "quality.md", "researcher.md", "reviewer.md", "worker.md"]);
-	for (const name of ["agents.md", "communication.md", "judge.md", "picture.md", "quality.md", "researcher.md", "reviewer.md", "worker.md"]) {
+	assert.deepEqual((await readdir(join(ROOT, "templates/.history"))).sort(), [
+		"advisor.md",
+		"agents.md",
+		"communication.md",
+		"judge.md",
+		"picture.md",
+		"quality.md",
+		"researcher.md",
+		"reviewer.md",
+		"worker.md",
+	]);
+	for (const name of ["advisor.md", "agents.md", "communication.md", "judge.md", "picture.md", "quality.md", "researcher.md", "reviewer.md", "worker.md"]) {
 		const text = await readFile(join(ROOT, "templates", name), "utf8");
 		const history = await readFile(join(ROOT, "templates/.history", name), "utf8");
 		assert.equal(
@@ -189,7 +199,8 @@ test("worker stays off the board and inside reading and check budgets", async ()
 
 test("shop manual states the quality pass", async () => {
 	const agents = (await readFile(join(ROOT, "templates/agents.md"), "utf8")).toLowerCase();
-	for (const phrase of ["ten proven landings", "human asks", "--role quality --detached --model gpt-5.6-sol:xhigh", "spec/quality/", "does not rewrite"]) assert.match(agents, new RegExp(phrase));
+	for (const phrase of ["ten proven landings", "human asks", "--role quality --detached --model gpt-5.6-sol:xhigh", "spec/quality/", "does not rewrite"])
+		assert.match(agents, new RegExp(phrase));
 });
 
 test("quality prompt judges, forbids rewriting, and names the only outputs", async () => {
@@ -281,6 +292,17 @@ test("job-file table is written by spawn and read by jobs", async () => {
 	}
 	const watch = await readFile(join(ROOT, "src/commands/watch.ts"), "utf8");
 	for (const name of ["PI_SESSION_ID", "notify/subscribers", "notify/ready"]) assert.ok(watch.includes(name), `watch must use ${name}`);
+});
+
+test("advisor names a tradeoff, writes nothing, and never merges", async () => {
+	const advisor = (await readFile(join(ROOT, "templates/advisor.md"), "utf8")).toLowerCase();
+	for (const phrase of ["perspective", "tradeoff", "no code, no commit", "never merge", "never edit the board", "filing is coordinator work", "detached", "guess"])
+		assert.match(advisor, new RegExp(phrase));
+});
+test("shop manual states the second opinion and where it is filed", async () => {
+	const agents = (await readFile(join(ROOT, "templates/agents.md"), "utf8")).toLowerCase();
+	for (const phrase of ["--role advisor --engine claude --detached", "no interactive tab", "takes no steer", "advice-<n>.md", "never writes code", "that is what review is for"])
+		assert.match(agents, new RegExp(phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
 });
 
 async function filesBelow(path: string): Promise<string[]> {

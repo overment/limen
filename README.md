@@ -12,7 +12,7 @@ Jobs can live on an always-on **seat** (a VPS on Tailscale) while your laptop is
 
 ## Trust boundary
 
-A spawned job runs `pi --approve` as you. A worktree and process group provide separation, not a security sandbox. A worker can do anything your account can do. Look at the branch before you merge. See [SECURITY.md](SECURITY.md).
+A spawned job runs `pi --approve` as you — or `claude -p --permission-mode bypassPermissions` when it runs on the Claude engine. A worktree and process group provide separation, not a security sandbox. A worker can do anything your account can do. Look at the branch before you merge. See [SECURITY.md](SECURITY.md).
 
 ## Install
 
@@ -48,6 +48,8 @@ A useful ask names the outcome and the first artifact, not a tour of the repo. T
 `done` means the run ended cleanly: Pi exited 0, or a hosted session ended, without a final `error` or `aborted` stop reason. A provider-errored run records `failed` with that reason. Neither state means the ticket is finished or the branch is safe to merge. The coordinator inspects the record, the diff, and the checks, then either merges, resumes a repair, or asks you.
 
 When the blast radius earns a second pair of eyes, the coordinator starts a fresh reviewer against the candidate. The reviewer reports a verdict; it does not rewrite the branch. You still merge.
+
+When the question is what to build rather than whether the branch is right — interface shape, feature specification, a second read on a decision — the coordinator can spawn an advisor on Claude instead of Pi: `limen spawn --role advisor --engine claude --detached`. It runs like any other detached job, in its own worktree, and its final message is a report the coordinator files. It advises; it never writes code, commits, or merges. A Claude job arrives with whatever MCP servers and skills your own `claude` install has, which is the point of reaching for it. It has no interactive tab and `limen steer` does not reach it.
 
 ## What the coordinator runs
 
@@ -126,7 +128,7 @@ The coordinator does this. You only need it if you are looking at a stuck tab yo
 limen init
 limen init --drop-leftovers
 limen workspace init
-limen spawn "instruction" [--label L] [--model M] [--branch B] [--timeout 20m] [--task-file F|-] [--prepare CMD]
+limen spawn "instruction" [--label L] [--model M] [--branch B] [--role NAME] [--engine pi|claude] [--timeout 20m] [--task-file F|-] [--prepare CMD]
 limen spawn --repo R "instruction" [--label L] [--model M]
 limen spawn --review --branch B --label L "instruction"
 limen jobs [--running|--active|--all|<id|suffix|label>]

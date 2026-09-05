@@ -90,6 +90,8 @@ function runLimen(
 		"LIMEN_HOSTED_IDLE_MS",
 		"LIMEN_HOSTED_START_MS",
 		"LIMEN_MODEL",
+		"LIMEN_ENGINE",
+		"LIMEN_CLAUDE",
 		"LIMEN_LABEL",
 		"LIMEN_JOB_LABEL",
 		"LIMEN_CONTEXT_ROOT",
@@ -153,6 +155,15 @@ export async function writeFakePi(fakeBin: string, source: string): Promise<void
 	await chmod(path, 0o755);
 }
 
+export async function writeFakeClaude(fakeBin: string, source: string): Promise<void> {
+	const path = join(fakeBin, "claude");
+	const nl = source.indexOf("\n");
+	const shebang = source.startsWith("#!") && nl !== -1 ? source.slice(0, nl + 1) : "";
+	const body = shebang ? source.slice(shebang.length) : source;
+	await writeFile(path, `${shebang}if (process.argv[2] === "--version") { console.log("0.0.0-test (Claude Code)"); process.exit(0); }\n${body}`);
+	await chmod(path, 0o755);
+}
+
 export function onlyJobId(stdout: string): string {
 	const lines = stdout.trim().split("\n");
 	const id = lines.at(-1);
@@ -179,4 +190,21 @@ if (task.includes("make commit")) {
   execFileSync("git", ["commit", "-m", "candidate"]);
 }
 if (task.includes("fail now")) process.exit(7);
+`;
+
+export const defaultFakeClaude = `#!/usr/bin/env node
+const { writeFileSync } = require("node:fs");
+const args = process.argv.slice(2);
+writeFileSync("claude-args.json", JSON.stringify(args));
+const task = args[args.indexOf("-p") + 1] ?? "";
+console.log(JSON.stringify({ type: "system", subtype: "init", session_id: "fake-claude-session" }));
+console.log(JSON.stringify({ type: "assistant", message: { content: [{ type: "tool_use", name: "Bash", input: { command: "git status" } }] } }));
+console.log(JSON.stringify({ type: "user", message: { content: [{ type: "tool_result" }] } }));
+console.log(JSON.stringify({ type: "assistant", message: { content: [{ type: "text", text: "looked at the worktree" }] } }));
+if (task.includes("fail now")) {
+  console.log(JSON.stringify({ type: "result", subtype: "error_during_execution", is_error: true, result: "", session_id: "fake-claude-session" }));
+  process.exit(1);
+}
+console.log(JSON.stringify({ type: "assistant", message: { content: [{ type: "text", text: "ship the narrow form; it costs the bulk import" }] } }));
+console.log(JSON.stringify({ type: "result", subtype: "success", is_error: false, result: "ship the narrow form; it costs the bulk import", session_id: "fake-claude-session" }));
 `;

@@ -76,10 +76,27 @@ async function orderedJobs(ids: readonly string[], jobsRoot: string): Promise<Re
 }
 async function renderJobDirectory(root: string, jobsRoot: string, id: string, detailed: boolean, human = false): Promise<{ compact: string; record: JobRecord }> {
 	const jobDir = `${jobsRoot}/${id}`;
-	const [state = "", label = "", branch = "", repo = "", pid, started = "", finished = "", toolCalls, lastTool, activity, hosted, candidate = "", advisory = "", parent = ""] =
-		await Promise.all(
-			"state label branch repo pid started-at finished-at tool-calls last-tool activity hosted candidate advisory parent".split(" ").map((field) => text(`${jobDir}/${field}`)),
-		);
+	const [
+		state = "",
+		label = "",
+		branch = "",
+		repo = "",
+		pid,
+		started = "",
+		finished = "",
+		toolCalls,
+		lastTool,
+		activity,
+		hosted,
+		candidate = "",
+		advisory = "",
+		parent = "",
+		engine = "",
+	] = await Promise.all(
+		"state label branch repo pid started-at finished-at tool-calls last-tool activity hosted candidate advisory parent engine"
+			.split(" ")
+			.map((field) => text(`${jobDir}/${field}`)),
+	);
 	if (!state) return { compact: `ORPHAN ${id} · no state`, record: { id, invalid: "orphan · no state" } };
 	const agent = await text(`${jobDir}/herdr/agent`);
 	const [commits, commitsStat] = await Promise.all([text(`${jobDir}/commits`), optionalStat(`${jobDir}/commits`)]);
@@ -124,6 +141,7 @@ async function renderJobDirectory(root: string, jobsRoot: string, id: string, de
 		if (repo) blocks.push(`  repo ${display(repo)}`);
 		if (parent) blocks.push(`  parent ${display(parent)}`);
 		if (candidate) blocks.push(`  candidate ${display(candidate)}`);
+		if (engine && engine !== "pi") blocks.push(`  engine ${display(engine)}`);
 		if (hosted) blocks.push("  hosted (weaker guarantees)");
 		if (job.phase === "running" && advisory) blocks.push(`  advisory ${display(advisory)}`);
 		if (stopReason) blocks.push(indented("stop-reason", stopReason));

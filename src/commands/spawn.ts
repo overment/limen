@@ -37,6 +37,7 @@ type SpawnOptions = {
 	tab: boolean;
 	detached: boolean;
 	role?: string;
+	engine?: string;
 };
 const PACKAGE_ROOT = fileURLToPath(new URL("../..", import.meta.url));
 export function resolvePreamble(root: string, role: string): string {
@@ -45,6 +46,9 @@ export function resolvePreamble(root: string, role: string): string {
 }
 export const HOSTED_NOTE =
 	"Hosted job: weaker guarantees. No 90-minute timeout, no tool-call cap, no F007 process containment. Herdr owns the process tree. Closing the tab ends the worker.\n";
+export function preflightClaude(): void {
+	if (!(process.env.PATH ?? "").split(":").some((dir) => dir && existsSync(`${dir}/claude`))) throw new Error("claude is not on PATH");
+}
 export function preflightPi(model?: string): void {
 	if (!(process.env.PATH ?? "").split(":").some((dir) => dir && existsSync(`${dir}/pi`))) throw new Error("pi is not on PATH");
 	if (process.env.LIMEN_PREFLIGHT !== "auth") return;
@@ -64,11 +68,14 @@ export async function spawnCommand(args: readonly string[], cwd: string): Promis
 	const tab = parsed.detached ? false : parsed.tab || herdr;
 	if (parsed.tab && parsed.detached) throw new Error("--tab and --detached cannot be combined");
 	if (tab && parsed.timeoutMs) throw new Error("hosted jobs have no timeout; omit --timeout or use --detached");
+	if (tab && parsed.engine === "claude") throw new Error("a claude job has no interactive tab; pass --detached");
 	if (tab && !herdr) throw new Error("hosted spawn requires Herdr (HERDR_ENV=1); use --detached for an ordinary job");
 	const loaded = await readSpawnTask(parsed.task, parsed.taskFile, cwd);
 	const options = { ...parsed, tab, task: loaded.text, label: parsed.label ?? (loaded.text.trim().split(/\r?\n/, 1)[0]?.trim().slice(0, 80) || "job") };
-	const model = options.model ?? (process.env[options.review ? "LIMEN_REVIEWER_MODEL" : "LIMEN_WORKER_MODEL"]?.trim() || undefined);
-	preflightPi(model);
+	const engine = options.engine ?? "pi";
+	const model = options.model ?? (engine === "claude" ? undefined : process.env[options.review ? "LIMEN_REVIEWER_MODEL" : "LIMEN_WORKER_MODEL"]?.trim() || undefined);
+	if (engine === "claude") preflightClaude();
+	else preflightPi(model);
 	const notificationSession = currentNotificationSession();
 	const coordinatorTab = process.env.HERDR_TAB_ID?.trim();
 	const workspace = workspaceRoot(cwd);
@@ -128,6 +135,7 @@ export async function spawnCommand(args: readonly string[], cwd: string): Promis
 			writeFile(`${jobDir}/activity`, "think\n", { flag: "wx", flush: true }),
 			writeFile(`${jobDir}/log`, "", { flag: "wx", flush: true }),
 			writeFile(`${jobDir}/role`, `${role}\n`, { flag: "wx", flush: true }),
+			writeFile(`${jobDir}/engine`, `${engine}\n`, { flag: "wx", flush: true }),
 			...(options.tab
 				? [writeFile(`${jobDir}/hosted`, HOSTED_NOTE, { flag: "wx", flush: true }), writeFile(`${jobDir}/agent-name`, `${hostedAgentName(id)}\n`, { flag: "wx", flush: true })]
 				: []),
@@ -145,7 +153,7 @@ export async function spawnCommand(args: readonly string[], cwd: string): Promis
 		await rm(jobDir, { recursive: true, force: true });
 		throw error;
 	}
-	const versions = capturedVersions().then((text) => writeFile(`${jobDir}/versions`, text, { flag: "wx", flush: true }));
+	const versions = capturedVersions(engine).then((text) => writeFile(`${jobDir}/versions`, text, { flag: "wx", flush: true }));
 	await atomicWrite(`${jobDir}/state`, "running\n");
 	if (options.tab) {
 		await startHosted({ jobDir, id, label: options.label, root, worktree, preamble, taskFile: `${jobDir}/task.md`, role, ...(model ? { model } : {}) });
@@ -164,6 +172,7 @@ export async function spawnCommand(args: readonly string[], cwd: string): Promis
 		LIMEN_LABEL: options.label,
 		LIMEN_CONTEXT_ROOT: root,
 	};
+	if (engine !== "pi") environment.LIMEN_ENGINE = engine;
 	if (model) environment.LIMEN_MODEL = model;
 	if (options.timeoutMs) environment.LIMEN_TIMEOUT_MS = String(options.timeoutMs);
 	let wrapperPid: number;
@@ -267,7 +276,7 @@ function executeWorktree(root: string, plan: WorktreePlan): string {
 }
 function parseSpawnArgs(args: readonly string[]): SpawnOptions {
 	let branch: string | undefined, repo: string | undefined, label: string | undefined, model: string | undefined;
-	let timeoutMs: number | undefined, taskFile: string | undefined, prepare: string | undefined, role: string | undefined;
+	let timeoutMs: number | undefined, taskFile: string | undefined, prepare: string | undefined, role: string | undefined, engine: string | undefined;
 	let review = false,
 		tab = false,
 		detached = false,
@@ -281,7 +290,8 @@ function parseSpawnArgs(args: readonly string[]): SpawnOptions {
 		else if (!positional && value === "--tab") tab = true;
 		else if (!positional && value === "--detached") detached = true;
 		else if (!positional && value.startsWith("--")) {
-			if (!["--branch", "--repo", "--label", "--model", "--timeout", "--task-file", "--prepare", "--role"].includes(value)) throw new Error(`unknown spawn option ${value}`);
+			if (!["--branch", "--repo", "--label", "--model", "--timeout", "--task-file", "--prepare", "--role", "--engine"].includes(value))
+				throw new Error(`unknown spawn option ${value}`);
 			const optionValue = args[index + 1];
 			if (!optionValue) throw new Error(`${value} requires a value`);
 			index += 1;
@@ -294,13 +304,16 @@ function parseSpawnArgs(args: readonly string[]): SpawnOptions {
 			else if (value === "--role") {
 				role = once(role, value, optionValue.trim());
 				if (!/^[a-z][a-z0-9-]*$/.test(role)) throw new Error("--role must be a lowercase name");
+			} else if (value === "--engine") {
+				engine = once(engine, value, optionValue.trim());
+				if (engine !== "pi" && engine !== "claude") throw new Error("--engine must be pi or claude");
 			} else timeoutMs = once(timeoutMs, value, parseDuration(optionValue));
 		} else task.push(value);
 	}
 	if (review && role) throw new Error("--role and --review cannot be combined");
 	if (taskFile && task.length) throw new Error("spawn accepts a positional task or --task-file, not both");
 	if (!taskFile && (task.length === 0 || !task.join(" ").trim())) throw new Error("spawn requires task text");
-	const out: SpawnOptions = { task: task.join(" "), review, tab, detached, ...(role ? { role } : {}) };
+	const out: SpawnOptions = { task: task.join(" "), review, tab, detached, ...(role ? { role } : {}), ...(engine ? { engine } : {}) };
 	if (label) out.label = label;
 	if (taskFile) out.taskFile = taskFile;
 	if (prepare) out.prepare = prepare;
@@ -341,13 +354,14 @@ function probeVersion(command: string): Promise<string> {
 		child.once("error", () => done("")).once("close", (code) => done(code === 0 ? (out.trim().split("\n")[0] ?? "") : ""));
 	});
 }
-export async function capturedVersions(): Promise<string> {
+export async function capturedVersions(engine = "pi"): Promise<string> {
 	const herdr = process.env.LIMEN_HERDR?.trim();
 	const hunk = hunkBinary();
 	const pi = (await probeVersion(process.env.LIMEN_PI || "pi")) || "unavailable";
 	const extra = herdr !== "0" && (await probeVersion(herdr || "herdr"));
 	const hunkVersion = hunk && (await probeVersion(hunk));
-	return `pi ${pi}\n${extra ? `herdr ${extra}\n` : ""}${hunkVersion ? `hunk ${hunkVersion}\n` : ""}`;
+	const claude = engine === "claude" && ((await probeVersion(process.env.LIMEN_CLAUDE || "claude")) || "unavailable");
+	return `pi ${pi}\n${claude ? `claude ${claude}\n` : ""}${extra ? `herdr ${extra}\n` : ""}${hunkVersion ? `hunk ${hunkVersion}\n` : ""}`;
 }
 function workspaceTask(task: string, root: string, repo: string): string {
 	const pointer = task.replace(/\bTicket: (spec\/\S+)/g, (_all, path: string) => `Ticket: ${root}/${path}`);

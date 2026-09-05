@@ -59,6 +59,7 @@ export async function continueCommand(args: readonly string[], cwd: string): Pro
 	const branch = await text(`${parentDir}/branch`);
 	if (!branch) throw new Error(`parent record ${parentId} has no branch`);
 	const repo = await text(`${parentDir}/repo`);
+	if ((await text(`${parentDir}/engine`)) === "claude") throw new Error(`job ${parentId} ran on claude, which keeps no limen session transcript; spawn a fresh job instead`);
 	const sessions = (await readdir(`${parentDir}/session`).catch(() => [])).filter((name) => name.endsWith(".jsonl"));
 	if (sessions.length === 0) throw new Error(`parent record ${parentId} has no session transcript to continue`);
 	const inheritedSession = sessions.sort().at(-1);
