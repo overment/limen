@@ -12,7 +12,7 @@
 - `F048-hosted-runtime-start` (🟠 ACTIVE): spawn prints the ID in seconds; the detached supervisor starts pi and owns the job. This closes the live 2026-08-27 caller-timeout orphaning before F049.
 - `F074-claude-perspective` (🟠 ACTIVE): a detached job runs on Claude instead of Pi, so the coordinator can buy a perspective on interface and feature shape. Interleaves with the seat work; gates nothing.
 - `F079-job-line-shows-changed-files` (🟠 ACTIVE): `limen jobs` shows a running job's changed-file count; a missing worktree leaves the count absent.
-- `F081-spawn-refuses-an-unusable-route` (🟠 ACTIVE): spawn fails on a model it cannot serve and hosted start encodes its arguments; no job directory is left behind.
+- `F081-spawn-refuses-an-unusable-route` (🟠 ACTIVE): spawn rejects an unusable route before planting a job; boundary: spawn preflight and hosted-start argument transport, with no retries or model selection.
 - `F077-evidence-outlives-the-worktree` (🟠 ACTIVE): proof runs at the clean candidate commit and retained artifacts reach review; boundary: `templates/worker.md`, `templates/agents.md`, and `templates/reviewer.md`, with no artifact store.
 
 ## NEXT
