@@ -22,8 +22,13 @@ async function wrapperAlive(pid: number, born: string): Promise<boolean> {
 	const outcome = await processInfo(pid);
 	return outcome.kind === "present" ? outcome.process.born === born : outcome.kind !== "absent";
 }
-export async function reapDeadJobs(jobsRoot: string, seen: Map<string, number>, now = Date.now()): Promise<void> {
-	for (const id of await readdir(jobsRoot).catch(() => [] as string[])) {
+export async function reapDeadJobs(jobsRoot: string, seen: Map<string, number>, now = Date.now(), ids?: readonly string[]): Promise<void> {
+	const candidates = ids ?? (await readdir(jobsRoot).catch(() => [] as string[]));
+	if (ids) {
+		const live = new Set(ids);
+		for (const id of seen.keys()) if (!live.has(id)) seen.delete(id);
+	}
+	for (const id of candidates) {
 		const jobDir = `${jobsRoot}/${id}`;
 		if ((await textFile(`${jobDir}/state`)) !== "running") {
 			seen.delete(id);
