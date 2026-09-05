@@ -16,6 +16,7 @@
 - `F049-running-owner-truth` (🔴 PLANNED): reaper adopts a hosted job that lost its supervisor, fails one with no live owner; no shape-based skips. Before F013.
 - `F013-remote-seat` (PLANNED): one disk, attach don’t clone; docs and seat-shaped guarantees. Before F014.
 - `F014-github-doorbell` (PLANNED): mention or label starts a job on the seat; comment back evidence; merge stays human.
+- `F075-closing-overview` (🔴 PLANNED): the coordinator closes with where we are whenever it hands back with work in flight. Register rule plus the per-turn cue; no new state.
 
 ## PROVEN
 
