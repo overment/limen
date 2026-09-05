@@ -66,6 +66,30 @@ test("two observations past grace finalize; one observation and the grace window
 	await assert.rejects(readFile(join(gone, "pid")));
 });
 
+test("shared running candidates preserve reaper grace and clear omitted observations", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	limen(scratch, "init");
+	const jobsRoot = join(scratch.root, ".limen/jobs");
+	const gone = await writeRunning(scratch.root, "gone", { pid: DEAD_PID, startedMsAgo: STARTUP_GRACE_MS + 60_000 });
+	const young = await writeRunning(scratch.root, "young", { pid: DEAD_PID, startedMsAgo: 60_000 });
+	const omitted = await writeRunning(scratch.root, "omitted", { pid: DEAD_PID, startedMsAgo: STARTUP_GRACE_MS + 60_000 });
+	const t0 = Date.now();
+	const seen = new Map([["omitted", t0 - 20_000]]);
+	await reapDeadJobs(jobsRoot, seen, t0, ["gone", "young"]);
+	assert.deepEqual([...seen], [["gone", t0]]);
+	await reapDeadJobs(jobsRoot, seen, t0 + 9_000, ["gone", "young"]);
+	assert.equal(await text(join(gone, "state")), "running");
+	await reapDeadJobs(jobsRoot, seen, t0 + 10_000, ["gone", "young"]);
+	assert.equal(await text(join(gone, "state")), "failed");
+	assert.equal(await text(join(young, "state")), "running");
+	assert.equal(await text(join(omitted, "state")), "running");
+	assert.equal(seen.size, 0);
+	seen.set("gone", t0);
+	await reapDeadJobs(jobsRoot, seen, t0, []);
+	assert.equal(seen.size, 0);
+});
+
 test("limen jobs reaps a dead record, then spawn and prune may use the branch", async (context) => {
 	const scratch = await scratchRepo();
 	context.after(scratch.cleanup);

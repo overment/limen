@@ -31,6 +31,7 @@ type PiApi = {
 const SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"] as const;
 const DEFAULT_FALLBACK_GRACE_MS = 5 * 60_000;
 const CLAIM_STALE_MS = 30_000;
+const CACHE_REFRESH_MS = 30_000;
 const TAB_TAIL = /\s*·\s*\d+\s+running$/;
 type HerdrPane = { readonly binary: string; readonly pane: string };
 
@@ -57,6 +58,9 @@ export default function limenWake(pi: PiApi): void {
 	let herdrMetadataAt = 0;
 	let tabTail = -1;
 	const firstDead = new Map<string, number>();
+	const settled = new Set<string>();
+	let ownsJobs: boolean | undefined;
+	let cacheExpiresAt = 0;
 	let sweeping = false;
 	let injectedThisSweep = false;
 	type PendingDelivery = {
@@ -159,11 +163,15 @@ export default function limenWake(pi: PiApi): void {
 		setStatus(`${SPINNER[frame]} ${statusBody}`);
 		frame = (frame + 1) % SPINNER.length;
 	};
+	const sessionOwns = (jobs: string) => {
+		if (ownsJobs === undefined) ownsJobs = sessionOwnsJobs(jobs, sessionId);
+		return ownsJobs;
+	};
 	// Limen owns the tab tail; the coordinator owns the stem. Rewriting only on a count change keeps this to a spawn or a completion.
-	const updateTabTail = (jobs: string) => {
+	const updateTabTail = (jobs: string, running: readonly string[]) => {
 		const tab = process.env.HERDR_TAB_ID?.trim();
 		if (!herdr || !tab) return;
-		const count = readdirSync(jobs).filter((id) => stateOf(jobs, id) === "running" && text(join(jobs, id, "origin-tab")) === tab).length;
+		const count = running.filter((id) => text(join(jobs, id, "origin-tab")) === tab).length;
 		if (count === tabTail) return;
 		tabTail = count;
 		const current = tabLabel(herdr.binary, tab);
@@ -174,9 +182,9 @@ export default function limenWake(pi: PiApi): void {
 		const next = count > 0 ? `${stem} · ${count} running` : stem;
 		if (next !== current) herdrCall(["tab", "rename", tab, next]);
 	};
-	const updateStatus = (jobs: string) => {
-		updateTabTail(jobs);
-		const next = runningDisplay(jobs, sessionId);
+	const updateStatus = (jobs: string, running: readonly string[]) => {
+		updateTabTail(jobs, running);
+		const next = runningDisplay(jobs, sessionId, running);
 		if (!next) {
 			clearStatus();
 			return;
@@ -229,7 +237,7 @@ export default function limenWake(pi: PiApi): void {
 		const repo = text(join(job, "repo"));
 		const slot = fallback ? "_fallback" : sessionId;
 		if (!fallback && deliveryExists(job, sessionId)) return false;
-		if (fallback && (completionSlots(deliveredSlots(job)).length > 0 || session.isIdle() !== true || muted || !sessionOwnsJobs(jobs, sessionId))) return false;
+		if (fallback && (completionSlots(deliveredSlots(job)).length > 0 || session.isIdle() !== true || muted || !sessionOwns(jobs))) return false;
 		const blocked = () => {
 			try {
 				session?.ui.notify(`limen: ${label} wake was unconfirmed twice; automatic delivery stopped (${id})`, "info");
@@ -245,7 +253,7 @@ export default function limenWake(pi: PiApi): void {
 				return (
 					session?.isIdle() === true &&
 					!muted &&
-					sessionOwnsJobs(jobs, sessionId) &&
+					sessionOwns(jobs) &&
 					completionSlots(claimSlots(job)).every((claim) => claim === "_fallback") &&
 					completionSlots(deliveredSlots(job)).length === 0
 				);
@@ -280,7 +288,7 @@ export default function limenWake(pi: PiApi): void {
 		const repo = text(join(job, "repo"));
 		const slot = fallback ? "_advisory._fallback" : `_advisory.${sessionId}`;
 		if (!fallback && deliveryExists(job, slot)) return false;
-		if (fallback && (advisorySlots(deliveredSlots(job)).length > 0 || session.isIdle() !== true || muted || !sessionOwnsJobs(jobs, sessionId))) return false;
+		if (fallback && (advisorySlots(deliveredSlots(job)).length > 0 || session.isIdle() !== true || muted || !sessionOwns(jobs))) return false;
 		const kind = advisory.startsWith("blocked") ? "blocked" : advisory.startsWith("errored:") ? "errored" : "idle";
 		const blocked = () => {
 			try {
@@ -296,7 +304,7 @@ export default function limenWake(pi: PiApi): void {
 				return (
 					session?.isIdle() === true &&
 					!muted &&
-					sessionOwnsJobs(jobs, sessionId) &&
+					sessionOwns(jobs) &&
 					advisorySlots(claimSlots(job)).every((claim) => claim === "_advisory._fallback") &&
 					advisorySlots(deliveredSlots(job)).length === 0
 				);
@@ -379,20 +387,30 @@ export default function limenWake(pi: PiApi): void {
 		refreshPendingClaims();
 		stampSweep();
 		try {
+			// Watch events invalidate individual records; a bounded refresh recovers missed events and manual wake repair.
+			if (Date.now() >= cacheExpiresAt) {
+				settled.clear();
+				ownsJobs = undefined;
+				cacheExpiresAt = Date.now() + CACHE_REFRESH_MS;
+			}
+			const { observe: ids, running } = collectSweep(jobs, settled);
 			if (initialSweep) {
 				initialSweep = false;
-				for (const id of readdirSync(jobs).sort()) {
-					const job = join(jobs, id);
-					if (stateOf(jobs, id) === "running" && text(join(job, "advisory"))) observe(jobs, id);
+				for (const id of running) {
+					if (text(join(jobs, id, "advisory"))) observe(jobs, id);
 				}
 			}
-			await reapDeadJobs(jobs, firstDead);
-			for (const id of readdirSync(jobs).sort()) {
+			await reapDeadJobs(jobs, firstDead, Date.now(), running);
+			for (const id of ids) {
 				const job = join(jobs, id);
 				if (stateOf(jobs, id) === "running" && !routable(job)) enrollLegacyRunning(job);
 				observe(jobs, id);
+				if (deliverySettled(job, sessionId)) settled.add(id);
 			}
-			updateStatus(jobs);
+			updateStatus(
+				jobs,
+				running.filter((id) => stateOf(jobs, id) === "running"),
+			);
 		} catch {
 			// Display and delivery are advisory; durable state remains on disk.
 		}
@@ -433,6 +451,9 @@ export default function limenWake(pi: PiApi): void {
 		pendingDeliveries.clear();
 		activeDeliveries.clear();
 		firstDead.clear();
+		settled.clear();
+		ownsJobs = undefined;
+		cacheExpiresAt = 0;
 		sweeping = false;
 		herdr = herdrTarget();
 		const tab = process.env.HERDR_TAB_ID?.trim();
@@ -444,12 +465,22 @@ export default function limenWake(pi: PiApi): void {
 			if (subscribed(job, id)) claimMarker(job, "started", id);
 		}
 		watcher = watch(jobs, { recursive: true }, (_event, filename) => {
+			if (progressFilename(filename)) return;
+			const path = filename?.replaceAll("\\", "/") ?? "";
+			if (!filename) settled.clear();
+			else {
+				const id = path.split("/")[0];
+				if (id) settled.delete(id);
+			}
+			// Claims do not schedule sweeps, but deleting a delivered slot must reopen a cached job on the next timer tick.
 			if (notifyBookkeeping(filename)) return;
+			if (!filename || !path.includes("/") || /^[^/]+\/notify(?:\/subscribers(?:\/|$)|$)/.test(path)) ownsJobs = undefined;
 			scheduleSweep();
 		});
 		watcher.unref();
 		watcher.on("error", () => {
 			watcher?.close();
+			cacheExpiresAt = 0;
 			clearStatus();
 		});
 		sweepTimer = setInterval(sweep, 500);
@@ -590,17 +621,40 @@ function recordedToolCalls(job: string): number | undefined {
 	return Number.isSafeInteger(count) && count >= 0 ? count : undefined;
 }
 
-function runningDisplay(jobs: string, session: string): { readonly status: string; readonly title: string; readonly pulses: readonly Pulse[] } | undefined {
-	const running = readdirSync(jobs)
-		.sort()
-		.filter((id) => stateOf(jobs, id) === "running")
-		.map((id) => {
-			const label = text(join(jobs, id, "label")) || id;
-			const pulse = pulseOf(jobs, id);
-			const tool = text(join(jobs, id, "last-tool"));
-			const watching = subscribed(join(jobs, id), session);
-			return { label, pulse, status: `${shortLabel(label)} ${pulse === "tool" && tool ? `${pulse}:${tool}` : pulse}${watching ? "" : " (unwatched)"}` };
-		});
+export function collectSweep(jobs: string, settled: ReadonlySet<string>): { readonly observe: string[]; readonly running: string[] } {
+	const observe: string[] = [];
+	const running: string[] = [];
+	for (const id of readdirSync(jobs).sort()) {
+		if (settled.has(id)) continue;
+		observe.push(id);
+		if (stateOf(jobs, id) === "running") running.push(id);
+	}
+	return { observe, running };
+}
+export function deliverySettled(job: string, session: string): boolean {
+	if (!isTerminal(text(join(job, "state")))) return false;
+	if (claimSlots(job).length > 0) return false;
+	if (!routable(job)) return true;
+	const delivered = deliveredSlots(job);
+	if (subscribed(job, session)) return delivered.includes(session) || delivered.includes("_fallback");
+	return completionSlots(delivered).length > 0;
+}
+export function progressFilename(filename: string | null): boolean {
+	if (!filename) return false;
+	return /^[^/]+\/(activity|changed-files|last-tool)$/.test(filename.replaceAll("\\", "/"));
+}
+function runningDisplay(
+	jobs: string,
+	session: string,
+	runningIds: readonly string[],
+): { readonly status: string; readonly title: string; readonly pulses: readonly Pulse[] } | undefined {
+	const running = runningIds.map((id) => {
+		const label = text(join(jobs, id, "label")) || id;
+		const pulse = pulseOf(jobs, id);
+		const tool = text(join(jobs, id, "last-tool"));
+		const watching = subscribed(join(jobs, id), session);
+		return { label, pulse, status: `${shortLabel(label)} ${pulse === "tool" && tool ? `${pulse}:${tool}` : pulse}${watching ? "" : " (unwatched)"}` };
+	});
 	if (running.length === 0) return undefined;
 	const summary = `${running
 		.slice(0, 3)
