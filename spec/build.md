@@ -22,10 +22,10 @@
 - `F075-closing-overview` (🔴 PLANNED): the coordinator closes with where we are whenever it hands back with work in flight. Register rule plus the per-turn cue; no new state.
 - `F078-a-picture-is-evidence-when-seen` (🔴 PLANNED): a cited screenshot was opened, and frames that should differ and do not are a failed check. Sequenced after F077; same templates.
 - `F083-spec-folder-says-one-thing-once` (🔴 PLANNED): one check per acceptance line, one constraint per handoff line, and a superseded file is deleted.
-- `F084-every-number-arrives-with-its-meaning` (🔴 PLANNED): the per-turn cue carries the identifier rule, because at Alice only 4 of every 100 feature numbers in a reply arrive with their meaning.
 
 ## PROVEN
 
+- `F084-every-number-arrives-with-its-meaning` (🟢 PROVEN): the reply cue and the specs reminder name the failing sentence, not the property; the identifier rule leads the Human register. Landed `0d3f2fd`. Coordinator-inspected.
 - `F079-job-line-shows-changed-files` (🟢 PROVEN): a running job line shows its changed-file count; a missing worktree leaves the signal absent. Landed `a98fa51`. Coordinator-inspected.
 - `F082-handoff-points-at-the-board` (🟢 PROVEN): a handoff points at the board line that owns its boundary; changes and steers name that line instead of duplicating the rule. Landed `88a2627`. Coordinator-inspected.
 - `F080-one-correction-reaches-every-job` (🟢 PROVEN): `limen steer --running` delivers one correction to every watched live job and reports targets that end during delivery. Landed `4006f2e`. Coordinator-inspected.
@@ -35,6 +35,5 @@
 - `F072-quality-pass` (🟢 PROVEN): one findings file over a stretch of landed work; never a rewrite or a merge gate. Landed `cb61dec`. Review PASS of `cb61dec`.
 - `F069-named-role` (🟢 PROVEN): a job kind is a name plus a prompt; spawn opens its own space. Landed `3ec3f21`. Review PASS of `3ec3f21`.
 - `F067-job-workspaces` (🟢 PROVEN): worker and reviewer tabs open in their own space; the first job tab replaces the seeded one. Landed `63a9179`, fix `7f9408d`. Coordinator-inspected.
-- `F068-legible-tab-titles` (🟢 PROVEN): a tab title says what the work changes, feature number last; ids still hoist it. Landed `01ab5dc`. Coordinator-inspected.
-- 2026-09: 27 landed. Hosted jobs end themselves; review loops stop at a ceiling; a failed turn is visible. spec/features/done/2026-09/
+- 2026-09: 28 landed. Hosted jobs end themselves; review loops stop at a ceiling; a failed turn is visible; a tab title says what the work changes. spec/features/done/2026-09/
 - 2026-08: 44 landed. Hosted jobs run in a named tab; wakes retry; the process tree is contained. spec/features/done/2026-08/
