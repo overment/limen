@@ -14,7 +14,7 @@ This repository uses plain specifications, Git, and `limen` to coordinate one hu
   - `done/YYYY-MM/FNNN-slug/` — landed history, grouped by completion month
   - `dropped/YYYY-MM/FNNN-slug/` — deliberately stopped history, grouped by decision month
   - `_template/` — ticket and terminal-outcome templates
-- A feature number is stable for life: allocate the next unused `FNNN`, keep it through every move, and never reuse it. The folder keeps its ticket, notes, questions, and review text. Terminal folders also keep `outcome.md` explaining what landed or why work was dropped.
+- A feature number is stable for life: allocate the next unused `FNNN`, keep it through every move, and never reuse it. The folder keeps the ticket, the notes, the numbered reviews, and the outcome. A file that stops being true is deleted in the change that supersedes it.
 - These lanes and dates organize human history only. Nothing parses them as workflow state, validates moves, or blocks work. `spec/build.md` is a concise TRACK / NOW / NEXT / PROVEN view, not an authoritative projection.
 - A project with a `spec/linear.md` (operator config naming a Linear team and project) mirrors feature state changes to Linear. The filesystem stays truth; conventions and rituals live in the installed package's `templates/linear.md`, replaced by a project file at `.agents/limen/linear.md`. Without `spec/linear.md`, Linear does not exist for this project.
 
