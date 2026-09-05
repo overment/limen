@@ -51,7 +51,7 @@ usage:
   limen spawn --review --branch B --label L "Review the FNNN candidate against spec/features/active/FNNN-slug/ticket.md"
   limen continue <id|suffix|label> "follow-up instruction" [--review] [--label L] [--model X] [--tab|--detached]
                                   # resume a finished job in its own pi session — full context, same worktree; Herdr default is hosted
-  limen steer <id|suffix|label> "correction"
+  limen steer <id|suffix|label> | --running "correction"
   limen diff <id|suffix|label>
   limen wait <id|suffix|label>
   limen stop <id|suffix|label> [reason]

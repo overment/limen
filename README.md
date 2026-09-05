@@ -134,7 +134,7 @@ limen spawn --review --branch B --label L "instruction"
 limen jobs [--running|--active|--all|<id|suffix|label>]
 limen diff <id|suffix|label>
 limen prune
-limen steer <id|suffix|label> "correction"
+limen steer <id|suffix|label> | --running "correction"
 limen stop <id|suffix|label> [reason]
 limen wait <id|suffix|label>
 limen watch <id|suffix|label> | --running
