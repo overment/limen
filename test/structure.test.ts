@@ -219,6 +219,23 @@ test("worker stays off the board and inside reading and check budgets", async ()
 	assert.doesNotMatch(worker, /as far as this slice earns/);
 });
 
+test("proof belongs to the candidate and outlives the worktree", async () => {
+	const worker = (await readFile(join(ROOT, "templates/worker.md"), "utf8")).toLowerCase();
+	for (const phrase of [
+		"clean candidate commit",
+		"after committing, not before it",
+		"artifacts a reviewer must read",
+		"out of the worktree",
+		"name that path in the final message",
+	])
+		assert.match(worker, new RegExp(phrase));
+	const agents = (await readFile(join(ROOT, "templates/agents.md"), "utf8")).toLowerCase();
+	for (const phrase of ["review handoff carries", "retained-evidence path", "inspects retained evidence", "before deciding to rerun a lane"])
+		assert.match(agents, new RegExp(phrase));
+	const reviewer = (await readFile(join(ROOT, "templates/reviewer.md"), "utf8")).toLowerCase();
+	for (const phrase of ["different commit or a dirty tree", "is unverified", "not a finding against the candidate"]) assert.match(reviewer, new RegExp(phrase));
+});
+
 test("shop manual states the quality pass", async () => {
 	const agents = (await readFile(join(ROOT, "templates/agents.md"), "utf8")).toLowerCase();
 	for (const phrase of ["ten proven landings", "human asks", "--role quality --detached --model gpt-5.6-sol:xhigh", "spec/quality/", "does not rewrite"])
