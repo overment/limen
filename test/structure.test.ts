@@ -92,6 +92,20 @@ test("shop manual tab titles say the work then the feature", async () => {
 	assert.match(agents, /about forty characters/);
 });
 
+test("a conversation tab is a stable stem plus a stage tail, not a label", async () => {
+	const agents = await readFile(join(ROOT, "templates/agents.md"), "utf8");
+	assert.doesNotMatch(agents, /same taste as `--label`/);
+	for (const phrase of [
+		"It is not a `--label`",
+		"stable stem",
+		"One to three words",
+		"leave it alone for the life of the conversation",
+		"**Tail.** Limen owns it",
+		"Never type a tail",
+	])
+		assert.match(agents, new RegExp(phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+});
+
 test("shop manual states the picture pass after a shape moves", async () => {
 	const agents = (await readFile(join(ROOT, "templates/agents.md"), "utf8")).toLowerCase();
 	for (const phrase of [

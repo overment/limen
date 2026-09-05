@@ -1,4 +1,4 @@
-import { execFile } from "node:child_process";
+import { execFile, spawnSync } from "node:child_process";
 import { appendFileSync, existsSync, type FSWatcher, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, watch, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { processGroupAlive } from "../src/contain.ts";
@@ -31,6 +31,7 @@ type PiApi = {
 const SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"] as const;
 const DEFAULT_FALLBACK_GRACE_MS = 5 * 60_000;
 const CLAIM_STALE_MS = 30_000;
+const TAB_TAIL = /\s*·\s*\d+\s+running$/;
 type HerdrPane = { readonly binary: string; readonly pane: string };
 
 export default function limenWake(pi: PiApi): void {
@@ -54,6 +55,7 @@ export default function limenWake(pi: PiApi): void {
 	let herdrSeq = Date.now();
 	let herdrMetadata: string | undefined;
 	let herdrMetadataAt = 0;
+	let tabTail = -1;
 	const firstDead = new Map<string, number>();
 	let sweeping = false;
 	let injectedThisSweep = false;
@@ -157,7 +159,23 @@ export default function limenWake(pi: PiApi): void {
 		setStatus(`${SPINNER[frame]} ${statusBody}`);
 		frame = (frame + 1) % SPINNER.length;
 	};
+	// Limen owns the tab tail; the coordinator owns the stem. Rewriting only on a count change keeps this to a spawn or a completion.
+	const updateTabTail = (jobs: string) => {
+		const tab = process.env.HERDR_TAB_ID?.trim();
+		if (!herdr || !tab) return;
+		const count = readdirSync(jobs).filter((id) => stateOf(jobs, id) === "running" && text(join(jobs, id, "origin-tab")) === tab).length;
+		if (count === tabTail) return;
+		tabTail = count;
+		const current = tabLabel(herdr.binary, tab);
+		if (current === undefined) return;
+		const stem = current.replace(TAB_TAIL, "").trim();
+		// A tab still carrying Herdr's own number was never named by a coordinator; decorating it would invent a stem.
+		if (!stem || /^\d+$/.test(stem)) return;
+		const next = count > 0 ? `${stem} · ${count} running` : stem;
+		if (next !== current) herdrCall(["tab", "rename", tab, next]);
+	};
 	const updateStatus = (jobs: string) => {
+		updateTabTail(jobs);
 		const next = runningDisplay(jobs, sessionId);
 		if (!next) {
 			clearStatus();
@@ -411,6 +429,7 @@ export default function limenWake(pi: PiApi): void {
 		initialSweep = true;
 		footerAlive = true;
 		footerNoted = false;
+		tabTail = -1;
 		pendingDeliveries.clear();
 		activeDeliveries.clear();
 		firstDead.clear();
@@ -854,6 +873,21 @@ function eventMessage(event: unknown): { readonly role: string; readonly content
 		.join("\n");
 	const stopReason = "stopReason" in message && typeof message.stopReason === "string" ? message.stopReason : undefined;
 	return { role: message.role, content: textContent, ...(stopReason ? { stopReason } : {}) };
+}
+/** The tab's current name, so a rewritten tail preserves whatever stem the coordinator set. */
+function tabLabel(binary: string, tab: string): string | undefined {
+	const result = spawnSync(binary, ["tab", "get", tab], { encoding: "utf8", timeout: 2_000 });
+	if (result.status !== 0 || !result.stdout) return undefined;
+	try {
+		const row: unknown = JSON.parse(result.stdout);
+		const label = record(record(record(row).result).tab).label;
+		return typeof label === "string" ? label : undefined;
+	} catch {
+		return undefined;
+	}
+}
+function record(value: unknown): Record<string, unknown> {
+	return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
 }
 function herdrTarget(): HerdrPane | undefined {
 	const binary = process.env.LIMEN_HERDR || "herdr";

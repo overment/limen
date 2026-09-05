@@ -713,6 +713,97 @@ test("herdr pane naming follows running jobs and each terminal state notifies on
 	await waitUntilAsync(async () => (await readCalls(calls)).some((call) => call.includes("--clear-display-agent")));
 });
 
+test("the coordinator tab keeps a running count on its stem and loses it when the last job ends", async (context) => {
+	stashEnv(context, "LIMEN_JOB", undefined);
+	const root = await import("node:fs/promises").then(({ mkdtemp }) => mkdtemp(join(process.env.TMPDIR ?? "/tmp", "limen-tab-")));
+	context.after(() => import("node:fs/promises").then(({ rm }) => rm(root, { recursive: true, force: true })));
+	const calls = join(root, "herdr-calls");
+	await mkdir(calls);
+	const label = join(root, "tab-label");
+	await writeFile(label, "chat settings");
+	const fake = join(root, "herdr");
+	await writeFile(
+		fake,
+		`#!/bin/sh\nprintf '%s\\n' "$@" > "${calls}/call.$$"\ncase "$1 $2" in\n'tab get') printf '{"result":{"tab":{"label":"%s"}}}' "$(cat ${label})" ;;\n'tab rename') printf '%s' "$4" > "${label}" ;;\nesac\n`,
+	);
+	await chmod(fake, 0o755);
+	stashEnv(context, "LIMEN_HERDR", fake);
+	stashEnv(context, "HERDR_ENV", "1");
+	stashEnv(context, "HERDR_PANE_ID", "w1:p1");
+	stashEnv(context, "HERDR_TAB_ID", "w1:t1");
+	await mkdir(join(root, ".agents/limen"), { recursive: true });
+	const jobs = join(root, ".limen/jobs");
+	const handlers = new Map<string, (event: unknown, context: TestContext) => void>();
+	limenWake({
+		on(event, handler) {
+			handlers.set(event, handler);
+		},
+		sendUserMessage() {},
+	});
+	const session = { cwd: root, isIdle: () => true, sessionManager: sessionManager("coordinator-a"), ui: { notify() {}, setStatus() {} } };
+	handlers.get("session_start")?.({}, session);
+	context.after(() => handlers.get("session_shutdown")?.({}, session));
+	const plant = async (id: string, tab: string) => {
+		await mkdir(join(jobs, id), { recursive: true });
+		await writeFile(join(jobs, id, "label"), `${id} work\n`);
+		await writeFile(join(jobs, id, "branch"), "candidate\n");
+		await writeFile(join(jobs, id, "origin-tab"), `${tab}\n`);
+		await subscribe(jobs, id, "coordinator-a");
+		await writeFile(join(jobs, id, "state"), "running\n");
+	};
+	const renames = async (): Promise<string[]> => (await readCalls(calls)).filter((call) => call[0] === "tab" && call[1] === "rename").map((call) => call[3] ?? "");
+	await plant("one", "w1:t1");
+	await waitUntilAsync(async () => (await renames()).includes("chat settings · 1 running"));
+	await plant("two", "w1:t1");
+	await waitUntilAsync(async () => (await renames()).includes("chat settings · 2 running"));
+	// A job another tab spawned is not this conversation's count.
+	await plant("three", "w9:t9");
+	await writeFile(join(jobs, "one/state"), "done\n");
+	await waitUntilAsync(async () => (await renames()).includes("chat settings · 1 running"));
+	await writeFile(join(jobs, "two/state"), "done\n");
+	await waitUntilAsync(async () => (await renames()).at(-1) === "chat settings");
+	assert.equal(await readFile(label, "utf8"), "chat settings", "the stem survives every tail rewrite");
+	assert.ok(
+		(await renames()).every((name) => !/running.*running/.test(name)),
+		"a tail is replaced, never stacked",
+	);
+});
+
+test("a tab still carrying herdr's own number is never decorated", async (context) => {
+	stashEnv(context, "LIMEN_JOB", undefined);
+	const root = await import("node:fs/promises").then(({ mkdtemp }) => mkdtemp(join(process.env.TMPDIR ?? "/tmp", "limen-tab-unnamed-")));
+	context.after(() => import("node:fs/promises").then(({ rm }) => rm(root, { recursive: true, force: true })));
+	const calls = join(root, "herdr-calls");
+	await mkdir(calls);
+	const fake = join(root, "herdr");
+	await writeFile(fake, `#!/bin/sh\nprintf '%s\\n' "$@" > "${calls}/call.$$"\n[ "$1 $2" = 'tab get' ] && printf '{"result":{"tab":{"label":"4"}}}'\nexit 0\n`);
+	await chmod(fake, 0o755);
+	stashEnv(context, "LIMEN_HERDR", fake);
+	stashEnv(context, "HERDR_ENV", "1");
+	stashEnv(context, "HERDR_PANE_ID", "w1:p1");
+	stashEnv(context, "HERDR_TAB_ID", "w1:t1");
+	await mkdir(join(root, ".agents/limen"), { recursive: true });
+	const jobs = join(root, ".limen/jobs");
+	const handlers = new Map<string, (event: unknown, context: TestContext) => void>();
+	limenWake({
+		on(event, handler) {
+			handlers.set(event, handler);
+		},
+		sendUserMessage() {},
+	});
+	const session = { cwd: root, isIdle: () => true, sessionManager: sessionManager("coordinator-a"), ui: { notify() {}, setStatus() {} } };
+	handlers.get("session_start")?.({}, session);
+	context.after(() => handlers.get("session_shutdown")?.({}, session));
+	await mkdir(join(jobs, "one"), { recursive: true });
+	await writeFile(join(jobs, "one/label"), "one work\n");
+	await writeFile(join(jobs, "one/branch"), "candidate\n");
+	await writeFile(join(jobs, "one/origin-tab"), "w1:t1\n");
+	await subscribe(jobs, "one", "coordinator-a");
+	await writeFile(join(jobs, "one/state"), "running\n");
+	await waitUntilAsync(async () => (await readCalls(calls)).some((call) => call[0] === "tab" && call[1] === "get"));
+	assert.equal((await readCalls(calls)).filter((call) => call[0] === "tab" && call[1] === "rename").length, 0);
+});
+
 function stashEnv(context: { after(fn: () => void): void }, name: string, value: string | undefined): void {
 	const inherited = process.env[name];
 	if (value === undefined) delete process.env[name];
