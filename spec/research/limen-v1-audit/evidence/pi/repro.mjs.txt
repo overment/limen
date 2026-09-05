@@ -1,0 +1,74 @@
+import fs from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { pathToFileURL } from 'node:url';
+const installed='/Users/overment/.nvm/versions/node/v24.1.0/lib/node_modules/@earendil-works/pi-coding-agent';
+const load=async f=>import(pathToFileURL(`${installed}/${f}`));
+const {AgentSession}=await load('dist/core/agent-session.js');
+const {SessionManager}=await load('dist/core/session-manager.js');
+const {SettingsManager}=await load('dist/core/settings-manager.js');
+const {createExtensionRuntime,loadExtensionFromFactory}=await load('dist/core/extensions/loader.js');
+const {createEventBus}=await load('dist/core/event-bus.js');
+const {Agent}=await load('node_modules/@earendil-works/pi-agent-core/dist/agent.js');
+const {EventStream}=await load('node_modules/@earendil-works/pi-ai/dist/compat.js');
+const {default:wake}=await import('./pinned/hook/wake.ts');
+const {default:steering}=await import('./pinned/hook/steering.ts');
+const {default:hosted}=await import('./pinned/hook/hosted.ts');
+const {default:communication}=await import('./pinned/hook/communication.ts');
+const model={id:'audit-mock',name:'audit',api:'anthropic-messages',provider:'anthropic',baseUrl:'http://invalid.test',reasoning:false,input:['text'],cost:{input:0,output:0,cacheRead:0,cacheWrite:0},contextWindow:200000,maxTokens:4096};
+const usage={input:1,output:1,cacheRead:0,cacheWrite:0,totalTokens:2,cost:{input:0,output:0,cacheRead:0,cacheWrite:0,total:0}};
+const msg=(text,overrides={})=>({role:'assistant',content:[{type:'text',text}],api:model.api,provider:model.provider,model:model.id,usage,stopReason:'stop',timestamp:Date.now(),...overrides});
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const put=(path,text)=>{fs.mkdirSync(join(path,'..'),{recursive:true});fs.writeFileSync(path,text+'\n')};
+const allRoots=[];
+function fixture(job=false){const root=fs.mkdtempSync(join(tmpdir(),'limen-pi-repro-'));allRoots.push(root);fs.mkdirSync(join(root,'.agents/limen'),{recursive:true});for(const k of ['LIMEN_JOB','LIMEN_WAKE','LIMEN_HOSTED','LIMEN_CONTEXT_ROOT','LIMEN_JOB_ID','HERDR_TAB_ID','HERDR_PANE_ID','HERDR_ENV'])delete process.env[k];process.env.LIMEN_HERDR='0';process.env.LIMEN_HOME=join(root,'home');process.env.LIMEN_PACKAGE='/tmp/limen-hooks-audit.BqRlq2/pinned';if(job){process.env.LIMEN_JOB='1';process.env.LIMEN_CONTEXT_ROOT=root;process.env.LIMEN_JOB_ID='job';fs.mkdirSync(join(root,'.limen/jobs/job'),{recursive:true});}return root;}
+async function make(root,factories,{auth=true,responder=()=>msg('ack'),retry=false}={}){
+ const calls=[],errors=[],events=[],apiReturns=[];let extApi;let allowAuth=auth;
+ const runtime=createExtensionRuntime();const bus=createEventBus();let extensions=[];
+ for(const [i,factory]of factories.entries())extensions.push(await loadExtensionFromFactory(pi=>{extApi=pi;factory(pi)},root,bus,runtime,`<audit:${i}>`));
+ const agent=new Agent({initialState:{model},streamFn:(_m,ctx,opts)=>{calls.push(JSON.parse(JSON.stringify(ctx)));const stream=new EventStream(e=>e.type==='done'||e.type==='error',e=>e.type==='error'?e.error:e.message);Promise.resolve().then(()=>responder(calls.length,ctx,opts)).then(message=>{stream.push({type:'start',partial:message});stream.push(message.stopReason==='error'||message.stopReason==='aborted'?{type:'error',reason:message.stopReason,error:message}:{type:'done',reason:message.stopReason,message});});return stream;}});
+ const sm=SessionManager.inMemory(root);const settings=SettingsManager.inMemory({compaction:{enabled:false},retry:{enabled:retry,maxRetries:2,baseDelayMs:1}});
+ const resourceLoader={getExtensions:()=>({extensions,runtime,errors:[]}),getSkills:()=>({skills:[],diagnostics:[]}),getPrompts:()=>({prompts:[],diagnostics:[]}),getThemes:()=>({themes:[],diagnostics:[]}),getAgentsFiles:()=>({agentsFiles:[]}),getSystemPrompt:()=>undefined,getAppendSystemPrompt:()=>[],extendResources(){},reload:async()=>{}};
+ const session=new AgentSession({agent,sessionManager:sm,settingsManager:settings,cwd:root,resourceLoader,modelRuntime:{hasConfiguredAuth:()=>allowAuth,checkAuth:async()=>undefined,isUsingOAuth:()=>false},baseToolsOverride:{}});
+ session.subscribe(e=>events.push(e));
+ return {session,calls,errors,events,sm,api:extApi,auth(v){allowAuth=v},async start(){await session.bindExtensions({onError:e=>errors.push(e),shutdownHandler:()=>events.push({type:'shutdown-request'})});},async close(){await session.extensionRunner.emit({type:'session_shutdown',reason:'quit'});session.dispose();}};
+}
+function completion(root,id,sessionId){const job=join(root,'.limen/jobs',id);put(join(job,'label'),id);put(join(job,'branch'),'limen/audit');put(join(job,'notify/ready'),'1');put(join(job,'notify/subscribers',sessionId),'1');put(join(job,'finished-at'),new Date().toISOString());put(join(job,'state'),'done');return job;}
+function userTexts(s){return s.messages.filter(m=>m.role==='user').map(m=>typeof m.content==='string'?m.content:m.content.filter(p=>p.type==='text').map(p=>p.text).join('\n'));}
+// Actual ExtensionAPI return vs prompt preflight rejection; no model/provider traffic.
+{
+const root=fixture();const h=await make(root,[wake],{auth:false});const job=completion(root,'preflight',h.sm.getSessionId());await h.start();await sleep(650);const claim=join(job,'notify/claims',h.sm.getSessionId());const before={errors:h.errors.map(e=>e.event+': '+e.error),accepted:fs.existsSync(join(claim,'accepted')),calls:h.calls.length};h.auth(true);const old=new Date(Date.now()-61000);fs.utimesSync(claim,old,old);await sleep(1100);console.log('WAKE_REJECTED',JSON.stringify({before,afterAuthRepair:{accepted:fs.existsSync(join(claim,'accepted')),delivered:fs.existsSync(join(job,'notify/delivered',h.sm.getSessionId())),calls:h.calls.length,claimAgeMs:Date.now()-fs.statSync(claim).mtimeMs,liveAgeMs:Date.now()-fs.statSync(join(claim,'live')).mtimeMs}}));await h.close();
+}
+// Steer: real API rejects asynchronously; Limen destroys its pending copy.
+{
+const root=fixture(true);const job=join(root,'.limen/jobs/job');put(join(job,'steer/inbox/0001'),'Keep the change local');const h=await make(root,[steering],{auth:false});await h.start();await sleep(50);console.log('STEER_REJECTED',JSON.stringify({errors:h.errors.map(e=>e.event+': '+e.error),inbox:fs.existsSync(join(job,'steer/inbox/0001')),delivered:fs.existsSync(join(job,'steer/delivered/0001')),calls:h.calls.length}));await h.close();
+}
+// Successful retry still leaves wake.errored latched; it injects the wake again.
+{
+const root=fixture();const h=await make(root,[wake],{retry:true,responder:n=>n===1?msg('',{stopReason:'error',errorMessage:'overloaded_error'}):msg('Acknowledged completion')});const job=completion(root,'transient',h.sm.getSessionId());await h.start();await sleep(700);console.log('WAKE_RETRY_DUPLICATE',JSON.stringify({calls:h.calls.length,wakes:userTexts(h.session).length,assistant:h.events.filter(e=>e.type==='message_end'&&e.message.role==='assistant').map(e=>e.message.stopReason),delivered:fs.existsSync(join(job,'notify/delivered',h.sm.getSessionId()))}));await h.close();
+}
+// Abort is reinjected automatically, even without Pi's provider retry enabled.
+{
+const root=fixture();const h=await make(root,[wake],{responder:n=>n===1?msg('partial',{stopReason:'aborted'}):msg('Unrequested restarted turn')});const job=completion(root,'abort',h.sm.getSessionId());await h.start();await sleep(700);console.log('WAKE_ABORT_RESTART',JSON.stringify({calls:h.calls.length,wakes:userTexts(h.session).length,retryEnabled:h.session.autoRetryEnabled,delivered:fs.existsSync(join(job,'notify/delivered',h.sm.getSessionId()))}));await h.close();
+}
+// Exact text identity fails through a legal input transform.
+{
+const root=fixture();const transform=pi=>pi.on('input',e=>({action:'transform',text:e.text+'\nTransformed for local conventions.'}));const h=await make(root,[wake,transform]);const job=completion(root,'transform',h.sm.getSessionId());await h.start();await sleep(700);console.log('WAKE_TRANSFORM',JSON.stringify({calls:h.calls.length,wakes:userTexts(h.session).length,blocked:fs.existsSync(join(job,'notify/claims',h.sm.getSessionId(),'blocked')),delivered:fs.existsSync(join(job,'notify/delivered',h.sm.getSessionId()))}));await h.close();
+}
+// finish requests deferred shutdown but does not terminate the automatic next model call.
+{
+const root=fixture(true);process.env.LIMEN_HOSTED='1';const h=await make(root,[hosted],{responder:n=>n===1?msg('',{stopReason:'toolUse',content:[{type:'toolCall',id:'finish-1',name:'finish',arguments:{handoff:'The actual handoff'}}]}):msg('Extra post-finish response')});await h.start();await h.session.prompt('Finish the task');console.log('FINISH_EXTRA_CALL',JSON.stringify({messages:h.session.messages,errors:h.errors,calls:h.calls.length,shutdowns:h.events.filter(e=>e.type==='shutdown-request').length,result:fs.existsSync(join(root,'.limen/jobs/job/result'))?fs.readFileSync(join(root,'.limen/jobs/job/result'),'utf8').trim():null,toolResults:h.session.messages.filter(m=>m.role==='toolResult'),tools:h.session.getActiveToolNames(),lastAssistant:h.session.getLastAssistantText()}));await h.close();
+}
+// Public reload emits shutdown but does not end the session; hosted leaves a terminal marker.
+{
+const root=fixture(true);process.env.LIMEN_HOSTED='1';const h=await make(root,[hosted]);await h.start();await h.session.reload();await h.session.prompt('Keep working after reload');console.log('HOSTED_RELOAD',JSON.stringify({callsAfterReload:h.calls.length,shutdownRequests:h.events.filter(e=>e.type==='shutdown-request').length,sessionEnded:fs.existsSync(join(root,'.limen/jobs/job/session-ended')),lastAssistant:h.session.getLastAssistantText()}));await h.close();
+}
+// A scratch wrapper adds Pi's documented terminate result, leaving the actual finish implementation intact.
+{
+const root=fixture(true);process.env.LIMEN_HOSTED='1';const terminating=pi=>hosted({...pi,registerTool:t=>pi.registerTool({...t,execute:async(...args)=>({...await t.execute(...args),terminate:true})})});const h=await make(root,[terminating],{responder:n=>msg('',{stopReason:'toolUse',content:[{type:'toolCall',id:'finish-1',name:'finish',arguments:{handoff:'The actual handoff'}}]})});await h.start();await h.session.prompt('Finish the task');console.log('FINISH_TERMINATE_CONTROL',JSON.stringify({calls:h.calls.length,shutdowns:h.events.filter(e=>e.type==='shutdown-request').length,result:fs.readFileSync(join(root,'.limen/jobs/job/result'),'utf8').trim()}));await h.close();
+}
+// Queued follow-up bypasses before_agent_start, leaving Limen without the promised wake cue.
+{
+const root=fixture();let gate;const pause=new Promise(r=>gate=r);let h;h=await make(root,[communication],{responder:async n=>{if(n===1)await pause;return msg('ack')}});await h.start();const running=h.session.prompt('human question');while(h.calls.length===0)await sleep(1);h.api.sendUserMessage('Limen job "queued wake" is done',{deliverAs:'followUp'});await sleep(5);gate();await running;console.log('BUSY_WAKE_CUE',JSON.stringify({calls:h.calls.length,users:userTexts(h.session),cueCount:h.session.messages.filter(m=>m.role==='custom').length,wakeCuePresent:h.calls[1].messages.some(m=>JSON.stringify(m).includes('opened by a job wake'))}));await h.close();
+}
+for(const root of allRoots)fs.rmSync(root,{recursive:true,force:true});
