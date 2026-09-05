@@ -8,6 +8,7 @@
 - 2026-09-05 Alice audit: a worker falsifies its own candidate, proof belongs to the commit it proves, and the stall becomes a signal rather than another rule. F076–F083.
 - Research default pair: `gpt-5.6-sol:xhigh` and `grok-4.6:xhigh`. Quality: `gpt-5.6-sol:xhigh`. Picture: `gpt-5.6-sol`.
 - Coordinator CPU workers and later resumes use `openai-codex/gpt-6-astra:xhigh` at the owner's request; the explicit provider avoids the Batch-only fuzzy match.
+- Owner-requested Limen v1 integration audit: all research and judge jobs use `openai-codex/gpt-6-astra:xhigh`; no implementation or feature-state changes.
 
 ## NOW
 
