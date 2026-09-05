@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { appendFile, open, readdir, readFile, rename, rm } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { containEscapedDescendants, discoverEscapedDescendants, processAlive, processInfo, signalProcessGroup } from "./contain.ts";
-import { commitList } from "./git.ts";
+import { changedFileCount, commitList } from "./git.ts";
 import { settleJobTab } from "./herdr.ts";
 import { createClaudeStreamParser, createStreamParser, type StreamEvent } from "./stream.ts";
 
@@ -210,9 +210,11 @@ async function recordEvents(jobDir: string, events: readonly StreamEvent[], next
 			await atomicWrite(`${jobDir}/last-tool`, `${event.name}\n`);
 			await atomicWrite(`${jobDir}/activity`, "tool\n");
 			await atomicWrite(`${jobDir}/tool-calls`, `${nextCount()}\n`);
+			await recordChangedFiles(jobDir);
 			await appendFile(`${jobDir}/log`, event.detail ? `${event.name} ${event.detail}\n` : `${event.name}\n`);
 		} else if (event.kind === "activity") {
 			await atomicWrite(`${jobDir}/activity`, `${event.name}\n`);
+			await recordChangedFiles(jobDir);
 			if (seen.activity !== event.name) await appendFile(`${jobDir}/log`, `${(seen.activity = event.name)}\n`);
 		} else if (event.kind === "session") {
 			await atomicWrite(`${jobDir}/claude-session`, `${event.id}\n`);
@@ -222,6 +224,11 @@ async function recordEvents(jobDir: string, events: readonly StreamEvent[], next
 			if (event.text) await appendFile(`${jobDir}/log`, `${event.text}\n`);
 		} else await appendFile(`${jobDir}/log`, `${event.line}\n`);
 	}
+}
+async function recordChangedFiles(jobDir: string): Promise<void> {
+	const count = changedFileCount(await textFile(`${jobDir}/worktree`));
+	if (count === undefined) await rm(`${jobDir}/changed-files`, { force: true });
+	else await atomicWrite(`${jobDir}/changed-files`, `${count}\n`);
 }
 export async function textFile(path: string): Promise<string> {
 	return readFile(path, "utf8").then(

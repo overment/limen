@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
-import { chmod, mkdir, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import test from "node:test";
-import { limen, limenWithEnv, scratchRepo } from "./scratch.ts";
+import { limen, limenWithEnv, onlyJobId, scratchRepo, waitForState, writeFakePi } from "./scratch.ts";
 
 test("malformed records are informational and do not get rewritten", async (context) => {
 	const scratch = await scratchRepo();
@@ -298,3 +298,86 @@ test("jobs reports an empty set before init", async (context) => {
 	assert.equal(result.status, 0, result.stderr);
 	assert.equal(result.stdout, "no jobs\n");
 });
+
+test("a running job line shows the sampled changed-file count", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	limen(scratch, "init");
+	const job = join(scratch.root, ".limen/jobs/files");
+	await mkdir(job);
+	await writeFile(join(job, "task.md"), "edit\n");
+	await writeFile(join(job, "state"), "running\n");
+	await writeFile(join(job, "label"), "F079 files\n");
+	await writeFile(join(job, "branch"), "limen/files\n");
+	await writeFile(join(job, "log"), "think\n");
+	await writeFile(join(job, "activity"), "think\n");
+	await writeFile(join(job, "tool-calls"), "4\n");
+	await writeFile(join(job, "changed-files"), "3\n");
+	const dirty = limen(scratch, "jobs");
+	assert.equal(dirty.status, 0, dirty.stderr);
+	assert.match(dirty.stdout, /RUNNING F079 files/);
+	assert.match(dirty.stdout, /tools 4 · files 3/);
+	const human = limenWithEnv(scratch, { LIMEN_VIEW: "human" }, "jobs");
+	assert.equal(human.status, 0, human.stderr);
+	assert.match(human.stdout, /4 tools · 3 files/);
+	await writeFile(join(job, "changed-files"), "0\n");
+	const clean = limen(scratch, "jobs");
+	assert.equal(clean.status, 0, clean.stderr);
+	assert.match(clean.stdout, /tools 4 · files 0/);
+	await rm(join(job, "changed-files"));
+	const gone = limen(scratch, "jobs");
+	assert.equal(gone.status, 0, gone.stderr);
+	assert.doesNotMatch(gone.stdout, /files \d/);
+	assert.doesNotMatch(gone.stderr, /changed-files|ENOENT|worktree/);
+});
+
+test("activity sampling records how many files the worktree has changed", async (context) => {
+	const dirtyPi = `#!/usr/bin/env node
+const { writeFileSync } = require("node:fs");
+process.on("SIGTERM", () => process.exit(0));
+writeFileSync("edited.txt", "hello\\n");
+console.log(JSON.stringify({ type: "agent_start" }));
+console.log(JSON.stringify({ type: "tool_execution_start", toolName: "bash", args: { command: "echo" } }));
+setInterval(() => {}, 1000);
+`;
+	const cleanPi = `#!/usr/bin/env node
+process.on("SIGTERM", () => process.exit(0));
+console.log(JSON.stringify({ type: "agent_start" }));
+console.log(JSON.stringify({ type: "tool_execution_start", toolName: "read", args: { path: "README.md" } }));
+setInterval(() => {}, 1000);
+`;
+	const scratch = await scratchRepo(dirtyPi);
+	context.after(scratch.cleanup);
+	limen(scratch, "init");
+	const dirtyId = onlyJobId(limen(scratch, "spawn", "--label", "F079 dirty", "edit a file").stdout);
+	await waitForRecordedCount(scratch.root, dirtyId, "1");
+	const dirty = limen(scratch, "jobs");
+	assert.equal(dirty.status, 0, dirty.stderr);
+	assert.match(dirty.stdout, /RUNNING F079 dirty/);
+	assert.match(dirty.stdout, /files 1/);
+	limen(scratch, "stop", dirtyId, "sampled dirty");
+	await waitForState(scratch.root, dirtyId, "stopped");
+	await writeFakePi(scratch.fakeBin, cleanPi);
+	const cleanId = onlyJobId(limen(scratch, "spawn", "--label", "F079 clean", "keep reading").stdout);
+	await waitForRecordedCount(scratch.root, cleanId, "0");
+	const clean = limen(scratch, "jobs");
+	assert.equal(clean.status, 0, clean.stderr);
+	assert.match(clean.stdout, /RUNNING F079 clean/);
+	assert.match(clean.stdout, /files 0/);
+	limen(scratch, "stop", cleanId, "sampled clean");
+	await waitForState(scratch.root, cleanId, "stopped");
+});
+
+async function waitForRecordedCount(root: string, id: string, expected: string): Promise<void> {
+	const path = join(root, ".limen/jobs", id, "changed-files");
+	const deadline = Date.now() + 10_000;
+	while (Date.now() < deadline) {
+		const value = await readFile(path, "utf8").then(
+			(text) => text.trim(),
+			() => "",
+		);
+		if (value === expected) return;
+		await new Promise((resolve) => setTimeout(resolve, 25));
+	}
+	throw new Error(`job ${id} did not record changed-files ${JSON.stringify(expected)}`);
+}

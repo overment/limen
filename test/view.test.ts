@@ -28,6 +28,15 @@ test("a running human row is glyph, label, suffix, then live facts", () => {
 	assert.equal(row, `● ${"F051 readable jobs".padEnd(20)}  ${"ab12cd34".padEnd(12)}  12m · bash · 24 tools`);
 });
 
+test("a running human row names how many files the job has changed", () => {
+	const dirty = humanRow(record("running", { pulse: "tool", lastTool: "bash", toolCalls: 24, changedFiles: 3, elapsedMs: 720_000, silentMs: 3_000 }), 20, plain);
+	assert.equal(dirty, `● ${"F051 readable jobs".padEnd(20)}  ${"ab12cd34".padEnd(12)}  12m · bash · 24 tools · 3 files`);
+	const clean = humanRow(record("running", { pulse: "think", toolCalls: 4, changedFiles: 0, elapsedMs: 60_000, silentMs: 0 }), 20, plain);
+	assert.equal(clean, `● ${"F051 readable jobs".padEnd(20)}  ${"ab12cd34".padEnd(12)}  1m · think · 4 tools · 0 files`);
+	const missing = humanRow(record("running", { pulse: "think", toolCalls: 4, elapsedMs: 60_000, silentMs: 0 }), 20, plain);
+	assert.equal(missing, `● ${"F051 readable jobs".padEnd(20)}  ${"ab12cd34".padEnd(12)}  1m · think · 4 tools`);
+});
+
 test("a terminal human row carries age, duration, work, and flags once each", () => {
 	const done = humanRow(record("done", { toolCalls: 82, commitCount: 1, elapsedMs: 2_040_000, ageMs: 4 * 86_400_000, hosted: true }), 20, plain);
 	assert.equal(done, `✓ ${"F051 readable jobs".padEnd(20)}  ${"ab12cd34".padEnd(12)}  4d ago · 34m · 82 tools · 1 commit · hosted`);

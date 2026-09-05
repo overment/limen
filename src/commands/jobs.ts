@@ -92,8 +92,9 @@ async function renderJobDirectory(root: string, jobsRoot: string, id: string, de
 		advisory = "",
 		parent = "",
 		engine = "",
+		changedFilesText,
 	] = await Promise.all(
-		"state label branch repo pid started-at finished-at tool-calls last-tool activity hosted candidate advisory parent engine"
+		"state label branch repo pid started-at finished-at tool-calls last-tool activity hosted candidate advisory parent engine changed-files"
 			.split(" ")
 			.map((field) => text(`${jobDir}/${field}`)),
 	);
@@ -125,12 +126,14 @@ async function renderJobDirectory(root: string, jobsRoot: string, id: string, de
 		const alive = hosted ? hostedAlive || processAlive : processAlive;
 		const pulse = job.phase === "running" ? derivePulse({ alive, ...(job.pid !== undefined ? { pid: job.pid } : {}), ...(activity ? { activity } : {}) }) : undefined;
 		const recordedTools = toolCalls ? recordedCount(toolCalls) : undefined;
+		const liveFiles = job.phase === "running" && changedFilesText ? { changedFiles: recordedCount(changedFilesText, "changed-files") } : {};
 		const empty = job.phase !== "running" && producedNothing(recordedTools, commitsStat ? commits : undefined);
 		const diffstat = detailed ? liveDiffstat(repo ? workspaceRepository(root, repo) : root, branch) : "";
 		const rendered = renderJob(job, {
 			elapsedMs: observedAt - startedAt.getTime(),
 			silentMs: observedAt - logStat.mtimeMs,
 			...(recordedTools !== undefined ? { toolCalls: recordedTools } : {}),
+			...liveFiles,
 			...(empty ? { producedNothing: true } : {}),
 			...(lastTool ? { lastTool: display(lastTool) } : {}),
 			...(job.phase === "running" && pulse ? { pulse, processAlive: alive } : {}),
@@ -161,6 +164,7 @@ async function renderJobDirectory(root: string, jobsRoot: string, id: string, de
 			job,
 			...(pulse ? { pulse } : {}),
 			...(recordedTools !== undefined ? { toolCalls: recordedTools } : {}),
+			...liveFiles,
 			...(empty ? { producedNothing: true } : {}),
 			...(lastTool ? { lastTool: display(lastTool) } : {}),
 			...((job.phase === "failed" || job.phase === "stopped") && reason && reason !== "see log" ? { reason } : {}),
@@ -219,9 +223,9 @@ function recordedDate(value: string, fallback: Date, name: string): Date {
 	if (Number.isNaN(date.getTime())) throw new Error(`invalid ${name} ${JSON.stringify(value.slice(0, 160))}`);
 	return date;
 }
-function recordedCount(value: string): number {
+function recordedCount(value: string, name = "tool-calls"): number {
 	const count = Number(value);
-	if (!Number.isSafeInteger(count) || count < 0) throw new Error(`invalid tool-calls ${JSON.stringify(value.slice(0, 160))}`);
+	if (!Number.isSafeInteger(count) || count < 0) throw new Error(`invalid ${name} ${JSON.stringify(value.slice(0, 160))}`);
 	return count;
 }
 async function readLog(path: string): Promise<{ tail: string; detail: string }> {
