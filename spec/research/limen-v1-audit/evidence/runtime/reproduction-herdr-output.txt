@@ -1,0 +1,4 @@
+(node:65315) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+MOVED_PLACE {"opened":"focused moved worker","pane":"w2:p2\n","tab":"w1:t1\n","workspace":"w1\n","calls":[["agent","get","w1:p1"],["agent","get","w1:p1"],["agent","list"],["tab","get","w1:t1"],["tab","focus","w1:t1"],["agent","get","w2:p2"],["tab","close","w1:t1"]]}
+DELTA_GIT_COST {"messageUpdates":50,"gitStatusCalls":51}

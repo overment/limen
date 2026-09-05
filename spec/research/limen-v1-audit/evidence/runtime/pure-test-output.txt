@@ -1,0 +1,20 @@
+(node:39320) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ duration parsing is explicit and bounded (0.588958ms)
+✔ jobs use one discriminated union and derived display facts (0.2505ms)
+✔ pulse is observed activity and liveness, never a timer (0.063667ms)
+✔ a running job with no pid is the handshake, not invalid (0.122041ms)
+✔ job ids resolve uniquely by suffix or label (0.187ms)
+(node:39321) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ json events become a human log and last-tool names (0.818125ms)
+✔ assistantStopReason keeps only error and aborted (0.070458ms)
+✔ claude events become the same log, tool names, and one closing result (0.188416ms)
+ℹ tests 8
+ℹ suites 0
+ℹ pass 8
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 494.804708

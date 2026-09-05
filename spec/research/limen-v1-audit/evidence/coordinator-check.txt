@@ -1,0 +1,152 @@
+npm warn Unknown user config "min-release-age". This will stop working in the next major version of npm.
+
+> @overment/limen@0.1.0 check
+> tsc --noEmit && biome check . && node --test --test-concurrency=1 --test-timeout=60000 test/*.test.ts
+
+.limen/jobs/2026-09-05-f085-coordinator-cpu-resume-2-a6845681/evidence/cpu-summary.json format ━━━━━━━━━━
+
+  × Formatter would have printed the following content:
+  
+     1  1 │   {
+     2    │ - ··"candidate":·"a48202003436520932a905def91650598d216917",
+     3    │ - ··"git_status_before":·"",
+     4    │ - ··"pi":·"/Users/overment/.nvm/versions/node/v24.1.0/bin/pi",
+     5    │ - ··"pi_version":·"0.85.1",
+     6    │ - ··"platform":·"Darwin·Adams-MacBook-Pro.local·25.5.0·Darwin·Kernel·Version·25.5.0:·Tue·Jun··9·22:28:34·PDT·2026;·root:xnu-12377.121.10~1/RELEASE_ARM64_T6041·arm64",
+     7    │ - ··"fixture":·"/var/folders/_2/zg9lhmwx3c53w15w_vp606340000gn/T/limen-f085-real-pi-19gx4bbl",
+     8    │ - ··"settled_records":·475,
+     9    │ - ··"sampling_seconds_per_phase":·60,
+    10    │ - ··"sampling_interval_seconds":·1,
+    11    │ - ··"running_record":·"controlled·record·backed·by·a·real·idle·Pi·process,·with·20Hz·synthetic·activity/last-tool/changed-files·writes;·not·a·spawned·model·task",
+    12    │ - ··"herdr":·"disabled",
+    13    │ - ··"provider_calls":·0,
+    14    │ - ··"coordinator":·{
+    15    │ - ····"pid":·70382,
+    16    │ - ····"command":·[
+    17    │ - ······"/Users/overment/.nvm/versions/node/v24.1.0/bin/pi",
+    18    │ - ······"--no-extensions",
+    19    │ - ······"--no-skills",
+    20    │ - ······"--no-prompt-templates",
+    21    │ - ······"--no-themes",
+    22    │ - ······"--no-context-files",
+    23    │ - ······"--no-session",
+    24    │ - ······"--offline",
+    25    │ - ······"--approve",
+    26    │ - ······"-e",
+    27    │ - ······"/Users/overment/.overment/.limen-limen-worktrees/2026-09-05-f085-coordinators-stop-burning-c-48858d92/hook/wake.ts"
+    28    │ - ····]
+    29    │ - ··},
+    30    │ - ··"first_stamp":·"2026-09-05T17:03:40.386Z\n01a07286-9b11-7497-9a0e-e14124b33588\n",
+    31    │ - ··"idle":·{
+    32    │ - ····"samples":·61,
+    33    │ - ····"elapsed_seconds":·60.084167167078704,
+    34    │ - ····"mean_cpu_percent":·0.13442622950819672,
+    35    │ - ····"max_cpu_percent":·2.4,
+    36    │ - ····"threshold":·5,
+    37    │ - ····"every_sample_below_threshold":·true,
+    38    │ - ····"last_sweep":·"2026-09-05T17:04:40.489Z\n01a07286-9b11-7497-9a0e-e14124b33588\n"
+    39    │ - ··},
+    40    │ - ··"worker":·{
+    41    │ - ····"pid":·95217,
+    42    │ - ····"command":·[
+    43    │ - ······"/Users/overment/.nvm/versions/node/v24.1.0/bin/pi",
+    44    │ - ······"--no-extensions",
+    45    │ - ······"--no-skills",
+    46    │ - ······"--no-prompt-templates",
+    47    │ - ······"--no-themes",
+    48    │ - ······"--no-context-files",
+    49    │ - ······"--no-session",
+    50    │ - ······"--offline",
+    51    │ - ······"--approve"
+    52    │ - ····]
+    53    │ - ··},
+    54    │ - ··"one-running":·{
+    55    │ - ····"samples":·61,
+    56    │ - ····"elapsed_seconds":·60.11156237509567,
+    57    │ - ····"mean_cpu_percent":·0.680327868852459,
+    58    │ - ····"max_cpu_percent":·10.1,
+    59    │ - ····"threshold":·25,
+    60    │ - ····"every_sample_below_threshold":·true,
+    61    │ - ····"last_sweep":·"2026-09-05T17:05:40.583Z\n01a07286-9b11-7497-9a0e-e14124b33588\n"
+    62    │ - ··},
+    63    │ - ··"git_status_after":·"",
+    64    │ - ··"result":·"PASS",
+    65    │ - ··"child_exit_codes":·[
+    66    │ - ····-9,
+    67    │ - ····-9
+    68    │ - ··]
+        2 │ + → "candidate":·"a48202003436520932a905def91650598d216917",
+        3 │ + → "git_status_before":·"",
+        4 │ + → "pi":·"/Users/overment/.nvm/versions/node/v24.1.0/bin/pi",
+        5 │ + → "pi_version":·"0.85.1",
+        6 │ + → "platform":·"Darwin·Adams-MacBook-Pro.local·25.5.0·Darwin·Kernel·Version·25.5.0:·Tue·Jun··9·22:28:34·PDT·2026;·root:xnu-12377.121.10~1/RELEASE_ARM64_T6041·arm64",
+        7 │ + → "fixture":·"/var/folders/_2/zg9lhmwx3c53w15w_vp606340000gn/T/limen-f085-real-pi-19gx4bbl",
+        8 │ + → "settled_records":·475,
+        9 │ + → "sampling_seconds_per_phase":·60,
+       10 │ + → "sampling_interval_seconds":·1,
+       11 │ + → "running_record":·"controlled·record·backed·by·a·real·idle·Pi·process,·with·20Hz·synthetic·activity/last-tool/changed-files·writes;·not·a·spawned·model·task",
+       12 │ + → "herdr":·"disabled",
+       13 │ + → "provider_calls":·0,
+       14 │ + → "coordinator":·{
+       15 │ + → → "pid":·70382,
+       16 │ + → → "command":·[
+       17 │ + → → → "/Users/overment/.nvm/versions/node/v24.1.0/bin/pi",
+       18 │ + → → → "--no-extensions",
+       19 │ + → → → "--no-skills",
+       20 │ + → → → "--no-prompt-templates",
+       21 │ + → → → "--no-themes",
+       22 │ + → → → "--no-context-files",
+       23 │ + → → → "--no-session",
+       24 │ + → → → "--offline",
+       25 │ + → → → "--approve",
+       26 │ + → → → "-e",
+       27 │ + → → → "/Users/overment/.overment/.limen-limen-worktrees/2026-09-05-f085-coordinators-stop-burning-c-48858d92/hook/wake.ts"
+       28 │ + → → ]
+       29 │ + → },
+       30 │ + → "first_stamp":·"2026-09-05T17:03:40.386Z\n01a07286-9b11-7497-9a0e-e14124b33588\n",
+       31 │ + → "idle":·{
+       32 │ + → → "samples":·61,
+       33 │ + → → "elapsed_seconds":·60.084167167078704,
+       34 │ + → → "mean_cpu_percent":·0.13442622950819672,
+       35 │ + → → "max_cpu_percent":·2.4,
+       36 │ + → → "threshold":·5,
+       37 │ + → → "every_sample_below_threshold":·true,
+       38 │ + → → "last_sweep":·"2026-09-05T17:04:40.489Z\n01a07286-9b11-7497-9a0e-e14124b33588\n"
+       39 │ + → },
+       40 │ + → "worker":·{
+       41 │ + → → "pid":·95217,
+       42 │ + → → "command":·[
+       43 │ + → → → "/Users/overment/.nvm/versions/node/v24.1.0/bin/pi",
+       44 │ + → → → "--no-extensions",
+       45 │ + → → → "--no-skills",
+       46 │ + → → → "--no-prompt-templates",
+       47 │ + → → → "--no-themes",
+       48 │ + → → → "--no-context-files",
+       49 │ + → → → "--no-session",
+       50 │ + → → → "--offline",
+       51 │ + → → → "--approve"
+       52 │ + → → ]
+       53 │ + → },
+       54 │ + → "one-running":·{
+       55 │ + → → "samples":·61,
+       56 │ + → → "elapsed_seconds":·60.11156237509567,
+       57 │ + → → "mean_cpu_percent":·0.680327868852459,
+       58 │ + → → "max_cpu_percent":·10.1,
+       59 │ + → → "threshold":·25,
+       60 │ + → → "every_sample_below_threshold":·true,
+       61 │ + → → "last_sweep":·"2026-09-05T17:05:40.583Z\n01a07286-9b11-7497-9a0e-e14124b33588\n"
+       62 │ + → },
+       63 │ + → "git_status_after":·"",
+       64 │ + → "result":·"PASS",
+       65 │ + → "child_exit_codes":·[-9,·-9]
+    69 66 │   }
+    70 67 │   
+  
+
+Checked 67 files in 282ms. No fixes applied.
+Found 1 error.
+check ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  × Some errors were emitted while running checks.
+  
+

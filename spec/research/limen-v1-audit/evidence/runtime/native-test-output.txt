@@ -1,0 +1,155 @@
+{"command":["/Users/overment/.nvm/versions/node/v24.1.0/bin/node","--test","--test-concurrency=1","--test-timeout=60000","test/continue-command.test.ts","test/diff-command.test.ts","test/finalize.test.ts","test/hosted-spawn.test.ts","test/init-command.test.ts","test/job.test.ts","test/jobs-command.test.ts","test/linear-command.test.ts","test/open-command.test.ts","test/prune-command.test.ts","test/reaper.test.ts","test/spawn-command.test.ts","test/steer-command.test.ts","test/stop-command.test.ts","test/stream.test.ts","test/sweep-command.test.ts","test/view.test.ts","test/wait-command.test.ts","test/watch-command.test.ts","test/workspace-command.test.ts"]}
+(node:18699) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ continue resumes a finished job in its own session and links the record (25449.352667ms)
+✔ continue without --review loads the parent role preamble (13159.630959ms)
+✔ continue refuses a running job and a pruned worktree without writing records (16904.965834ms)
+✔ workspace continue copies repo so jobs diffs the child (19326.890917ms)
+✔ continue --detached stays a wrapper even in Herdr (18619.847334ms)
+✔ LIMEN_PREFLIGHT=auth fails continue with no record (11947.264417ms)
+✔ hosted continue start failure finalizes the child record (16570.517375ms)
+(node:47347) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✖ diff resolves a pruned job and prints its exact recorded changeset (20569.383042ms)
+✖ diff does not launch hunk without a TTY and fresh jobs record its version (21066.3265ms)
+✖ diff opens one Herdr review tab, focuses it again, and close sweeps it (16816.268208ms)
+✔ diff watches a running job from its live worktree without touching the job (15933.171125ms)
+✔ diff requires one job selector (3127.086584ms)
+(node:69767) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ finalizeJob writes state before a hanging rename, once, and sweeps leftovers (2953.063833ms)
+✔ a provider-error stream fails with its stop reason and preserves prior commits (12528.671416ms)
+✔ an aborted stream fails with its stop reason (10309.107041ms)
+✔ a recovered provider error follows the clean final turn (13667.782041ms)
+✔ a clean run writes no stop-reason (13770.54175ms)
+✔ an unseen steer is counted at finalize (11482.472083ms)
+✔ exhaustion finalizes failed while tab close hangs (13047.515333ms)
+✔ limen stop leaves one finished-at and one terminal state line (14350.474792ms)
+(node:97275) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ hosted completion is session end or vanished agent, not Herdr idle (0.581291ms)
+✔ hosted result capture follows the last assistant stop reason (5.480916ms)
+✔ hosted result capture keeps a tool-written result over later assistant text (2.27575ms)
+✔ hosted idle bound defaults to 60s and re-ring to 15m (0.140583ms)
+✔ noteHostedIdle finalizes a clean idle turn with no tool call and writes no advisory (3312.124958ms)
+✔ noteHostedIdle finalizes a clean tool-using turn without claiming the session ended (2909.660542ms)
+✔ noteHostedIdle writes one stall marker, skips zero tools, and re-arms after working (15.108667ms)
+✖ test/hosted-spawn.test.ts (7375.974125ms)
+✖ test/init-command.test.ts
+✖ test/job.test.ts
+✖ test/jobs-command.test.ts
+✖ test/linear-command.test.ts
+✖ test/open-command.test.ts
+✖ test/prune-command.test.ts
+✖ test/reaper.test.ts
+✖ test/spawn-command.test.ts
+✖ test/steer-command.test.ts
+✖ test/stop-command.test.ts
+✖ test/stream.test.ts
+✖ test/sweep-command.test.ts
+✖ test/view.test.ts
+✖ test/wait-command.test.ts
+✖ test/watch-command.test.ts
+✖ test/workspace-command.test.ts
+ℹ tests 44
+ℹ suites 0
+ℹ pass 24
+ℹ fail 3
+ℹ cancelled 17
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 300914.738
+
+✖ failing tests:
+
+test at test/diff-command.test.ts:7:1
+✖ diff resolves a pruned job and prints its exact recorded changeset (20569.383042ms)
+  Error: job 2026-09-05-f050-fallback-1f317c7e did not reach done
+      at waitForState (file:///private/tmp/limen-runtime-audit.s79R5Y/limen/test/scratch.ts:142:8)
+      at async TestContext.<anonymous> (file:///private/tmp/limen-runtime-audit.s79R5Y/limen/test/diff-command.test.ts:12:2)
+      at async Test.run (node:internal/test_runner/test:1069:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:332:3)
+
+test at test/diff-command.test.ts:24:1
+✖ diff does not launch hunk without a TTY and fresh jobs record its version (21066.3265ms)
+  Error: job 2026-09-05-f050-no-tty-2a7323a3 did not reach done
+      at waitForState (file:///private/tmp/limen-runtime-audit.s79R5Y/limen/test/scratch.ts:142:8)
+      at async TestContext.<anonymous> (file:///private/tmp/limen-runtime-audit.s79R5Y/limen/test/diff-command.test.ts:41:2)
+      at async Test.run (node:internal/test_runner/test:1069:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:752:7)
+
+test at test/diff-command.test.ts:51:1
+✖ diff opens one Herdr review tab, focuses it again, and close sweeps it (16816.268208ms)
+  Error: job 2026-09-05-f050-review-3c85da88 did not reach done
+      at waitForState (file:///private/tmp/limen-runtime-audit.s79R5Y/limen/test/scratch.ts:142:8)
+      at async TestContext.<anonymous> (file:///private/tmp/limen-runtime-audit.s79R5Y/limen/test/diff-command.test.ts:59:2)
+      at async Test.run (node:internal/test_runner/test:1069:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:752:7)
+
+test at test/hosted-spawn.test.ts:1:1
+✖ test/hosted-spawn.test.ts (7375.974125ms)
+  'Promise resolution is still pending but the event loop has already resolved'
+
+test at test/init-command.test.ts:1:1
+✖ test/init-command.test.ts
+  'Promise resolution is still pending but the event loop has already resolved'
+
+test at test/job.test.ts:1:1
+✖ test/job.test.ts
+  'Promise resolution is still pending but the event loop has already resolved'
+
+test at test/jobs-command.test.ts:1:1
+✖ test/jobs-command.test.ts
+  'Promise resolution is still pending but the event loop has already resolved'
+
+test at test/linear-command.test.ts:1:1
+✖ test/linear-command.test.ts
+  'Promise resolution is still pending but the event loop has already resolved'
+
+test at test/open-command.test.ts:1:1
+✖ test/open-command.test.ts
+  'Promise resolution is still pending but the event loop has already resolved'
+
+test at test/prune-command.test.ts:1:1
+✖ test/prune-command.test.ts
+  'Promise resolution is still pending but the event loop has already resolved'
+
+test at test/reaper.test.ts:1:1
+✖ test/reaper.test.ts
+  'Promise resolution is still pending but the event loop has already resolved'
+
+test at test/spawn-command.test.ts:1:1
+✖ test/spawn-command.test.ts
+  'Promise resolution is still pending but the event loop has already resolved'
+
+test at test/steer-command.test.ts:1:1
+✖ test/steer-command.test.ts
+  'Promise resolution is still pending but the event loop has already resolved'
+
+test at test/stop-command.test.ts:1:1
+✖ test/stop-command.test.ts
+  'Promise resolution is still pending but the event loop has already resolved'
+
+test at test/stream.test.ts:1:1
+✖ test/stream.test.ts
+  'Promise resolution is still pending but the event loop has already resolved'
+
+test at test/sweep-command.test.ts:1:1
+✖ test/sweep-command.test.ts
+  'Promise resolution is still pending but the event loop has already resolved'
+
+test at test/view.test.ts:1:1
+✖ test/view.test.ts
+  'Promise resolution is still pending but the event loop has already resolved'
+
+test at test/wait-command.test.ts:1:1
+✖ test/wait-command.test.ts
+  'Promise resolution is still pending but the event loop has already resolved'
+
+test at test/watch-command.test.ts:1:1
+✖ test/watch-command.test.ts
+  'Promise resolution is still pending but the event loop has already resolved'
+
+test at test/workspace-command.test.ts:1:1
+✖ test/workspace-command.test.ts
+  'Promise resolution is still pending but the event loop has already resolved'
