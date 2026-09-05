@@ -12,6 +12,8 @@
 - `F048-hosted-runtime-start` (🟠 ACTIVE): spawn prints the ID in seconds; the detached supervisor starts pi and owns the job. This closes the live 2026-08-27 caller-timeout orphaning before F049.
 - `F074-claude-perspective` (🟠 ACTIVE): a detached job runs on Claude instead of Pi, so the coordinator can buy a perspective on interface and feature shape. Interleaves with the seat work; gates nothing.
 - `F081-spawn-refuses-an-unusable-route` (🟠 ACTIVE): spawn rejects an unusable route before planting a job; boundary: spawn preflight and hosted-start argument transport, with no retries or model selection.
+- `F078-a-picture-is-evidence-when-seen` (🟠 ACTIVE): visual evidence names what an opened frame showed; boundary: `templates/worker.md` and `templates/reviewer.md`, with no capture or image-comparison helper.
+- `F083-spec-folder-says-one-thing-once` (🟠 ACTIVE): specs keep one rule and one check per line and delete superseded files; boundary: `templates/communication.md` and `templates/agents.md`, with no validator.
 
 ## NEXT
 
@@ -19,8 +21,6 @@
 - `F013-remote-seat` (PLANNED): one disk, attach don’t clone; docs and seat-shaped guarantees. Before F014.
 - `F014-github-doorbell` (PLANNED): mention or label starts a job on the seat; comment back evidence; merge stays human.
 - `F075-closing-overview` (🔴 PLANNED): the coordinator closes with where we are whenever it hands back with work in flight. Register rule plus the per-turn cue; no new state.
-- `F078-a-picture-is-evidence-when-seen` (🔴 PLANNED): a cited screenshot was opened, and frames that should differ and do not are a failed check. Sequenced after F077; same templates.
-- `F083-spec-folder-says-one-thing-once` (🔴 PLANNED): one check per acceptance line, one constraint per handoff line, and a superseded file is deleted.
 
 ## PROVEN
 
