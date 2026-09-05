@@ -189,6 +189,9 @@ test("worker stays off the board and inside reading and check budgets", async ()
 		"no two lanes in parallel",
 		"install from the lockfile",
 		"never a symlink to another checkout",
+		"acceptance line most likely to be false",
+		"the check that would catch it",
+		"a suite that only passes is not evidence",
 		"more than the seam the handoff names",
 		"write the question to a plain file",
 	])
