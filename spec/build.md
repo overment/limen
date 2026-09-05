@@ -12,7 +12,6 @@
 - `F048-hosted-runtime-start` (🟠 ACTIVE): spawn prints the ID in seconds; the detached supervisor starts pi and owns the job. This closes the live 2026-08-27 caller-timeout orphaning before F049.
 - `F074-claude-perspective` (🟠 ACTIVE): a detached job runs on Claude instead of Pi, so the coordinator can buy a perspective on interface and feature shape. Interleaves with the seat work; gates nothing.
 - `F081-spawn-refuses-an-unusable-route` (🟠 ACTIVE): spawn rejects an unusable route before planting a job; boundary: spawn preflight and hosted-start argument transport, with no retries or model selection.
-- `F077-evidence-outlives-the-worktree` (🟠 ACTIVE): proof runs at the clean candidate commit and retained artifacts reach review; boundary: `templates/worker.md`, `templates/agents.md`, and `templates/reviewer.md`, with no artifact store.
 
 ## NEXT
 
@@ -25,6 +24,7 @@
 
 ## PROVEN
 
+- `F077-evidence-outlives-the-worktree` (🟢 PROVEN): proof runs at the clean candidate commit, retained artifacts reach review, and mismatched evidence is unverified. Landed `cf3e9e0`. Review PASS of `85d57d2`.
 - `F084-every-number-arrives-with-its-meaning` (🟢 PROVEN): the reply cue and the specs reminder name the failing sentence, not the property; the identifier rule leads the Human register. Landed `0d3f2fd`. Coordinator-inspected.
 - `F079-job-line-shows-changed-files` (🟢 PROVEN): a running job line shows its changed-file count; a missing worktree leaves the signal absent. Landed `a98fa51`. Coordinator-inspected.
 - `F082-handoff-points-at-the-board` (🟢 PROVEN): a handoff points at the board line that owns its boundary; changes and steers name that line instead of duplicating the rule. Landed `88a2627`. Coordinator-inspected.
@@ -34,6 +34,5 @@
 - `F073-picture-pass` (🟢 PROVEN): after a merge that moved a shape, rewrite one living diagram. Landed `8259cb1`. Review PASS of `adf6542`.
 - `F072-quality-pass` (🟢 PROVEN): one findings file over a stretch of landed work; never a rewrite or a merge gate. Landed `cb61dec`. Review PASS of `cb61dec`.
 - `F069-named-role` (🟢 PROVEN): a job kind is a name plus a prompt; spawn opens its own space. Landed `3ec3f21`. Review PASS of `3ec3f21`.
-- `F067-job-workspaces` (🟢 PROVEN): worker and reviewer tabs open in their own space; the first job tab replaces the seeded one. Landed `63a9179`, fix `7f9408d`. Coordinator-inspected.
-- 2026-09: 28 landed. Hosted jobs end themselves; review loops stop at a ceiling; a failed turn is visible; a tab title says what the work changes. spec/features/done/2026-09/
+- 2026-09: 29 landed. Hosted jobs end themselves; review loops stop at a ceiling; a failed turn is visible; a tab title says what the work changes. spec/features/done/2026-09/
 - 2026-08: 44 landed. Hosted jobs run in a named tab; wakes retry; the process tree is contained. spec/features/done/2026-08/
