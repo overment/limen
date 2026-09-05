@@ -6,6 +6,7 @@
 - 2026-09-03 Alice audit: guidance present once per call and recalled at the moment of use; hosted jobs end themselves; review loops stop at the ceiling. F053–F063.
 - 2026-09-05 Alice audit: a worker falsifies its own candidate, proof belongs to the commit it proves, and the stall becomes a signal rather than another rule. F076–F083.
 - Research default pair: `gpt-5.6-sol:xhigh` and `grok-4.6:xhigh`. Quality: `gpt-5.6-sol:xhigh`. Picture: `gpt-5.6-sol`.
+- Coordinator CPU workers and later resumes use `gpt-6-astra:xhigh` at the owner's request.
 
 ## NOW
 
