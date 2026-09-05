@@ -11,6 +11,11 @@
 
 - `F048-hosted-runtime-start` (🟠 ACTIVE): spawn prints the ID in seconds; the detached supervisor starts pi and owns the job. This closes the live 2026-08-27 caller-timeout orphaning before F049.
 - `F074-claude-perspective` (🟠 ACTIVE): a detached job runs on Claude instead of Pi, so the coordinator can buy a perspective on interface and feature shape. Interleaves with the seat work; gates nothing.
+- `F076-worker-attacks-its-own-candidate` (🟠 ACTIVE): the worker names the acceptance line most likely to be false and writes that check before the final commit.
+- `F079-job-line-shows-changed-files` (🟠 ACTIVE): `limen jobs` shows a running job's changed-file count; a missing worktree leaves the count absent.
+- `F080-one-correction-reaches-every-job` (🟠 ACTIVE): `limen steer --running` delivers one correction to every watched live job.
+- `F081-spawn-refuses-an-unusable-route` (🟠 ACTIVE): spawn fails on a model it cannot serve and hosted start encodes its arguments; no job directory is left behind.
+- `F082-handoff-points-at-the-board` (🟠 ACTIVE): the handoff points at this board boundary: `templates/agents.md` only; no lock primitive.
 
 ## NEXT
 
@@ -18,13 +23,8 @@
 - `F013-remote-seat` (PLANNED): one disk, attach don’t clone; docs and seat-shaped guarantees. Before F014.
 - `F014-github-doorbell` (PLANNED): mention or label starts a job on the seat; comment back evidence; merge stays human.
 - `F075-closing-overview` (🔴 PLANNED): the coordinator closes with where we are whenever it hands back with work in flight. Register rule plus the per-turn cue; no new state.
-- `F079-job-line-shows-changed-files` (🔴 PLANNED): `limen jobs` shows a running job's changed-file count. The reading budget landed and the median got worse, so this one is a signal, not a sentence.
-- `F076-worker-attacks-its-own-candidate` (🔴 PLANNED): the worker names the acceptance line most likely to be false and writes that check before the final commit.
 - `F077-evidence-outlives-the-worktree` (🔴 PLANNED): the deciding proof runs at the candidate commit and its artifacts survive the checkout. Sequenced after F076; same template.
 - `F078-a-picture-is-evidence-when-seen` (🔴 PLANNED): a cited screenshot was opened, and frames that should differ and do not are a failed check. Sequenced after F077; same templates.
-- `F081-spawn-refuses-an-unusable-route` (🔴 PLANNED): spawn fails on a model it cannot serve and hosted start encodes its arguments; no job directory left behind.
-- `F080-one-correction-reaches-every-job` (🔴 PLANNED): `limen steer --running` delivers one correction to every watched live job.
-- `F082-handoff-points-at-the-board` (🔴 PLANNED): the board line carries the boundary and the handoff names it instead of restating it. No lock primitive.
 - `F083-spec-folder-says-one-thing-once` (🔴 PLANNED): one check per acceptance line, one constraint per handoff line, and a superseded file is deleted.
 
 ## PROVEN
