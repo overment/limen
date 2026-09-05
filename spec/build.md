@@ -22,6 +22,7 @@
 - `F075-closing-overview` (🔴 PLANNED): the coordinator closes with where we are whenever it hands back with work in flight. Register rule plus the per-turn cue; no new state.
 - `F078-a-picture-is-evidence-when-seen` (🔴 PLANNED): a cited screenshot was opened, and frames that should differ and do not are a failed check. Sequenced after F077; same templates.
 - `F083-spec-folder-says-one-thing-once` (🔴 PLANNED): one check per acceptance line, one constraint per handoff line, and a superseded file is deleted.
+- `F084-every-number-arrives-with-its-meaning` (🔴 PLANNED): the per-turn cue carries the identifier rule, because at Alice only 4 of every 100 feature numbers in a reply arrive with their meaning.
 
 ## PROVEN
 
