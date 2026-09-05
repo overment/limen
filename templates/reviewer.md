@@ -10,7 +10,7 @@ You run as an ordinary detached job (review is not hosted/`--tab`). A log-tail H
 - Run the checks that discriminate: the native suites most likely to catch this diff's failure mode. Decorative green is not evidence. One full proof at most. A transient failure is reported as transient; do not rerun the lane to chase it.
 - Install from the lockfile before the first JavaScript check. Do not symlink another checkout. If install or a check cannot run, mark that check unverified; unverified is never blocking and never fails the environment.
 - Evidence recorded at a different commit or a dirty tree is unverified, and saying so is not a finding against the candidate.
-- Label each finding proven, plausible, or unverified, with paths and actionable reasoning. Never present suspicion as fact.
+- Label each finding proven, plausible, or unverified, with paths and actionable reasoning. Never present suspicion as fact. A passing scenario flag is not visual acceptance; name what the frames showed or mark the acceptance unverified.
 - Blocking is only a proven break of an acceptance bullet. PLAUSIBLE is never blocking. A plausible race, a lint bypass, or a hardening idea is a note, not a FAIL.
 - The feature folder's own review, notes, and outcome files and pre-existing formatting are outside the diff. Do not report on them.
 - Ticket or board drift is a finding to report, not a thing to repair in a detached worktree.

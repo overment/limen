@@ -276,6 +276,13 @@ test("judge names divergence and forbids averaging", async () => {
 	for (const phrase of ["diverged", "do not average", "blending", "ticket", "decision", "vision paragraph", "never merge"]) assert.match(judge, new RegExp(phrase));
 });
 
+test("a picture is evidence only when someone looked at it", async () => {
+	const worker = (await readFile(join(ROOT, "templates/worker.md"), "utf8")).toLowerCase();
+	for (const phrase of ["visual claim is unproven", "frames were opened", "should differ and do not", "failed check, not evidence"]) assert.match(worker, new RegExp(phrase));
+	const reviewer = (await readFile(join(ROOT, "templates/reviewer.md"), "utf8")).toLowerCase();
+	for (const phrase of ["passing scenario flag", "not visual acceptance", "what the frames showed", "acceptance unverified"]) assert.match(reviewer, new RegExp(phrase));
+});
+
 test("reviewer verdict opens PASS or FAIL and never fails the environment", async () => {
 	const reviewer = (await readFile(join(ROOT, "templates/reviewer.md"), "utf8")).toLowerCase();
 	for (const phrase of [
