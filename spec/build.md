@@ -13,7 +13,6 @@
 - `F074-claude-perspective` (🟠 ACTIVE): a detached job runs on Claude instead of Pi, so the coordinator can buy a perspective on interface and feature shape. Interleaves with the seat work; gates nothing.
 - `F079-job-line-shows-changed-files` (🟠 ACTIVE): `limen jobs` shows a running job's changed-file count; a missing worktree leaves the count absent.
 - `F081-spawn-refuses-an-unusable-route` (🟠 ACTIVE): spawn fails on a model it cannot serve and hosted start encodes its arguments; no job directory is left behind.
-- `F082-handoff-points-at-the-board` (🟠 ACTIVE): the handoff points at this board boundary: `templates/agents.md` only; no lock primitive.
 
 ## NEXT
 
@@ -27,6 +26,7 @@
 
 ## PROVEN
 
+- `F082-handoff-points-at-the-board` (🟢 PROVEN): a handoff points at the board line that owns its boundary; changes and steers name that line instead of duplicating the rule. Landed `88a2627`. Coordinator-inspected.
 - `F080-one-correction-reaches-every-job` (🟢 PROVEN): `limen steer --running` delivers one correction to every watched live job and reports targets that end during delivery. Landed `4006f2e`. Coordinator-inspected.
 - `F076-worker-attacks-its-own-candidate` (🟢 PROVEN): the worker names the acceptance line most likely to be false, writes that check, and reports what it showed. Landed `81f85ae`. Coordinator-inspected.
 - `F070-research-fan-out` (🟢 PROVEN): human-asked research on different models, then a judge that names divergence. Named sources only. Landed `8233fb1`. Review PASS of `c02f8f8`.
@@ -36,6 +36,5 @@
 - `F067-job-workspaces` (🟢 PROVEN): worker and reviewer tabs open in their own space; the first job tab replaces the seeded one. Landed `63a9179`, fix `7f9408d`. Coordinator-inspected.
 - `F068-legible-tab-titles` (🟢 PROVEN): a tab title says what the work changes, feature number last; ids still hoist it. Landed `01ab5dc`. Coordinator-inspected.
 - `F065-idle-backstop` (🟢 PROVEN): clean hosted tool-using turns close after the idle bound. Landed `12d533a`. Review PASS of `76e0895`.
-- `F064-project-reminders` (🟢 PROVEN): reminders name project styleguide and vision headings across languages. Landed `91ea670`. Review PASS of `b929056`.
-- 2026-09: 25 landed. Hosted jobs end themselves; review loops stop at a ceiling; a failed turn is visible. spec/features/done/2026-09/
+- 2026-09: 26 landed. Hosted jobs end themselves; review loops stop at a ceiling; a failed turn is visible. spec/features/done/2026-09/
 - 2026-08: 44 landed. Hosted jobs run in a named tab; wakes retry; the process tree is contained. spec/features/done/2026-08/
