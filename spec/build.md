@@ -12,9 +12,11 @@
 - `F048-hosted-runtime-start` (🟠 ACTIVE): spawn prints the ID in seconds; the detached supervisor starts pi and owns the job. This closes the live 2026-08-27 caller-timeout orphaning before F049.
 - `F074-claude-perspective` (🟠 ACTIVE): a detached job runs on Claude instead of Pi, so the coordinator can buy a perspective on interface and feature shape. Interleaves with the seat work; gates nothing.
 - `F081-spawn-refuses-an-unusable-route` (🟠 ACTIVE): spawn rejects an unusable route before planting a job; boundary: spawn preflight and hosted-start argument transport, with no retries or model selection.
+- `F085-sweep-skips-settled-jobs` (🟠 ACTIVE): a coordinator stops re-walking settled jobs on every sweep, and stops holding a core at 90–98%; boundary: the wake hook's sweep, its watcher filter, and the status redraw, with the wake protocol unchanged.
 
 ## NEXT
 
+- `F086-job-history-can-be-retired` (🔴 PLANNED): an operator retires finished job records, so months of history stop setting session-start and sweep cost; boundary: the prune command, with worktree pruning unchanged. After F085.
 - `F049-running-owner-truth` (🔴 PLANNED): reaper adopts a hosted job that lost its supervisor, fails one with no live owner; no shape-based skips. Before F013.
 - `F013-remote-seat` (PLANNED): one disk, attach don’t clone; docs and seat-shaped guarantees. Before F014.
 - `F014-github-doorbell` (PLANNED): mention or label starts a job on the seat; comment back evidence; merge stays human.
