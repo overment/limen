@@ -171,6 +171,20 @@ test("shop manual holds review and merge ceilings", async () => {
 		assert.match(agents, new RegExp(phrase));
 });
 
+test("shop manual handoff points at the board line", async () => {
+	const agents = (await readFile(join(ROOT, "templates/agents.md"), "utf8")).toLowerCase();
+	for (const phrase of [
+		"board line carries the boundary this job must not cross",
+		"handoff points at it",
+		"rather than restating it",
+		"board edit in the same coherent change",
+		"not a new prompt or a steer",
+		"steer that names the board line",
+		"not a restatement of the rule",
+	])
+		assert.match(agents, new RegExp(phrase));
+});
+
 test("worker stays off the board and inside reading and check budgets", async () => {
 	const worker = (await readFile(join(ROOT, "templates/worker.md"), "utf8")).toLowerCase();
 	for (const phrase of [
