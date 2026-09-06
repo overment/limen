@@ -7,11 +7,13 @@
 - 2026-09-03 Alice audit: guidance present once per call and recalled at the moment of use; hosted jobs end themselves; review loops stop at the ceiling. F053–F063.
 - 2026-09-05 Alice audit: a worker falsifies its own candidate, proof belongs to the commit it proves, and the stall becomes a signal rather than another rule. F076–F083.
 - Research default pair: `gpt-5.6-sol:xhigh` and `grok-4.6:xhigh`. Quality: `gpt-5.6-sol:xhigh`. Picture: `gpt-5.6-sol`.
-- Coordinator CPU workers and later resumes use `openai-codex/gpt-6-astra:xhigh` at the owner's request; the explicit provider avoids the Batch-only fuzzy match.
+- Adam/Tony model policy: coordinators use `openai-codex/gpt-6-astra:xhigh`; Pi workers, including repairs and resumes, default to `openai-codex/gpt-6-astra:high` rather than global Pi settings.
+- Adam performs reviews; do not start an independent review lane unless asked.
 - Owner-requested Limen v1 integration audit: all research and judge jobs use `openai-codex/gpt-6-astra:xhigh`; no implementation or feature-state changes.
 
 ## NOW
 
+- `F088-spawns-use-explicit-model-defaults` (🟠 ACTIVE): coordinators and workers start on the intended Codex model; boundary: model defaults, project Pi settings, and launch guidance, with preflight and supervision unchanged.
 - `F048-hosted-runtime-start` (🟠 ACTIVE): spawn prints the ID in seconds; the detached supervisor starts pi and owns the job. This closes the live 2026-08-27 caller-timeout orphaning before F049.
 - `F074-claude-perspective` (🟠 ACTIVE): a detached job runs on Claude instead of Pi, so the coordinator can buy a perspective on interface and feature shape. Interleaves with the seat work; gates nothing.
 - `F081-spawn-refuses-an-unusable-route` (🟠 ACTIVE): spawn rejects an unusable route before planting a job; boundary: spawn preflight and hosted-start argument transport, with no retries or model selection.
