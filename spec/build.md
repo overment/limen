@@ -13,7 +13,6 @@
 
 ## NOW
 
-- `F088-spawns-use-explicit-model-defaults` (🟠 ACTIVE): coordinators and workers start on the intended Codex model; boundary: model defaults, project Pi settings, and launch guidance, with preflight and supervision unchanged.
 - `F048-hosted-runtime-start` (🟠 ACTIVE): spawn prints the ID in seconds; the detached supervisor starts pi and owns the job. This closes the live 2026-08-27 caller-timeout orphaning before F049.
 - `F074-claude-perspective` (🟠 ACTIVE): a detached job runs on Claude instead of Pi, so the coordinator can buy a perspective on interface and feature shape. Interleaves with the seat work; gates nothing.
 - `F081-spawn-refuses-an-unusable-route` (🟠 ACTIVE): spawn rejects an unusable route before planting a job; boundary: spawn preflight and hosted-start argument transport, with no retries or model selection.
@@ -29,6 +28,7 @@
 
 ## PROVEN
 
+- `F088-spawns-use-explicit-model-defaults` (🟢 PROVEN): coordinators use Codex/xhigh and Pi jobs default to Codex/high without inheriting global Grok. Landed `aa5382e`; focused checks passed, full native lane incomplete; Adam owns review.
 - `F085-sweep-skips-settled-jobs` (🟢 PROVEN): coordinators skip settled history while completion wakes remain observable. Landed `5a00065`; review PASS of `a482020`, with the full native lane incomplete.
 - `F083-spec-folder-says-one-thing-once` (🟢 PROVEN): specs keep one check and one constraint per line, and delete files when they stop being true. Landed `7d966e5`. Review PASS of `e386591`.
 - `F078-a-picture-is-evidence-when-seen` (🟢 PROVEN): visual evidence names what opened frames showed; identical frames that should differ fail the check. Landed `5067c69`. Review PASS of `5067c69`.
@@ -38,6 +38,5 @@
 - `F082-handoff-points-at-the-board` (🟢 PROVEN): a handoff points at the board line that owns its boundary; changes and steers name that line instead of duplicating the rule. Landed `88a2627`. Coordinator-inspected.
 - `F080-one-correction-reaches-every-job` (🟢 PROVEN): `limen steer --running` delivers one correction to every watched live job and reports targets that end during delivery. Landed `4006f2e`. Coordinator-inspected.
 - `F076-worker-attacks-its-own-candidate` (🟢 PROVEN): the worker names the acceptance line most likely to be false, writes that check, and reports what it showed. Landed `81f85ae`. Coordinator-inspected.
-- `F070-research-fan-out` (🟢 PROVEN): human-asked research on different models, then a judge that names divergence. Named sources only. Landed `8233fb1`. Review PASS of `c02f8f8`.
-- 2026-09: 32 landed. Hosted jobs end themselves; review loops stop at a ceiling; a failed turn is visible; a tab title says what the work changes; one living picture follows system shape. spec/features/done/2026-09/
+- 2026-09: 33 landed. Hosted jobs end themselves; review loops stop at a ceiling; a failed turn is visible; a tab title says what the work changes; one living picture follows system shape; human-asked research compares named sources across models before judgment. spec/features/done/2026-09/
 - 2026-08: 44 landed. Hosted jobs run in a named tab; wakes retry; the process tree is contained. spec/features/done/2026-08/
