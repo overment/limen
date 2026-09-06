@@ -92,6 +92,26 @@ test("continue sends an explicit model rather than inheriting Pi settings or the
 	}
 });
 
+test("detached spawn and continuation forward literal provider, model, and thinking flags", async (context) => {
+	const scratch = await scratchRepo(continuingFakePi);
+	context.after(scratch.cleanup);
+	assert.equal(limen(scratch, "init").status, 0);
+	const flags = ["--provider", "openai-codex", "--model", "gpt-6-astra", "--thinking", "high"];
+	const env = { LIMEN_WORKER_MODEL: "xai/grok-4.6:xhigh" };
+	const first = limenWithEnv(scratch, env, "spawn", "--detached", ...flags, "first slice");
+	assert.equal(first.status, 0, first.stderr);
+	const parent = onlyJobId(first.stdout);
+	await waitForState(scratch.root, parent, "done");
+	const path = join(worktreeFor(scratch.root, parent), "pi-args.json");
+	const initialArgs = JSON.parse(await readFile(path, "utf8")) as string[];
+	assert.deepEqual(initialArgs.slice(initialArgs.indexOf("--provider"), initialArgs.indexOf("--provider") + flags.length), flags);
+	const resumed = limenWithEnv(scratch, env, "continue", "--detached", ...flags, parent, "refine the seam");
+	assert.equal(resumed.status, 0, resumed.stderr);
+	await waitForState(scratch.root, onlyJobId(resumed.stdout), "done");
+	const resumedArgs = JSON.parse(await readFile(path, "utf8")) as string[];
+	assert.deepEqual(resumedArgs.slice(resumedArgs.indexOf("--provider"), resumedArgs.indexOf("--provider") + flags.length), flags);
+});
+
 test("continue without --review loads the parent role preamble", async (context) => {
 	const scratch = await scratchRepo(continuingFakePi);
 	context.after(scratch.cleanup);

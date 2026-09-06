@@ -95,8 +95,10 @@ export async function runInternalJob(): Promise<void> {
 		args.push("--mode", "json", "--approve", "--no-extensions", "--session-dir", `${jobDir}/session`, "--name", `limen: ${label}`, "--append-system-prompt", preamble);
 		args.push("--extension", `${HOOK}/steering.ts`, "--extension", `${HOOK}/communication.ts`);
 	}
+	if (engine === "pi" && process.env.LIMEN_PROVIDER) args.push("--provider", process.env.LIMEN_PROVIDER);
 	if (process.env.LIMEN_MODEL) args.push("--model", process.env.LIMEN_MODEL);
 	if (engine === "pi") {
+		if (process.env.LIMEN_THINKING) args.push("--thinking", process.env.LIMEN_THINKING);
 		if (process.env.LIMEN_CONTINUE === "1") args.push("--continue", (await readFile(taskFile, "utf8")).trim());
 		else args.push(`@${taskFile}`);
 	}
@@ -107,7 +109,7 @@ export async function runInternalJob(): Promise<void> {
 		LIMEN_JOB_LABEL: label,
 	};
 	const privateEnvironment =
-		"LIMEN_INTERNAL_RUN LIMEN_JOB_DIR LIMEN_WORKTREE LIMEN_TASK_FILE LIMEN_PREAMBLE LIMEN_TIMEOUT_MS LIMEN_MODEL LIMEN_LABEL LIMEN_ENGINE LIMEN_CLAUDE PI_SESSION_ID PI_SESSION_FILE PI_PROVIDER PI_MODEL PI_REASONING_LEVEL";
+		"LIMEN_INTERNAL_RUN LIMEN_JOB_DIR LIMEN_WORKTREE LIMEN_TASK_FILE LIMEN_PREAMBLE LIMEN_TIMEOUT_MS LIMEN_MODEL LIMEN_PROVIDER LIMEN_THINKING LIMEN_LABEL LIMEN_ENGINE LIMEN_CLAUDE PI_SESSION_ID PI_SESSION_FILE PI_PROVIDER PI_MODEL PI_REASONING_LEVEL";
 	for (const name of privateEnvironment.split(" ")) delete childEnvironment[name];
 	// A detached job must not inherit the coordinator's Herdr pane.
 	for (const name of Object.keys(childEnvironment)) if (name.startsWith("HERDR_")) delete childEnvironment[name];

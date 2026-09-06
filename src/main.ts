@@ -44,12 +44,12 @@ usage:
   limen workspace init
   limen spawn "Implement FNNN: <outcome>. Start by writing <slice>. Ticket: spec/features/active/FNNN-slug/ticket.md" [--label L] [--model X] [--branch B] [--role NAME] [--timeout 20m; default 90m] [--task-file F|-] [--prepare CMD]
   limen spawn --role advisor --engine claude --detached "…"   # a perspective from claude; detached only, never merges
-  limen spawn "…" [--label L] [--model X]          # in Herdr: hosted interactive tab; else detached
+  limen spawn "…" [--label L] [--provider P] [--model X] [--thinking T]  # Pi flags; in Herdr: hosted, else detached
   limen spawn --tab "…"                            # force hosted (requires Herdr; no --timeout)
   limen spawn --detached "…"                       # force background worker + log-tail tab
   limen spawn --repo R "Implement FNNN: <outcome>. Ticket: spec/features/active/FNNN-slug/ticket.md" [--label L] [--model X]
   limen spawn --review --branch B --label L "Review the FNNN candidate against spec/features/active/FNNN-slug/ticket.md"
-  limen continue <id|suffix|label> "follow-up instruction" [--review] [--label L] [--model X] [--tab|--detached]
+  limen continue <id|suffix|label> "follow-up instruction" [--review] [--label L] [--provider P] [--model X] [--thinking T] [--tab|--detached]
                                   # resume a finished job in its own pi session — full context, same worktree; Herdr default is hosted
   limen steer <id|suffix|label> | --running "correction"
   limen diff <id|suffix|label>

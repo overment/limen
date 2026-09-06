@@ -31,6 +31,8 @@ type SpawnOptions = {
 	branch?: string;
 	repo?: string;
 	model?: string;
+	provider?: string;
+	thinking?: string;
 	timeoutMs?: number;
 	prepare?: string;
 	review: boolean;
@@ -49,10 +51,12 @@ export const HOSTED_NOTE =
 export function preflightClaude(): void {
 	if (!(process.env.PATH ?? "").split(":").some((dir) => dir && existsSync(`${dir}/claude`))) throw new Error("claude is not on PATH");
 }
-export function preflightPi(model?: string): void {
+export function preflightPi(model?: string, provider?: string): void {
 	if (!(process.env.PATH ?? "").split(":").some((dir) => dir && existsSync(`${dir}/pi`))) throw new Error("pi is not on PATH");
 	if (process.env.LIMEN_PREFLIGHT !== "auth") return;
-	const result = spawnSync(process.env.LIMEN_PI || "pi", ["auth", "check", ...(model ? ["--model", model] : [])], { encoding: "utf8" });
+	const result = spawnSync(process.env.LIMEN_PI || "pi", ["auth", "check", ...(provider ? ["--provider", provider] : []), ...(model ? ["--model", model] : [])], {
+		encoding: "utf8",
+	});
 	if (result.status !== 0) throw new Error((result.stderr || result.stdout || result.error?.message || "pi auth check failed").trim() || "pi auth check failed");
 }
 type WorktreePlan =
@@ -75,8 +79,9 @@ export async function spawnCommand(args: readonly string[], cwd: string): Promis
 	const engine = options.engine ?? "pi";
 	const model =
 		options.model ?? (engine === "claude" ? undefined : process.env[options.review ? "LIMEN_REVIEWER_MODEL" : "LIMEN_WORKER_MODEL"]?.trim() || "openai-codex/gpt-6-astra:high");
+	if (engine === "claude" && (options.provider || options.thinking)) throw new Error("--provider and --thinking are Pi options; omit them for --engine claude");
 	if (engine === "claude") preflightClaude();
-	else preflightPi(model);
+	else preflightPi(model, options.provider);
 	const notificationSession = currentNotificationSession();
 	const coordinatorTab = process.env.HERDR_TAB_ID?.trim();
 	const workspace = workspaceRoot(cwd);
@@ -157,7 +162,19 @@ export async function spawnCommand(args: readonly string[], cwd: string): Promis
 	const versions = capturedVersions(engine).then((text) => writeFile(`${jobDir}/versions`, text, { flag: "wx", flush: true }));
 	await atomicWrite(`${jobDir}/state`, "running\n");
 	if (options.tab) {
-		await startHosted({ jobDir, id, label: options.label, root, worktree, preamble, taskFile: `${jobDir}/task.md`, role, ...(model ? { model } : {}) });
+		await startHosted({
+			jobDir,
+			id,
+			label: options.label,
+			root,
+			worktree,
+			preamble,
+			taskFile: `${jobDir}/task.md`,
+			role,
+			...(model ? { model } : {}),
+			...(options.provider ? { provider: options.provider } : {}),
+			...(options.thinking ? { thinking: options.thinking } : {}),
+		});
 		await versions.catch(() => {});
 		console.log(`started ${options.label} (hosted)`);
 		console.log(id);
@@ -174,6 +191,8 @@ export async function spawnCommand(args: readonly string[], cwd: string): Promis
 		LIMEN_CONTEXT_ROOT: root,
 	};
 	if (engine !== "pi") environment.LIMEN_ENGINE = engine;
+	environment.LIMEN_PROVIDER = options.provider ?? "";
+	environment.LIMEN_THINKING = options.thinking ?? "";
 	if (model) environment.LIMEN_MODEL = model;
 	if (options.timeoutMs) environment.LIMEN_TIMEOUT_MS = String(options.timeoutMs);
 	let wrapperPid: number;
@@ -208,6 +227,8 @@ export async function startHosted(input: {
 	readonly taskFile: string;
 	readonly role: string;
 	readonly model?: string;
+	readonly provider?: string;
+	readonly thinking?: string;
 	readonly continueFile?: string;
 }): Promise<void> {
 	const agentName = hostedAgentName(input.id);
@@ -239,6 +260,8 @@ export async function startHosted(input: {
 			LIMEN_AGENT_NAME: agentName,
 			LIMEN_HOSTED_START: "1",
 			LIMEN_MODEL: input.model ?? "",
+			LIMEN_PROVIDER: input.provider ?? "",
+			LIMEN_THINKING: input.thinking ?? "",
 			LIMEN_CONTINUE_FILE: input.continueFile ?? "",
 		});
 		await waitForHandshake(input.jobDir, supervisorPid, "hosted supervisor");
@@ -277,6 +300,7 @@ function executeWorktree(root: string, plan: WorktreePlan): string {
 }
 function parseSpawnArgs(args: readonly string[]): SpawnOptions {
 	let branch: string | undefined, repo: string | undefined, label: string | undefined, model: string | undefined;
+	let provider: string | undefined, thinking: string | undefined;
 	let timeoutMs: number | undefined, taskFile: string | undefined, prepare: string | undefined, role: string | undefined, engine: string | undefined;
 	let review = false,
 		tab = false,
@@ -291,7 +315,7 @@ function parseSpawnArgs(args: readonly string[]): SpawnOptions {
 		else if (!positional && value === "--tab") tab = true;
 		else if (!positional && value === "--detached") detached = true;
 		else if (!positional && value.startsWith("--")) {
-			if (!["--branch", "--repo", "--label", "--model", "--timeout", "--task-file", "--prepare", "--role", "--engine"].includes(value))
+			if (!["--branch", "--repo", "--label", "--model", "--provider", "--thinking", "--timeout", "--task-file", "--prepare", "--role", "--engine"].includes(value))
 				throw new Error(`unknown spawn option ${value}`);
 			const optionValue = args[index + 1];
 			if (!optionValue) throw new Error(`${value} requires a value`);
@@ -300,6 +324,8 @@ function parseSpawnArgs(args: readonly string[]): SpawnOptions {
 			else if (value === "--repo") repo = once(repo, value, optionValue);
 			else if (value === "--label") label = once(label, value, normalizeLabel(optionValue));
 			else if (value === "--model") model = once(model, value, optionValue);
+			else if (value === "--provider") provider = once(provider, value, optionValue);
+			else if (value === "--thinking") thinking = once(thinking, value, optionValue);
 			else if (value === "--task-file") taskFile = once(taskFile, value, optionValue);
 			else if (value === "--prepare") prepare = once(prepare, value, optionValue);
 			else if (value === "--role") {
@@ -321,6 +347,8 @@ function parseSpawnArgs(args: readonly string[]): SpawnOptions {
 	if (branch) out.branch = branch;
 	if (repo) out.repo = repo;
 	if (model) out.model = model;
+	if (provider) out.provider = provider;
+	if (thinking) out.thinking = thinking;
 	if (timeoutMs) out.timeoutMs = timeoutMs;
 	return out;
 }

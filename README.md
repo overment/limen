@@ -94,12 +94,15 @@ Pi workers default to `openai-codex/gpt-6-astra:high` in Limen's spawn path, for
 export LIMEN_WORKER_MODEL="openai-codex/gpt-6-astra:high"
 ```
 
-One-spawn override (Limen accepts `--model provider/id:thinking`, not separate `--provider` or `--thinking` flags; Pi resolves the tuple explicitly):
+When the worker must receive literal Pi arguments, pass all three through Limen:
 
 ```bash
-limen spawn --model openai-codex/gpt-6-astra:high \
+limen spawn --tab --engine pi \
+  --provider openai-codex --model gpt-6-astra --thinking high \
   --label "short worker task" 'Implement the requested slice.'
 ```
+
+`--provider`, `--model`, and `--thinking` reach Pi as separate flag/value pairs in both hosted and detached mode; use `--detached` instead of `--tab` for a background worker. `limen continue` accepts the same three flags. The existing combined `--model openai-codex/gpt-6-astra:high` form remains supported. Explicit `--thinking` takes precedence over a combined selector's thinking suffix in Pi. Provider and thinking flags are Pi-only; a Claude spawn rejects them before creating a job.
 
 Precedence is `--model`, then `LIMEN_WORKER_MODEL`, then the package default. A requested `--review` uses `LIMEN_REVIEWER_MODEL` instead of `LIMEN_WORKER_MODEL`, with the same package fallback; neither variable starts a review. Adam performs reviews for Alice/Limen work, so do not spawn an independent reviewer unless asked. If requested, its model can be explicit or set with `export LIMEN_REVIEWER_MODEL="openai-codex/gpt-6-astra:high"`.
 
@@ -145,7 +148,7 @@ The coordinator does this. You only need it if you are looking at a stuck tab yo
 limen init
 limen init --drop-leftovers
 limen workspace init
-limen spawn "instruction" [--label L] [--model M] [--branch B] [--role NAME] [--engine pi|claude] [--timeout 20m] [--task-file F|-] [--prepare CMD]
+limen spawn "instruction" [--label L] [--provider P] [--model M] [--thinking T] [--branch B] [--role NAME] [--engine pi|claude] [--timeout 20m] [--task-file F|-] [--prepare CMD]
 limen spawn --repo R "instruction" [--label L] [--model M]
 limen spawn --review --branch B --label L "instruction"
 limen jobs [--running|--active|--all|<id|suffix|label>]

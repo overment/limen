@@ -23,7 +23,7 @@ export async function continueCommand(args: readonly string[], cwd: string): Pro
 	let tab = false;
 	let detached = false;
 	let label: string | undefined;
-	let model: string | undefined;
+	let model: string | undefined, provider: string | undefined, thinking: string | undefined;
 	const positional: string[] = [];
 	for (let index = 0; index < args.length; index += 1) {
 		const value = args[index];
@@ -31,11 +31,13 @@ export async function continueCommand(args: readonly string[], cwd: string): Pro
 		if (value === "--review") review = true;
 		else if (value === "--tab") tab = true;
 		else if (value === "--detached") detached = true;
-		else if (value === "--label" || value === "--model") {
+		else if (value === "--label" || value === "--model" || value === "--provider" || value === "--thinking") {
 			const optionValue = args[index + 1];
 			if (!optionValue) throw new Error(`${value} requires a value`);
 			index += 1;
 			if (value === "--label") label = normalizeLabel(optionValue);
+			else if (value === "--provider") provider = optionValue;
+			else if (value === "--thinking") thinking = optionValue;
 			else model = optionValue;
 		} else if (value.startsWith("--")) throw new Error(`unknown continue option ${value}`);
 		else positional.push(value);
@@ -48,7 +50,7 @@ export async function continueCommand(args: readonly string[], cwd: string): Pro
 	const hosted = detached ? false : tab || herdr;
 	if (tab && !herdr) throw new Error("hosted continue requires Herdr (HERDR_ENV=1); use --detached for an ordinary job");
 	const chosenModel = model ?? (process.env[review ? "LIMEN_REVIEWER_MODEL" : "LIMEN_WORKER_MODEL"]?.trim() || "openai-codex/gpt-6-astra:high");
-	preflightPi(chosenModel);
+	preflightPi(chosenModel, provider);
 
 	const root = workspaceRoot(cwd) ?? repoRoot(cwd);
 	const { id: parentId, jobDir: parentDir } = await resolveJob(cwd, query);
@@ -122,6 +124,8 @@ export async function continueCommand(args: readonly string[], cwd: string): Pro
 				role,
 				continueFile: `${jobDir}/continue`,
 				...(chosenModel ? { model: chosenModel } : {}),
+				...(provider ? { provider } : {}),
+				...(thinking ? { thinking } : {}),
 			});
 		} catch (error) {
 			await versions.catch(() => {});
@@ -146,6 +150,8 @@ export async function continueCommand(args: readonly string[], cwd: string): Pro
 		LIMEN_LABEL: finalLabel,
 		LIMEN_CONTEXT_ROOT: root,
 		LIMEN_CONTINUE: "1",
+		LIMEN_PROVIDER: provider ?? "",
+		LIMEN_THINKING: thinking ?? "",
 	};
 	if (chosenModel) environment.LIMEN_MODEL = chosenModel;
 	let wrapperPid: number;

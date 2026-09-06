@@ -533,6 +533,35 @@ test("spawn in Herdr is hosted without --tab; --detached keeps a watch tab", asy
 	assert.match(logText, /hosted agent done|hosted agent ended/);
 });
 
+test("hosted spawn and continuation forward literal Pi launch flags", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	assert.equal(limen(scratch, "init").status, 0);
+	const herdr = await installHostedFakeHerdr(scratch.root, scratch.fakeBin);
+	const env = { HERDR_ENV: "1", LIMEN_HERDR: herdr.bin, FAKE_HERDR_STATE: herdr.dir, LIMEN_WORKER_MODEL: "xai/grok-4.6:xhigh" };
+	const flags = ["--provider", "openai-codex", "--model", "gpt-6-astra", "--thinking", "high"];
+	const launched = limenWithEnv(scratch, env, "spawn", "--tab", "--engine", "pi", ...flags, "first slice");
+	assert.equal(launched.status, 0, launched.stderr);
+	const parent = onlyJobId(launched.stdout);
+	await waitForState(scratch.root, parent, "done");
+	const session = join(scratch.root, ".limen/jobs", parent, "session");
+	await mkdir(session, { recursive: true });
+	await writeFile(join(session, "run.jsonl"), `${JSON.stringify({ type: "session" })}\n`);
+	const resumed = limenWithEnv(scratch, env, "continue", "--tab", ...flags, parent, "refine the seam");
+	assert.equal(resumed.status, 0, resumed.stderr);
+	await waitForState(scratch.root, onlyJobId(resumed.stdout), "done");
+	const starts = (await readFile(join(herdr.dir, "argv"), "utf8"))
+		.trim()
+		.split("\n")
+		.map((line) => JSON.parse(line) as string[])
+		.filter((args) => args[0] === "agent" && args[1] === "start");
+	assert.equal(starts.length, 2);
+	for (const args of starts) {
+		const piArgs = args.slice(args.indexOf("--") + 1);
+		assert.deepEqual(piArgs.slice(piArgs.indexOf("--provider"), piArgs.indexOf("--provider") + flags.length), flags);
+	}
+});
+
 test("hosted spawn returns on the supervisor PID while agent start is still busy", async (context) => {
 	const scratch = await scratchRepo();
 	context.after(scratch.cleanup);
@@ -1202,6 +1231,7 @@ const { appendFileSync, readFileSync, writeFileSync } = require("node:fs");
 const args = process.argv.slice(2);
 const dir = process.env.FAKE_HERDR_STATE;
 appendFileSync(dir + "/calls", args.join(" ") + "\\n");
+appendFileSync(dir + "/argv", JSON.stringify(args) + "\\n");
 const path = dir + "/state.json";
 const state = JSON.parse(readFileSync(path, "utf8"));
 const ok = (result) => console.log(JSON.stringify({ result }));

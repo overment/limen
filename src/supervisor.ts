@@ -138,7 +138,9 @@ async function startHostedAgent(jobDir: string): Promise<string | undefined> {
 		"--append-system-prompt",
 		requiredEnvironment("LIMEN_PREAMBLE"),
 		...extensions,
+		...(process.env.LIMEN_PROVIDER ? ["--provider", process.env.LIMEN_PROVIDER] : []),
 		...(process.env.LIMEN_MODEL ? ["--model", process.env.LIMEN_MODEL] : []),
+		...(process.env.LIMEN_THINKING ? ["--thinking", process.env.LIMEN_THINKING] : []),
 		...(continuation !== undefined ? ["--continue", continuation] : [`@${taskFile}`]),
 	];
 	try {

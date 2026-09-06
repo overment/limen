@@ -321,6 +321,40 @@ process.exit(0);
 	assert.doesNotMatch(git(scratch.root, "worktree", "list"), /limen-worktrees/);
 });
 
+test("explicit provider reaches authentication preflight without a fallback job", async (context) => {
+	const scratch = await scratchRepo(`#!/usr/bin/env node
+const args = process.argv.slice(2);
+if (args[0] === "auth") {
+  require("node:fs").writeFileSync("auth-args.json", JSON.stringify(args));
+  console.error("requested provider refused");
+  process.exit(2);
+}
+process.exit(0);
+`);
+	context.after(scratch.cleanup);
+	assert.equal(limen(scratch, "init").status, 0);
+	const launched = limenWithEnv(scratch, { LIMEN_PREFLIGHT: "auth" }, "spawn", "--provider", "openai-codex", "--model", "gpt-6-astra", "--thinking", "high", "do work");
+	assert.equal(launched.status, 1);
+	assert.match(launched.stderr, /requested provider refused/);
+	assert.deepEqual(JSON.parse(await readFile(join(scratch.root, "auth-args.json"), "utf8")), ["auth", "check", "--provider", "openai-codex", "--model", "gpt-6-astra"]);
+	assert.deepEqual(await readdir(join(scratch.root, ".limen/jobs")).catch(() => []), []);
+});
+
+test("Pi-only flags are refused for Claude before creating a job", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	assert.equal(limen(scratch, "init").status, 0);
+	for (const flags of [
+		["--provider", "openai-codex"],
+		["--thinking", "high"],
+	]) {
+		const launched = limen(scratch, "spawn", "--engine", "claude", "--detached", ...flags, "do work");
+		assert.equal(launched.status, 1);
+		assert.match(launched.stderr, /Pi options/);
+	}
+	assert.deepEqual(await readdir(join(scratch.root, ".limen/jobs")).catch(() => []), []);
+});
+
 test("LIMEN_PREFLIGHT=auth proceeds when check passes", async (context) => {
 	const scratch = await scratchRepo(defaultFakePi.replace('if (args[0] === "auth") process.exit(1);', 'if (args[0] === "auth") process.exit(0);'));
 	context.after(scratch.cleanup);
