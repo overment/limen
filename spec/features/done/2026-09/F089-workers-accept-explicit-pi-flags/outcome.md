@@ -1,0 +1,3 @@
+# Outcome
+
+Workers can now receive literal `--provider openai-codex --model gpt-6-astra --thinking high` arguments through Limen's existing hosted and detached launch paths, including continuations. Implementation landed directly on main in `cd8cbb1`; the linked installation and updated launch guidance support the command without a separate launcher. Nine focused tests passed, including exact captured argv against a competing Grok environment, and the four new regressions passed again at the clean candidate commit. Full native verification remains limited by older evidence formatting and the source-line cap, as recorded in `notes.md`; no live provider call or independent review was run.

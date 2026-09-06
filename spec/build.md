@@ -9,11 +9,11 @@
 - Research default pair: `gpt-5.6-sol:xhigh` and `grok-4.6:xhigh`. Quality: `gpt-5.6-sol:xhigh`. Picture: `gpt-5.6-sol`.
 - Adam/Tony model policy: coordinators use `openai-codex/gpt-6-astra:xhigh`; Pi workers, including repairs and resumes, default to `openai-codex/gpt-6-astra:high` rather than global Pi settings.
 - Adam performs reviews; do not start an independent review lane unless asked.
+- Transcript-settlement workers require literal `--provider openai-codex --model gpt-6-astra --thinking high`; pass those separate flags through Limen, not a combined selector.
 - Owner-requested Limen v1 integration audit: all research and judge jobs use `openai-codex/gpt-6-astra:xhigh`; no implementation or feature-state changes.
 
 ## NOW
 
-- `F089-workers-accept-explicit-pi-flags` (🟠 ACTIVE): workers receive literal Pi provider and thinking flags; boundary: parser and existing launch-argument transport, with transcript behavior and process supervision unchanged.
 - `F048-hosted-runtime-start` (🟠 ACTIVE): spawn prints the ID in seconds; the detached supervisor starts pi and owns the job. This closes the live 2026-08-27 caller-timeout orphaning before F049.
 - `F074-claude-perspective` (🟠 ACTIVE): a detached job runs on Claude instead of Pi, so the coordinator can buy a perspective on interface and feature shape. Interleaves with the seat work; gates nothing.
 - `F081-spawn-refuses-an-unusable-route` (🟠 ACTIVE): spawn rejects an unusable route before planting a job; boundary: spawn preflight and hosted-start argument transport, with no retries or model selection.
@@ -29,6 +29,7 @@
 
 ## PROVEN
 
+- `F089-workers-accept-explicit-pi-flags` (🟢 PROVEN): spawn and continuation forward literal Pi provider/model/thinking flags in both modes. Landed `cd8cbb1`; exact-argv checks passed, full native lane incomplete; Adam owns review.
 - `F088-spawns-use-explicit-model-defaults` (🟢 PROVEN): coordinators use Codex/xhigh and Pi jobs default to Codex/high without inheriting global Grok. Landed `aa5382e`; focused checks passed, full native lane incomplete; Adam owns review.
 - `F085-sweep-skips-settled-jobs` (🟢 PROVEN): coordinators skip settled history while completion wakes remain observable. Landed `5a00065`; review PASS of `a482020`, with the full native lane incomplete.
 - `F083-spec-folder-says-one-thing-once` (🟢 PROVEN): specs keep one check and one constraint per line, and delete files when they stop being true. Landed `7d966e5`. Review PASS of `e386591`.
@@ -38,6 +39,5 @@
 - `F079-job-line-shows-changed-files` (🟢 PROVEN): a running job line shows its changed-file count; a missing worktree leaves the signal absent. Landed `a98fa51`. Coordinator-inspected.
 - `F082-handoff-points-at-the-board` (🟢 PROVEN): a handoff points at the board line that owns its boundary; changes and steers name that line instead of duplicating the rule. Landed `88a2627`. Coordinator-inspected.
 - `F080-one-correction-reaches-every-job` (🟢 PROVEN): `limen steer --running` delivers one correction to every watched live job and reports targets that end during delivery. Landed `4006f2e`. Coordinator-inspected.
-- `F076-worker-attacks-its-own-candidate` (🟢 PROVEN): the worker names the acceptance line most likely to be false, writes that check, and reports what it showed. Landed `81f85ae`. Coordinator-inspected.
-- 2026-09: 33 landed. Hosted jobs end themselves; review loops stop at a ceiling; a failed turn is visible; a tab title says what the work changes; one living picture follows system shape; human-asked research compares named sources across models before judgment. spec/features/done/2026-09/
+- 2026-09: 34 landed. Hosted jobs end themselves; review loops stop at a ceiling; a failed turn is visible; a tab title says what the work changes; one living picture follows system shape; human-asked research compares named sources across models before judgment; workers falsify their own candidate before handoff. spec/features/done/2026-09/
 - 2026-08: 44 landed. Hosted jobs run in a named tab; wakes retry; the process tree is contained. spec/features/done/2026-08/
