@@ -13,6 +13,7 @@
 
 ## NOW
 
+- `F089-workers-accept-explicit-pi-flags` (🟠 ACTIVE): workers receive literal Pi provider and thinking flags; boundary: parser and existing launch-argument transport, with transcript behavior and process supervision unchanged.
 - `F048-hosted-runtime-start` (🟠 ACTIVE): spawn prints the ID in seconds; the detached supervisor starts pi and owns the job. This closes the live 2026-08-27 caller-timeout orphaning before F049.
 - `F074-claude-perspective` (🟠 ACTIVE): a detached job runs on Claude instead of Pi, so the coordinator can buy a perspective on interface and feature shape. Interleaves with the seat work; gates nothing.
 - `F081-spawn-refuses-an-unusable-route` (🟠 ACTIVE): spawn rejects an unusable route before planting a job; boundary: spawn preflight and hosted-start argument transport, with no retries or model selection.
