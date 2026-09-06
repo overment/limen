@@ -73,7 +73,8 @@ export async function spawnCommand(args: readonly string[], cwd: string): Promis
 	const loaded = await readSpawnTask(parsed.task, parsed.taskFile, cwd);
 	const options = { ...parsed, tab, task: loaded.text, label: parsed.label ?? (loaded.text.trim().split(/\r?\n/, 1)[0]?.trim().slice(0, 80) || "job") };
 	const engine = options.engine ?? "pi";
-	const model = options.model ?? (engine === "claude" ? undefined : process.env[options.review ? "LIMEN_REVIEWER_MODEL" : "LIMEN_WORKER_MODEL"]?.trim() || undefined);
+	const model =
+		options.model ?? (engine === "claude" ? undefined : process.env[options.review ? "LIMEN_REVIEWER_MODEL" : "LIMEN_WORKER_MODEL"]?.trim() || "openai-codex/gpt-6-astra:high");
 	if (engine === "claude") preflightClaude();
 	else preflightPi(model);
 	const notificationSession = currentNotificationSession();

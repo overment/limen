@@ -158,9 +158,16 @@ test("stage model defaults respect review roles and explicit overrides", async (
 		if (inherited.reviewer === undefined) delete process.env.LIMEN_REVIEWER_MODEL;
 		else process.env.LIMEN_REVIEWER_MODEL = inherited.reviewer;
 	});
-	const noDefault = onlyJobId(limen(scratch, "spawn", "no model default").stdout);
-	await waitForState(scratch.root, noDefault, "done");
-	assert.equal(await modelForJob(scratch.root, noDefault), undefined);
+	const packageDefault = onlyJobId(limen(scratch, "spawn", "package model default").stdout);
+	await waitForState(scratch.root, packageDefault, "done");
+	assert.equal(await modelForJob(scratch.root, packageDefault), "openai-codex/gpt-6-astra:high");
+	const reviewDefault = onlyJobId(limen(scratch, "spawn", "--review", "--branch", `limen/${packageDefault}`, "requested review default").stdout);
+	await waitForState(scratch.root, reviewDefault, "done");
+	assert.equal(await modelForJob(scratch.root, reviewDefault), "openai-codex/gpt-6-astra:high");
+	process.env.LIMEN_WORKER_MODEL = "   ";
+	const blank = onlyJobId(limen(scratch, "spawn", "blank stage default").stdout);
+	await waitForState(scratch.root, blank, "done");
+	assert.equal(await modelForJob(scratch.root, blank), "openai-codex/gpt-6-astra:high");
 	process.env.LIMEN_WORKER_MODEL = "worker-default";
 	process.env.LIMEN_REVIEWER_MODEL = "reviewer-default";
 	const worker = onlyJobId(limen(scratch, "spawn", "worker model default").stdout);
@@ -172,6 +179,9 @@ test("stage model defaults respect review roles and explicit overrides", async (
 	const explicit = onlyJobId(limen(scratch, "spawn", "--model", "ticket-specific", "explicit model").stdout);
 	await waitForState(scratch.root, explicit, "done");
 	assert.equal(await modelForJob(scratch.root, explicit), "ticket-specific");
+	const explicitReview = onlyJobId(limen(scratch, "spawn", "--review", "--branch", `limen/${worker}`, "--model", "review-specific", "explicit review model").stdout);
+	await waitForState(scratch.root, explicitReview, "done");
+	assert.equal(await modelForJob(scratch.root, explicitReview), "review-specific");
 });
 
 async function modelForJob(root: string, id: string): Promise<string | undefined> {
@@ -524,6 +534,7 @@ test("F074: a claude job keeps the ordinary record and files the closing result"
 	assert.equal(argv[argv.indexOf("--permission-mode") + 1], "bypassPermissions");
 	assert.match(argv[argv.indexOf("--append-system-prompt") + 1] ?? "", /You answer one question with a perspective/);
 	assert.equal(argv.includes("--session-dir"), false);
+	assert.equal(argv.includes("--model"), false, "the Pi package default must not reach Claude");
 	// The engine is a spawn choice, not a resumable session: continue says so instead of failing on a missing transcript.
 	assert.match(limen(scratch, "continue", id, "say more").stderr, /ran on claude/);
 });

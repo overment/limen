@@ -47,7 +47,7 @@ export async function continueCommand(args: readonly string[], cwd: string): Pro
 	const herdr = herdrAvailable();
 	const hosted = detached ? false : tab || herdr;
 	if (tab && !herdr) throw new Error("hosted continue requires Herdr (HERDR_ENV=1); use --detached for an ordinary job");
-	const chosenModel = model ?? (process.env[review ? "LIMEN_REVIEWER_MODEL" : "LIMEN_WORKER_MODEL"]?.trim() || undefined);
+	const chosenModel = model ?? (process.env[review ? "LIMEN_REVIEWER_MODEL" : "LIMEN_WORKER_MODEL"]?.trim() || "openai-codex/gpt-6-astra:high");
 	preflightPi(chosenModel);
 
 	const root = workspaceRoot(cwd) ?? repoRoot(cwd);

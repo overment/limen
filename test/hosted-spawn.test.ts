@@ -498,7 +498,7 @@ test("spawn in Herdr is hosted without --tab; --detached keeps a watch tab", asy
 	assert.equal(limen(scratch, "init").status, 0);
 	const herdr = await installHostedFakeHerdr(scratch.root, scratch.fakeBin);
 	const env = { HERDR_ENV: "1", LIMEN_HERDR: herdr.bin, FAKE_HERDR_STATE: herdr.dir, HERDR_TAB_ID: "coord:t0" };
-	const launched = limenWithEnv(scratch, env, "spawn", "--label", "F010 hosted", "make a tiny commit");
+	const launched = limenWithEnv(scratch, { ...env, LIMEN_WORKER_MODEL: "" }, "spawn", "--label", "F010 hosted", "make a tiny commit");
 	assert.equal(launched.status, 0, launched.stderr);
 	assert.match(launched.stdout, /started F010 hosted \(hosted\)/);
 	const id = onlyJobId(launched.stdout);
@@ -519,6 +519,7 @@ test("spawn in Herdr is hosted without --tab; --detached keeps a watch tab", asy
 	assert.ok(focusNew >= 0 && start > focusNew && focusSpace > start && focusCoord > focusSpace, calls);
 	assert.equal(await readFile(join(job, "herdr/workspace"), "utf8"), "w1\n");
 	assert.match(calls, /--kind pi/);
+	assert.match(lines[start] ?? "", /--model openai-codex\/gpt-6-astra:high(?: |$)/);
 	assert.doesNotMatch(calls, /pane run .*tail/);
 	await waitForState(scratch.root, id, "done");
 	assert.match(await readFile(join(job, "log"), "utf8"), /hosted supervisor started/);
@@ -918,7 +919,7 @@ console.log(JSON.stringify({ type: "message_end", message: { role: "assistant", 
 	await waitForState(scratch.root, parent, "done");
 	const herdr = await installHostedFakeHerdr(scratch.root, scratch.fakeBin);
 	const env = { HERDR_ENV: "1", LIMEN_HERDR: herdr.bin, FAKE_HERDR_STATE: herdr.dir, HERDR_TAB_ID: "coord:t0" };
-	const launched = limenWithEnv(scratch, env, "continue", parent, "now refine the seam");
+	const launched = limenWithEnv(scratch, { ...env, LIMEN_WORKER_MODEL: "" }, "continue", parent, "now refine the seam");
 	assert.equal(launched.status, 0, launched.stderr);
 	assert.match(launched.stdout, /\(hosted\)/);
 	const id = onlyJobId(launched.stdout);
@@ -928,6 +929,7 @@ console.log(JSON.stringify({ type: "message_end", message: { role: "assistant", 
 	const calls = await waitForFile(herdr.calls, /agent start /);
 	assert.match(calls, /agent start /);
 	assert.match(calls, /--continue now refine the seam/);
+	assert.match(calls, /--model openai-codex\/gpt-6-astra:high(?: |$)/);
 	assert.doesNotMatch(calls, /@/);
 	await waitForState(scratch.root, id, "done");
 });

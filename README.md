@@ -32,7 +32,7 @@ Then in each project:
 ```bash
 cd /path/to/your-project
 limen init
-pi
+pi --provider openai-codex --model gpt-6-astra --thinking xhigh
 ```
 
 `limen init` plants what the project owns (vision, board, feature lanes, styleguide) and a stub that loads package hooks. It never overwrites existing project files. It always deletes leftover `.pi/extensions/limen-*.ts` hook copies so they cannot load beside the stub. `limen init --drop-leftovers` deletes only prompt copies that still match the package.
@@ -79,14 +79,31 @@ A job is bounded by 90 minutes (`--timeout 20m`) and 900 tool-start events (`LIM
 
 ## Models
 
-Set these in the environment that starts the coordinator:
+Coordinators use `openai-codex/gpt-6-astra` with `xhigh` thinking. In an existing Herdr pane at a shell prompt, with the project as its working directory, Tony starts a peer with explicit Pi arguments:
 
 ```bash
-export LIMEN_WORKER_MODEL="your-worker-model"
-export LIMEN_REVIEWER_MODEL="your-reviewer-model"
+herdr agent start limen-peer --kind pi --pane <pane-id> -- \
+  --provider openai-codex --model gpt-6-astra --thinking xhigh
 ```
 
-`--model MODEL` on one spawn overrides the stage default. With no setting, Pi chooses as usual.
+Herdr forwards the arguments after `--`; it does not select Limen's model. This repository also tracks `.pi/settings.json` with coordinator defaults for a bare `pi` launch when the project is trusted. Explicit flags work even when project settings are ignored. `limen init` does not change other projects' Pi settings. Adam's global `~/.pi/agent/settings.json` is left untouched; its `grok-4.6` default still applies outside this override.
+
+Pi workers default to `openai-codex/gpt-6-astra:high` in Limen's spawn path, for both hosted and detached jobs. No export is required. To make the policy explicit, set this in each coordinator's shell environment before starting it:
+
+```bash
+export LIMEN_WORKER_MODEL="openai-codex/gpt-6-astra:high"
+```
+
+One-spawn override (Limen accepts `--model provider/id:thinking`, not separate `--provider` or `--thinking` flags; Pi resolves the tuple explicitly):
+
+```bash
+limen spawn --model openai-codex/gpt-6-astra:high \
+  --label "short worker task" 'Implement the requested slice.'
+```
+
+Precedence is `--model`, then `LIMEN_WORKER_MODEL`, then the package default. A requested `--review` uses `LIMEN_REVIEWER_MODEL` instead of `LIMEN_WORKER_MODEL`, with the same package fallback; neither variable starts a review. Adam performs reviews for Alice/Limen work, so do not spawn an independent reviewer unless asked. If requested, its model can be explicit or set with `export LIMEN_REVIEWER_MODEL="openai-codex/gpt-6-astra:high"`.
+
+The `--engine claude` path keeps its own CLI default unless `--model` is supplied. Pi's `PI_PROVIDER`, `PI_MODEL`, and `PI_REASONING_LEVEL` describe the current session; they do not configure a child Pi launch.
 
 ## Adjacent-repository workspaces
 

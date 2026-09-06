@@ -68,6 +68,30 @@ test("continue resumes a finished job in its own session and links the record", 
 	assert.match(detail.stdout, new RegExp(`parent ${parent}`));
 });
 
+test("continue sends an explicit model rather than inheriting Pi settings or the old session", async (context) => {
+	const scratch = await scratchRepo(continuingFakePi);
+	context.after(scratch.cleanup);
+	assert.equal(limen(scratch, "init").status, 0);
+	const parent = onlyJobId(limen(scratch, "spawn", "--model", "xai/grok-4.6:xhigh", "first slice").stdout);
+	await waitForState(scratch.root, parent, "done");
+	const cases = [
+		{ worker: "", reviewer: "", flags: [], expected: "openai-codex/gpt-6-astra:high" },
+		{ worker: "   ", reviewer: "", flags: [], expected: "openai-codex/gpt-6-astra:high" },
+		{ worker: "worker-model", reviewer: "review-model", flags: [], expected: "worker-model" },
+		{ worker: "worker-model", reviewer: "review-model", flags: ["--review"], expected: "review-model" },
+		{ worker: "worker-model", reviewer: "", flags: ["--review"], expected: "openai-codex/gpt-6-astra:high" },
+		{ worker: "worker-model", reviewer: "review-model", flags: ["--model", "explicit"], expected: "explicit" },
+	];
+	for (const entry of cases) {
+		const env = { LIMEN_WORKER_MODEL: entry.worker, LIMEN_REVIEWER_MODEL: entry.reviewer };
+		const launched = limenWithEnv(scratch, env, "continue", ...entry.flags, parent, "refine the seam");
+		assert.equal(launched.status, 0, launched.stderr);
+		await waitForState(scratch.root, onlyJobId(launched.stdout), "done");
+		const argv = JSON.parse(await readFile(join(worktreeFor(scratch.root, parent), "pi-args.json"), "utf8")) as string[];
+		assert.equal(argv[argv.indexOf("--model") + 1], entry.expected);
+	}
+});
+
 test("continue without --review loads the parent role preamble", async (context) => {
 	const scratch = await scratchRepo(continuingFakePi);
 	context.after(scratch.cleanup);
