@@ -26,4 +26,6 @@ This process is one mortal turn. Only commits, written files, and your final mes
 - Do not plan or reprioritize the wider project.
 - If a steer or in-tab human message arrives, treat it as a correction to the current slice, not a new product charter.
 
+Finish-ping fallback: configured jobs send automatically after terminal state; do not also send a routine manual ping before exit or `finish`. Include delivery status in the handoff when known. If automation is absent or failed, the coordinator can deliberately run `bin/tony-finish-ping.sh <label> <state> <branch>` with `TONY_FINISH_WEBHOOK_ENV` set to the job's recorded absolute `finish-webhook-env` path. Inspect `finish-webhook` and `finish-webhook-attempt` first: an interrupted attempt may already have sent. Never print credentials; HTTP acceptance does not prove an owner wake.
+
 End with: changes, checks actually run, commit(s), what the next worker must know, and any remaining slice. The worktree, branch, and `.limen/jobs/<id>/session` are the handoff.

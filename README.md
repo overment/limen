@@ -10,6 +10,8 @@ Requires macOS or Linux, Node.js 24+, Git, and `pi` on `PATH`. Windows is unsupp
 
 Jobs can live on an always-on **seat** (a VPS on Tailscale) while your laptop is only a window. See [docs/remote.md](docs/remote.md). The walkthrough we actually ran is [docs/vps.md](docs/vps.md).
 
+Opt-in terminal webhooks: [finish-ping setup, inspection and deliberate retry](docs/finish-webhooks.md).
+
 ## Trust boundary
 
 A spawned job runs `pi --approve` as you — or `claude -p --permission-mode bypassPermissions` when it runs on the Claude engine. A worktree and process group provide separation, not a security sandbox. A worker can do anything your account can do. Look at the branch before you merge. See [SECURITY.md](SECURITY.md).

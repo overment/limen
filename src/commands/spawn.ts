@@ -5,6 +5,7 @@ import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { signalProcessGroup, waitForProcessGroup } from "../contain.ts";
+import { finishWebhookEnv } from "../finish-webhook.ts";
 import {
 	addBranchWorktree,
 	addDetachedWorktree,
@@ -153,6 +154,8 @@ export async function spawnCommand(args: readonly string[], cwd: string): Promis
 				: []),
 			...(coordinatorTab ? [writeFile(`${jobDir}/origin-tab`, `${coordinatorTab}\n`, { flag: "wx", flush: true })] : []),
 		]);
+		const finishConfig = finishWebhookEnv(root, cwd);
+		if (finishConfig) await writeFile(`${jobDir}/finish-webhook-env`, `${finishConfig}\n`, { flag: "wx", mode: 0o600, flush: true });
 		await writeFile(`${jobDir}/notify/ready`, "1\n", { flag: "wx", flush: true });
 		await runPrepare(jobDir, worktree, parsed.prepare ?? process.env.LIMEN_PREPARE?.trim());
 	} catch (error) {
