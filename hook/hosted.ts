@@ -1,9 +1,9 @@
 import { execFile } from "node:child_process";
-import { appendFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 type PiApi = {
-	on(event: "session_start" | "session_shutdown", handler: (event: unknown, context: unknown) => void): void;
+	on(event: "session_start" | "session_shutdown" | "agent_settled", handler: (event: unknown, context: unknown) => void): void;
 	on(event: "tool_execution_start", handler: (event: { readonly toolName?: string }, context: unknown) => void): void;
 	on(event: "turn_start" | "turn_end", handler: (event: unknown, context: unknown) => void): void;
 	registerTool?(tool: {
@@ -31,6 +31,38 @@ export default function limenHosted(pi: PiApi): void {
 	if (!existsSync(jobDir)) return;
 	let tools = 0;
 	let turnTools = 0;
+	let metadataTimer: NodeJS.Timeout | undefined;
+	let herdr: { readonly binary: string; readonly pane: string } | undefined;
+	let seq = Date.now();
+	let metadata = "";
+	let metadataAt = 0;
+	const report = (release = false) => {
+		if (!herdr) return;
+		try {
+			const state = release ? "" : readFileSync(join(jobDir, "state"), "utf8").trim();
+			const body = ["running", "done", "failed", "stopped"].includes(state) ? `job ${state.toUpperCase()}` : "job state unknown";
+			if (!release && body === metadata && Date.now() - metadataAt < 60_000) return;
+			metadata = body;
+			metadataAt = Date.now();
+			const change = release
+				? ["--clear-display-agent", "--clear-token", "limen", "--clear-state-labels"]
+				: [
+						"--display-agent",
+						`limen ${process.env.LIMEN_ROLE?.trim() || "worker"}`,
+						"--token",
+						`limen=${body}`,
+						"--state-label",
+						`idle=${body} · pane ready`,
+						"--state-label",
+						`done=${body} · pane ready`,
+						"--ttl-ms",
+						"180000",
+					];
+			execFile(herdr.binary, ["pane", "report-metadata", herdr.pane, "--source", "limen", "--seq", String((seq += 1)), ...change], { timeout: 2_000 }, () => {}).unref();
+		} catch {
+			// Advisory. Never infer job completion from a pane settling or an unreadable record.
+		}
+	};
 	const write = (name: string, content: string) => {
 		try {
 			writeFileSync(join(jobDir, name), content.endsWith("\n") ? content : `${content}\n`);
@@ -65,18 +97,17 @@ export default function limenHosted(pi: PiApi): void {
 		mkdirSync(join(jobDir, "session"), { recursive: true });
 		write("activity", "think");
 		log(`[limen ${new Date().toISOString()}] hosted reporter attached`);
-		// The sidebar description says who this pane is; the tab label already says what it does.
-		const herdr = process.env.LIMEN_HERDR?.trim() || "herdr";
+		const binary = process.env.LIMEN_HERDR?.trim() || "herdr";
 		const pane = process.env.HERDR_PANE_ID?.trim();
-		if (process.env.HERDR_ENV === "1" && herdr !== "0" && pane) {
-			const role = `limen ${process.env.LIMEN_ROLE?.trim() || "worker"}`;
-			try {
-				execFile(herdr, ["pane", "report-metadata", pane, "--source", "limen", "--display-agent", role], { timeout: 2_000 }, () => {}).unref();
-			} catch {
-				// Advisory.
-			}
-		}
+		if (metadataTimer) clearInterval(metadataTimer);
+		herdr = process.env.HERDR_ENV === "1" && binary !== "0" && pane ? { binary, pane } : undefined;
+		if (!herdr) return;
+		report();
+		// Refresh even through long silent turns; state changes remain the supervisor's responsibility.
+		metadataTimer = setInterval(report, 1_000);
+		metadataTimer.unref();
 	});
+	pi.on("agent_settled", () => report());
 	pi.on("turn_start", () => {
 		turnTools = 0;
 		write("activity", "think");
@@ -98,6 +129,10 @@ export default function limenHosted(pi: PiApi): void {
 		log("wait");
 	});
 	pi.on("session_shutdown", () => {
+		if (metadataTimer) clearInterval(metadataTimer);
+		metadataTimer = undefined;
+		report(true);
+		herdr = undefined;
 		write("activity", "wait");
 		write("session-ended", new Date().toISOString());
 		log(`[limen ${new Date().toISOString()}] hosted session shutdown`);

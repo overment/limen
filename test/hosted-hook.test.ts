@@ -1,8 +1,80 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import test from "node:test";
 import limenHosted from "../hook/hosted.ts";
+
+test("settled hosted pane reports the durable job state, refreshes silence, and releases metadata on shutdown", async (context) => {
+	const root = await mkdtemp(join(process.env.TMPDIR ?? "/tmp", "limen-hosted-metadata-"));
+	context.after(() => rm(root, { recursive: true, force: true }));
+	const job = join(root, ".limen/jobs/job-1");
+	await mkdir(job, { recursive: true });
+	await writeFile(join(job, "state"), "running\n");
+	const calls = join(root, "calls");
+	const fake = join(root, "herdr");
+	await writeFile(fake, `#!/bin/sh\nprintf '%s\\n' "$@" "" >> "${calls}"\n`);
+	await chmod(fake, 0o755);
+	for (const [key, value] of Object.entries({
+		LIMEN_HOSTED: "1",
+		LIMEN_JOB: "1",
+		LIMEN_CONTEXT_ROOT: root,
+		LIMEN_JOB_ID: "job-1",
+		LIMEN_ROLE: "reviewer",
+		LIMEN_HERDR: fake,
+		HERDR_ENV: "1",
+		HERDR_PANE_ID: "w1:p1",
+	})) {
+		const previous = process.env[key];
+		process.env[key] = value;
+		context.after(() => {
+			if (previous === undefined) delete process.env[key];
+			else process.env[key] = previous;
+		});
+	}
+	const handlers = new Map<string, (event?: unknown) => void>();
+	limenHosted({ on: (event, handler) => handlers.set(event, handler as (event?: unknown) => void) });
+	const readCalls = async (): Promise<string[][]> =>
+		(await readFile(calls, "utf8").catch(() => ""))
+			.trim()
+			.split("\n\n")
+			.filter(Boolean)
+			.map((call) => call.split("\n"));
+	const waitFor = async (predicate: (calls: string[][]) => boolean) => {
+		const deadline = performance.now() + 3_000;
+		while (!predicate(await readCalls()) && performance.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 20));
+		assert.ok(predicate(await readCalls()), "expected hosted metadata report");
+	};
+	context.mock.timers.enable({ apis: ["setInterval", "Date"] });
+	handlers.get("session_start")?.({});
+	context.after(() => handlers.get("session_shutdown")?.({}));
+	handlers.get("turn_end")?.({});
+	handlers.get("agent_settled")?.({});
+	await waitFor((calls) => calls.some((call) => call.includes("idle=job RUNNING · pane ready")));
+	const running = (await readCalls()).find((call) => call.includes("idle=job RUNNING · pane ready"));
+	assert.ok(running);
+	assert.ok(running.includes("done=job RUNNING · pane ready"));
+	assert.ok(running.includes("limen=job RUNNING"));
+	assert.ok(running.includes("limen reviewer"));
+	assert.equal(await readFile(join(job, "state"), "utf8"), "running\n", "settlement cannot finish the job");
+	context.mock.timers.tick(61_000);
+	await waitFor((calls) => calls.filter((call) => call.includes("limen=job RUNNING")).length >= 2);
+	await writeFile(join(job, "state"), "stopped\n");
+	context.mock.timers.tick(1_000);
+	await waitFor((calls) => calls.some((call) => call.includes("limen=job STOPPED")));
+	assert.ok((await readCalls()).some((call) => call.includes("done=job STOPPED · pane ready")));
+	handlers.get("session_shutdown")?.({});
+	await waitFor((calls) => calls.some((call) => call.includes("--clear-state-labels")));
+	const before = (await readCalls()).length;
+	context.mock.timers.tick(180_000);
+	assert.equal((await readCalls()).length, before, "shutdown must stop metadata refresh");
+	for (const call of await readCalls()) {
+		assert.deepEqual(call.slice(0, 5), ["pane", "report-metadata", "w1:p1", "--source", "limen"]);
+		assert.ok(!call.includes("--state"));
+		assert.ok(!call.some((arg) => arg.startsWith("blocked=")), "wait is not a human blocker");
+	}
+	const seqs = (await readCalls()).map((call) => Number(call[call.indexOf("--seq") + 1]));
+	assert.equal(new Set(seqs).size, seqs.length, "sequencing must reject late pre-shutdown reports");
+});
 
 test("hosted finish writes the handoff and shuts down; a text-only turn records zero tools", async (context) => {
 	const root = await mkdtemp(join(process.env.TMPDIR ?? "/tmp", "limen-hosted-hook-"));
