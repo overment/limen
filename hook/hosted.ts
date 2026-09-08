@@ -39,6 +39,11 @@ export default function limenHosted(pi: PiApi): void {
 	const report = (release = false) => {
 		if (!herdr) return;
 		try {
+			// The supervisor owns warning metadata until it removes the advisory.
+			if (!release && existsSync(join(jobDir, "advisory"))) {
+				metadata = ""; // Restore ordinary labels on the first poll after recovery.
+				return;
+			}
 			const state = release ? "" : readFileSync(join(jobDir, "state"), "utf8").trim();
 			const body = ["running", "done", "failed", "stopped"].includes(state) ? `job ${state.toUpperCase()}` : "job state unknown";
 			if (!release && body === metadata && Date.now() - metadataAt < 60_000) return;

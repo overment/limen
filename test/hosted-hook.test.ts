@@ -3,8 +3,9 @@ import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises
 import { join } from "node:path";
 import test from "node:test";
 import limenHosted from "../hook/hosted.ts";
+import { reportHostedStall, restoreHostedPane } from "../src/herdr.ts";
 
-test("settled hosted pane reports the durable job state, refreshes silence, and releases metadata on shutdown", async (context) => {
+test("hosted refresh preserves supervisor warnings, promptly recovers RUNNING labels, and cleans up on shutdown", async (context) => {
 	const root = await mkdtemp(join(process.env.TMPDIR ?? "/tmp", "limen-hosted-metadata-"));
 	context.after(() => rm(root, { recursive: true, force: true }));
 	const job = join(root, ".limen/jobs/job-1");
@@ -58,21 +59,42 @@ test("settled hosted pane reports the durable job state, refreshes silence, and 
 	assert.equal(await readFile(join(job, "state"), "utf8"), "running\n", "settlement cannot finish the job");
 	context.mock.timers.tick(61_000);
 	await waitFor((calls) => calls.filter((call) => call.includes("limen=job RUNNING")).length >= 2);
+	for (const advisory of ["idle 2m after 4 tool calls", "blocked after 4 tool calls", "errored: last turn failed with error: usage limit reached"]) {
+		await writeFile(join(job, "advisory"), `${advisory}, session still open\n`);
+		reportHostedStall({ pane: "w1:p1", label: "job-1", duration: "2m", notify: false });
+		const beforeStall = (await readCalls()).filter((call) => call.includes("limen=job RUNNING")).length;
+		await waitFor((calls) => calls.at(-1)?.includes("blocked=⚠ stalled 2m") === true);
+		const stalled = (await readCalls()).length;
+		context.mock.timers.tick(advisory.startsWith("idle") ? 61_000 : 1_000);
+		handlers.get("agent_settled")?.({});
+		await new Promise((resolve) => setTimeout(resolve, 100));
+		assert.equal((await readCalls()).length, stalled, `${advisory}: heartbeat and settlement must leave the supervisor warning alone`);
+		assert.match(await readFile(join(job, "advisory"), "utf8"), /session still open/);
+		await rm(join(job, "advisory"));
+		restoreHostedPane("w1:p1", "reviewer");
+		await waitFor((calls) => calls.at(-1)?.includes("--clear-state-labels") === true);
+		context.mock.timers.tick(1_000);
+		await waitFor((calls) => calls.filter((call) => call.includes("limen=job RUNNING")).length > beforeStall);
+		assert.ok((await readCalls()).at(-1)?.includes("done=job RUNNING · pane ready"), "recovery must not wait for the 60s refresh cache");
+	}
 	await writeFile(join(job, "state"), "stopped\n");
 	context.mock.timers.tick(1_000);
 	await waitFor((calls) => calls.some((call) => call.includes("limen=job STOPPED")));
 	assert.ok((await readCalls()).some((call) => call.includes("done=job STOPPED · pane ready")));
+	await writeFile(join(job, "advisory"), "blocked after 4 tool calls, session still open\n");
+	reportHostedStall({ pane: "w1:p1", label: "job-1", duration: "2m", notify: false });
+	await waitFor((calls) => calls.at(-1)?.includes("blocked=⚠ stalled 2m") === true);
 	handlers.get("session_shutdown")?.({});
-	await waitFor((calls) => calls.some((call) => call.includes("--clear-state-labels")));
+	await waitFor((calls) => calls.at(-1)?.includes("--clear-token") === true);
 	const before = (await readCalls()).length;
 	context.mock.timers.tick(180_000);
 	assert.equal((await readCalls()).length, before, "shutdown must stop metadata refresh");
 	for (const call of await readCalls()) {
 		assert.deepEqual(call.slice(0, 5), ["pane", "report-metadata", "w1:p1", "--source", "limen"]);
 		assert.ok(!call.includes("--state"));
-		assert.ok(!call.some((arg) => arg.startsWith("blocked=")), "wait is not a human blocker");
+		if (call.includes("--seq")) assert.ok(!call.some((arg) => arg.startsWith("blocked=")), "only the supervisor owns the blocker label");
 	}
-	const seqs = (await readCalls()).map((call) => Number(call[call.indexOf("--seq") + 1]));
+	const seqs = (await readCalls()).filter((call) => call.includes("--seq")).map((call) => Number(call[call.indexOf("--seq") + 1]));
 	assert.equal(new Set(seqs).size, seqs.length, "sequencing must reject late pre-shutdown reports");
 });
 
