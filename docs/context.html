@@ -1,0 +1,424 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>How we guide agents · Limen</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #111113;
+      --surface: #18181b;
+      --raised: #242427;
+      --selected: #303034;
+      --border: #333337;
+      --text: #eeeeef;
+      --muted: #acacb3;
+      --faint: #8b8b93;
+      --radius: 5px;
+      font: 14px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); }
+    button, select { font: inherit; color: inherit; }
+    button { cursor: pointer; }
+    button:disabled { opacity: .35; cursor: default; }
+    button, select, summary { border-radius: var(--radius); -webkit-tap-highlight-color: transparent; }
+    :focus-visible { outline: 2px solid #e5e5e8; outline-offset: 3px; }
+    code, .snippet, .number, .count { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+    code { font-size: 11px; overflow-wrap: anywhere; }
+    .shell { max-width: 1380px; padding: 24px 30px 20px; margin: auto; }
+    main { display: grid; grid-template-columns: 188px minmax(0, 1fr); gap: 30px; align-items: start; }
+    nav { position: sticky; top: 28px; padding-top: 1px; }
+    .step { display: flex; width: 100%; align-items: center; gap: 11px; border: 1px solid transparent; background: transparent; padding: 10px 11px; margin-bottom: 4px; text-align: left; color: var(--muted); font-size: 12px; }
+    .step .number { font-size: 10px; color: var(--faint); }
+    .step:hover { background: var(--surface); color: var(--text); }
+    .step[aria-current="step"] { background: var(--raised); color: #fff; border-color: #444449; }
+    .step[aria-current="step"] .number { color: #d3d3d8; }
+    .step[data-step="6"] { margin-top: 26px; }
+    .nav-note { margin: 25px 11px 0; color: var(--faint); font-size: 11px; line-height: 1.7; }
+    .lesson { min-width: 0; }
+    .intro { margin: 2px 0 20px; max-width: 840px; font-size: 16px; line-height: 1.65; letter-spacing: -.015em; }
+    .workspace { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 26px; align-items: start; }
+    .viewer { min-width: 0; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+    .toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; background: var(--surface); border-bottom: 1px solid var(--border); }
+    .target { font-size: 11px; color: var(--muted); }
+    .view-switch { display: flex; gap: 2px; }
+    .view-switch button { background: transparent; border: 1px solid transparent; padding: 4px 8px; font-size: 11px; color: var(--muted); }
+    .view-switch button[aria-pressed="true"] { background: #313135; color: #fff; border-color: #49494e; }
+    .legend { margin: 0; padding: 9px 14px; color: var(--muted); font-size: 10px; border-bottom: 1px solid var(--border); }
+    .legend strong { font-weight: 500; color: var(--text); }
+    .variant { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--muted); font-size: 11px; }
+    .variant[hidden] { display: none; }
+    select { min-height: 30px; padding: 3px 26px 3px 8px; background: var(--bg); border: 1px solid #4c4c53; max-width: 100%; font-size: 11px; }
+    .context { padding: 0 14px; }
+    .message { padding: 10px 0; border-bottom: 1px solid var(--border); }
+    .message:last-child { border-bottom: 0; }
+    .message-meta { display: flex; align-items: baseline; flex-wrap: wrap; gap: 7px; margin-bottom: 9px; font-size: 10px; color: var(--faint); }
+    .message-meta .role { font-weight: 600; color: #bdbdc4; }
+    .original-text { color: var(--muted); font-size: 12px; margin: 0 0 9px; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .original-text:last-child { margin-bottom: 0; }
+    .addition { display: block; text-align: left; width: 100%; background: var(--raised); border: 1px solid transparent; border-left: 2px solid #9e9ea6; padding: 7px 10px; margin: 5px 0 0; border-radius: 0 var(--radius) var(--radius) 0; }
+    .addition:hover { background: #2c2c31; }
+    .addition[aria-pressed="true"] { background: var(--selected); border-color: #777780; border-left-color: #f0f0f2; }
+    .addition-label { display: flex; align-items: center; gap: 7px; margin-bottom: 2px; color: #f0f0f2; font-size: 11px; line-height: 1.4; font-weight: 600; }
+    .plus { font-size: 13px; font-weight: 400; color: #c0c0c8; }
+    .snippet { display: block; white-space: pre-wrap; overflow-wrap: anywhere; color: #cdccd4; font-size: 11px; line-height: 1.65; font-weight: 400; }
+    .history { border-bottom: 1px solid var(--border); padding: 12px 0; color: var(--faint); font-size: 11px; }
+    .history summary { cursor: pointer; }
+    .history p { margin: 8px 0 0; color: var(--muted); font-size: 12px; }
+    [data-view="original"] .addition, [data-view="original"] .added-message { display: none; }
+    .comparison-note { margin: 0; padding: 10px 14px; border-top: 1px solid var(--border); color: var(--faint); font-size: 10px; }
+    .reason { position: sticky; top: 28px; padding: 3px 0 0 16px; border-left: 1px solid var(--border); }
+    .reason-label { margin: 0 0 10px; font-size: 12px; color: #fff; font-weight: 600; }
+    .reason p { font-size: 13px; line-height: 1.75; }
+    .reason .decision { margin: 0 0 18px; color: var(--text); }
+    .reason .benefit { margin: 0 0 15px; color: var(--muted); }
+    .reason .benefit strong { display: block; font-size: 11px; font-weight: 550; color: #d3d3da; margin-bottom: 3px; }
+    .reason .limit { color: var(--faint); font-size: 11px; line-height: 1.7; margin: 18px 0 0; }
+    .source { margin-top: 16px; color: var(--faint); font-size: 11px; }
+    .source summary { cursor: pointer; width: fit-content; }
+    .source code { display: block; margin-top: 7px; color: var(--muted); }
+    .reset-reason { background: transparent; border: 0; border-bottom: 1px solid var(--border); border-radius: 0; padding: 0 0 2px; color: var(--muted); font-size: 11px; margin-bottom: 12px; }
+    .reset-reason[hidden] { display: none; }
+    .bottom { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 26px; }
+    .navigation { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin: 18px 0 0; }
+    .navigation button { padding: 7px 11px; border: 1px solid var(--border); background: var(--surface); font-size: 11px; }
+    .navigation button:not(:disabled):hover { border-color: #74747d; }
+    .navigation .next { background: #d8d8df; color: #161619; border-color: #d8d8df; }
+    .count { color: var(--faint); font-size: 10px; }
+    .notes { margin-top: 17px; color: var(--muted); font-size: 11px; }
+    .notes > summary { cursor: pointer; width: fit-content; padding: 3px 0; }
+    .notes ul { margin: 9px 0 0; padding-left: 16px; }
+    .notes li { margin: 7px 0; }
+    footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; margin-top: 24px; padding-top: 14px; border-top: 1px solid var(--border); font-size: 10px; color: var(--faint); }
+    kbd { font: inherit; border: 1px solid var(--border); border-radius: 3px; padding: 1px 3px; }
+    .sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+    @media (max-width: 1100px) {
+      .shell { padding: 26px 22px; }
+      main { grid-template-columns: 155px minmax(0, 1fr); gap: 22px; }
+      .workspace { grid-template-columns: minmax(0, 1fr) 220px; gap: 20px; }
+      .bottom { grid-template-columns: minmax(0, 1fr) 220px; gap: 20px; }
+      .step { padding: 9px 7px; font-size: 11px; gap: 8px; }
+    }
+    @media (max-width: 850px) {
+      .workspace, .bottom { grid-template-columns: minmax(0, 1fr); }
+      .reason { position: static; margin-top: 2px; padding: 15px 0 0; border-left: 0; border-top: 1px solid var(--border); }
+      .reason p { font-size: 13px; }
+      .reason .decision { margin-bottom: 13px; }
+      .reason .benefit { margin-bottom: 12px; }
+      .reason .benefit strong { display: inline; margin-right: 5px; }
+      .intro { font-size: 15px; }
+    }
+    @media (max-width: 600px) {
+      .shell { padding: 14px 15px 20px; }
+      main { display: block; }
+      nav { position: static; display: flex; overflow-x: auto; gap: 5px; padding: 4px 0 13px; margin-bottom: 14px; }
+      .step, .step[data-step="6"] { flex-shrink: 0; width: auto; margin: 0; padding: 7px 10px; }
+      .nav-note { display: none; }
+      .intro { margin-top: 0; }
+      .toolbar { gap: 6px; }
+      .keyboard { display: none; }
+    }
+    @media print {
+      nav, .view-switch, .variant, .navigation, .reset-reason, .keyboard { display: none; }
+      main { display: block; }
+      .shell { max-width: none; }
+      .reason { position: static; }
+      body { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <main>
+      <nav id="steps" aria-label="Conversation steps"></nav>
+      <article class="lesson" aria-label="How we modify the agent's context">
+        <p class="intro" id="intro"></p>
+        <div class="workspace">
+          <div class="viewer">
+            <div class="toolbar">
+              <span class="target" id="target"></span>
+              <div class="view-switch" role="group" aria-label="Compare before and after adding context">
+                <button type="button" data-view="original" aria-pressed="false">Before</button>
+                <button type="button" data-view="limen" aria-pressed="true">After</button>
+              </div>
+            </div>
+            <p class="legend"><strong>+ Brighter blocks are our additions.</strong> Select one to see why it is there.</p>
+            <div class="variant" id="variant" hidden></div>
+            <div class="context" id="context" data-view="limen"></div>
+            <p class="comparison-note" id="comparison-note"></p>
+          </div>
+          <aside class="reason" aria-label="Why we made this decision" tabindex="-1">
+            <button type="button" class="reset-reason" id="reset-reason" hidden>&larr; Explain the whole step</button>
+            <p class="reason-label" id="reason-label"></p>
+            <p class="decision" id="decision"></p>
+            <p class="benefit"><strong>For quality</strong><span id="quality"></span></p>
+            <p class="benefit"><strong>For managing the work</strong><span id="management"></span></p>
+            <p class="limit" id="limit"></p>
+            <details class="source" id="source"><summary>Where this comes from</summary><code id="source-path"></code></details>
+          </aside>
+        </div>
+        <div class="bottom"><div>
+          <div class="navigation"><button type="button" id="previous">&larr; Previous</button><span class="count" id="counter"></span><button type="button" class="next" id="next">Next &rarr;</button></div>
+          <details class="notes" id="notes"><summary>Implementation details and exceptions</summary><ul id="note-content"></ul></details>
+        </div></div>
+        <p class="sr-only" id="announcement" role="status" aria-live="polite" aria-atomic="true"></p>
+      </article>
+    </main>
+    <footer><span>Shortened examples of Limen's behavior, not a live conversation. Instructions guide judgment; checks provide evidence.</span><span class="keyboard"><kbd>&larr;</kbd> <kbd>&rarr;</kbd> steps &nbsp; <kbd>H</kbd> before / after</span></footer>
+    <noscript><p>This self-contained walkthrough needs JavaScript. It does not need a network connection.</p></noscript>
+  </div>
+  <script>
+    const labels = ["Your request", "Using a tool", "Delegating work", "Correcting direction", "Receiving a result", "Updating the plan", "Using Claude", "Resuming work", "Recovering a failure"];
+    const state = { step: 0, view: "limen", tool: "code", role: "worker", selected: null };
+    let current;
+    let additions = [];
+    const escape = (text) => String(text).replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
+    const explain = (decision, quality, management, limit = "") => ({ decision, quality, management, limit });
+    const plain = (text) => ({ text });
+    const added = (label, text, source, reason) => ({ label, text, source, reason, added: true });
+    const message = (role, label, pieces, whole = false) => ({ role, label, pieces, whole });
+    const history = (text) => ({ history: text });
+    const base = (engine = "Pi") => plain(`${engine}'s own instructions, available tools and project information.`);
+    const system = (pieces, engine = "Pi") => message("System instructions", "Rules above the conversation", [base(engine), ...pieces]);
+    const human = (text, label = "Written by the human") => message("User message", label, [plain(text)]);
+    const sourceRules = "hook/communication.ts · guidancePrompt()";
+
+    function coordination() {
+      return added("Coordination rules", "Keep the plan current. Delegate focused tasks. Inspect results.", "templates/agents.md", explain(
+        "We tell the coordinator how to organize the work, not just how to answer a question.",
+        "It is instructed to inspect changes and real check results instead of accepting a worker's claim that the job is finished.",
+        "The coordinator owns tickets, assignments, reviews and merges. Workers get narrow responsibilities, so several sessions do not all try to run the project.",
+        "This is called the shop manual in the code. It is written guidance, not an automatic approval system."
+      ));
+    }
+    function communication() {
+      return added("Rules for clear explanations", "Explain changes and evidence. Write for the intended reader.", "templates/communication.md", explain(
+        "We include shared writing rules, then tell each reply who it is for.",
+        "Claims must distinguish checked facts from assumptions. Clear explanations make missing evidence and misunderstandings easier to notice.",
+        "The human gets an understandable update. The next worker gets the paths, constraints and unresolved questions needed to continue.",
+        "The full file is included, not just the Human or Agent section. The reminder beside each request selects the audience."
+      ));
+    }
+    function vision() {
+      return added("Product goals", "Follow the product's lasting goals. Ask before changing them.", "spec/vision.md", explain(
+        "We keep the purpose of the product in context, beyond the latest small request.",
+        "The model has a reason to reject unnecessary complexity or a locally useful change that works against the product's purpose.",
+        "The human owns product direction. The coordinator can make routine engineering decisions without silently redefining what is being built."
+      ));
+    }
+    function style() {
+      return added("Coding rules", "Make small, consistent changes. Avoid unrelated rewrites.", ".agents/limen/styleguide.md", explain(
+        "We give agents the project's coding rules instead of relying on each model's preferred style.",
+        "Smaller, consistent changes are easier to understand, test and review. They reduce the amount of unrelated code a reviewer must investigate.",
+        "Different workers have a shared standard. A narrow change is easier to assign, combine with other work, or undo if it is wrong."
+      ));
+    }
+    function plan() {
+      return added("Current work and next work", "NOW: current work. NEXT: accepted work that can follow.", "spec/build.md · NOW / NEXT", explain(
+        "We include the short, current part of the work plan rather than the entire project history.",
+        "The coordinator can judge a request against work already underway and avoid acting on an outdated picture of the project.",
+        "It can identify overlapping tasks, dependencies and work that could run independently. It must still check job records and reconcile the plan before acting.",
+        "The board is a human-maintained guide, not authoritative runtime state. Its words do not lock files or prevent duplicate work."
+      ));
+    }
+    const coordinatorRules = () => [coordination(), communication(), vision(), style(), plan()];
+    const workerRules = () => [communication(), style()];
+    function replyReminder(audience = "human", extra = "", reason) {
+      return message("Extra context message", "Added by Limen; hidden in the chat UI", [added("Reminder for this reply", `<limen-project-context>\nAudience for this reply: ${audience}.\n${extra ? extra + "\n" : ""}First line is the answer. Explain identifiers.\nSize the reply to the question.\n</limen-project-context>`, "hook/communication.ts · turnCue()", reason || explain(
+        "We put a short reminder beside the request, where it is close to the next answer.",
+        "The model is reminded to answer the question clearly rather than open with an unexplained feature number or a long activity report.",
+        audience === "human" ? "The coordinator reports outcomes, checks and decisions in language the owner can act on." : "The worker reports changes, actual checks and remaining work so the coordinator can decide what to do next.",
+        "The message is stored in the session and reaches the model, even though display=false keeps it out of the normal chat UI."
+      ))], true);
+    }
+    const roles = {
+      worker: { label: "Implement a change", text: "Read the assigned ticket. Make the smallest coherent change.\nRun the relevant checks and commit the result.", quality: "Implementation stays tied to an observable outcome and real checks, rather than a tour of the repository.", management: "One worker owns one task in one isolated worktree. The coordinator still owns the overall plan and the merge." },
+      reviewer: { label: "Review a change", text: "Inspect the candidate against its ticket. Do not rewrite it.\nReport PASS or FAIL with the commit and evidence.", quality: "A fresh session can challenge the implementation without inheriting the original worker's assumptions.", management: "The reviewer reports findings; the coordinator decides whether to merge, repair or narrow the task." },
+      researcher: { label: "Research a question", text: "Answer from the named sources, not recalled APIs.\nReturn a report; do not merge or edit the plan.", quality: "Claims must be tied to material the researcher actually read, making them possible to verify.", management: "Research produces decision input, not an unsolicited implementation. The coordinator files the report." },
+      judge: { label: "Compare research", text: "Read the reports. Explain where they disagree and why.\nReturn a judgment, not a blended compromise.", quality: "Contradictions stay visible instead of disappearing inside an averaged answer.", management: "The coordinator gets the tradeoff or decision needed for a ticket. The judge does not take over the plan." },
+      advisor: { label: "Give a recommendation", text: "Recommend an approach and explain its tradeoff.\nDo not write code, commit or merge.", quality: "A recommendation must acknowledge its cost and separate checked facts from guesses.", management: "Advice stays separate from implementation. The coordinator files it and decides what to act on." },
+      quality: { label: "Assess landed work", text: "Look for dead code, unnecessary complexity and competing rules.\nWrite and commit one findings file. Do not rewrite the code.", quality: "A wider view can reveal accumulated problems that individual change reviews missed.", management: "Findings become input to later tickets. This job cannot quietly start a cleanup project or block a merge." },
+      picture: { label: "Explain the system", text: "Update spec/picture.md from the plan, feature files and Git.\nDo not invent status or change other files.", quality: "The explanation must match inspectable project facts, not an attractive but inaccurate architecture story.", management: "The human gets a current overview. The job updates the picture without changing task ownership or priorities." }
+    };
+    function roleRule(role) {
+      const rule = roles[role];
+      return added(`Assigned role: ${rule.label.toLowerCase()}`, rule.text, `templates/${role}.md · --append-system-prompt`, explain(
+        "We state what this session is responsible for and where its authority ends.", rule.quality, rule.management,
+        "These are prompt instructions. The worktree is isolation for changes, not a security sandbox."
+      ));
+    }
+    const pointers = "Ticket: spec/features/active/F123-settings/ticket.md\nVision (read-only): spec/vision.md\nBoard (read-only): spec/build.md";
+    const toolExamples = {
+      code: { label: "Edit code", call: 'edit("src/settings.ts", ...)', result: "Successfully replaced text in src/settings.ts.", text: "[limen] Styleguide: Styleguide; Shape; Prefer; Avoid.", labelAdded: "Recall the coding rules", reason: explain("After an edit, we append a short pointer to the project's coding rules to the tool output.", "The reminder brings those rules back into view before the model continues making changes.", "It encourages the worker to stay within the agreed conventions and keep the change reviewable.", "Only the file's headings are repeated. This happens after the edit; it does not validate or block the edit.") },
+      spec: { label: "Write a task specification", call: 'write("spec/features/planned/F123-settings/ticket.md", ...)', result: "Successfully wrote the ticket file.", text: "[limen] Specs: about 300 words.\nOutcome, scope, out of scope, acceptance.\nNo status lines or progress markers.", labelAdded: "Recall what a useful task needs", reason: explain("After writing under spec/, we remind the agent what a clear task specification should contain.", "Observable acceptance gives the implementer and reviewer something concrete to prove or disprove.", "A defined scope and explicit exclusions help prevent several agents from interpreting one ticket as different projects.", "The reminder is hardcoded in the hook. It is not a validator that checks the ticket's contents.") },
+      spawn: { label: "Start a job or merge work", call: 'bash("limen spawn ...")', result: "started settings toggle\n<job-id>", text: "[limen] Vision: Product principles; Current direction; ...", labelAdded: "Recall the product goals", reason: explain("After a command that starts or merges work, we append the headings of the product vision.", "This points the coordinator back to product intent instead of allowing task execution to become the goal by itself.", "It reminds the coordinator to judge what should start or land, not merely whether the command succeeded.", "The reminder comes after the command. It cannot prevent an already executed spawn or merge.") },
+      read: { label: "Read a file", call: 'read("src/settings.ts")', result: "export function settings() { /* file contents */ }", text: "", reason: explain("We leave an ordinary read result unchanged.", "Relevant file contents stay easy to inspect without another unrelated instruction attached.", "Selective reminders keep repeated instructions from filling every tool result.", "No extra reminder does not mean there are no standing rules. Those remain in the system context.") }
+    };
+
+    function scene(index) {
+      if (index === 0) return {
+        intro: "The coordinator receives your request together with the project's goals, working rules and current plan. Your words stay unchanged.", target: "Coordinator · Pi", reason: explain("We add shared context around the request so the coordinator knows both what you want and how work is managed here.", "The agent can use project-specific standards instead of guessing what a good result looks like.", "It sees who owns decisions, what is already underway and how delegated work must return for inspection.", "Select any added block to see the reason for that particular instruction."),
+        cards: [system(coordinatorRules()), human("Add a toggle to the settings screen."), replyReminder()], source: sourceRules,
+        notes: ["Examples are shortened and paraphrased for teaching. The real hook injects file contents, not these summaries.", "The complete communication file is included. A short extra message chooses whether this reply is for the human or another agent.", "Project files replace matching package defaults. A project AGENTS.md suppresses Limen's package coordination rules; Pi's normal context loader reads AGENTS.md."]
+      };
+      if (index === 1) {
+        const example = toolExamples[state.tool];
+        return {
+          intro: example.text ? "After a relevant action, we add a reminder to the tool's result. The original result is preserved; the next model response sees both." : "Not every action needs another instruction. Reading a file returns its contents without an extra Limen reminder.", target: "Coordinator or worker · Pi", reason: example.reason,
+          cards: [history("The earlier system rules, request and reply reminder remain in context."), message("Assistant", "A tool call", [plain(example.call)]), message("Tool result", "What the tool returned", [plain(example.result), ...(example.text ? [added(example.labelAdded, example.text, "hook/communication.ts · tool_result", example.reason)] : [])])], variant: "tool", source: "hook/communication.ts · reminderKind()",
+          notes: ["write/edit under spec/ gets a specification reminder. Other non-Markdown files get coding-rule headings. Markdown outside spec/ gets neither.", "The vision reminder matches certain bash/powershell commands: limen spawn, git merge, or file operations involving spec/features/planned/.", "Style and vision reminders show up to eight headings. A missing file or a file without headings gets a short notice instead.", "The latest matching action is also remembered for one reminder on the next run. A matching action is not proof that the tool succeeded."]
+        };
+      }
+      if (index === 2) return {
+        intro: "When the coordinator delegates work, the worker starts a separate conversation. It gets a focused assignment and a role, not the coordinator's entire chat history.", target: "Worker · Pi", reason: explain("We separate project coordination from individual jobs. A role states the deliverable and the decisions this session must leave to others.", "A smaller, focused context reduces irrelevant history. A separate reviewer can inspect the change without the implementer's conversation influencing it.", "Workers use isolated worktrees and do not edit the plan. The coordinator retains ownership of task assignment, review and merging.", "A task file is a pointer the worker must read. The harness does not automatically paste the ticket or evidence into the prompt."),
+        cards: [system([roleRule(state.role), ...workerRules()]), human(state.role === "worker" ? "Implement a settings toggle. Start with its test.\nTicket: spec/features/active/F123-settings/ticket.md" : `Carry out the assigned ${state.role} task.\nTicket: spec/features/active/F123-settings/ticket.md`, "Assignment written by the coordinator"), replyReminder("agent", pointers, explain("We remind the worker where to read the task and shared goals without giving it ownership of the project plan.", "The task and acceptance criteria stay available as evidence the worker must consult, rather than being replaced by a vague one-line assignment.", "The board and vision pointers are read-only instructions. The worker reports back; the coordinator updates project state.", "Pi workers automatically receive communication and coding rules. This hook does not paste the full vision or board into their system prompt."))], variant: "role", source: "src/commands/spawn.ts · src/wrapper.ts · src/supervisor.ts",
+        notes: ["Role files come from .agents/limen/<role>.md first, otherwise templates/<role>.md. Roles, engines and hosted/detached modes are separate choices.", "Both Pi job modes disable auto-discovered extensions and explicitly load communication and steering. Hosted Pi also loads the finish tool. Normal Pi project context and skills are separate.", "A positional --review task adds the candidate commit. A workspace positional task adds the repository boundary and an absolute Ticket path. File/stdin tasks preserve task.md bytes and skip those text rewrites.", "A fresh review uses a new session and detached Git checkout. --review does not itself force detached execution. Evidence paths still need to be provided by the coordinator."]
+      };
+      if (index === 3) {
+        const reason = explain("We deliver a correction as a new message instead of restarting the worker or silently rewriting its original task.", "The agent can stop widening the change and return to the specific work and checks that matter.", "Useful progress and the current conversation survive. The human or coordinator can adjust a running job without abandoning its worktree.", "Delivery happens after the current assistant turn's tools. It does not stop a running command or automatically edit the ticket.");
+        return {
+          intro: "If a worker starts going beyond its assignment, the coordinator can send a correction while it runs. The correction becomes another message in the worker's conversation.", target: "Worker · Pi", reason,
+          cards: [history("The existing task, rules, tool calls and results remain in the worker's conversation."), message("Assistant", "Work already in progress", [plain("I will update the toggle and its test.")]), message("User message", "Delivered by Limen, written by the coordinator", [added("A correction to the current task", "Keep this to the toggle and its test.\nDo not redesign the settings screen.", "limen steer → hook/steering.ts → sendUserMessage", reason)], true)], source: "src/commands/steer.ts · hook/steering.ts",
+          notes: ["Corrections are written to a durable inbox and delivered as steer messages. An idle worker can receive one as a new run.", "limen steer --running addresses only watched running jobs. Finished jobs and jobs without a ready steering hook cannot receive it.", "Humans can type directly into a hosted Pi worker. Claude jobs do not have this Limen steering hook."]
+        };
+      }
+      if (index === 4) {
+        const reason = explain("We bring a bounded summary of the job record back to the coordinator, together with an instruction to inspect the actual work.", "A worker saying done is not enough. The coordinator is prompted to inspect the diff, commits and check results before trusting the outcome.", "The subscribed coordinator receives the result and chooses the next step: review, merge, repair or a question for the human. Other sessions are not automatically given the job.", "A job record marked done means the run ended. It is not an approval of the implementation.");
+        return {
+          intro: "When a job ends, Limen sends its result to the coordinator as a generated message. The coordinator must assess that result, not simply repeat the worker's success claim.", target: "Coordinator · Pi", reason,
+          cards: [history("The coordinator keeps its own conversation. The worker's full transcript is not copied back."), message("User message", "Generated from the job record", [added("Job result and next-step instruction", 'Limen job "settings toggle" is done.\nJob: <id> · branch: <branch>\nCommits: <summary>\nFinal message: <worker report>\n\nInspect the record, changes and relevant checks.\nKeep the human informed; take the next safe step.', "hook/wake.ts · completionWake()", reason)], true), replyReminder("human", "This turn was opened by a job wake, not the human.\nExplain what the job did before describing the next step.", explain("We explicitly say that this turn came from a job notification, not a new request from the human.", "The coordinator has to explain the result and its evidence instead of assuming the human saw the worker's output.", "The owner gets an understandable update while the coordinator continues managing the work.", "This event is called a wake in the code. It is a generated user-role message, not a message the human typed."))], source: "hook/wake.ts · hook/communication.ts",
+          notes: ["A wake can include the task's first sentence, state, ID, branch, repository, stop reason, ten commits and at most 15 lines / 1,200 characters of the final message.", "An idle coordinator starts a turn on the first wake. A busy coordinator, or additional wakes, receives queued followUp messages instead.", "Running jobs can also report idle, blocked or errored states. An eligible fallback listener is told not to spawn, stop or steer unless the human asks.", "Subscriptions scope delivery. /limen off and LIMEN_WAKE=0 affect wakes, not the separate communication rules."]
+        };
+      }
+      if (index === 5) return {
+        intro: "At the next agent start, we reread the shared rules and current plan. The conversation stays, but the model does not have to rely only on yesterday's instructions.", target: "Coordinator · Pi", reason: explain("We rebuild the system additions from the current files and add a short reminder of the latest relevant action.", "Updated standards and decisions can reach the next answer. The model is less likely to continue using rules that have changed.", "The coordinator sees current and next work when choosing what to do. Shared files give the human and multiple sessions a place to inspect and update intent.", "The files are reread before an agent run, not after every tool call. Limen does not delete old conversation messages."),
+        cards: [system(coordinatorRules()), history("Previous questions, answers, tool results and extra context messages remain in the session, subject to Pi's normal context and compaction behavior."), human("What changed, and what should we do next?"), replyReminder("human", "Last turn edited src/settings.ts;\nthe styleguide governs how files are written.", explain("We briefly name the most recent action that matched a guidance reminder.", "The rule relevant to that action is recalled near the next answer, instead of relying only on distant context.", "The coordinator can reconnect its report to the work it just performed, without turning the cue into a second task tracker.", "This reminder is consumed once. It records a matching action, not proof of success or a full activity log."))], source: sourceRules,
+        notes: ["Each injected guidance section is capped at 1,000 lines with a truncation notice. Only NOW and NEXT from the board are included, at the end of the system additions.", "A board over 120 lines gets a shortening advisory. Identical, stale or differing project overrides are also named to the coordinator. These are notices, not gates.", "LIMEN_CONTEXT_ROOT points worker guidance reads at the coordinator/workspace root, not the worker's isolated copies. Role instructions are selected at launch, not refreshed by this hook.", "The reply reminder and specification reminder are hardcoded strings. Editing templates/communication.md does not change those separate copies."]
+      };
+      if (index === 6) return {
+        intro: "A job launched with Claude receives its assigned role and task, but none of Pi's Limen context hooks. Choosing another engine changes which reminders are present.", target: "Advisor · Claude", reason: explain("We append the role to Claude's own instructions. We do not assume that Pi's automatic reminders exist in a different engine.", "A recommendation can provide another perspective, but claims still need evidence. The coordinator must not mistake a role prompt for the full Pi guidance setup.", "Claude jobs run detached. They can return a result, but Limen cannot send them live corrections or resume them through limen continue.", "Access to a file is not the same as including its contents in the context. Important missing guidance must be supplied in the task or read by the agent."),
+        cards: [system([roleRule("advisor")], "Claude"), human("Look at the settings screen.\nRecommend a simpler interaction and explain the tradeoff.", "Assignment written by the coordinator")], source: "src/wrapper.ts · Claude engine branch",
+        notes: ["Limen uses --append-system-prompt for the role and -p for the task. Claude keeps its own tools, skills and normal project context.", "This path does not automatically add Limen's communication file, coding rules, reply reminders, tool-result reminders or steering hook.", "--add-dir can grant access to the coordinator root, but it does not paste that directory's files into the prompt. The closing result can still generate a coordinator notification."]
+      };
+      if (index === 7) return {
+        intro: "When work should continue in the same conversation, limen continue copies the previous job's session and adds the new instruction. It reuses the worktree as well.", target: "Worker · Pi", reason: explain("We preserve useful conversation context when a finished job needs a focused follow-up rather than a fresh investigation.", "The worker can reuse the reasoning, file reads and checks already recorded instead of rediscovering the same facts.", "A new job record tracks the follow-up while the old record stays unchanged. The same checkout keeps the work together.", "This is not a fresh review. continue --review still inherits prior conversation and therefore is not independent."),
+        cards: [system([roleRule("worker"), ...workerRules()]), history("The previous job's saved session is copied. It includes earlier tasks, responses, tools and injected messages; Pi restores the usable context, including compaction if present."), human("The toggle works. Now cover its disabled state in the same test.", "New instruction written by the coordinator"), replyReminder("agent", "Vision (read-only): spec/vision.md\nBoard (read-only): spec/build.md")], source: "src/commands/continue.ts",
+        notes: ["spawn --branch reuses a worktree but starts a fresh session. continue preserves the worktree and conversation.", "Continuing requires a finished Pi job with an existing worktree and transcript. A pruned checkout or Claude job requires a fresh spawn.", "The parent's role is reused unless --review changes it. The current task must include a Ticket pointer if it should appear in the new reminder."]
+      };
+      return {
+        intro: "If the last response ended in an error or was interrupted, we add that fact to the next reply reminder. The agent should acknowledge the failed attempt instead of implying it succeeded.", target: "Coordinator or worker · Pi", reason: explain("We make the previous failure explicit once, close to the next response.", "This discourages unsupported completion claims and encourages the agent to distinguish what was attempted from what was verified.", "The human gets a clear account of the interruption. The coordinator can inspect saved progress and choose a focused recovery instead of silently starting over.", "The hook's wording says nothing reached the human. That sentence is not a separate delivery audit; files and job records still need inspection."),
+        cards: [history("Existing instructions and conversation remain. An error reminder does not erase work or establish what was committed."), human("Try that again."), replyReminder("human", "The previous turn failed with error: request failed\nand nothing reached the human.", explain("We include the last assistant error or abort in the next context reminder.", "The model has an explicit reason to acknowledge an unsuccessful attempt rather than report it as completed work.", "It can explain what is being recovered while checking the durable files for what actually survived.", "The failure reminder is cleared after use. A later successful assistant message also clears the stored failure."))], source: "hook/communication.ts · message_end / turnCue()",
+        notes: ["The same hook runs in Pi workers, with the audience set to agent. Claude does not get this reminder.", "A hosted worker with an errored last turn may also send a separate advisory notification to its coordinator."]
+      };
+    }
+
+    function renderMessage(item) {
+      if (item.history) return `<details class="history"><summary>Earlier conversation is still available</summary><p>${escape(item.history)}</p></details>`;
+      return `<div class="message${item.whole ? " added-message" : ""}"><div class="message-meta"><span class="role">${escape(item.role)}</span><span aria-hidden="true">/</span><span>${escape(item.label)}</span></div>${item.pieces.map((piece) => {
+        if (!piece.added) return `<p class="original-text">${escape(piece.text)}</p>`;
+        const index = additions.push(piece) - 1;
+        return `<button type="button" class="addition" data-addition="${index}" aria-pressed="false" aria-controls="decision quality management limit"><span class="addition-label"><span class="plus" aria-hidden="true">+</span>${escape(piece.label)}</span><span class="snippet">${escape(piece.text)}</span></button>`;
+      }).join("")}</div>`;
+    }
+    function renderReason() {
+      const selected = state.view === "limen" && state.selected !== null ? additions[state.selected] : null;
+      const reason = selected ? selected.reason : current.reason;
+      document.getElementById("reason-label").textContent = selected ? selected.label : labels[state.step];
+      for (const key of ["decision", "quality", "management", "limit"]) document.getElementById(key).textContent = reason[key] || "";
+      document.getElementById("source-path").textContent = selected ? selected.source : current.source;
+      document.getElementById("source").open = false;
+      document.getElementById("reset-reason").hidden = !selected;
+      document.querySelectorAll("[data-addition]").forEach((button) => button.setAttribute("aria-pressed", String(Boolean(selected) && Number(button.dataset.addition) === state.selected)));
+    }
+    function updateView() {
+      document.getElementById("context").dataset.view = state.view;
+      document.querySelectorAll(".view-switch button").forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.view === state.view)));
+      document.getElementById("comparison-note").textContent = state.view === "limen" ? "Showing the context with our additions. Examples are shortened for teaching." : "Comparison only: our additions are hidden, not removed from a real agent session.";
+      renderReason();
+    }
+    function render() {
+      current = scene(state.step);
+      additions = [];
+      state.selected = null;
+      document.getElementById("intro").textContent = current.intro;
+      document.getElementById("target").textContent = `Shown to: ${current.target}`;
+      document.getElementById("context").innerHTML = current.cards.map(renderMessage).join("");
+      document.getElementById("note-content").innerHTML = current.notes.map((note) => `<li>${escape(note)}</li>`).join("");
+      const variant = document.getElementById("variant");
+      variant.hidden = !current.variant;
+      if (current.variant) {
+        const isTool = current.variant === "tool";
+        const choices = Object.entries(isTool ? toolExamples : roles);
+        const selected = isTool ? state.tool : state.role;
+        variant.innerHTML = `<label for="variant-select">${isTool ? "Action" : "Responsibility"}</label><select id="variant-select" data-kind="${current.variant}">${choices.map(([key, value]) => `<option value="${key}"${key === selected ? " selected" : ""}>${escape(value.label)}</option>`).join("")}</select>`;
+      } else variant.innerHTML = "";
+      document.querySelectorAll(".step").forEach((button, index) => {
+        if (index === state.step) button.setAttribute("aria-current", "step");
+        else button.removeAttribute("aria-current");
+      });
+      document.getElementById("previous").disabled = state.step === 0;
+      document.getElementById("next").disabled = state.step === labels.length - 1;
+      document.getElementById("counter").textContent = `${String(state.step + 1).padStart(2, "0")} / ${labels.length}`;
+      document.getElementById("announcement").textContent = `${labels[state.step]}. ${current.intro}`;
+      updateView();
+    }
+    function go(index) {
+      if (index < 0 || index >= labels.length || index === state.step) return;
+      state.step = index;
+      document.getElementById("notes").open = false;
+      render();
+      if (window.matchMedia("(max-width: 600px)").matches) {
+        const nav = document.getElementById("steps");
+        const button = document.querySelector('.step[aria-current="step"]');
+        nav.scrollLeft = button.offsetLeft - nav.offsetLeft - 8;
+      }
+    }
+    function toggleView(view) {
+      state.view = view;
+      updateView();
+      document.getElementById("announcement").textContent = view === "limen" ? "Our context additions are visible." : "Our context additions are hidden for comparison.";
+    }
+    document.getElementById("steps").innerHTML = labels.map((label, index) => `<button type="button" class="step" data-step="${index}"><span class="number">${String(index + 1).padStart(2, "0")}</span>${escape(label)}</button>`).join("") + '<p class="nav-note">Follow the conversation from a human request to a managed result.<br><br>Steps 7–9 show different engines and recovery choices.</p>';
+    document.getElementById("steps").addEventListener("click", (event) => {
+      const button = event.target.closest("[data-step]");
+      if (button) go(Number(button.dataset.step));
+    });
+    document.getElementById("context").addEventListener("click", (event) => {
+      const button = event.target.closest("[data-addition]");
+      if (!button) return;
+      state.selected = Number(button.dataset.addition);
+      renderReason();
+      document.getElementById("announcement").textContent = `${additions[state.selected].label}. ${additions[state.selected].reason.decision}`;
+      if (window.matchMedia("(max-width: 850px)").matches) document.querySelector(".reason").focus();
+    });
+    document.getElementById("reset-reason").addEventListener("click", () => {
+      state.selected = null;
+      renderReason();
+      document.querySelector(".reason").focus();
+      document.getElementById("announcement").textContent = `${labels[state.step]}. ${current.reason.decision}`;
+    });
+    document.querySelector(".view-switch").addEventListener("click", (event) => {
+      const button = event.target.closest("button[data-view]");
+      if (button) toggleView(button.dataset.view);
+    });
+    document.getElementById("variant").addEventListener("change", (event) => {
+      if (event.target.id !== "variant-select") return;
+      state[event.target.dataset.kind] = event.target.value;
+      render();
+      document.getElementById("variant-select").focus();
+    });
+    document.getElementById("previous").addEventListener("click", () => go(state.step - 1));
+    document.getElementById("next").addEventListener("click", () => go(state.step + 1));
+    document.addEventListener("keydown", (event) => {
+      if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || /^(INPUT|SELECT|TEXTAREA)$/.test(event.target.tagName) || event.target.isContentEditable) return;
+      if (event.key === "ArrowRight") { event.preventDefault(); go(state.step + 1); }
+      if (event.key === "ArrowLeft") { event.preventDefault(); go(state.step - 1); }
+      if (event.key.toLowerCase() === "h") { event.preventDefault(); toggleView(state.view === "limen" ? "original" : "limen"); }
+    });
+    render();
+  </script>
+</body>
+</html>
