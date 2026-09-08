@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import { appendFile, open, readdir, readFile, rename, rm } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { containEscapedDescendants, discoverEscapedDescendants, processAlive, processInfo, signalProcessGroup } from "./contain.ts";
+import { deliverFinishWebhook } from "./finish-webhook.ts";
 import { changedFileCount, commitList } from "./git.ts";
 import { settleJobTab } from "./herdr.ts";
 import { createClaudeStreamParser, createStreamParser, type StreamEvent } from "./stream.ts";
@@ -60,12 +61,14 @@ export async function runInternalJob(): Promise<void> {
 	const timeoutMs = process.env.LIMEN_TIMEOUT_MS ? Number(process.env.LIMEN_TIMEOUT_MS) : DEFAULT_TIMEOUT_MS;
 	const preamble = await readFile(preambleFile, "utf8");
 	let stopRequested = false;
+	let shutdownDeadline: number | undefined;
 	let exhausted: string | undefined;
 	let graceTimer: NodeJS.Timeout | undefined;
 	let tools = 0;
 	let pending = Promise.resolve();
 	process.on("SIGTERM", () => {
 		stopRequested = true;
+		shutdownDeadline ??= Date.now() + STOP_GRACE_MS - 500;
 	});
 	let exhaustionTermination = Promise.resolve();
 	const exhaust = (reason: string) => {
@@ -75,11 +78,12 @@ export async function runInternalJob(): Promise<void> {
 			// Complete the bounded ownership snapshot while the parent chain is intact, then signal.
 			const escaped = await discoverEscapedDescendants(jobDir, process.pid, "during exhaustion");
 			await appendLimenLog(jobDir, `${reason}; sending TERM`).catch(() => {});
+			shutdownDeadline = Date.now() + STOP_GRACE_MS - 500;
 			signalProcessGroup(process.pid, "SIGTERM");
 			graceTimer = setTimeout(() => signalProcessGroup(process.pid, "SIGKILL"), STOP_GRACE_MS);
 			graceTimer.unref();
 			void containEscapedDescendants(jobDir, escaped, "after exhaustion").catch(() => {});
-			await finalizeJob(jobDir, "failed", reason);
+			await finalizeJob(jobDir, "failed", reason, shutdownDeadline);
 		})();
 	};
 	// A role names a preamble; an engine names a binary. Both agents get the same preamble, the same
@@ -165,7 +169,7 @@ export async function runInternalJob(): Promise<void> {
 	if (exhausted) {
 		await exhaustionTermination;
 	} else if (stopRequested || result.signal === "SIGTERM" || result.signal === "SIGKILL") {
-		await finalizeJob(jobDir, "stopped", "process group interrupted");
+		await finalizeJob(jobDir, "stopped", "process group interrupted", shutdownDeadline);
 	} else if (result.error) await finalizeJob(jobDir, "failed", result.error.message);
 	else if (result.code === 0) {
 		if (seen.assistant) await atomicWrite(`${jobDir}/result`, `${seen.assistant}\n`).catch(() => {});
@@ -182,7 +186,7 @@ export function isFailedStopReason(reason: string): boolean {
 	return reason === "error" || reason.startsWith("error: ") || reason === "aborted" || reason.startsWith("aborted: ");
 }
 export const requestedTerminal = (reason: string): "done" | "stopped" => (reason.startsWith("done:") ? "done" : "stopped");
-export async function finalizeJob(jobDir: string, state: "done" | "failed" | "stopped", detail: string): Promise<void> {
+export async function finalizeJob(jobDir: string, state: "done" | "failed" | "stopped", detail: string, shutdownDeadline?: number): Promise<void> {
 	if (["done", "failed", "stopped"].includes(await textFile(`${jobDir}/state`))) return;
 	await recordCommits(jobDir).catch(() => {});
 	await atomicWrite(`${jobDir}/finished-at`, `${new Date().toISOString()}\n`);
@@ -197,6 +201,9 @@ export async function finalizeJob(jobDir: string, state: "done" | "failed" | "st
 		const writer = /\.(\d+)\.[0-9a-f]+\.tmp$/.exec(name);
 		if (writer && !processAlive(Number(writer[1]))) await rm(`${jobDir}/${name}`, { force: true });
 	}
+	await deliverFinishWebhook(jobDir, shutdownDeadline).catch(() =>
+		appendLimenLog(jobDir, "finish webhook: delivery could not be recorded; inspect finish-webhook-attempt before manual retry").catch(() => {}),
+	);
 	await settleJobTab(jobDir);
 }
 export async function recordCommits(jobDir: string): Promise<void> {

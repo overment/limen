@@ -146,6 +146,7 @@ All runtime truth is inspectable under `.limen/jobs/` and in Git.
 - Bad candidate: do not merge; remove its worktree and branch with Git.
 - Conflict or moved base: rebase, or start again from current HEAD.
 - Bad merge: use `git log` and `git reflog` like any other Git recovery.
+- Finish-ping fallback: opted-in jobs automatically invoke `bin/tony-finish-ping.sh <label> <state> <branch>` after terminal state. Do not request a routine manual-plus-automatic double send. Inspect the job's `finish-webhook` status and `finish-webhook-attempt` marker; only deliberately retry a failed or absent automatic send, setting `TONY_FINISH_WEBHOOK_ENV` to its recorded absolute `finish-webhook-env` path. An interrupted attempt may already have sent. Never print credentials; report HTTP acceptance separately from an observed owner wake. Include this fallback in worker/coordinator handoffs when finish delivery matters.
 - Missed completion message or dead coordinator: read `.limen/jobs/<id>/state` and `limen jobs <id>` now — do not keep waiting for a wake that already failed to surface. Notifications are only a convenience. After updating the installed `limen`, `/reload` so the coordinator loads the new package hooks.
 
 No harness rule owns these files. If state is messy, inspect and edit it; hygiene never latches the session.

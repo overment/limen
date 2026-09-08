@@ -104,6 +104,9 @@ export async function continueCommand(args: readonly string[], cwd: string): Pro
 			: []),
 		...(coordinatorTab ? [writeFile(`${jobDir}/origin-tab`, `${coordinatorTab}\n`, { flag: "wx", flush: true })] : []),
 	]);
+	// Resume the parent's opt-in (or absence), not the current shell's destination.
+	const finishConfig = await text(`${parentDir}/finish-webhook-env`);
+	if (finishConfig) await writeFile(`${jobDir}/finish-webhook-env`, `${finishConfig}\n`, { flag: "wx", mode: 0o600, flush: true });
 	await writeFile(`${jobDir}/notify/ready`, "1\n", { flag: "wx", flush: true });
 	const versions = capturedVersions().then((text) => writeFile(`${jobDir}/versions`, text, { flag: "wx", flush: true }));
 	// The continued run writes into its own transcript, seeded with a copy of the parent's
