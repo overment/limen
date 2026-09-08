@@ -9,13 +9,13 @@
 - Research default pair: `gpt-5.6-sol:xhigh` and `grok-4.6:xhigh`. Quality: `gpt-5.6-sol:xhigh`. Picture: `gpt-5.6-sol`.
 - Adam/Tony model policy: coordinators use `openai-codex/gpt-6-astra:xhigh`; Pi workers, including repairs and resumes, default to `openai-codex/gpt-6-astra:high` rather than global Pi settings.
 - Adam performs reviews; do not start an independent review lane unless asked.
-- Herdr/job status work (F707): workers, repairs, and resumes use literal `--provider openai-codex --model gpt-6-astra --thinking xhigh`; consume finish-webhook delivery after the F702 coordinator lands it.
+- Herdr/job status work (F707): workers, repairs, and resumes use literal `--provider openai-codex --model gpt-6-astra --thinking xhigh`; automatic finish delivery landed with F702 at `622d426`, and Adam owns status review.
 - Transcript-settlement workers require literal `--provider openai-codex --model gpt-6-astra --thinking high`; pass those separate flags through Limen, not a combined selector.
 - Owner-requested Limen v1 integration audit: all research and judge jobs use `openai-codex/gpt-6-astra:xhigh`; no implementation or feature-state changes.
 
 ## NOW
 
-- `F707-herdr-limen-truthful-status` (🟠 ACTIVE): Herdr panes and Limen jobs show one truthful status; finish wakes are automatic and per-project configurable (extends F702). Boundary: Herdr integration, job signals, landed F702 wake evidence, and plain-English operator docs — not Alice product merges; F702 retains finalizer/config ownership until landing.
+- `F707-herdr-limen-truthful-status` (🟠 ACTIVE): explicit RUNNING pane labels and the operator guide are being implemented; per-project automatic finish delivery landed with F702. Boundary: Herdr integration, job signals, landed wake evidence, and plain-English docs — not Alice product merges or project credential setup.
 - `F050-living-architecture-picture` (🟠 ACTIVE): a background application field guide is under proposal; no product merge.
 - `F048-hosted-runtime-start` (🟠 ACTIVE): spawn prints the ID in seconds; the detached supervisor starts pi and owns the job. This closes the live 2026-08-27 caller-timeout orphaning before F049.
 - `F074-claude-perspective` (🟠 ACTIVE): a detached job runs on Claude instead of Pi, so the coordinator can buy a perspective on interface and feature shape. Interleaves with the seat work; gates nothing.
