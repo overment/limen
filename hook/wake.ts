@@ -84,14 +84,17 @@ export default function limenWake(pi: PiApi): void {
 			// Herdr reporting is advisory; durable state remains on disk.
 		}
 	};
-	const herdrReport = (body: string, title: string, pulses: readonly Pulse[] = []) => {
+	const herdrReport = (body: string, title: string, pulses: readonly Pulse[] = [], watched = 0) => {
 		if (!herdr) return;
-		const signature = `${title}\0${body}`;
+		const jobs = `${pulses.length} RUNNING · ${watched} watched · ${pulses.length - watched} unwatched`;
+		const label = `${jobs} · ${body}`;
+		const agent = herdrDisplayAgent(pulses);
+		const signature = `${title}\0${label}\0${agent}`;
 		if (signature === herdrMetadata && Date.now() - herdrMetadataAt < 60_000) return;
 		herdrMetadata = signature;
 		herdrMetadataAt = Date.now();
 		const change = body
-			? ["--title", title, "--display-agent", herdrDisplayAgent(pulses), "--token", `limen=${body}`, "--state-label", `idle=${body}`, "--state-label", `done=${body}`]
+			? ["--title", title, "--display-agent", agent, "--token", `limen=${label}`, "--state-label", `idle=${label}`, "--state-label", `done=${label}`]
 			: ["--clear-title", "--display-agent", "Limen coordinator", "--clear-token", "limen", "--clear-state-labels"];
 		herdrCall(["pane", "report-metadata", herdr.pane, "--source", "limen", "--seq", String((herdrSeq += 1)), ...change, "--ttl-ms", "180000"]);
 	};
@@ -190,7 +193,7 @@ export default function limenWake(pi: PiApi): void {
 			return;
 		}
 		statusBody = next.status;
-		herdrReport(next.status.slice("limen ".length), next.title, next.pulses);
+		herdrReport(next.summary, next.title, next.pulses, next.watched);
 		drawStatus();
 		if (footerAlive && !statusTimer) {
 			statusTimer = setInterval(drawStatus, 120);
@@ -647,13 +650,13 @@ function runningDisplay(
 	jobs: string,
 	session: string,
 	runningIds: readonly string[],
-): { readonly status: string; readonly title: string; readonly pulses: readonly Pulse[] } | undefined {
+): { readonly status: string; readonly title: string; readonly summary: string; readonly pulses: readonly Pulse[]; readonly watched: number } | undefined {
 	const running = runningIds.map((id) => {
 		const label = text(join(jobs, id, "label")) || id;
 		const pulse = pulseOf(jobs, id);
 		const tool = text(join(jobs, id, "last-tool"));
 		const watching = subscribed(join(jobs, id), session);
-		return { label, pulse, status: `${shortLabel(label)} ${pulse === "tool" && tool ? `${pulse}:${tool}` : pulse}${watching ? "" : " (unwatched)"}` };
+		return { label, pulse, watching, status: `${shortLabel(label)} ${pulse === "tool" && tool ? `${pulse}:${tool}` : pulse}${watching ? "" : " (unwatched)"}` };
 	});
 	if (running.length === 0) return undefined;
 	const summary = `${running
@@ -667,7 +670,7 @@ function runningDisplay(
 					.slice(0, 3)
 					.map(({ label }) => shortLabel(label))
 					.join(" ")}`;
-	return { status: `limen ${running.length} · ${summary}`, title, pulses: running.map(({ pulse }) => pulse) };
+	return { status: `limen ${running.length} · ${summary}`, title, summary, pulses: running.map(({ pulse }) => pulse), watched: running.filter(({ watching }) => watching).length };
 }
 function pulseOf(jobs: string, id: string): Pulse {
 	const pid = Number(text(join(jobs, id, "pid")));

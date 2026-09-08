@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
 import { chmod, mkdir, mkdtemp, readFile, rm, stat, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -682,18 +683,19 @@ test("herdr pane naming follows running jobs and each terminal state notifies on
 	await writeFile(join(jobs, "new/branch"), "candidate\n");
 	await subscribe(jobs, "new", "coordinator-a");
 	await writeFile(join(jobs, "new/state"), "running\n");
-	await waitUntilAsync(async () => (await readCalls(calls)).some((call) => call.includes("limen=1 · F001 starting")));
-	const naming = (await readCalls(calls)).find((call) => call.includes("limen=1 · F001 starting"));
+	const body = "1 RUNNING · 1 watched · 0 unwatched · F001 starting";
+	await waitUntilAsync(async () => (await readCalls(calls)).some((call) => call.includes(`limen=${body}`)));
+	const naming = (await readCalls(calls)).find((call) => call.includes(`limen=${body}`));
 	assert.ok(naming, "pane metadata call expected");
 	assert.deepEqual(naming.slice(0, 5), ["pane", "report-metadata", "w1:p1", "--source", "limen"]);
 	const titleAt = naming.indexOf("--title");
 	assert.equal(naming[titleAt + 1], "Limen · F001 implementation");
 	assert.equal(naming[naming.indexOf("--display-agent") + 1], "✦ Limen · 1 waking");
-	const tokenAt = naming.indexOf("limen=1 · F001 starting");
+	const tokenAt = naming.indexOf(`limen=${body}`);
 	assert.equal(naming[tokenAt - 1], "--token");
 	assert.equal(naming[tokenAt + 1], "--state-label");
-	assert.equal(naming[tokenAt + 2], "idle=1 · F001 starting");
-	assert.equal(naming[tokenAt + 4], "done=1 · F001 starting");
+	assert.equal(naming[tokenAt + 2], `idle=${body}`);
+	assert.equal(naming[tokenAt + 4], `done=${body}`);
 	assert.equal(naming[naming.indexOf("--ttl-ms") + 1], "180000");
 	await writeFile(join(jobs, "new/state"), "done\n");
 	await waitUntilAsync(async () => (await readCalls(calls)).some((call) => call[0] === "notification"));
@@ -711,6 +713,76 @@ test("herdr pane naming follows running jobs and each terminal state notifies on
 	assert.equal(clear[clear.indexOf("--ttl-ms") + 1], "180000");
 	handlers.get("session_shutdown")?.({}, session);
 	await waitUntilAsync(async () => (await readCalls(calls)).some((call) => call.includes("--clear-display-agent")));
+});
+
+test("settled coordinator labels count watched and visible unwatched RUNNING jobs beyond truncated detail", async (context) => {
+	stashEnv(context, "LIMEN_JOB", undefined);
+	stashEnv(context, "HERDR_TAB_ID", undefined);
+	const root = await mkdtemp(join(tmpdir(), "limen-running-metadata-"));
+	context.after(() => rm(root, { recursive: true, force: true }));
+	const calls = join(root, "calls");
+	await mkdir(calls);
+	const fake = join(root, "herdr");
+	await writeFile(fake, `#!/bin/sh\nprintf '%s\\n' "$@" > "${calls}/call.$$"\n`);
+	await chmod(fake, 0o755);
+	stashEnv(context, "LIMEN_HERDR", fake);
+	stashEnv(context, "HERDR_ENV", "1");
+	stashEnv(context, "HERDR_PANE_ID", "w1:p1");
+	await mkdir(join(root, ".agents/limen"), { recursive: true });
+	const jobs = join(root, ".limen/jobs");
+	const worker = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { detached: true, stdio: "ignore" });
+	context.after(() => worker.kill());
+	assert.ok(worker.pid);
+	for (const id of ["a", "b", "c", "d"]) {
+		await mkdir(join(jobs, id), { recursive: true });
+		await writeFile(join(jobs, id, "state"), "running\n");
+		await writeFile(join(jobs, id, "activity"), "think\n");
+		await writeFile(join(jobs, id, "pid"), `${worker.pid}\n`);
+		await subscribe(jobs, id, id === "d" ? "other-session" : "coordinator-a");
+	}
+	const handlers = new Map<string, (event: unknown, context: TestContext) => void>();
+	const messages: string[] = [];
+	limenWake({
+		on: (event, handler) => handlers.set(event, handler),
+		sendUserMessage: (message) => {
+			messages.push(message);
+		},
+	});
+	const session = { cwd: root, isIdle: () => true, sessionManager: sessionManager("coordinator-a"), ui: { notify() {}, setStatus() {} } };
+	handlers.get("session_start")?.({}, session);
+	context.after(() => handlers.get("session_shutdown")?.({}, session));
+	handlers.get("agent_settled")?.({}, session);
+	const report = async (prefix: string) => {
+		await waitUntilAsync(async () => (await readCalls(calls)).some((call) => call.some((arg) => arg.startsWith(`idle=${prefix}`))));
+		const call = (await readCalls(calls)).find((call) => call.some((arg) => arg.startsWith(`idle=${prefix}`)));
+		assert.ok(call);
+		const idle = call.find((arg) => arg.startsWith("idle="))?.slice(5);
+		assert.ok(call.includes(`done=${idle}`));
+		assert.ok(call.includes(`limen=${idle}`));
+		assert.ok(!call.includes("--state"));
+		assert.ok(!call.some((arg) => arg.startsWith("blocked=")), "native blockers must retain their evidence");
+		return idle ?? "";
+	};
+	assert.match(await report("4 RUNNING · 3 watched · 1 unwatched"), /a think b think c think \+1$/);
+	await writeFile(join(jobs, "d/pid"), "99999999\n");
+	await waitUntilAsync(async () => (await readCalls(calls)).some((call) => call.includes("⚠ Limen · 4 needs attention")));
+	await writeFile(join(jobs, "d/pid"), `${worker.pid}\n`);
+	await rm(join(jobs, "c/notify/subscribers/coordinator-a"));
+	assert.match(await report("4 RUNNING · 2 watched · 2 unwatched"), /c think \(unwatched\)/);
+	for (const id of ["a", "b", "c"]) await writeFile(join(jobs, id, "state"), "done\n");
+	assert.match(await report("1 RUNNING · 0 watched · 1 unwatched"), /d think \(unwatched\)$/);
+	await assert.rejects(readFile(join(jobs, "d/notify/subscribers/coordinator-a")), "visibility must not subscribe this session");
+	assert.ok(!messages.some((message) => message.includes("(d)")), "unwatched work is not a completion wake for this session");
+	await writeFile(join(jobs, "d/activity"), "wait\n");
+	await waitUntilAsync(async () => (await readCalls(calls)).some((call) => call.some((arg) => /idle=.*d wait \(unwatched\)$/.test(arg))));
+	await writeFile(join(jobs, "d/pid"), "99999999\n");
+	await waitUntilAsync(async () => (await readCalls(calls)).some((call) => call.some((arg) => /idle=.*d dead \(unwatched\)$/.test(arg))));
+	assert.ok(
+		(await readCalls(calls)).some((call) => call.includes("⚠ Limen · 1 needs attention")),
+		"dead evidence must not be relabeled waiting",
+	);
+	await writeFile(join(jobs, "d/state"), "stopped\n");
+	await waitUntilAsync(async () => (await readCalls(calls)).some((call) => call.includes("--clear-state-labels")));
 });
 
 test("the coordinator tab keeps a running count on its stem and loses it when the last job ends", async (context) => {
@@ -873,7 +945,7 @@ test("herdr surfaces stay live while the conversation is muted", async (context)
 	await writeFile(join(jobs, "new/branch"), "candidate\n");
 	await subscribe(jobs, "new", "coordinator-a");
 	await writeFile(join(jobs, "new/state"), "running\n");
-	await waitUntilAsync(async () => (await readCalls(calls)).some((call) => call.includes("limen=1 · F001 starting")));
+	await waitUntilAsync(async () => (await readCalls(calls)).some((call) => call.includes("limen=1 RUNNING · 1 watched · 0 unwatched · F001 starting")));
 	assert.deepEqual(
 		statuses.filter((value) => value !== undefined),
 		[],
