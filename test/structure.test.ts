@@ -13,7 +13,7 @@ test("architecture stays small, pure, direct, and dependency-free", async () => 
 	};
 	assert.deepEqual(packageJson.dependencies, {});
 	assert.deepEqual(packageJson.bin, { limen: "bin/limen" });
-	assert.deepEqual(await readdir(join(ROOT, "bin")), ["limen"]);
+	assert.deepEqual((await readdir(join(ROOT, "bin"))).sort(), ["limen", "tony-finish-ping.sh"]);
 	const source = await filesBelow(join(ROOT, "src"));
 	const sourceLines = (await Promise.all(source.map((path) => readFile(path, "utf8")))).reduce((sum, text) => sum + text.split("\n").length - 1, 0);
 	assert.ok(sourceLines <= 3513, `src has ${sourceLines} lines; changed-file sampling and steer fan-out`);
