@@ -15,7 +15,7 @@
 
 ## NOW
 
-- `F707-herdr-limen-truthful-status` (🟠 ACTIVE): RUNNING labels and the guide have a candidate; one repair must preserve active stall warnings before Adam reviews it. Boundary: Herdr integration, job signals, landed F702 wake evidence, and plain-English docs — not Alice product merges, project credential setup, or unrelated broad-suite failures.
+- `F707-herdr-limen-truthful-status` (🟠 ACTIVE): RUNNING labels and the guide await Adam's review at `839db44`; stall-warning repair and 70 focused status/finish-wake checks passed, with the full suite still incomplete. Boundary: Herdr integration, job signals, landed F702 wake evidence, and plain-English docs — not Alice product merges, project credential setup, or unrelated broad-suite failures.
 - `F050-living-architecture-picture` (🟠 ACTIVE): a background application field guide is under proposal; no product merge.
 - `F048-hosted-runtime-start` (🟠 ACTIVE): spawn prints the ID in seconds; the detached supervisor starts pi and owns the job. This closes the live 2026-08-27 caller-timeout orphaning before F049.
 - `F074-claude-perspective` (🟠 ACTIVE): a detached job runs on Claude instead of Pi, so the coordinator can buy a perspective on interface and feature shape. Interleaves with the seat work; gates nothing.
