@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Alice — application field guide</title>
+<style>
+:root { color-scheme: light; --paper: #f7f5ef; --ink: #252b29; --muted: #59645f; --line: #c8cec6; --white: #fffefa; --accent: #245b4b; --tint: #eaf0e9; --warn: #8d4629; --warn-bg: #faf0e5; --radius: 6px; }
+* { box-sizing: border-box; }
+html { scroll-padding-top: 76px; }
+body { margin: 0; background: var(--paper); color: var(--ink); font: 15px/1.5 system-ui, sans-serif; }
+a { color: var(--accent); text-underline-offset: 3px; }
+a:hover { text-decoration-thickness: 2px; }
+a:focus-visible, input:focus-visible, summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 5px; }
+header { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 16px 32px; border-bottom: 1px solid var(--line); background: var(--paper); }
+header a { text-decoration: none; }
+.brand { font-weight: 650; letter-spacing: -.02em; }
+.brand span { color: var(--muted); font-weight: 400; margin-left: 12px; }
+header nav { display: flex; gap: 22px; font-size: 13px; }
+main { max-width: 1440px; padding: 35px 32px 60px; margin: auto; }
+.eyebrow, .number, .kind { font: 11px/1.5 ui-monospace, monospace; text-transform: uppercase; letter-spacing: .1em; }
+.eyebrow { color: var(--muted); }
+h1, h2, h3, p { margin-top: 0; }
+h1 { font: 43px/1.13 Georgia, serif; letter-spacing: -.025em; margin-bottom: 12px; }
+h2 { font: 30px/1.2 Georgia, serif; letter-spacing: -.02em; }
+h3 { font-size: 17px; line-height: 1.3; margin-bottom: 10px; }
+p { margin-bottom: 12px; }
+.intro { display: grid; grid-template-columns: 1fr 330px; gap: 42px; margin-bottom: 28px; align-items: end; }
+.lede { font-size: 17px; max-width: 750px; margin-bottom: 0; }
+.receipt { border-left: 2px solid var(--accent); padding-left: 18px; font-size: 12px; color: var(--muted); }
+.receipt strong { display: block; color: var(--ink); font-size: 13px; }
+code { font: .9em/1.5 ui-monospace, monospace; overflow-wrap: anywhere; }
+.controls { display: flex; align-items: center; gap: 24px; margin-bottom: 20px; }
+fieldset { display: flex; gap: 18px; border: 0; margin: 0; padding: 0; }
+legend { float: left; margin-right: 22px; color: var(--muted); font-size: 13px; }
+fieldset label { cursor: pointer; font-size: 13px; }
+input { accent-color: var(--accent); margin: 0 5px 0 0; }
+.hint { color: var(--muted); font-size: 12px; margin: 0 0 0 auto; }
+.overview-layout { display: grid; grid-template-columns: minmax(0, 1fr) 265px; gap: 28px; }
+.flow { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 10px 0; color: var(--muted); font-size: 12px; margin-bottom: 16px; }
+.map { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.place { min-height: 225px; padding: 18px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--white); display: flex; flex-direction: column; }
+.place .number { color: var(--muted); margin-bottom: 13px; }
+.place h3 a { color: var(--ink); text-decoration: none; }
+.place h3 a::after { content: ' ↗'; color: var(--accent); font-weight: 400; }
+.place p { font-size: 13px; }
+.place .address { border-top: 1px solid var(--line); padding-top: 10px; margin: auto 0 0; color: var(--muted); font-size: 11px; }
+.place.development { background: transparent; border-style: dashed; }
+.lens { display: none; }
+main:has(#structure:checked) .structure, main:has(#intent:checked) .intent, main:has(#evidence:checked) .evidence { display: block; }
+.kind { display: block; color: var(--accent); margin-bottom: 6px; letter-spacing: .06em; }
+.kind.tension { color: var(--warn); }
+aside h2 { font: 19px/1.3 Georgia, serif; margin-bottom: 18px; }
+.note { border-top: 1px solid var(--line); padding-top: 14px; margin-bottom: 20px; font-size: 13px; }
+.note a { color: var(--ink); font-weight: 600; }
+.note p { color: var(--muted); margin: 6px 0; font-size: 12px; }
+.limit { margin-top: 16px; font-size: 12px; color: var(--muted); }
+.journeys { margin-top: 28px; padding: 18px 0; border-block: 1px solid var(--line); display: flex; align-items: center; gap: 24px; flex-wrap: wrap; font-size: 13px; }
+.journeys strong { margin-right: auto; }
+.detail { max-width: 1040px; margin: 70px auto 0; padding-top: 28px; border-top: 1px solid var(--line); }
+.detail:target { border-top: 3px solid var(--accent); }
+.breadcrumb { font-size: 12px; margin-bottom: 18px; color: var(--muted); }
+.split { display: grid; grid-template-columns: 1.3fr 1fr; gap: 36px; }
+.law { padding: 20px; background: var(--tint); border-radius: var(--radius); font-size: 14px; }
+.law.warning { background: var(--warn-bg); }
+.path { padding-left: 24px; }
+.path li { padding: 0 0 16px 9px; }
+.path strong { display: block; }
+.path p { color: var(--muted); font-size: 14px; }
+summary { cursor: pointer; font-weight: 600; padding: 12px 0; }
+details { border-top: 1px solid var(--line); margin-top: 18px; }
+details p, details li { font-size: 13px; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; margin: 20px 0; }
+th, td { text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); padding: 11px 12px 11px 0; }
+th { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+.status { font: 11px ui-monospace, monospace; color: var(--warn); }
+footer { margin: 60px auto 0; max-width: 1040px; border-top: 1px solid var(--line); padding-top: 24px; font-size: 12px; color: var(--muted); }
+.skip { position: absolute; top: -70px; left: 20px; padding: 12px; background: var(--white); z-index: 4; }
+.skip:focus { top: 10px; }
+@media (max-width: 1100px) { .overview-layout { grid-template-columns: 1fr; } aside { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; } aside h2 { grid-column: 1 / -1; margin: 0; } .intro { grid-template-columns: 1fr 280px; } .hint { display: none; } }
+@media (max-width: 700px) { header { padding: 13px 18px; } header nav { gap: 12px; } .brand span { display: none; } main { padding: 25px 18px; } h1 { font-size: 34px; } .intro, .map, .split, aside { grid-template-columns: 1fr; } .intro { gap: 20px; } .place { min-height: 200px; } .controls, fieldset { flex-wrap: wrap; gap: 14px; } legend { float: none; margin-bottom: 10px; } .journeys { gap: 16px; } .journeys strong { width: 100%; } table { font-size: 12px; } .detail { margin-top: 45px; } }
+@media print { header { position: static; } .controls, .skip { display: none; } .overview-layout, .split { display: block; } .place { break-inside: avoid; } .detail { break-before: page; } details > * { display: block; } }
+</style>
+</head>
+<body>
+<a class="skip" href="#overview">Skip to the application map</a>
+<header>
+  <a class="brand" href="#overview">Alice <span>/ field guide</span></a>
+  <nav aria-label="Guide"><a href="#overview">Map</a><a href="#send">Journeys</a><a href="#coverage">Coverage</a><a href="proposal.md">Proposal</a></nav>
+</header>
+<main id="overview">
+  <div class="intro">
+    <div><p class="eyebrow">The whole application, before the next detail</p><h1>The window is not the work.</h1><p class="lede">Alice is a local personal assistant that acts through code.<br>One runtime does the work. Clients let you see and steer it.</p></div>
+    <div class="receipt"><strong>Illustrative snapshot · not live health</strong>Source examined: <code>fd67336e9</code><br>Selective inspection. No Alice tests run here.<br><a href="#coverage">What was and wasn't examined →</a></div>
+  </div>
+  <div class="controls">
+    <fieldset><legend>Read this map as</legend><label><input id="structure" name="lens" type="radio" checked>Structure</label><label><input id="intent" name="lens" type="radio">Intent</label><label><input id="evidence" name="lens" type="radio">Evidence</label></fieldset>
+    <p class="hint">Same places. Different questions. Select a place to go deeper.</p>
+  </div>
+  <div class="overview-layout">
+    <div>
+      <p class="flow">RUNTIME FLOW &nbsp; Surfaces → host &amp; contract → runtime → authority stores / injected adapters</p>
+      <div class="map" aria-label="Six responsibility areas">
+        <article class="place" data-place="surfaces"><span class="number">01 / see &amp; steer</span><h3><a href="#surfaces">Surfaces</a></h3>
+          <p class="lens structure">Chat, Apps, History, Gallery and Settings render runtime facts. The transcript is a projection, not its own history.</p>
+          <p class="lens intent"><span class="kind tension">In tension</span>Stable identity is the law. The single-reply wording disagrees with chronological narration now in source.</p>
+          <p class="lens evidence"><span class="kind">Source inspected</span>Projector retains narration beats. Earlier browser/native reports are evidence at their own revisions, not this one.</p>
+          <p class="address"><code>src/app/ · lib/thread/ · lib/ui/</code></p></article>
+        <article class="place" data-place="host"><span class="number">02 / cross the boundary</span><h3><a href="#host">Host &amp; contract</a></h3>
+          <p class="lens structure">Typed requests cross Tauri into Runtime. The host composes adapters, account services, credentials and device access.</p>
+          <p class="lens intent"><span class="kind">One contract</span>Transport is not a second runtime. Account operations have a host-owned route behind the client envelope.</p>
+          <p class="lens evidence"><span class="kind tension">Missing capability</span>The HTTP transport rejects request and subscribe. A browser-access design has landed, not browser access.</p>
+          <p class="address"><code>contract/ · lib/ipc/ · src-tauri/</code></p></article>
+        <article class="place" data-place="runtime"><span class="number">03 / do the work</span><h3><a href="#runtime">Runtime</a></h3>
+          <p class="lens structure">Bounded agent work, one dispatch and Grants. Reads current identity, coordinates durable state, calls injected implementations.</p>
+          <p class="lens intent"><span class="kind">One execution model</span>Files · Values · Secrets · Integrations · Code · Runs · Events · Grants. Primitives compose; they are not eight stores.</p>
+          <p class="lens evidence"><span class="kind">Earlier proof, reported</span>Nested-reply repair records 55 passing protocol/fold tests. Native reopening acceptance was not run.</p>
+          <p class="address"><code>crates/alice/src/agent/ · runtime.rs</code></p></article>
+        <article class="place" data-place="remember"><span class="number">04 / keep what matters</span><h3><a href="#remember">Remember</a></h3>
+          <p class="lens structure">Files: identity. Journals: history. Work rows: scheduling. Values: host preferences. Index and live hints can be rebuilt.</p>
+          <p class="lens intent"><span class="kind">Four authorities</span>Sharing a database does not merge ownership. A client disappearing must not erase durable work.</p>
+          <p class="lens evidence"><span class="kind">Selective source</span>Authority construction and module boundaries inspected. Not every mutation path; no restart performed here.</p>
+          <p class="address"><code>workspace/ · journal/ · work/ · values/</code></p></article>
+        <article class="place" data-place="act"><span class="number">05 / reach outside</span><h3><a href="#act">Act outside</a></h3>
+          <p class="lens structure">Provider/service protocols and contained Node execution. Runtime calls injected implementations; the host bridges the separate Code runner.</p>
+          <p class="lens intent"><span class="kind tension">Wording has drifted</span>The guide says model protocols only. The adapter crate also owns HTTP, MCP, OAuth and search. Don't move code to fix prose.</p>
+          <p class="lens evidence"><span class="kind">Acceptance, reported</span>One Integration for chat/images is landed. Adam's OpenRouter confirmation is recorded; no live call made here.</p>
+          <p class="address"><code>crates/alice-ai/ · crates/alice-code/</code></p></article>
+        <article class="place development" data-place="craft"><span class="number">06 / development layer</span><h3><a href="#craft">Look &amp; proof</a></h3>
+          <p class="lens structure">Tokens and vocabulary own appearance. Proof records consequences. Quality names debt. None is another product authority.</p>
+          <p class="lens intent"><span class="kind">Subtraction over duplication</span>Use current exemplars. Generate shared facts. Run the cheapest proof that can observe the consequence.</p>
+          <p class="lens evidence"><span class="kind tension">Coverage is uneven</span>The older quality report and recent alignment audit inspect different ranges. Neither certifies the whole application.</p>
+          <p class="address"><code>ds/ · scripts/proof/ · spec/quality/</code></p></article>
+      </div>
+      <p class="limit">External account/cloud services are outside this inspection. Remote delivery, all MCP modes, Windows containment and offline-model readiness are not implied by this map.</p>
+    </div>
+    <aside aria-label="Worth knowing">
+      <h2>Worth knowing</h2>
+      <div class="note"><span class="kind tension">A rule disagrees</span><a href="#surfaces">Narration now keeps its place in time.</a><p>The vision still describes one reply. An existing audit already names the correction.</p></div>
+      <div class="note"><span class="kind tension">A design isn't delivery</span><a href="#host">Browser access is still a missing edge.</a><p>The HTTP slot rejects calls. A done-folder design doesn't make it work.</p></div>
+      <div class="note"><span class="kind">An evidence boundary</span><a href="#craft">Live isolated labs are a proposal.</a><p>No new app launch, secret access or lab-isolation proof belongs to this picture.</p></div>
+    </aside>
+  </div>
+  <nav class="journeys" aria-label="Follow a journey"><strong>Follow one action</strong><a href="#send">Send a message →</a><a href="#remember">Close and reopen →</a><a href="#act">Use an external service →</a></nav>
+
+  <section class="detail" id="send">
+    <p class="breadcrumb"><a href="#overview">Alice / whole map</a> &nbsp; / &nbsp; Journey</p><h2>Send a message. Follow the responsibility.</h2>
+    <div class="split"><ol class="path">
+      <li><strong><a href="#surfaces">The window submits.</a></strong><p>Typed RuntimeClient sends the input. The projector renders journal facts and decorates them with live progress.</p></li>
+      <li><strong><a href="#host">One envelope crosses Tauri.</a></strong><p>The runtime-request route calls Runtime. This is a message path; account requests take the host's account branch.</p></li>
+      <li><strong><a href="#runtime">The bounded loop takes work.</a></strong><p>Read current authored identity. Use work rows to schedule. Dispatch under Grants, deadlines and budgets.</p></li>
+      <li><strong><a href="#act">Injected adapters act.</a></strong><p>Models/services speak concrete protocols; Code uses the contained runner. Neither owns a second work queue.</p></li>
+      <li><strong><a href="#remember">History remains; clients reread.</a></strong><p>Journal intent/results explain durable actions. Live chunks are disposable. A reconnect rereads authority, not a notification log.</p></li>
+    </ol><div><div class="law"><span class="kind">Why the boundary matters</span><h3>A window can leave without taking the work with it.</h3><p>Client subscription lifetime and runtime lifetime are different owners. Explicit runtime stop is a different action.</p><p><strong>This is a source/intent explanation, not a native restart test run by this study.</strong></p></div>
+    <details><summary>Open the source trail</summary><p>Source at <code>fd67336e94bd3a13eb86341c04de265cef5020a2</code>.</p><ul><li><a href="https://github.com/iceener/alice/blob/fd67336e94bd3a13eb86341c04de265cef5020a2/src/lib/ipc/client.ts">Typed client · request / subscribe</a></li><li><a href="https://github.com/iceener/alice/blob/fd67336e94bd3a13eb86341c04de265cef5020a2/src-tauri/src/commands.rs">Native transport · runtime_request / page lifetime</a></li><li><a href="https://github.com/iceener/alice/blob/fd67336e94bd3a13eb86341c04de265cef5020a2/crates/alice/src/runtime.rs">Runtime · authority construction / stop</a></li></ul></details></div></div>
+  </section>
+
+  <section class="detail" id="remember">
+    <p class="breadcrumb"><a href="#overview">Alice / whole map</a> &nbsp; / &nbsp; Remember</p><h2>Four facts. Four owners.</h2><p>A shared disk or database is a location, not shared semantic authority.</p>
+    <table><thead><tr><th>Fact</th><th>Its owner</th><th>On closing a client</th></tr></thead><tbody>
+      <tr><td>Who Alice is now</td><td>Authored workspace Files; coordinated CAS writes, direct edits legal</td><td>Files remain; future work reads them now</td></tr>
+      <tr><td>What happened</td><td>Runtime-written thread journal</td><td>Reconstruct the transcript from durable records</td></tr>
+      <tr><td>What this host is doing</td><td>Guarded work rows in app-local <code>state.db</code></td><td>One client subscription doesn't own scheduling</td></tr>
+      <tr><td>This host's preferences</td><td>Typed Values; separate tables/schema in <code>state.db</code></td><td>Preferences remain; they aren't work history</td></tr>
+      <tr><td>Search / projection acceleration</td><td>Derived <code>.alice/index.db</code></td><td>Rebuildable; not a fifth authority</td></tr>
+    </tbody></table>
+    <div class="split"><div class="law"><span class="kind">Intent → sampled source</span><p><strong>One authority per state family.</strong> The runtime constructs separate workspace, journal, work and Values owners. Managed attachments remain Files + journals; Secrets remain host-mediated, not authored Values.</p><a href="https://github.com/iceener/alice/blob/fd67336e94bd3a13eb86341c04de265cef5020a2/crates/alice/src/lib.rs">Inspect the authority module map →</a></div><div><span class="kind">Earlier proof · reported, not rerun</span><h3>Nested replies survived runtime restart cuts.</h3><p>The repair outcome (F595) reports 55 passing protocol/fold tests at <code>81981f469…</code>. Native waiting/reopening acceptance was not run.</p><p class="status">Summary path exists. Contents not audited here.</p><a href="https://github.com/iceener/alice/blob/fd67336e94bd3a13eb86341c04de265cef5020a2/spec/features/done/2026-09/F595-nested-child-root-never-settles/outcome.md">Read the original outcome and evidence address →</a></div></div>
+  </section>
+
+  <section class="detail" id="surfaces">
+    <p class="breadcrumb"><a href="#overview">Alice / whole map</a> &nbsp; / &nbsp; Surfaces</p><h2>Keep the reader's place. Don't erase earlier speech.</h2>
+    <div class="split"><div><span class="kind">Observed source</span><p>The transcript projector retains chronological narration beats and treats narration as a tool-grouping boundary. Chat, Apps and supporting panels remain clients over the same runtime.</p><p><strong>Owns:</strong> rendering, draft/preview memory and one window's subscription.<br><strong>Does not own:</strong> durable history, scheduling or provider credentials.</p><a href="https://github.com/iceener/alice/blob/fd67336e94bd3a13eb86341c04de265cef5020a2/src/lib/thread/project.ts">Inspect narration insertion and stable reply slots →</a></div><div class="law warning"><span class="kind tension">Intent/source disagreement</span><p>The vision's PROJECTION-IDENTITY still describes all same-turn tools above one narration row. Stable identity agrees; single-row chronology does not.</p><p>The existing alignment audit (F641) proposes wording. This map neither changes the rule nor creates another ticket.</p><a href="https://github.com/iceener/alice/blob/fd67336e94bd3a13eb86341c04de265cef5020a2/spec/features/done/2026-09/F641-vision-styleguide-alignment-audit/notes.md">Read both sides and the existing proposed correction →</a></div></div>
+  </section>
+
+  <section class="detail" id="host">
+    <p class="breadcrumb"><a href="#overview">Alice / whole map</a> &nbsp; / &nbsp; Host &amp; contract</p><h2>A transport slot is not a working route.</h2>
+    <div class="split"><div><p>The generated contract and typed client lead to Tauri's request/subscription adapter. Host composition supplies native services; account operations route to the host account owner rather than product-runtime dispatch.</p><p><strong>Source inspected:</strong> client envelope and native command boundary. External account/API behavior is outside this survey.</p><a href="https://github.com/iceener/alice/blob/fd67336e94bd3a13eb86341c04de265cef5020a2/src-tauri/src/commands.rs">Inspect the actual host route →</a></div><div class="law warning"><span class="kind tension">Not implemented</span><p><code>createHttpTransport</code> rejects request and subscribe with “not implemented.” The desktop/web decision map (F644) is a landed design, not proof of a browser runtime.</p><a href="https://github.com/iceener/alice/blob/fd67336e94bd3a13eb86341c04de265cef5020a2/src/lib/ipc/http.ts">Open the rejecting HTTP implementation →</a></div></div>
+  </section>
+
+  <section class="detail" id="runtime">
+    <p class="breadcrumb"><a href="#overview">Alice / whole map</a> &nbsp; / &nbsp; Runtime</p><h2>Primitives compose. Authorities persist.</h2><p>Files, Values, Secrets, Integrations, Code, Runs, Events and Grants describe what agents compose against. They are not eight databases or eight separately scheduled subsystems.</p>
+    <div class="split"><div><p><strong>Owns:</strong> bounded agent work, runtime dispatch and policy, authority access and live subscriptions.<br><strong>Does not own:</strong> vendor protocols, the UI, or another copy of host credential plaintext.</p><a href="https://github.com/iceener/alice/blob/fd67336e94bd3a13eb86341c04de265cef5020a2/crates/alice/src/agent/mod.rs">Enter the runtime's agent boundary →</a></div><div class="law"><span class="kind">Coverage limit</span><p>Module entries and the request/lifecycle boundary were inspected. This is not an audit of every cancellation, grant evaluation or durable action path. See <a href="#remember">Remember</a> for the earlier, narrowly scoped restart evidence.</p></div></div>
+  </section>
+
+  <section class="detail" id="act">
+    <p class="breadcrumb"><a href="#overview">Alice / whole map</a> &nbsp; / &nbsp; Act outside</p><h2>The call travels out. The dependency points in.</h2>
+    <div class="split"><div><p><strong>Call direction:</strong> runtime → injected model/service/Code implementation.<br><strong>Dependency:</strong> <code>alice-ai</code> → <code>alice</code>. Code differs: the host's <code>HostCodeRunner</code> implements the runtime interface and adapts to <code>alice-code</code>; that runner has no <code>alice</code> dependency.</p><p>To use a service: discover the exact Integration → dispatch under Grants → host-mediated credential use → concrete adapter → durable result. An imported package grants no independent authority.</p><p>The one-Integration outcome (F580) records Adam's OpenRouter chat/images dogfood confirmation. It also explicitly preserves the unrun isolated-native suite. No live call was made here.</p><a href="https://github.com/iceener/alice/blob/fd67336e94bd3a13eb86341c04de265cef5020a2/spec/features/done/2026-09/F580-one-integration-chat-and-images/outcome.md">Read reported acceptance and its limits →</a></div><div class="law warning"><span class="kind tension">Responsibility wording has drifted</span><p>The styleguide calls <code>alice-ai</code> provider protocols only. The crate also declares Integration HTTP, OAuth, MCP and native search. Its dependency direction still matches intent in this sample.</p><p>The existing alignment audit names the discrepancy. Don't create a third crate to make an old sentence true.</p><a href="https://github.com/iceener/alice/blob/fd67336e94bd3a13eb86341c04de265cef5020a2/crates/alice-ai/src/lib.rs">Inspect actual adapter responsibilities →</a></div></div>
+  </section>
+
+  <section class="detail" id="craft">
+    <p class="breadcrumb"><a href="#overview">Alice / whole map</a> &nbsp; / &nbsp; Look &amp; proof</p><h2>A guide to evidence, not a green certificate.</h2>
+    <table><thead><tr><th>Input</th><th>What it tells us</th><th>What it does not</th></tr></thead><tbody>
+      <tr><td>Vision / styleguide</td><td>Intent, authority boundaries, current exemplars, look ownership</td><td>Whether all present code obeys them</td></tr>
+      <tr><td>Earlier quality pass</td><td>Five subtraction/unification findings over clipboard/Settings work at <code>85d7cd898</code></td><td>Current whole-project condition or automatic resolution</td></tr>
+      <tr><td>Recent alignment audit (F641)</td><td>Selective contradictions and existing follow-ups at <code>c33fcea56…</code></td><td>A full source/native audit at this snapshot</td></tr>
+      <tr><td>Agent-owned lab design (F643)</td><td>A plan for private state, control and authorized live profiles</td><td>Working live labs, secret access, or permission to launch Alice</td></tr>
+    </tbody></table>
+    <p><a href="https://github.com/iceener/alice/blob/fd67336e94bd3a13eb86341c04de265cef5020a2/spec/features/done/2026-09/F643-agent-owned-alice-lab-instances/architecture.md">Read the lab design and explicit proof boundary →</a></p>
+  </section>
+
+  <section class="detail" id="coverage">
+    <p class="breadcrumb"><a href="#overview">Alice / whole map</a> &nbsp; / &nbsp; Coverage receipt</p><h2>The edge of this map is visible.</h2>
+    <div class="split"><div><span class="kind">Source examined</span><p><code>fd67336e94bd3a13eb86341c04de265cef5020a2</code></p><p>Vision, styleguide, board, module entries, client/host/runtime boundaries, narration source, selected recent outcomes and existing audits/designs. All GitHub source links pin this revision.</p><p>The board window trails recent Git history. That disagreement remains visible; this guide does not replace the board.</p></div><div class="law"><span class="kind">Not examined / not run</span><p>No whole-codebase audit, Alice tests, historical Alice frame review, external API audit, live provider calls or creator-app interaction. No watcher or renderer has been installed.</p><p>Receipt paths checked for existence only. Earlier proof is reported, not rerun or promoted to this revision.</p></div></div>
+    <details><summary>Offline source addresses and complete study</summary><p>GitHub links may require access. From the Alice checkout, use <code>git show fd67336e94bd3a13eb86341c04de265cef5020a2:&lt;path&gt;</code>. Pinned local copies and source hashes are retained at <code>/Users/overment/.overment/limen/tmp/evidence/F050-study/sources/</code>.</p><p><a href="example.md">Text-only guide</a> · <a href="notes.md">Evidence map</a> · <a href="proposal.md">Background observer/publication design</a></p></details>
+  </section>
+  <footer><p>Place index: <a href="#act">Act outside</a> · <a href="#host">Host &amp; contract</a> · <a href="#craft">Look &amp; proof</a> · <a href="#remember">Remember</a> · <a href="#runtime">Runtime</a> · <a href="#surfaces">Surfaces</a></p><p>Wireframe for a living architecture picture. No external fonts, scripts, analytics or network requests on open. This HTML is a disposable presentation sample; a production guide would render shared Markdown, not maintain two copies.</p></footer>
+</main>
+</body>
+</html>
