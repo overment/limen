@@ -97,7 +97,8 @@ export function ticketAuthor(cwd: string, ticket: string): { path: string; commi
 	if (git(root, ["cat-file", "-t", `HEAD:${path}`]).stdout.trim() !== "blob") throw new Error(`ticket author unavailable: ${path} is not a committed file at HEAD`);
 	if (requireGit(root, ["rev-parse", "--is-shallow-repository"]).stdout.trim() === "true")
 		throw new Error("ticket author unavailable: shallow history; fetch complete history first");
-	const [commit, name, email] = requireGit(root, ["log", "--follow", "--diff-filter=A", "-1", "--format=%H%x00%an%x00%ae", "HEAD", "--", `:(literal)${path}`])
+	// A copy files a new ticket; follow renames, but stop at copies.
+	const [commit, name, email] = requireGit(root, ["log", "--follow", "--diff-filter=AC", "-1", "--format=%H%x00%an%x00%ae", "HEAD", "--", `:(literal)${path}`])
 		.stdout.trimEnd()
 		.split("\0");
 	if (!commit || !name || !email) throw new Error(`ticket author unavailable: no creation author found for ${path}`);

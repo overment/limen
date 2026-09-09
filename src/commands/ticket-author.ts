@@ -7,5 +7,5 @@ export async function ticketAuthorCommand(args: readonly string[], cwd: string):
 	const github = /^(?:\d+\+)?([a-z\d](?:[a-z\d-]{0,37}[a-z\d])?)@users\.noreply\.github\.com$/i.exec(author.email)?.[1];
 	console.log(`Ticket: ${author.path}\nAuthor: ${author.name} <${author.email}>`);
 	if (github) console.log(`GitHub: @${github} (from recorded noreply email)`);
-	console.log(`Creation commit: ${author.commit}\nSource: Git author at HEAD, following renames; not verified human identity.`);
+	console.log(`Creation commit: ${author.commit}\nSource: creation author in HEAD history, following renames; not verified human identity.`);
 }
