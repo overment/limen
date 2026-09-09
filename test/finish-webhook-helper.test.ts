@@ -19,22 +19,24 @@ async function fixture() {
 	const preload = join(root, "transport.mjs");
 	await writeFile(
 		preload,
-		`import { writeFileSync } from 'node:fs';
+		`import { appendFileSync, writeFileSync } from 'node:fs';
 const setTimer = globalThis.setTimeout;
 globalThis.setTimeout = (callback, ms, ...args) => {
   writeFileSync(process.env.CAPTURE + '.timeout', String(ms));
-  return setTimer(callback, process.env.TRANSPORT === 'timeout' ? 35 : ms, ...args);
+  return setTimer(callback, ['timeout', 'mixed-timeout'].includes(process.env.TRANSPORT) ? 35 : ms, ...args);
 };
 globalThis.fetch = async (url, options) => {
+  appendFileSync(process.env.CAPTURE + '.requests', JSON.stringify({ url: String(url), headers: options.headers, body: options.body }) + '\\n');
   writeFileSync(process.env.CAPTURE, JSON.stringify({
     url: String(url), method: options.method, redirect: options.redirect,
     headers: options.headers, body: options.body, argv: process.argv,
     hasSignal: options.signal instanceof AbortSignal,
   }));
+  if (String(url).endsWith('/stall')) return new Promise((resolve, reject) => options.signal.addEventListener('abort', () => reject(new Error('aborted'))));
   if (process.env.TRANSPORT === 'timeout') return new Promise(() => {});
-  if (process.env.TRANSPORT === 'error') throw new Error(options.headers.Authorization + ' ' + url);
+  if (process.env.TRANSPORT === 'error' || String(url).endsWith('/error')) throw new Error(options.headers.Authorization + ' ' + url);
   return {
-    status: Number(process.env.HTTP_STATUS ?? '204'),
+    status: String(url).endsWith('/reject') ? 503 : Number(process.env.HTTP_STATUS ?? '204'),
     get body() { throw new Error('response bodies must not be read'); },
   };
 };
@@ -94,6 +96,83 @@ test("helper safely encodes all CLI fields, sends Bearer in memory, and reports 
 	assert.deepEqual(request.argv.slice(2), args);
 	assert.ok(!request.argv.join(" ").includes(AUTH));
 	assert.equal(readFileSync(`${f.capture}.timeout`, "utf8"), "10000");
+});
+
+test("explicit targets fan out to two bot routes without sending to legacy Tony", async (t) => {
+	const f = await fixture();
+	t.after(f.cleanup);
+	const targets = [
+		{ url: "https://finish.example.test/grok-one", auth: AUTH },
+		{ url: "https://finish.example.test/grok-two", auth: "Bearer second-synthetic-secret" },
+	];
+	const path = await f.config(
+		join(f.root, "multi.env"),
+		`LIMEN_FINISH_WEBHOOK_TARGETS='${JSON.stringify(targets)}'\nTONY_FINISH_WEBHOOK_URL='${DESTINATION}'\nTONY_FINISH_WEBHOOK_AUTH='${AUTH}'\n`,
+	);
+	const result = f.run({ TONY_FINISH_WEBHOOK_ENV: path });
+	assert.equal(result.status, 0, result.stderr);
+	const requests = readFileSync(`${f.capture}.requests`, "utf8")
+		.trim()
+		.split("\n")
+		.map((line) => JSON.parse(line));
+	assert.deepEqual(
+		requests.map(({ url, headers }) => ({ url, auth: headers.Authorization })),
+		targets,
+	);
+	for (const request of requests) assert.deepEqual(JSON.parse(request.body), { job: "label", status: "done", branch: "topic" });
+	assert.match(result.stdout, /target 1 accepted \(HTTP 204\); owner wake unobserved/);
+	assert.match(result.stdout, /target 2 accepted \(HTTP 204\); owner wake unobserved/);
+});
+
+test("a failed or stalled first bot does not block the second bot; acceptance is never called a wake", async (t) => {
+	for (const route of ["error", "reject", "stall"]) {
+		await t.test(route, async (t) => {
+			const f = await fixture();
+			t.after(f.cleanup);
+			const targets = [
+				{ url: `https://finish.example.test/${route}`, auth: AUTH },
+				{ url: "https://finish.example.test/grok-two", auth: "Bearer second-synthetic-secret" },
+			];
+			const path = await f.config(join(f.root, "multi.env"), `LIMEN_FINISH_WEBHOOK_TARGETS='${JSON.stringify(targets)}'\n`);
+			const result = f.run({ TONY_FINISH_WEBHOOK_ENV: path, TRANSPORT: "mixed-timeout" });
+			assert.equal(result.status, 1);
+			const expected = route === "error" ? "request failed" : route === "reject" ? "HTTP 503 rejected" : "request timed out after 10000ms";
+			assert.ok(result.stdout.includes(`target 1 ${expected}; owner wake unobserved`), result.stdout);
+			assert.match(result.stdout, /target 2 accepted \(HTTP 204\); owner wake unobserved/);
+			assert.equal(result.stdout.trim().split("\n").length, 2, "timeout and abort rejection must not produce duplicate results");
+			assert.equal(readFileSync(`${f.capture}.requests`, "utf8").trim().split("\n").length, 2);
+		});
+	}
+});
+
+test("invalid explicit target lists fail before all transport and never fall back to Tony", async (t) => {
+	const valid = { url: DESTINATION, auth: AUTH };
+	const invalid = [
+		"",
+		"not-json",
+		"null",
+		"{}",
+		"[]",
+		"[null]",
+		'["synthetic-secret"]',
+		JSON.stringify([valid, { ...valid, auth: "synthetic-secret" }]),
+		JSON.stringify([valid, { ...valid, url: "http://finish.example.test" }]),
+		JSON.stringify([valid, { url: DESTINATION }]),
+		JSON.stringify([valid, { auth: AUTH }]),
+		JSON.stringify([valid, { ...valid, bot: "grok-two" }]),
+	];
+	for (const [index, value] of invalid.entries()) {
+		await t.test(`invalid selection ${index + 1}`, async (t) => {
+			const f = await fixture();
+			t.after(f.cleanup);
+			const path = await f.config(
+				join(f.root, "invalid.env"),
+				`LIMEN_FINISH_WEBHOOK_TARGETS='${value}'\nTONY_FINISH_WEBHOOK_URL='${DESTINATION}'\nTONY_FINISH_WEBHOOK_AUTH='${AUTH}'\n`,
+			);
+			assert.equal(f.run({ TONY_FINISH_WEBHOOK_ENV: path }).status, 1);
+			assert.equal(existsSync(`${f.capture}.requests`), false);
+		});
+	}
 });
 
 test("helper rejects missing, raw, Basic and malformed Bearer auth before transport", async (t) => {
@@ -216,7 +295,10 @@ test("Git common directory selects the canonical project's config from an extern
 test("legacy home config is available only for manual invocation outside Git, not inherited credentials", async (t) => {
 	const f = await fixture();
 	t.after(f.cleanup);
-	assert.equal(f.run({ TONY_FINISH_WEBHOOK_URL: DESTINATION, TONY_FINISH_WEBHOOK_AUTH: AUTH }).status, 1);
+	assert.equal(
+		f.run({ TONY_FINISH_WEBHOOK_URL: DESTINATION, TONY_FINISH_WEBHOOK_AUTH: AUTH, LIMEN_FINISH_WEBHOOK_TARGETS: JSON.stringify([{ url: DESTINATION, auth: AUTH }]) }).status,
+		1,
+	);
 	assert.equal(existsSync(f.capture), false);
 	await f.config(join(f.home, ".overment", "tony-finish-webhook.env"));
 	assert.equal(f.run().status, 0);

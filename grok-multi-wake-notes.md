@@ -1,0 +1,15 @@
+# Multi-bot finish delivery (F702b)
+
+The assigned ticket `spec/features/active/F702b-grok-bot-multi-wake/ticket.md` is absent in this worktree. No findings file was supplied. Work proceeds from the instruction: finish webhooks must fan out to two Grok bots on one project, and HTTP acceptance must not be called a wake.
+
+Seam: `bin/tony-finish-ping.sh` owns private config and transport; `src/finish-webhook.ts` owns the once-only automatic attempt and durable receipt. Spawn/continuation already select a project-specific private env path. Preserve those semantics and legacy Tony single-destination configuration.
+
+Candidate contract: optional `LIMEN_FINISH_WEBHOOK_TARGETS` is a JSON array of explicit `{url, auth}` destinations in the selected private dotenv file. It replaces, not appends to, legacy Tony fields. Bot-specific routing belongs in each endpoint URL; Limen sends the existing `{job, status, branch}` payload to every configured target concurrently. Never discover recipients from names or default all bots to Tony. Invalid config fails before any send.
+
+Live-proof blocker: which two authorized Grok Bot wake endpoints consume this payload, and where can the coordinator observe each bot's resulting turn? Neither endpoint contract nor observer is provided by the missing ticket. Synthetic HTTP receivers prove fan-out but create no bot turn and cannot prove production Grok wake. Do not print private configuration, invent a Grok API, or install/change private configuration without that contract.
+
+The requested retrospective is in `alice-finish-reliability-notes.md`. It found no automatic opt-in for 610 recent Alice app/API jobs, manual HTTP-only evidence and one reported ping exit 127, plus separate native Pi delivery/unconfirmed records. No live two-Grok wake was established, and no VPS request was run. The accessible local routine/session stores did not contain the earlier probe history. The docs now distinguish all these evidence types and explain that installation alone is not opt-in.
+
+Candidate checks: the discriminating two-target test failed on the baseline by sending only to legacy Tony; after the change, 39 helper checks passed. Expanded helper/lifecycle checks passed 70/70, including partial HTTP failure, a stalled first target with second-target acceptance, validation before any transport, and automatic fan-out after terminal state. Those are synthetic transport checks, not live bot-wake proof. Artifacts are retained outside the worktree at `/Users/overment/.overment/limen/tmp/evidence/F702b/1d77c03b/`; the clean-candidate native lane and final delivery status are recorded there and in the final handoff.
+
+Only sender, focused tests, operator docs, and notes change. Spawn/continue snapshots, finalization, `notify` subscriptions, installed files, private config and feature state remain untouched. Automatic receipts remain aggregate: a failed multi-target send may have reached some bots. No target gets a blind automatic retry. The operator can deliberately select a private failed-target-only config after observing each receiver.
