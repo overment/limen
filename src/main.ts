@@ -10,6 +10,7 @@ import { spawnCommand } from "./commands/spawn.ts";
 import { steerCommand } from "./commands/steer.ts";
 import { stopCommand } from "./commands/stop.ts";
 import { sweepCommand } from "./commands/sweep.ts";
+import { ticketAuthorCommand } from "./commands/ticket-author.ts";
 import { waitCommand } from "./commands/wait.ts";
 import { unwatchCommand, watchCommand } from "./commands/watch.ts";
 import { runHostedSupervisor } from "./supervisor.ts";
@@ -33,8 +34,25 @@ const COMMANDS = {
 	close: closeCommand,
 	sweep: sweepCommand,
 	linear: linearCommand,
+	"ticket-author": ticketAuthorCommand,
 } as const satisfies Record<
-	"init" | "workspace" | "spawn" | "continue" | "diff" | "steer" | "stop" | "wait" | "jobs" | "prune" | "watch" | "unwatch" | "open" | "close" | "sweep" | "linear",
+	| "init"
+	| "workspace"
+	| "spawn"
+	| "continue"
+	| "diff"
+	| "steer"
+	| "stop"
+	| "wait"
+	| "jobs"
+	| "prune"
+	| "watch"
+	| "unwatch"
+	| "open"
+	| "close"
+	| "sweep"
+	| "linear"
+	| "ticket-author",
 	Command
 >;
 const HELP = `limen — isolated coding jobs with files and git
@@ -61,6 +79,7 @@ usage:
   limen unwatch <id|suffix|label> | --all
   limen open <id|suffix|label>
   limen close <FNNN>
+  limen ticket-author <ticket-path>                 # creation-commit author, following Git renames
   limen sweep [--install|--uninstall]
   limen linear [on [--team T --project P]|off|status]   # Linear mirror toggle — renames spec/linear.md ↔ .off; --team/--project write a fresh config
 Pass a short coordinator instruction, not $(cat ticket.md). The ticket is a pointer, not the prompt.`;
