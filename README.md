@@ -79,6 +79,14 @@ Finished jobs keep their files under `.limen/jobs/`. Extra checkouts do not stay
 
 A job is bounded by 90 minutes (`--timeout 20m`) and 900 tool-start events (`LIMEN_MAX_TOOL_CALLS`). A bound records `failed`; it does not finish the ticket. Do not run `limen wait` in the coordinator conversation — it blocks you.
 
+## Ticket authorship
+
+For collaborators sharing a project, `limen ticket-author spec/features/active/F001-auth/ticket.md` reports the name, email, and commit that first added the ticket, following Git-recognized renames between lanes. Paths are relative to the current directory; absolute paths within the repository also work. The lookup reads the current branch's committed `HEAD`, never the current operator's Git config or GitHub session, and writes nothing.
+
+A GitHub noreply email also yields its recorded login. Ordinary emails remain usable identities without a GitHub account or network access. This is the creation **author**, not the committer or latest editor; it is evidence from Git, not verified human identity. Shared bot credentials identify the bot, not the person who asked it to file the ticket. Keep distinct authors on filing commits when collaborators need distinct attribution.
+
+Uncommitted paths and shallow history report authorship unavailable rather than guessing. Commit a new ticket before looking it up; fetch complete history for a shallow clone. A move Git cannot recognize, a squash, or rewritten history can lose original attribution. Deleting and recreating a path starts a new ticket history. No author tags are added to ticket Markdown.
+
 ## Models
 
 Coordinators use `openai-codex/gpt-6-astra` with `xhigh` thinking. In an existing Herdr pane at a shell prompt, with the project as its working directory, Tony starts a peer with explicit Pi arguments:
