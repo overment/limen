@@ -1,9 +1,11 @@
 # Finish webhooks
 
-`bin/tony-finish-ping.sh <label> <status> <branch>` sends one JSON POST containing
-`job`, `status` and `branch`. It requires Node.js 24+ and Git, on macOS or Linux.
-It uses Node's HTTP client, not curl; credentials never enter child-process
-arguments. HTTP acceptance does **not** prove Tony woke or read the handoff.
+`bin/tony-finish-ping.sh <label> <status> <branch>` sends a JSON POST containing
+`job`, `status` and `branch` to each explicitly configured destination. Its name
+is retained for compatibility; recipients need not be Tony. It requires Node.js
+24+ and Git, on macOS or Linux. It uses Node's HTTP client, not curl; credentials
+never enter child-process arguments. HTTP acceptance does **not** prove any bot
+woke or read the handoff.
 
 ## Install the reviewed helper
 
@@ -102,6 +104,9 @@ with no time left it records `not sent`. No timeout extends job shutdown.
 Routine workers should omit a manual finish-ping before exit or `finish`:
 automation handles configured jobs. A coordinator uses the deliberate fallback
 below after a failed or absent automatic send, never as a routine duplicate.
+Installing the helper alone does not opt in a project: inspect a newly spawned
+job's `finish-webhook-env` before expecting automatic delivery. A legacy home
+config is not a project opt-in, and historical jobs are not retrofitted.
 
 ## Private env format
 
@@ -122,6 +127,55 @@ sending. The URL must use HTTPS, without embedded username/password or fragment.
 Response bodies, URLs and credential values are never printed by the helper.
 Do not enable runtime network tracing, put secrets in command arguments, or
 paste private env contents into job logs.
+
+## Two bots on one project
+
+Set `LIMEN_FINISH_WEBHOOK_TARGETS` in the same private env file to a nonempty JSON
+array of `{url, auth}` objects. This explicit list **replaces** the legacy Tony
+URL/auth pair; it never appends an implicit Tony recipient or falls back to one.
+The same HTTPS and Bearer validation applies to every target. Unknown object
+fields, malformed JSON, an empty list or any invalid target fail before any send.
+The setting is read from the selected file, not inherited from the process env.
+
+```dotenv
+LIMEN_FINISH_WEBHOOK_TARGETS='[{"url":"https://your-endpoint.example.invalid/bots/grok-one/finish","auth":"Bearer FIRST_BOT_TOKEN"},{"url":"https://your-endpoint.example.invalid/bots/grok-two/finish","auth":"Bearer SECOND_BOT_TOKEN"}]'
+```
+
+These URLs are placeholders, **not a Grok Bot API definition**. Obtain each bot's
+authorized wake route from its operator. The route (URL and/or credential) must
+select the intended bot and turn the `{job, status, branch}` payload into a wake.
+A shared endpoint that merely logs events or always wakes Tony does not meet
+that contract. Limen does not infer recipients from a model or display name, nor
+does it invent a bot/session field for an unknown receiver API. If Tony should
+also receive the finish, include Tony's destination explicitly as another entry.
+
+Every request starts before the sender waits for results, so a failed or stalled
+first bot does not suppress delivery to the second. The standalone bound remains
+10 seconds per request, concurrent rather than multiplied by recipient count.
+Automatic finalization still caps the entire sender at three seconds (or the
+remaining shutdown budget). A killed request may already have been accepted.
+
+Manual output identifies targets by their one-based list position only:
+`finish webhook: target 2 accepted (HTTP 204); owner wake unobserved`.
+Exit 0 requires HTTP acceptance from **all** targets. One failure yields exit 1
+after the other requests settle. No URLs, credentials or response bodies appear
+in output. Automatic records remain aggregate sender status and discard its
+output: `failed` can mean one bot accepted while another did not. There is no
+per-target automatic retry. Retrying the whole list may wake a successful bot
+twice; after inspecting both receivers, an operator may deliberately select a
+separate private config containing only the failed route for a manual retry.
+
+### Prove wake, not just HTTP
+
+Use a unique probe label with the selected project config and retain the safe
+sender results. Then inspect **each intended bot's session** for a new completed
+turn that references that exact label and the original status/branch. Record the
+bot identity, session/turn address, and observed response separately from the
+HTTP status. Two 2xx responses, two request-log entries or one bot's response are
+not evidence that two bots woke. If a receiver accepts HTTP but produces no
+matching turn, record its wake as unobserved and repair its wake route before
+calling delivery proven. This repository's synthetic tests never prove a live
+Grok Bot wake; that requires the authorized endpoints and session observations.
 
 ## macOS: configure a project
 
@@ -194,8 +248,10 @@ space in `Bearer …`.
 
 ## Inspect failures and deliberately retry
 
-Exit 0 prints `finish webhook: accepted (HTTP NNN)` for 200–299 only. Other
-responses print `finish webhook: HTTP NNN rejected` and exit 1. Redirects are not
+In legacy single-target mode, exit 0 prints `finish webhook: accepted (HTTP NNN)`
+for 200–299 only. Other responses print `finish webhook: HTTP NNN rejected` and
+exit 1. An explicit target list prints one indexed result per destination and
+exits 0 only when all are accepted. Redirects are not
 followed. Network errors print `request failed`; a stalled request is forcibly
 bounded to 10 seconds and prints `request timed out after 10000ms`. Git lookup
 has a separate two-second limit. Config/usage errors exit 1 before transport.
@@ -203,7 +259,14 @@ No response body is read, so even a server that echoes credentials cannot put
 them in a handoff.
 
 Automatic delivery discards sender stdout/stderr and records only safe status.
-Inspect `limen jobs <id>` for the log summary, then the plain job records:
+Inspect `limen jobs <id>` for the log summary, then the plain job records.
+Do not substitute `notify/delivered/*/accepted`: those are native Pi injection
+records, not HTTP receipts or external Grok Bot acknowledgements. Multiple
+native delivery slots may simply be different subscribed coordinators.
+A receiver run ID is also not a completed bot turn. When recording a manual
+send, capture the helper's own exit status; a later successful shell command
+must not hide a failed ping.
+
 
 | Job file | Meaning |
 |---|---|
@@ -213,7 +276,7 @@ Inspect `limen jobs <id>` for the log summary, then the plain job records:
 | `state` / `finished-at` | Job outcome and completion time, independent of delivery success. |
 
 `accepted: sender exited 0 (owner wake unobserved)` means the canonical sender
-reported HTTP success, not an observed Tony wake. `failed` identifies a nonzero
+reported HTTP success for all selected targets, not an observed bot wake. `failed` identifies a nonzero
 exit, launch failure, deadline, or invalid recorded path without exposing sender
 output. After the finalizer is gone, a remaining `attempting` or a claim without
 a result is ambiguous: the endpoint may already have accepted the request.
@@ -257,7 +320,7 @@ printf 'finish sender exit=%s\n' "$result"
 
 There is no automatic retry or idempotency guarantee in this helper. A timeout
 can happen after the server accepted the request; a deliberate retry may produce
-a duplicate. HTTP acceptance and an observed Tony wake must be recorded as two
+a duplicate. HTTP acceptance and each observed bot wake must be recorded as
 separate facts. Do not delete a claim to trigger automatic retries: there is no
 queue or retry daemon.
 
@@ -277,3 +340,8 @@ Lifecycle tests additionally exercise automatic hosted/detached finalization,
 worktree/workspace selection, continuation, one-send claims, safe failures and
 bounded shutdown with synthetic executables. A combined test invokes the actual
 canonical helper through automatic finalization with intercepted transport.
+Multi-target checks assert distinct routes and credentials, no implicit Tony
+recipient, full validation before transport, and second-bot delivery despite a
+failed or stalled first bot. Automatic two-route tests exercise both all-accepted
+and partial-failure outcomes after durable terminal state. These HTTP-only
+receivers create no bot turn; their receipts must not claim a wake.

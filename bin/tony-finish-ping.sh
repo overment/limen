@@ -42,34 +42,58 @@ try {
 } catch {
   fail('cannot read the selected env file');
 }
-const auth = config.TONY_FINISH_WEBHOOK_AUTH;
-if (!auth || !/^Bearer [A-Za-z0-9._~+/-]+=*$/.test(auth)) {
-  fail('TONY_FINISH_WEBHOOK_AUTH must be a complete Bearer value');
+const multi = config.LIMEN_FINISH_WEBHOOK_TARGETS !== undefined;
+let targets = [{ url: config.TONY_FINISH_WEBHOOK_URL, auth: config.TONY_FINISH_WEBHOOK_AUTH }];
+if (multi) {
+  try {
+    targets = JSON.parse(config.LIMEN_FINISH_WEBHOOK_TARGETS);
+    if (!Array.isArray(targets) || !targets.length) throw new Error();
+    if (targets.some(target => !target || typeof target !== 'object' || Array.isArray(target)
+      || Object.keys(target).some(key => !['url', 'auth'].includes(key)))) throw new Error();
+  } catch {
+    fail('LIMEN_FINISH_WEBHOOK_TARGETS must be a nonempty JSON array of {url, auth}');
+  }
 }
-let url;
-try {
-  url = new URL(config.TONY_FINISH_WEBHOOK_URL);
-  if (url.protocol !== 'https:' || url.username || url.password || url.hash) throw new Error();
-} catch {
-  fail('TONY_FINISH_WEBHOOK_URL must be an HTTPS URL without userinfo or fragment');
+// Validate the entire selection before contacting any destination. Explicit fan-out never falls back.
+for (const [index, target] of targets.entries()) {
+  const prefix = multi ? `target ${index + 1}` : 'TONY_FINISH_WEBHOOK';
+  if (typeof target.auth !== 'string' || !/^Bearer [A-Za-z0-9._~+/-]+=*$/.test(target.auth)) {
+    fail(`${prefix}${multi ? ' auth' : '_AUTH'} must be a complete Bearer value`);
+  }
+  try {
+    const url = new URL(target.url);
+    if (typeof target.url !== 'string' || url.protocol !== 'https:' || url.username || url.password || url.hash) throw new Error();
+    target.url = url;
+  } catch {
+    fail(`${prefix}${multi ? ' url' : '_URL'} must be an HTTPS URL without userinfo or fragment`);
+  }
 }
 
-const controller = new AbortController();
-setTimeout(() => {
-  controller.abort();
-  fail('request timed out after 10000ms');
-}, 10000);
-try {
-  const response = await fetch(url, {
-    method: 'POST', redirect: 'manual', signal: controller.signal,
-    headers: { Authorization: auth, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ job: args[0], status: args[1], branch: args[2] }),
+function send(target, index) {
+  return new Promise(resolve => {
+    const controller = new AbortController();
+    let settled = false;
+    const finish = (accepted, message) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      controller.abort(); // Do not read or print a possibly sensitive response body.
+      const line = multi ? `target ${index + 1} ${message}; owner wake unobserved` : message;
+      console[accepted || multi ? 'log' : 'error'](`finish webhook: ${line}`);
+      resolve(accepted);
+    };
+    const timer = setTimeout(() => finish(false, 'request timed out after 10000ms'), 10000);
+    fetch(target.url, {
+      method: 'POST', redirect: 'manual', signal: controller.signal,
+      headers: { Authorization: target.auth, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ job: args[0], status: args[1], branch: args[2] }),
+    }).then(response => {
+      const accepted = response.status >= 200 && response.status < 300;
+      finish(accepted, accepted ? `accepted (HTTP ${response.status})` : `HTTP ${response.status} rejected`);
+    }, () => finish(false, 'request failed'));
   });
-  controller.abort(); // Do not read or print a possibly sensitive response body.
-  if (response.status < 200 || response.status >= 300) fail(`HTTP ${response.status} rejected`);
-  console.log(`finish webhook: accepted (HTTP ${response.status})`);
-  process.exit(0);
-} catch {
-  fail('request failed');
 }
+// Start every route before waiting: a failed or stalled bot must not prevent another bot's request.
+const results = await Promise.all(targets.map(send));
+process.exit(results.every(Boolean) ? 0 : 1);
 NODE

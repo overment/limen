@@ -108,6 +108,43 @@ test("automatic delivery invokes the real canonical helper with synthetic dotenv
 	assert.doesNotMatch(await readFile(join(job, "log"), "utf8"), /synthetic-only|synthetic\.example/);
 });
 
+for (const firstStatus of [204, 503]) {
+	test(`automatic fan-out reaches two bot routes after terminal state; first HTTP ${firstStatus} stays HTTP-only`, async (context) => {
+		const f = await fixture(context);
+		await copyFile(join(ROOT, "bin/tony-finish-ping.sh"), join(f.pkg, "bin/tony-finish-ping.sh"));
+		const targets = [
+			{ url: "https://synthetic.example.invalid/grok-one", auth: "Bearer synthetic-one" },
+			{ url: "https://synthetic.example.invalid/grok-two", auth: "Bearer synthetic-two" },
+		];
+		await writeFile(join(f.root, ".limen/finish-webhook.env"), `LIMEN_FINISH_WEBHOOK_TARGETS='${JSON.stringify(targets)}'\n`, { mode: 0o600 });
+		const transport = join(f.parent, "transport.mjs");
+		await writeFile(
+			transport,
+			`import { appendFileSync, readFileSync } from 'node:fs'; globalThis.fetch = async (url, options) => {
+				appendFileSync(${JSON.stringify(f.observations)}, JSON.stringify({ url: String(url), auth: options.headers.Authorization, body: JSON.parse(options.body), state: readFileSync(process.env.LIMEN_JOB_DIR + '/state', 'utf8').trim() }) + '\\n');
+				return { status: String(url).endsWith('/grok-one') ? ${firstStatus} : 204 };
+			};`,
+		);
+		const id = onlyJobId(f.command(["spawn", "--detached", "--label", "two bots", "finish without manual ping"], { NODE_OPTIONS: `--import=${transport}` }));
+		const job = join(f.root, ".limen/jobs", id);
+		const result = await delivery(job);
+		assert.match(result, firstStatus === 204 ? /^accepted: sender exited 0 \(owner wake unobserved\)/ : /^failed: sender exited 1/);
+		const requests = await observe(f.observations);
+		assert.deepEqual(
+			requests.map(({ url, auth }) => ({ url, auth })),
+			targets,
+		);
+		for (const request of requests) {
+			assert.equal(request.state, "done");
+			assert.deepEqual(request.body, { job: "two bots", status: "done", branch: (await readFile(join(job, "branch"), "utf8")).trim() });
+		}
+		assert.equal(await readFile(join(job, "state"), "utf8"), "done\n");
+		assert.doesNotMatch(result + (await readFile(join(job, "log"), "utf8")), /synthetic-one|synthetic-two|synthetic\.example/);
+		// The receiver only accepts HTTP: no bot session/turn is created by this fixture or claimed by the receipt.
+		assert.match(result, /Acceptance is not proof of owner wake/);
+	});
+}
+
 test("detached completion sends exact arguments only after durable state using an absolute explicit config snapshot", async (context) => {
 	const f = await fixture(context);
 	await f.config(join(f.root, ".limen/finish-webhook.env"), { exit: 99 });
