@@ -19,13 +19,14 @@ async function fixture() {
 	const preload = join(root, "transport.mjs");
 	await writeFile(
 		preload,
-		`import { writeFileSync } from 'node:fs';
+		`import { appendFileSync, writeFileSync } from 'node:fs';
 const setTimer = globalThis.setTimeout;
 globalThis.setTimeout = (callback, ms, ...args) => {
   writeFileSync(process.env.CAPTURE + '.timeout', String(ms));
   return setTimer(callback, process.env.TRANSPORT === 'timeout' ? 35 : ms, ...args);
 };
 globalThis.fetch = async (url, options) => {
+  appendFileSync(process.env.CAPTURE + '.requests', JSON.stringify({ url: String(url), headers: options.headers, body: options.body }) + '\\n');
   writeFileSync(process.env.CAPTURE, JSON.stringify({
     url: String(url), method: options.method, redirect: options.redirect,
     headers: options.headers, body: options.body, argv: process.argv,
@@ -94,6 +95,23 @@ test("helper safely encodes all CLI fields, sends Bearer in memory, and reports 
 	assert.deepEqual(request.argv.slice(2), args);
 	assert.ok(!request.argv.join(" ").includes(AUTH));
 	assert.equal(readFileSync(`${f.capture}.timeout`, "utf8"), "10000");
+});
+
+test("explicit targets fan out to two bot routes without sending to legacy Tony", async (t) => {
+	const f = await fixture();
+	t.after(f.cleanup);
+	const targets = [
+		{ url: "https://finish.example.test/grok-one", auth: AUTH },
+		{ url: "https://finish.example.test/grok-two", auth: "Bearer second-synthetic-secret" },
+	];
+	const path = await f.config(join(f.root, "multi.env"), `LIMEN_FINISH_WEBHOOK_TARGETS='${JSON.stringify(targets)}'\nTONY_FINISH_WEBHOOK_URL='${DESTINATION}'\nTONY_FINISH_WEBHOOK_AUTH='${AUTH}'\n`);
+	const result = f.run({ TONY_FINISH_WEBHOOK_ENV: path });
+	assert.equal(result.status, 0, result.stderr);
+	const requests = readFileSync(`${f.capture}.requests`, "utf8").trim().split("\n").map((line) => JSON.parse(line));
+	assert.deepEqual(requests.map(({ url, headers }) => ({ url, auth: headers.Authorization })), targets);
+	for (const request of requests) assert.deepEqual(JSON.parse(request.body), { job: "label", status: "done", branch: "topic" });
+	assert.match(result.stdout, /target 1 accepted \(HTTP 204\); owner wake unobserved/);
+	assert.match(result.stdout, /target 2 accepted \(HTTP 204\); owner wake unobserved/);
 });
 
 test("helper rejects missing, raw, Basic and malformed Bearer auth before transport", async (t) => {
