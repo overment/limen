@@ -104,6 +104,9 @@ with no time left it records `not sent`. No timeout extends job shutdown.
 Routine workers should omit a manual finish-ping before exit or `finish`:
 automation handles configured jobs. A coordinator uses the deliberate fallback
 below after a failed or absent automatic send, never as a routine duplicate.
+Installing the helper alone does not opt in a project: inspect a newly spawned
+job's `finish-webhook-env` before expecting automatic delivery. A legacy home
+config is not a project opt-in, and historical jobs are not retrofitted.
 
 ## Private env format
 
@@ -256,7 +259,14 @@ No response body is read, so even a server that echoes credentials cannot put
 them in a handoff.
 
 Automatic delivery discards sender stdout/stderr and records only safe status.
-Inspect `limen jobs <id>` for the log summary, then the plain job records:
+Inspect `limen jobs <id>` for the log summary, then the plain job records.
+Do not substitute `notify/delivered/*/accepted`: those are native Pi injection
+records, not HTTP receipts or external Grok Bot acknowledgements. Multiple
+native delivery slots may simply be different subscribed coordinators.
+A receiver run ID is also not a completed bot turn. When recording a manual
+send, capture the helper's own exit status; a later successful shell command
+must not hide a failed ping.
+
 
 | Job file | Meaning |
 |---|---|

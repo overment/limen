@@ -295,7 +295,10 @@ test("Git common directory selects the canonical project's config from an extern
 test("legacy home config is available only for manual invocation outside Git, not inherited credentials", async (t) => {
 	const f = await fixture();
 	t.after(f.cleanup);
-	assert.equal(f.run({ TONY_FINISH_WEBHOOK_URL: DESTINATION, TONY_FINISH_WEBHOOK_AUTH: AUTH }).status, 1);
+	assert.equal(
+		f.run({ TONY_FINISH_WEBHOOK_URL: DESTINATION, TONY_FINISH_WEBHOOK_AUTH: AUTH, LIMEN_FINISH_WEBHOOK_TARGETS: JSON.stringify([{ url: DESTINATION, auth: AUTH }]) }).status,
+		1,
+	);
 	assert.equal(existsSync(f.capture), false);
 	await f.config(join(f.home, ".overment", "tony-finish-webhook.env"));
 	assert.equal(f.run().status, 0);
