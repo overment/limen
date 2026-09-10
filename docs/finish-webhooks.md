@@ -73,6 +73,9 @@ Both hosted supervisors and detached wrappers invoke the package's canonical
 `bin/tony-finish-ping.sh` after writing durable terminal state. The job's label,
 `done`/`failed`/`stopped` state and branch are passed unchanged as three arguments.
 Sender failure never changes the job outcome or coordinator wake subscriptions.
+The automatic caller prepends the directory of Limen's running Node executable
+to the helper's `PATH`, so a noninteractive environment missing that directory
+can still launch the sender. Manual launchers still need Node.js 24+ on `PATH`.
 
 At `limen spawn`, selection is deliberately narrower than the standalone helper:
 
@@ -323,6 +326,51 @@ can happen after the server accepted the request; a deliberate retry may produce
 a duplicate. HTTP acceptance and each observed bot wake must be recorded as
 separate facts. Do not delete a claim to trigger automatic retries: there is no
 queue or retry daemon.
+
+## Diagnose `[unauthenticated]` without changing the wrong credential
+
+A Grok Bot routine failure is not itself a Limen HTTP receipt. The sender never
+reads response bodies and cannot emit `[unauthenticated] Error`. First correlate
+the exact probe `job`, `status`, `branch`, send timestamp and receiver run; a
+notification title alone does not identify which request failed.
+
+| Evidence | Boundary and next action |
+|---|---|
+| No `finish-webhook-env` on the job | Project opt-in absent; no automatic HTTP request was selected. Configure only the authorized project, then inspect a fresh spawn. Home config does not count. |
+| Helper rejects the Bearer value before transport | Local config syntax. Supply the complete `Bearer …` value in the selected private file; do not source it or put credentials in argv. |
+| Helper reports HTTP 401 or 403 | Receiver ingress rejected the request. Its operator must verify the selected route, current webhook credential and receiver access policy. Syntax validation cannot prove a key is current. |
+| Helper reports HTTP 2xx; the matching routine later reports `[unauthenticated]` | HTTP accepted, routine failed downstream. Inspect the failing receiver step and its account/provider/integration authentication. Do not assume rotating the ingress webhook key repairs routine credentials. |
+| HTTP 2xx with no matching completed turn | Wake unobserved, not delivered. Verify receiver routing and inspect the intended bot's session, not just a run ID. |
+| `request failed`, timeout, or automatic deadline | Transport/budget failure; acceptance may be unknown. Inspect the receiver before deciding to retry. |
+| One indexed target rejected while another accepted | Partial fan-out. Inspect both receivers; retry only the failed authorized route if needed, not the whole list. |
+| Exit 127 | Launcher/runtime failure, not an HTTP status. Check executable paths and Node availability in the caller's actual noninteractive environment. |
+| Automatic `sender exited 1` only | Aggregate failure, insufficient to diagnose auth. It may be config, HTTP rejection, network failure or partial fan-out. Do not infer 401 from it. |
+
+Check a manual launcher's runtime **without sending**, in the same environment
+that failed:
+
+```sh
+command -v node
+node --version
+"$HOME/.overment/tony-finish-ping.sh"
+result=$?
+printf 'launcher preflight exit=%s (expected 1 with usage)\n' "$result"
+```
+
+No arguments causes the canonical helper to print usage and exit 1 before reading
+config or sending. Exit 127 instead commonly means a missing launcher target or
+Node. On an NVM Mac, a service with only `/usr/bin:/bin` normally cannot find
+Node; add the actual Node 24+ installation directory to that **service's** PATH.
+An interactive shell succeeding does not prove a launch agent or worker shell
+has the same PATH. Preserve the thin launcher's explicit manual-home selection;
+do not repair PATH by copying credentials or enabling unrelated projects.
+
+Keep the actual helper exit, safe HTTP status, and matching completed bot turn as
+three separate facts. Do not print env contents or receiver response bodies to
+diagnose a failed routine. If no authorized receiver history is available, ask
+its operator for the failed run address and failing step, with secrets removed.
+A fresh webhook key is appropriate only after ingress authentication is
+identified as the problem; a receiver-side provider login is a different repair.
 
 ## Synthetic checks
 
