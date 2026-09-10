@@ -2,6 +2,8 @@
 
 ## TRACK
 
+- **Ops remediation lock 2026-09-10 (Adam):** (1) two unsuccessful automatic wake attempts then deliberate recovery; park-and-preserve on quota — no silent model substitution. (2) First finish→bot proof on **alice** (Mac); intended receivers Johnny + Tony; HTTP ≠ bot turn. (3) Landing/board writer = the feature coordinator **or** the coordinator-manager (Johnny/Tony); Adam reviews these slices; named-job `limen watch <id>` for takeovers — not `watch --running`. Sequence: F090 wake ceiling → F091 finish receipts → F081 launch/unusable route → exclusive worktrees → F087 policy-on-resume.
+
 - Reliable in-flight control on one seat; a laptop is a window; GitHub may ring the doorbell later.
 - Settled Herdr panes keep RUNNING jobs and stall warnings visible; external finish delivery remains per-project opt-in.
 - Coordinator CPU is repaired without deleting history; job-history retention remains a separate operator decision.
@@ -16,6 +18,8 @@
 
 ## NOW
 
+- `F090-wake-errors-count-toward-attempt-ceiling` (🟠 ACTIVE): provider error/aborted/injection failures charge the two-attempt wake ceiling; exhausted claims stay inspectable; deliberate recovery. Highest-leverage ops remediation.
+- `F091-finish-job-shows-bot-turn-receipt` (🟠 ACTIVE): job inspection separates configured / transport / completed bot turn; first proof on alice → Johnny/Tony. After F090.
 - `F050-living-architecture-picture` (🟠 ACTIVE): a background application field guide is under proposal; no product merge.
 - `F048-hosted-runtime-start` (🟠 ACTIVE): spawn prints the ID in seconds; the detached supervisor starts pi and owns the job. This closes the live 2026-08-27 caller-timeout orphaning before F049.
 - `F074-claude-perspective` (🟠 ACTIVE): a detached job runs on Claude instead of Pi, so the coordinator can buy a perspective on interface and feature shape. Interleaves with the seat work; gates nothing.
