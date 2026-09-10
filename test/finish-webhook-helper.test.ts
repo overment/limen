@@ -38,6 +38,8 @@ globalThis.fetch = async (url, options) => {
   return {
     status: String(url).endsWith('/reject') ? 503 : Number(process.env.HTTP_STATUS ?? '204'),
     get body() { throw new Error('response bodies must not be read'); },
+    async text() { writeFileSync(process.env.CAPTURE + '.response-read', '1'); return process.env.RECEIVER_BODY ?? ''; },
+    async json() { writeFileSync(process.env.CAPTURE + '.response-read', '1'); return { error: process.env.RECEIVER_BODY }; },
   };
 };
 `,
@@ -225,7 +227,7 @@ test("helper rejects missing or unsafe destinations without revealing their cont
 });
 
 test("helper fails redirects, non-2xx, transport errors and a bounded stalled request", async (t) => {
-	for (const status of [200, 299, 300, 302, 307, 400, 401, 500]) {
+	for (const status of [200, 299, 300, 302, 307, 400, 401, 403, 500]) {
 		await t.test(`HTTP ${status}`, async (t) => {
 			const f = await fixture();
 			t.after(f.cleanup);
@@ -246,6 +248,19 @@ test("helper fails redirects, non-2xx, transport errors and a bounded stalled re
 			assert.match(result.stderr, transport === "timeout" ? /timed out after 10000ms/ : /request failed/);
 			assert.equal(readFileSync(`${f.capture}.timeout`, "utf8"), "10000");
 		});
+	}
+});
+
+test("an unauthenticated receiver body is not a sender diagnosis or a wake acknowledgement", async (t) => {
+	const f = await fixture();
+	t.after(f.cleanup);
+	const path = await f.config(join(f.root, "config.env"));
+	for (const status of [200, 401, 403]) {
+		const result = f.run({ TONY_FINISH_WEBHOOK_ENV: path, HTTP_STATUS: String(status), RECEIVER_BODY: "[unauthenticated] Error synthetic-secret" });
+		assert.equal(result.status, status === 200 ? 0 : 1);
+		assert.equal(result.stdout + result.stderr, `finish webhook: ${status === 200 ? "accepted (HTTP 200)" : `HTTP ${status} rejected`}\n`);
+		assert.equal(existsSync(`${f.capture}.response-read`), false, "receiver response content must not become a sender receipt");
+		assert.deepEqual(f.request().headers, { Authorization: AUTH, "Content-Type": "application/json" });
 	}
 });
 

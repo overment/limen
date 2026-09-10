@@ -108,6 +108,30 @@ test("automatic delivery invokes the real canonical helper with synthetic dotenv
 	assert.doesNotMatch(await readFile(join(job, "log"), "utf8"), /synthetic-only|synthetic\.example/);
 });
 
+test("automatic delivery finds Limen's Node runtime when the inherited PATH cannot run node", async (context) => {
+	const f = await fixture(context);
+	await copyFile(join(ROOT, "bin/tony-finish-ping.sh"), join(f.pkg, "bin/tony-finish-ping.sh"));
+	const job = await bareJob(f.root);
+	const config = join(f.parent, "runtime.env");
+	await writeFile(config, "TONY_FINISH_WEBHOOK_URL='https://synthetic.example.invalid/finish'\nTONY_FINISH_WEBHOOK_AUTH='Bearer synthetic-only'\n", { mode: 0o600 });
+	await writeFile(join(job, "finish-webhook-env"), `${config}\n`);
+	// Simulate a stale/missing node in a service PATH, independently of the host's installed binaries.
+	await writeFile(join(f.fakeBin, "node"), "#!/bin/sh\nexit 127\n", { mode: 0o755 });
+	const transport = join(f.parent, "runtime-transport.mjs");
+	await writeFile(
+		transport,
+		`import { appendFileSync } from 'node:fs'; globalThis.fetch = async () => { appendFileSync(${JSON.stringify(f.observations)}, 'accepted\\n'); return { status: 204 }; };`,
+	);
+	await runModule(
+		f.pkg,
+		{ ...f.env, PATH: f.fakeBin, NODE_OPTIONS: `--import=${transport}` },
+		`const { finalizeJob } = await import('./src/wrapper.ts'); await finalizeJob(${JSON.stringify(job)}, 'done', 'runtime probe');`,
+	);
+	assert.match(await delivery(job), /^accepted: sender exited 0 \(owner wake unobserved\)/);
+	assert.equal(await readFile(f.observations, "utf8"), "accepted\n");
+	assert.equal(await readFile(join(job, "state"), "utf8"), "done\n");
+});
+
 for (const firstStatus of [204, 503]) {
 	test(`automatic fan-out reaches two bot routes after terminal state; first HTTP ${firstStatus} stays HTTP-only`, async (context) => {
 		const f = await fixture(context);
