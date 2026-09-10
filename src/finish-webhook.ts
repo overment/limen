@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
-import { isAbsolute, resolve } from "node:path";
+import { delimiter, dirname, isAbsolute, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { listWorktrees, workspaceRoot } from "./git.ts";
 import { appendLimenLog, atomicWrite, textFile } from "./wrapper.ts";
@@ -45,7 +45,8 @@ export async function deliverFinishWebhook(jobDir: string, shutdownDeadline = Nu
 function send(config: string, label: string, state: string, branch: string, timeoutMs: number): Promise<string> {
 	return new Promise((resolve) => {
 		const child = spawn(SENDER, [label, state, branch], {
-			env: { ...process.env, TONY_FINISH_WEBHOOK_ENV: config },
+			// Noninteractive PATH may omit Node even though Limen itself is running under it.
+			env: { ...process.env, PATH: `${dirname(process.execPath)}${delimiter}${process.env.PATH ?? ""}`, TONY_FINISH_WEBHOOK_ENV: config },
 			stdio: "ignore",
 			detached: true,
 		});
