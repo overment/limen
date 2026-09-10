@@ -31,4 +31,12 @@ A bounded scan of nine September 10 Alice job-session files (16.4 MB) found six 
 
 Evidence is retained outside the worktree at `/Users/overment/.overment/limen/tmp/evidence/finish-webhook-failures/9766a0a7/`. `local-metadata.json`, `correlation-1030.json`, `today-pings.json`, and `receiver-before.json` contain sanitized observations; adjacent scripts reproduce the bounded scans. `baseline.log`, `runtime-red.log`, `runtime-green.log`, `focused.log`, and `install.log` retain real outputs. Prior context remains in `alice-finish-reliability-notes.md` and the earlier `tmp/evidence/F702b/1d77c03b/` directory.
 
-The controlled final ping and full native lane are recorded separately after the candidate commit. No private config, receiver credential, Alice checkout, or tab was changed by this diagnosis.
+## Full native lane and controlled finish ping
+
+At clean candidate `5783a88`, `npm run check` completed in 770 seconds: TypeScript passed, Biome checked 73 files without changes, and 360/361 tests passed. The sole failure was the source-line budget: 3,642 lines against a 3,641 cap. Removing the new explanatory comment from `src/finish-webhook.ts` restored the budget without changing behavior or raising the cap. The subsequent scoped structure and runtime regression checks both passed (2/2), and scoped Biome passed. The full native lane was not rerun after this comment-only correction. See `native-candidate-commit`, `native-result.json`, `native-check.log`, and `final-scoped.log`.
+
+The one authorized final request ran at `2026-09-10T09:14:17.816Z` through `~/.overment/tony-finish-ping.sh`, using `{job: "limen-webhook-reliability", status: "done", branch: "limen/2026-09-10-2026-09-10-limen-webhook-reliabi-9766a0a7"}`. Immediately before sending, this job still had no automatic selection, attempt, or receipt. The launcher and installed canonical sender matched the inspected files; the controlled environment supplied the installed Node directory without network tracing or a config override.
+
+The helper exited **0** and printed **`finish webhook: accepted (HTTP 200)`** at 09:14:18 UTC. No unexpected output was suppressed. **Owner wake remains unobserved.** The immediate read-only local-store check still has no matching probe turn; it is not remote Grok history and cannot establish the receiver's eventual outcome. The full payload, timestamps, actual exit, and HTTP-only result are in `live-ping.json`; `live-ping-attempt.json` prevents accidental replay by the evidence script. Do not rerun the ping to compensate for missing receiver visibility.
+
+No private config, receiver credential, Alice checkout, or tab was changed by this diagnosis. No VPS check or remote receiver repair was performed.

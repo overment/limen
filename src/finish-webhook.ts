@@ -45,7 +45,6 @@ export async function deliverFinishWebhook(jobDir: string, shutdownDeadline = Nu
 function send(config: string, label: string, state: string, branch: string, timeoutMs: number): Promise<string> {
 	return new Promise((resolve) => {
 		const child = spawn(SENDER, [label, state, branch], {
-			// Noninteractive PATH may omit Node even though Limen itself is running under it.
 			env: { ...process.env, PATH: `${dirname(process.execPath)}${delimiter}${process.env.PATH ?? ""}`, TONY_FINISH_WEBHOOK_ENV: config },
 			stdio: "ignore",
 			detached: true,
