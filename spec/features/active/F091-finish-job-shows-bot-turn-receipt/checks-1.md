@@ -9,10 +9,10 @@ Evidence: `/home/overment/limen-evidence/f091-5932f3a5/`. The coordinator retain
 - Full native lane ran once: TypeScript/Biome passed, 377 tests passed, one registry-lock test cancelled after 60 seconds, exit 1. No full rerun or unrelated repair; cause remains unproven.
 - Real helper fixtures preserved HTTP 2xx acceptance alongside 5xx rejection or a stalled target, omitted secrets in both views, and sent no additional request on repeat finalization. All transport was intercepted; no real receiver was contacted.
 
-## What remains open
+## Superseded implementation gap
 
-The CLI has no path from unobserved to observed completed bot turn. It always prints unobserved, even after external verification; this does not meet the ticket's full inspection outcome. A receiver-owned evidence source/contract is still needed, without inventing a bot API or treating an arbitrary local completion flag as proof.
+At the transport landing the CLI had no path from unobserved to observed completed bot turn. The receiver-evidence candidate documented in `notes.md` supersedes that gap with bounded operator-selected file exports and both-view offline checks. This historical check record proves only the transport candidate, not the receiver-evidence candidate or actual receiver turns.
 
 First operational proof still requires one authorized new Alice Mac job, automatic-only delivery, receiver-owned Johnny/Tony target mapping and completed-turn references/excerpts preserving its exact `finishEvent`, plus an accepted-HTTP/no-turn control. Neither this VPS nor synthetic receipts satisfy that acceptance.
 
-Keep F091 ACTIVE, with no outcome file or PROVEN mark. The remaining wave advances to route refusal after this transport landing; its progress does not waive the unfinished bot-turn capability or Mac proof. Operators should note the documented 64-target selection limit and added automatic `finishEvent` payload field. Private configuration and production receiver contracts were not inspected or changed.
+Keep F091 ACTIVE, with no outcome file or PROVEN mark. The new inspection capability does not waive Mac proof. Operators should note the documented 64-target selection limit and added automatic `finishEvent` payload field. Private configuration and production receiver contracts were not inspected or changed.

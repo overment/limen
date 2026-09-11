@@ -196,6 +196,47 @@ for (const firstStatus of [204, 503, "stall"]) {
 			assert.doesNotMatch(detail + receipts, /synthetic-one|synthetic-two|synthetic\.example|Bearer|grok-one|grok-two/);
 			inspections.push(detail);
 		}
+		// Offline file exchange, not actual Johnny/Tony history. The operator explicitly selects this source.
+		const source = join(f.parent, "receiver-exports");
+		await mkdir(source);
+		await writeFile(
+			join(source, "receivers.json"),
+			JSON.stringify({
+				version: 1,
+				targets: [
+					{ target: 1, receiver: "johnny" },
+					{ target: 2, receiver: "tony" },
+				],
+			}),
+		);
+		const completed = {
+			version: 1,
+			event: finishEvent(job),
+			target: 1,
+			receiver: "johnny",
+			state: "completed",
+			session: "synthetic-session",
+			turn: "synthetic-turn",
+			completedAt: "2026-09-11T12:00:00.000Z",
+		};
+		await writeFile(join(source, `${finishEvent(job)}.1.json`), JSON.stringify(completed));
+		await writeFile(join(source, `${finishEvent(job)}.2.json`), JSON.stringify({ ...completed, target: 2, receiver: "tony", event: finishEvent("wrong-job") }));
+		const promoted: string[] = [];
+		for (const view of ["compact", "human"]) {
+			const detail = f.command(["jobs", id], { LIMEN_VIEW: view, LIMEN_FINISH_EVIDENCE_DIR: source });
+			assert.match(detail, /target 1: transport [^\n]*bot-turn observed[^\n]*receiver johnny[^\n]*turn synthetic-turn/);
+			assert.match(detail, /target 2: transport accepted[^\n]*bot-turn unobserved/);
+			assert.doesNotMatch(detail, /synthetic-one|synthetic-two|synthetic\.example|Bearer|wrong-job/);
+			promoted.push(detail);
+		}
+		await writeFile(join(source, `${finishEvent(job)}.2.json`), JSON.stringify({ ...completed, target: 2, receiver: "tony", turn: "synthetic-turn-2" }));
+		const both: string[] = [];
+		for (const view of ["compact", "human"]) {
+			const detail = f.command(["jobs", id], { LIMEN_VIEW: view, LIMEN_FINISH_EVIDENCE_DIR: source });
+			assert.match(detail, /target 2: transport accepted[^\n]*bot-turn observed[^\n]*receiver tony[^\n]*turn synthetic-turn-2/);
+			assert.match(detail, /bot-turn: observed for 2 target\(s\)/);
+			both.push(detail);
+		}
 		await runModule(f.pkg, f.env, `const { finalizeJob } = await import('./src/wrapper.ts'); await finalizeJob(${JSON.stringify(job)}, 'done', 'repeat');`);
 		assert.equal((await observe(f.observations)).length, 2, "repeat finalization sends nothing");
 		assert.equal(await readFile(join(job, "finish-webhook-targets"), "utf8"), receipts);
@@ -205,7 +246,13 @@ for (const firstStatus of [204, 503, "stall"]) {
 			await writeFile(join(evidence, "targets.jsonl"), receipts);
 			await writeFile(join(evidence, "aggregate.txt"), result);
 			await writeFile(join(evidence, "inspection.txt"), inspections.join("\n\n"));
-			await writeFile(join(evidence, "proof.txt"), `job=${id}\nevent=${finishEvent(job)}\nautomatic requests=2; after repeat=2\nreceiver turns=0; both views unobserved\n`);
+			await writeFile(join(evidence, "one-observed.txt"), promoted.join("\n\n"));
+			await writeFile(join(evidence, "both-observed.txt"), both.join("\n\n"));
+			await cp(source, join(evidence, "synthetic-exports"), { recursive: true });
+			await writeFile(
+				join(evidence, "proof.txt"),
+				`job=${id}\nevent=${finishEvent(job)}\nautomatic requests=2; after repeat=2\nactual receiver turns=0; synthetic exports only\nBoth views: no export -> unobserved; matching target 1 + mismatched target 2 -> only target 1 observed; both matching -> both observed\n`,
+			);
 		}
 	});
 }
