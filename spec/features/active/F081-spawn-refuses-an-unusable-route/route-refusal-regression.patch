@@ -1,0 +1,25 @@
+diff --git a/test/spawn-command.test.ts b/test/spawn-command.test.ts
+index c50d167..750607a 100644
+--- a/test/spawn-command.test.ts
++++ b/test/spawn-command.test.ts
+@@ -323,0 +324,20 @@ process.exit(0);
++test("auth-ready batch-only route is refused before planting a job or worktree", async (context) => {
++	const scratch = await scratchRepo(`#!/usr/bin/env node
++const args = process.argv.slice(2);
++if (args[0] === "--version") { console.log("0.0.0-test"); process.exit(0); }
++if (args[0] === "auth" && args[1] === "check") { console.log("ready"); process.exit(0); }
++console.error("404 model is only available through the Batch API");
++process.exit(1);
++`);
++	context.after(scratch.cleanup);
++	assert.equal(limen(scratch, "init").status, 0);
++	const before = git(scratch.root, "worktree", "list", "--porcelain");
++	const launched = limenWithEnv(scratch, { LIMEN_PREFLIGHT: "auth" }, "spawn", "--detached", "--provider", "openai", "--model", "batch-only", "do work");
++	const jobs = await readdir(join(scratch.root, ".limen/jobs")).catch(() => []);
++	for (const id of jobs) await waitForState(scratch.root, id, "failed");
++	assert.equal(launched.status, 1, `auth readiness must not admit a batch-only route: ${launched.stdout}`);
++	assert.match(launched.stderr, /404 model is only available through the Batch API/);
++	assert.deepEqual(jobs, []);
++	assert.equal(git(scratch.root, "worktree", "list", "--porcelain"), before);
++});
++

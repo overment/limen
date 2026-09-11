@@ -126,7 +126,6 @@ async function startHostedAgent(jobDir: string): Promise<string | undefined> {
 	const place: HerdrPlace = { workspace, tab, pane, mode: "hosted" };
 	const taskFile = requiredEnvironment("LIMEN_TASK_FILE");
 	const continueFile = process.env.LIMEN_CONTINUE_FILE?.trim();
-	const continuation = continueFile ? (await readFile(continueFile, "utf8")).trim() : undefined;
 	const extensions = ["hosted", "steering", "communication"].flatMap((name) => ["--extension", `${PACKAGE_ROOT}/hook/${name}.ts`]);
 	const args = [
 		"--approve",
@@ -141,7 +140,7 @@ async function startHostedAgent(jobDir: string): Promise<string | undefined> {
 		...(process.env.LIMEN_PROVIDER ? ["--provider", process.env.LIMEN_PROVIDER] : []),
 		...(process.env.LIMEN_MODEL ? ["--model", process.env.LIMEN_MODEL] : []),
 		...(process.env.LIMEN_THINKING ? ["--thinking", process.env.LIMEN_THINKING] : []),
-		...(continuation !== undefined ? ["--continue", continuation] : [`@${taskFile}`]),
+		...(continueFile ? ["--continue", `@${continueFile}`] : [`@${taskFile}`]),
 	];
 	try {
 		const target = startHostedPi({

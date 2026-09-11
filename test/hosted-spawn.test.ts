@@ -562,6 +562,46 @@ test("hosted spawn and continuation forward literal Pi launch flags", async (con
 	}
 });
 
+test("hosted spawn and continuation keep quoted multiline tasks out of shell arguments", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	assert.equal(limen(scratch, "init").status, 0);
+	const herdr = await installHostedFakeHerdr(scratch.root, scratch.fakeBin);
+	const env = { HERDR_ENV: "1", LIMEN_HERDR: herdr.bin, FAKE_HERDR_STATE: herdr.dir };
+	const task = "Keep 'quotes', \"double quotes\", `backticks`, and $(touch injected) literal.\nNext line.\n";
+	await writeFile(join(scratch.root, "task-input.md"), task);
+	const launched = limenWithEnv(scratch, env, "spawn", "--tab", "--label", "quoted task", "--task-file", "task-input.md");
+	assert.equal(launched.status, 0, launched.stderr);
+	const parent = onlyJobId(launched.stdout);
+	const parentJob = join(scratch.root, ".limen/jobs", parent);
+	await waitForState(scratch.root, parent, "done");
+	assert.equal(await readFile(join(parentJob, "herdr/agent"), "utf8"), "w1:p1\n");
+	await mkdir(join(parentJob, "session"), { recursive: true });
+	await writeFile(join(parentJob, "session/run.jsonl"), `${JSON.stringify({ type: "session" })}\n`);
+	const resumed = limenWithEnv(scratch, env, "continue", "--tab", parent, task);
+	assert.equal(resumed.status, 0, resumed.stderr);
+	const child = onlyJobId(resumed.stdout);
+	const childJob = join(scratch.root, ".limen/jobs", child);
+	await waitForState(scratch.root, child, "done");
+	assert.equal(await readFile(join(childJob, "herdr/agent"), "utf8"), "w1:p2\n");
+	const starts = (await readFile(join(herdr.dir, "argv"), "utf8"))
+		.trim()
+		.split("\n")
+		.map((line) => JSON.parse(line) as string[])
+		.filter((args) => args[0] === "agent" && args[1] === "start");
+	assert.equal(starts.length, 2);
+	for (const [index, args] of starts.entries()) {
+		const piArgs = args.slice(args.indexOf("--") + 1);
+		assert.ok(
+			piArgs.every((arg) => !/[\r\n]/.test(arg)),
+			"shell argv must not contain task newlines",
+		);
+		const fileArg = piArgs.at(-1) ?? "";
+		assert.ok(fileArg.startsWith("@"));
+		assert.equal(await readFile(fileArg.slice(1), "utf8"), index === 0 ? task : `${task.trim()}\n`);
+	}
+});
+
 test("hosted spawn returns on the supervisor PID while agent start is still busy", async (context) => {
 	const scratch = await scratchRepo();
 	context.after(scratch.cleanup);
@@ -928,7 +968,7 @@ test("garbage agent get never counts toward missing", async (context) => {
 	await waitForState(scratch.root, id, "done");
 });
 
-test("continue in Herdr is hosted and passes --continue, not @task", async (context) => {
+test("continue in Herdr is hosted and passes --continue with @continue, not @task", async (context) => {
 	const continuing = `#!/usr/bin/env node
 const { writeFileSync, mkdirSync } = require("node:fs");
 const args = process.argv.slice(2);
@@ -957,9 +997,9 @@ console.log(JSON.stringify({ type: "message_end", message: { role: "assistant", 
 	assert.equal(await readFile(join(job, "continue"), "utf8"), "now refine the seam\n");
 	const calls = await waitForFile(herdr.calls, /agent start /);
 	assert.match(calls, /agent start /);
-	assert.match(calls, /--continue now refine the seam/);
+	assert.match(calls, /--continue @\S+\/continue/);
 	assert.match(calls, /--model openai-codex\/gpt-6-astra:high(?: |$)/);
-	assert.doesNotMatch(calls, /@/);
+	assert.doesNotMatch(calls, /@\S+\/task\.md/);
 	await waitForState(scratch.root, id, "done");
 });
 
@@ -1286,6 +1326,7 @@ if (args[0] === "workspace" && args[1] === "list") {
   state.startAttempts = (state.startAttempts || 0) + 1;
   writeFileSync(path, JSON.stringify(state));
   if (state.startAttempts <= Number(process.env.FAKE_HERDR_START_PANE_FAILURES || 0)) fail("agent_pane_busy", "agent target pane " + pane + " is not an available shell");
+  if (args.slice(args.indexOf("--") + 1).some((arg) => /[\\r\\n]/.test(arg))) fail("unsafe_args", "agent arguments cannot be encoded safely for the target shell");
   if (process.env.FAKE_HERDR_START_ERROR === "1") fail("auth_failed", "authentication denied");
   if (!tab || !state.tabs[tab].focused) fail("agent_pane_busy", "agent target pane " + pane + " is not an available shell");
   state.agents[pane] = { status: "working", ticks: 0 };
