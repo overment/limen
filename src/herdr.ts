@@ -142,10 +142,13 @@ export function hostedTerminalReason(status: HostedAgentStatus, sessionEnded: bo
 }
 
 /** Live target for a hosted job whose recorded target stopped resolving cleanly: the agent found under a moved pane ID, or an unclassifiable but present process on the recorded pane. Undefined means genuinely gone. */
-export function locateHostedAgent(target: string, agentName = ""): string | undefined {
-	if (hostedAgentStatus(target) !== "missing") return target;
+export function locateHostedAgent(target: string, agentName = "", concrete = false): string | undefined {
+	const status = hostedAgentStatus(target, concrete);
+	if (concrete && status === "unknown") return "unknown";
+	if (status !== "missing") return target;
 	const herdr = herdrBinary();
-	if (!herdr) return;
+	if (!herdr) return concrete ? "unknown" : undefined;
+	let uncertain = false;
 	try {
 		const agents = asRecord(call(herdr, ["agent", "list"])).agents;
 		if (Array.isArray(agents)) {
@@ -156,18 +159,21 @@ export function locateHostedAgent(target: string, agentName = ""): string | unde
 				const rowPane = typeof agent.pane_id === "string" ? agent.pane_id : undefined;
 				if (agentName && rowPane && (name === agentName || name.startsWith(`${agentName}-`))) return rowPane;
 			}
-		}
+		} else uncertain = true;
 	} catch {
-		// Fall through to process probe.
+		uncertain = true;
 	}
 	try {
 		const info = asRecord(asRecord(call(herdr, ["pane", "process-info", "--pane", target])).process_info);
 		const foreground = Array.isArray(info.foreground_processes) ? info.foreground_processes : [];
 		const names = foreground.map((row) => String(asRecord(row).name ?? "").toLowerCase());
 		if (names.some((n) => n === "pi" || n === "node")) return target;
-	} catch {
-		// Missing.
+		if (!Array.isArray(info.foreground_processes)) uncertain = true;
+	} catch (error) {
+		if (!(typeof error === "object" && error !== null && "code" in error && ["target_not_found", "pane_not_found", "agent_not_found"].includes(String(error.code))))
+			uncertain = true;
 	}
+	if (concrete && uncertain) return "unknown";
 }
 
 const SHELL_NAMES = new Set(["zsh", "bash", "sh", "fish", "nu", "pwsh", "powershell"]);
@@ -199,9 +205,9 @@ function waitForShell(herdr: string, pane: string, timeoutMs: number, stopped?: 
 const lastHostedStatus = new Map<string, HostedAgentStatus>();
 const lastHostedFault = new Map<string, string>();
 
-export function hostedAgentStatus(target: string): HostedAgentStatus {
+export function hostedAgentStatus(target: string, fresh = false): HostedAgentStatus {
 	const herdr = herdrBinary();
-	if (!herdr) return noteHostedFault(target, "herdr_unavailable");
+	if (!herdr) return fresh ? "unknown" : noteHostedFault(target, "herdr_unavailable");
 	try {
 		const row = asRecord(call(herdr, ["agent", "get", target]));
 		const raw = asRecord(row.agent).agent_status ?? row.agent_status;
@@ -216,7 +222,7 @@ export function hostedAgentStatus(target: string): HostedAgentStatus {
 			lastHostedFault.delete(target);
 			return "missing";
 		}
-		return noteHostedFault(target, code);
+		return fresh ? "unknown" : noteHostedFault(target, code);
 	}
 }
 
