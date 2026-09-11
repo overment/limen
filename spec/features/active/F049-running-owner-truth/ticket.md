@@ -1,6 +1,4 @@
-# F049-running-owner-truth · Every running job has a live owner
-
-[2026-08-27] [🔴] [PLANNED] [COORDINATOR] PLANNED · F049-running-owner-truth
+# F049 · Every running job has a live owner
 
 The reaper's law (F025) is "dead running jobs reap to failed" — but two loopholes make zombies immortal. A running job with no `pid` is skipped before any liveness check, forever. A hosted job whose supervisor died but whose agent lives counts as live and is left alone — running, unadvised, unfinalizable. F048 closes the front door; this closes the back. Sequenced with F048 before F013.
 

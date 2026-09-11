@@ -25,11 +25,10 @@
 
 - `F091-finish-job-shows-bot-turn-receipt` (🟠 ACTIVE): transport inspection landed `2dabae7`, but CLI bot-turn stays unobserved; completed-turn evidence source/contract and Alice Mac → Johnny/Tony proof remain open (`checks-1.md`), no PROVEN claim; boundary: no guessed receiver API or polling system.
 - `F081-spawn-refuses-an-unusable-route` (🟠 ACTIVE): hosted continuation transport landed `a3872a6`; route refusal is unimplemented, with its failing counterexample preserved at `b14b5fe` and the Pi-interface/generated-spend decision open (`interface-question.md`); no generated probe, retries, model selection, or PROVEN claim.
-- `F048-hosted-runtime-start` (🟠 ACTIVE): finish/proof worker verifies the existing supervisor-first startup on the landed continuation fix (`notes.md`); boundary: close actual startup gaps and retain killed-caller proof, no duplicate start mechanism or reaper adoption, before F049.
+- `F049-running-owner-truth` (🟠 ACTIVE): implementation restores watch-only supervision or fails ownerless work after the proven startup contract; boundary: existing reaper/supervisor recovery, no new worker, coordinator adoption, notification routing, or new control plane.
 
 ## NEXT
 
-- `F049-running-owner-truth` (🔴 PLANNED): restore watch-only supervision or fail a job with no live owner, after F048; boundary: process recovery for existing jobs, never coordinator adoption or a new worker.
 - `F087-prompt-policy-has-one-home` (🔴 PLANNED): prompt policy has one prose owner, after F049; boundary: templates and prose-only assertions, with runtime model resolution unchanged and owner choices retained on resume.
 - `F090-wake-errors-count-toward-attempt-ceiling` (🔴 PLANNED): parked unchanged at `0fa48fa` for Adam's later review, outside the remaining wave; refusal and installed proof passed, full lane timed out with four failures (`checks-2.md`); no merge, third repair, or widening.
 - `F050-living-architecture-picture` (🔴 PLANNED): background application field guide proposal is retained but deferred beyond narrow 1.0; no product merge.
@@ -41,6 +40,7 @@
 
 ## PROVEN
 
+- `F048-hosted-runtime-start` (🟢 PROVEN): killed-caller startup ownership proof landed `c6d4d6c` without runtime changes; focused 87 passed, coordinator's three falsifiers passed, full native 381 passed with one registry-lock cancellation retained.
 - `F092-finish-webhook-names-are-bot-agnostic` (🟢 PROVEN): neutral configuration keys landed `a76e0ae`; worker focused 76/76 and coordinator 79/79 passed, full native 371 passed with one registry-lock timeout retained; coordinator-inspected, private migration operator-owned.
 - `F707-herdr-limen-truthful-status` (🟢 PROVEN): settled panes show RUNNING jobs without erasing warnings; the operator guide separates job, merge, and wake evidence. Adam authorized landing `756c747`; 70 candidate checks passed, one post-merge timing timeout passed recheck, full suite incomplete.
 - `F089-workers-accept-explicit-pi-flags` (🟢 PROVEN): spawn and continuation forward literal Pi provider/model/thinking flags in both modes. Landed `cd8cbb1`; exact-argv checks passed, full native lane incomplete; Adam owns review.
@@ -50,6 +50,5 @@
 - `F078-a-picture-is-evidence-when-seen` (🟢 PROVEN): visual evidence names what opened frames showed; identical frames that should differ fail the check. Landed `5067c69`. Review PASS of `5067c69`.
 - `F077-evidence-outlives-the-worktree` (🟢 PROVEN): proof runs at the clean candidate commit, retained artifacts reach review, and mismatched evidence is unverified. Landed `cf3e9e0`. Review PASS of `85d57d2`.
 - `F084-every-number-arrives-with-its-meaning` (🟢 PROVEN): the reply cue and the specs reminder name the failing sentence, not the property; the identifier rule leads the Human register. Landed `0d3f2fd`. Coordinator-inspected.
-- `F079-job-line-shows-changed-files` (🟢 PROVEN): a running job line shows its changed-file count; a missing worktree leaves the signal absent. Landed `a98fa51`. Coordinator-inspected.
-- 2026-09: 36 landed. Hosted jobs end themselves; review loops stop at a ceiling; a failed turn is visible; tab titles name the change; handoffs point at board-owned boundaries; one living picture follows system shape; human-asked research compares named sources before judgment; workers falsify candidates before handoff; one correction reaches every watched live job. spec/features/done/2026-09/
+- 2026-09: 37 landed. Hosted jobs end themselves; review loops stop at a ceiling; failed turns and changed-file counts are visible; tab titles name the change; handoffs point at board-owned boundaries; one living picture follows system shape; human-asked research compares named sources before judgment; workers falsify candidates before handoff; one correction reaches every watched live job. spec/features/done/2026-09/
 - 2026-08: 44 landed. Hosted jobs run in a named tab; wakes retry; the process tree is contained. spec/features/done/2026-08/

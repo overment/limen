@@ -1,6 +1,4 @@
-# F048-hosted-runtime-start · The hosted runtime starts its own agent
-
-[2026-08-27] [🟠] [ACTIVE] [COORDINATOR] ACTIVE · F048-hosted-runtime-start
+# F048 · The hosted runtime starts its own agent
 
 One law, already true for detached jobs: spawn plants the record and launches the runtime; the runtime starts pi and owns the job to its terminal state. Hosted jobs violate it — `startHosted` starts pi inline inside the caller's process, blocking up to ~125s in `waitForShell` + `herdr agent start --timeout 120000`. Any caller deadline (a coordinator's Bash tool timeout) kills spawn mid-start. Herdr still brings the worker up, but nothing after `startHostedPi` runs: no `herdr/agent`, no supervisor, no `pid`, no focus restore. The job stays `running` forever with no one to advise, finalize, or reap it. Sequenced with F049 before F013.
 
