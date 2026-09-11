@@ -963,12 +963,27 @@ test("herdr surfaces stay live while the conversation is muted", async (context)
 	assert.equal((await readCalls(calls)).filter((call) => call[0] === "notification").length, 1, "unmute delivers the herdr toast once");
 });
 
-test("a dead running job past grace is reaped once and wakes", async (context) => {
+test("a concretely missing hosted job is reaped once and wakes while a pidless young job keeps grace", async (context) => {
 	stashEnv(context, "LIMEN_JOB", undefined);
-	stashEnv(context, "LIMEN_HERDR", "0");
 	stashEnv(context, "LIMEN_REAP_CONFIRM_MS", "30");
 	const root = await import("node:fs/promises").then(({ mkdtemp }) => mkdtemp(join(process.env.TMPDIR ?? "/tmp", "limen-wake-reap-")));
 	context.after(() => import("node:fs/promises").then(({ rm }) => rm(root, { recursive: true, force: true })));
+	const herdr = join(root, "herdr");
+	await writeFile(
+		herdr,
+		`#!/usr/bin/env node
+const args = process.argv.slice(2);
+if (args[0] === "agent" && args[1] === "get") {
+  console.log(JSON.stringify({error: {code: "agent_not_found", message: "fixture agent is gone"}}));
+  process.exit(1);
+}
+const result = args[0] === "agent" && args[1] === "list" ? {agents: []}
+  : args[0] === "pane" && args[1] === "process-info" ? {process_info: {foreground_processes: []}} : {};
+console.log(JSON.stringify({result}));
+`,
+		{ mode: 0o755 },
+	);
+	stashEnv(context, "LIMEN_HERDR", herdr);
 	await mkdir(join(root, ".agents/limen"), { recursive: true });
 	const jobs = join(root, ".limen/jobs");
 	const handlers = new Map<string, (event: unknown, context: TestContext) => void>();
@@ -988,7 +1003,6 @@ test("a dead running job past grace is reaped once and wakes", async (context) =
 	await mkdir(young, { recursive: true });
 	await writeFile(join(young, "label"), "F025 young\n");
 	await writeFile(join(young, "branch"), "limen/young\n");
-	await writeFile(join(young, "pid"), "999999999\n");
 	await writeFile(join(young, "started-at"), `${new Date(Date.now() - 60_000).toISOString()}\n`);
 	await writeFile(join(young, "log"), "");
 	await subscribe(jobs, "young", "coordinator-a");
@@ -1001,6 +1015,8 @@ test("a dead running job past grace is reaped once and wakes", async (context) =
 	await writeFile(join(gone, "started-at"), `${new Date(Date.now() - 60 * 60_000).toISOString()}\n`);
 	await writeFile(join(gone, "log"), "");
 	await writeFile(join(gone, "hosted"), "hosted\n");
+	await mkdir(join(gone, "herdr"));
+	await writeFile(join(gone, "herdr/agent"), "w1:p1\n");
 	await writeFile(
 		join(gone, "session", "2026-08-19.jsonl"),
 		`${JSON.stringify({

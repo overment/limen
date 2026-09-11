@@ -42,7 +42,7 @@ test("recycled pgids cannot fake life when born mismatches", async (context) => 
 	}
 });
 
-test("two observations past grace finalize; one observation and the grace window do not", async (context) => {
+test("dead valid PIDs confirm immediately regardless of job age", async (context) => {
 	const scratch = await scratchRepo();
 	context.after(scratch.cleanup);
 	limen(scratch, "init");
@@ -54,13 +54,13 @@ test("two observations past grace finalize; one observation and the grace window
 	await reapDeadJobs(jobsRoot, seen, t0);
 	assert.equal(await text(join(young, "state")), "running");
 	assert.equal(await text(join(gone, "state")), "running");
-	assert.equal(seen.has("young"), false);
+	assert.equal(seen.get("young"), t0);
 	assert.equal(seen.get("gone"), t0);
 	await reapDeadJobs(jobsRoot, seen, t0 + 9_000);
 	assert.equal(await text(join(gone, "state")), "running");
 	await reapDeadJobs(jobsRoot, seen, t0 + 10_000);
 	assert.equal(await text(join(gone, "state")), "failed");
-	assert.equal(await text(join(young, "state")), "running");
+	assert.equal(await text(join(young, "state")), "failed");
 	assert.match(await text(join(gone, "log")), /failed: process group gone/);
 	assert.equal(seen.size, 0);
 	await assert.rejects(readFile(join(gone, "pid")));
@@ -72,7 +72,7 @@ test("shared running candidates preserve reaper grace and clear omitted observat
 	limen(scratch, "init");
 	const jobsRoot = join(scratch.root, ".limen/jobs");
 	const gone = await writeRunning(scratch.root, "gone", { pid: DEAD_PID, startedMsAgo: STARTUP_GRACE_MS + 60_000 });
-	const young = await writeRunning(scratch.root, "young", { pid: DEAD_PID, startedMsAgo: 60_000 });
+	const young = await writeRunning(scratch.root, "young", { pid: 0, startedMsAgo: 60_000 });
 	const omitted = await writeRunning(scratch.root, "omitted", { pid: DEAD_PID, startedMsAgo: STARTUP_GRACE_MS + 60_000 });
 	const t0 = Date.now();
 	const seen = new Map([["omitted", t0 - 20_000]]);
@@ -118,7 +118,7 @@ test("limen jobs reaps a dead record, then spawn and prune may use the branch", 
 	await waitForState(scratch.root, onlyJobId(spawned.stdout), "done");
 });
 
-test("a hosted job with a live agent is not reaped when the supervisor is gone", async (context) => {
+test("a hosted job with a live agent gets a watch-only owner when its young supervisor is gone", async (context) => {
 	const scratch = await scratchRepo();
 	context.after(scratch.cleanup);
 	limen(scratch, "init");
@@ -131,15 +131,24 @@ test("a hosted job with a live agent is not reaped when the supervisor is gone",
 	});
 	const job = await writeRunning(scratch.root, "hosted-live", {
 		pid: DEAD_PID,
-		startedMsAgo: STARTUP_GRACE_MS + 60_000,
+		startedMsAgo: 60_000,
 		hosted: true,
 		agent: "w1:p1",
+	});
+	context.after(async () => {
+		const pid = Number(await text(join(job, "pid")).catch(() => ""));
+		if (pid > 0 && pid !== DEAD_PID) {
+			try {
+				process.kill(pid, "SIGKILL");
+			} catch {}
+		}
 	});
 	assert.equal(await liveJob(job), true);
 	const listed = limenWithEnv(scratch, { LIMEN_HERDR: herdr, LIMEN_REAP_CONFIRM_MS: "30" }, "jobs");
 	assert.equal(listed.status, 0, listed.stderr);
 	assert.match(listed.stdout, /RUNNING/);
 	assert.equal(await text(join(job, "state")), "running");
+	assert.notEqual(Number(await text(join(job, "pid"))), DEAD_PID, "the live agent needs a new supervisor, not merely RUNNING visibility");
 });
 
 test("a reaped hosted job keeps the session jsonl handoff", async (context) => {
@@ -171,7 +180,7 @@ test("a reaped hosted job keeps the session jsonl handoff", async (context) => {
 	const listed = limenWithEnv(scratch, { LIMEN_HERDR: herdr, LIMEN_REAP_CONFIRM_MS: "30" }, "jobs", "hosted-gone");
 	assert.equal(listed.status, 0, listed.stderr);
 	assert.match(listed.stdout, /FAILED/);
-	assert.match(listed.stdout, /process group gone/);
+	assert.match(listed.stdout, /hosted supervisor lost/);
 	assert.equal(await text(join(job, "result")), "worker final");
 	assert.equal(await text(join(job, "stop-reason")), "error: usage limit reached");
 	assert.match(listed.stdout, /result:\n    worker final/);
@@ -240,7 +249,10 @@ if (args[0] === "agent" && args[1] === "get") {
     process.exit(1);
   }
   console.log(JSON.stringify({ result: { type: "agent_info", agent: { agent_status: "working", pane_id: args[2] } } }));
-} else console.log(JSON.stringify({ result: {} }));
+} else if (args[0] === "agent" && args[1] === "list") console.log(JSON.stringify({ result: { agents: [] } }));
+else if (args[0] === "pane" && args[1] === "process-info") console.log(JSON.stringify({ result: { process_info: { foreground_processes: [] } } }));
+else if (args[0] === "agent" && args[1] === "start") { require("node:fs").writeFileSync(${JSON.stringify(join(fakeBin, "unexpected-start"))}, JSON.stringify(args)); process.exit(1); }
+else console.log(JSON.stringify({ result: {} }));
 `,
 	);
 	await chmod(bin, 0o755);

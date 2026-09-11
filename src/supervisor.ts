@@ -13,6 +13,7 @@ import {
 	startHostedPi,
 	stopHostedAgent,
 } from "./herdr.ts";
+import { prepareRecoveredOwner } from "./recovery.ts";
 import { assistantStopReason, assistantText } from "./stream.ts";
 import { appendLimenLog, atomicWrite, finalizeJob, isFailedStopReason, recordCommits, requestedTerminal, textFile, writeHandshake } from "./wrapper.ts";
 
@@ -40,11 +41,19 @@ export async function runHostedSupervisor(): Promise<void> {
 	process.on("SIGTERM", () => {
 		interrupted = true;
 	});
+	const recovering = process.env.LIMEN_HOSTED_RECOVER === "1";
+	const release = recovering ? await prepareRecoveredOwner(jobDir) : undefined;
+	if (recovering && !release) return;
+	if ((await textFile(`${jobDir}/state`)) !== "running") {
+		await release?.();
+		return;
+	}
+	await rm(`${jobDir}/born`, { force: true });
 	await writeHandshake(jobDir);
-	await atomicWrite(`${jobDir}/state`, "running\n");
+	await release?.();
 	await appendLimenLog(jobDir, "hosted supervisor started (weaker guarantees: no timeout, no tool-call cap, no process containment)");
 	let target = process.env.LIMEN_HOSTED_TARGET?.trim() ?? "";
-	if (process.env.LIMEN_HOSTED_START === "1") {
+	if (!recovering && process.env.LIMEN_HOSTED_START === "1") {
 		try {
 			const started = await startHostedAgent(jobDir);
 			if (!started) return;
@@ -62,6 +71,7 @@ export async function runHostedSupervisor(): Promise<void> {
 	let unknownAliveNoted = false;
 	const idle: HostedIdleWatch = { leftWorkingAt: undefined, armed: true };
 	while (!interrupted) {
+		if ((await textFile(`${jobDir}/state`)) !== "running") return;
 		const status = hostedAgentStatus(target);
 		const sessionEnded = Boolean(await textFile(`${jobDir}/session-ended`));
 		// Herdr idle/done = unseen background tab, not job completion.

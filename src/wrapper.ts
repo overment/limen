@@ -34,7 +34,7 @@ export async function launchWrapper(environment: Readonly<Record<string, string>
 	return launchDetached({ ...environment, LIMEN_INTERNAL_RUN: "1" });
 }
 export async function launchHostedSupervisor(environment: Readonly<Record<string, string>>): Promise<number> {
-	return launchDetached({ ...environment, LIMEN_INTERNAL_HOSTED: "1" });
+	return launchDetached({ LIMEN_HOSTED_RECOVER: "", ...environment, LIMEN_INTERNAL_HOSTED: "1" });
 }
 async function launchDetached(environment: Readonly<Record<string, string>>): Promise<number> {
 	const executable = fileURLToPath(new URL("../bin/limen", import.meta.url));

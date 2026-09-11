@@ -28,6 +28,7 @@ test("a running record without pid is starting, not invalid", async (context) =>
 	await mkdir(job);
 	await writeFile(join(job, "task.md"), "soon\n");
 	await writeFile(join(job, "state"), "running\n");
+	await writeFile(join(job, "started-at"), `${new Date().toISOString()}\n`);
 	await writeFile(join(job, "label"), "F001 implementation\n");
 	await writeFile(join(job, "branch"), "limen/handshake\n");
 	await writeFile(join(job, "log"), "");
@@ -80,6 +81,7 @@ test("jobs detail shows result and commits for a terminal job that has them", as
 	assert.match(detail.stdout, /result:\n    final summary line\n    second line/);
 	// The compact snapshot stays compact: no result or commits blocks there.
 	await writeFile(join(job, "state"), "running\n");
+	await writeFile(join(job, "started-at"), `${new Date().toISOString()}\n`);
 	await writeFile(join(job, "activity"), "think\n");
 	const snapshot = limen(scratch, "jobs");
 	assert.equal(snapshot.status, 0, snapshot.stderr);
@@ -145,6 +147,7 @@ test("jobs lists running first, then newest started-at", async (context) => {
 		await writeFile(join(dir, "label"), `${job.label}\n`);
 		await writeFile(join(dir, "branch"), "main\n");
 		await writeFile(join(dir, "started-at"), `${job.started}\n`);
+		if (job.state === "running") await writeFile(join(dir, "pid"), `${process.pid}\n`);
 		await writeFile(join(dir, "log"), "");
 	}
 	const result = limen(scratch, "jobs", "--all");
@@ -171,6 +174,7 @@ test("the default jobs snapshot stays compact and exposes every live job", async
 	await mkdir(running);
 	await writeFile(join(running, "task.md"), "x\n");
 	await writeFile(join(running, "state"), "running\n");
+	await writeFile(join(running, "started-at"), `${new Date().toISOString()}\n`);
 	await writeFile(join(running, "label"), `F005 live review ${"x".repeat(8_192)}\n`);
 	await writeFile(join(running, "branch"), "limen/live\n");
 	await writeFile(join(running, "activity"), "tool\n");
@@ -196,6 +200,7 @@ test("compact snapshots cap malformed live diagnostics", async (context) => {
 	await mkdir(job);
 	await writeFile(join(job, "task.md"), "x\n");
 	await writeFile(join(job, "state"), "running\n");
+	await writeFile(join(job, "started-at"), `${new Date().toISOString()}\n`);
 	await writeFile(join(job, "label"), "F005 malformed live\n");
 	await writeFile(join(job, "branch"), "limen/malformed\n");
 	await writeFile(join(job, "tool-calls"), `${"x".repeat(8_192)}\n`);
@@ -224,6 +229,7 @@ console.log(JSON.stringify({ result: { agent: { agent_status: "idle" } } }));
 	await mkdir(join(job, "herdr"), { recursive: true });
 	await writeFile(join(job, "task.md"), "think\n");
 	await writeFile(join(job, "state"), "running\n");
+	await writeFile(join(job, "started-at"), `${new Date().toISOString()}\n`);
 	await writeFile(join(job, "label"), "F038 hosted gen\n");
 	await writeFile(join(job, "branch"), "limen/hosted-think\n");
 	await writeFile(join(job, "log"), "think\n");
@@ -255,6 +261,7 @@ test("jobs shows the advisory line on a running hosted job", async (context) => 
 	await mkdir(job);
 	await writeFile(join(job, "task.md"), "stall\n");
 	await writeFile(join(job, "state"), "running\n");
+	await writeFile(join(job, "started-at"), `${new Date().toISOString()}\n`);
 	await writeFile(join(job, "label"), "F027 stalled\n");
 	await writeFile(join(job, "branch"), "limen/stalled\n");
 	await writeFile(join(job, "log"), "wait\n");
@@ -307,6 +314,7 @@ test("a running job line shows the sampled changed-file count", async (context) 
 	await mkdir(job);
 	await writeFile(join(job, "task.md"), "edit\n");
 	await writeFile(join(job, "state"), "running\n");
+	await writeFile(join(job, "started-at"), `${new Date().toISOString()}\n`);
 	await writeFile(join(job, "label"), "F079 files\n");
 	await writeFile(join(job, "branch"), "limen/files\n");
 	await writeFile(join(job, "log"), "think\n");
