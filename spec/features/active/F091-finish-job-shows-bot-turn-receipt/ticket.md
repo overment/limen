@@ -17,10 +17,13 @@ with Johnny and Tony as intended receivers.
   credentials, raw bodies.
 - `src/commands/jobs.ts` / `src/view.ts`: present configured · transport ·
   bot-turn separately; keep aggregate receipt.
-- Docs: `docs/finish-webhooks.md` proof steps for alice → Johnny/Tony.
-- Stable finish-event identity derived from job ID for correlation; receiver
-  owners (Johnny/Tony) must preserve it in their completed turn. No invented
-  Grok API inside limen.
+- Define a bounded on-disk contract for receiver-exported completed turns from
+  an operator-designated trusted source; correlate event, target and receiver
+  with a completed-turn reference, not a local observed flag.
+- `docs/finish-webhooks.md`: exact Alice Mac → Johnny/Tony operator steps and
+  an offline harness, with the evidence import's trust boundary stated plainly.
+- Preserve job-derived finish-event identity in receiver evidence; no invented
+  receiver API, polling, signing infrastructure or completion claim from HTTP.
 
 ## Out of scope
 
@@ -32,18 +35,21 @@ with Johnny and Tony as intended receivers.
 
 ## Acceptance
 
-- Synthetic two-target finalization: one accepts, one fails/stalls; inspection
-  retains acceptance and distinguishes failure from unknown; secrets absent;
-  repeat finalization sends nothing.
-- One authorized newly spawned alice job: automatic send only; each selected
-  destination followed to a completed Johnny and/or Tony turn that references
-  that finish event; intentionally accepted HTTP with no bot turn stays
-  **unobserved**.
+- Two-target synthetic finalization retains independent transport results and
+  sends nothing on repeat finalization.
+- Matching receiver-exported completed-turn evidence promotes only its target
+  to observed in both CLI views, independently of HTTP acceptance.
+- Missing, malformed, incomplete or mismatched evidence remains unobserved;
+  legacy local flags, raw bodies and secrets cannot promote or leak into output.
+- An offline harness proves accepted HTTP without completed-turn evidence stays
+  unobserved and a correlated completed-turn export becomes observed.
+- One authorized new Alice Mac job sends automatically only; Johnny and Tony's
+  actual completed turns preserve its finish event, with no-turn control retained.
 - Focused helper/lifecycle checks pass. Adam reviews.
 
 ## Notes
 
-Adam lock 2026-09-10: first finish proof project = alice; landing authority =
-feature coordinator or coordinator-manager (Johnny/Tony). Private env values
-never enter tickets or logs. Depends on receiver owners naming wake endpoints
-and supplying bot-turn history for the proof record.
+Limen defines the file-exchange contract; receiver owners supply actual completed
+turns through an authorized export. Validating that export is not cryptographic
+proof of provenance. Johnny actively shepherds delivery; webhook acceptance is
+not relied on as a wake. Private env values never enter tickets or logs.

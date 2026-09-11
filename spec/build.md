@@ -10,6 +10,8 @@
 - **Narrow 1.0 proof boundary:** Alice Mac → Johnny/Tony correlated bot turns remain required; VPS transport acceptance is not receiver proof, and parking the wake ceiling is not a claim that it shipped.
 - **Narrow 1.0 deferrals:** field guide, Claude perspective, closing overview, history retention, remote rollout, GitHub doorbell, and expanded job automation wait beyond this wave; landed explicit-model work is not reopened.
 - **Narrow 1.0 checkpoint:** four tickets are proven and two remain partial, with receiver-confirmed turns, route refusal and the registry-lock timeout unresolved; no tag or release is claimed.
+- **Narrow 1.0 final continuation (Adam):** define receiver-owned file evidence and finish honest CLI inspection plus exact Mac proof steps; refusal waits for Pi-supported non-generating validation or explicit spend authorization, never inferred from auth/catalog or guessed zero-cost generation.
+- **Actively managed finish delivery (Adam):** Johnny shepherds without relying on finish webhooks; fresh workers select the new VPS project opt-in, this coordinator alone lands/edits the board, and VPS acceptance never substitutes for Alice Mac completed-turn proof.
 - Reliable in-flight control on one seat; a laptop is a window; GitHub may ring the doorbell later.
 - Settled Herdr panes keep RUNNING jobs and stall warnings visible; external finish delivery remains per-project opt-in.
 - Coordinator CPU is repaired without deleting history; job-history retention remains a separate operator decision.
@@ -24,8 +26,8 @@
 
 ## NOW
 
-- `F091-finish-job-shows-bot-turn-receipt` (🟠 ACTIVE): transport inspection landed `2dabae7`, but CLI bot-turn stays unobserved; completed-turn evidence source/contract and Alice Mac → Johnny/Tony proof remain open (`checks-1.md`), no PROVEN claim; boundary: no guessed receiver API or polling system.
-- `F081-spawn-refuses-an-unusable-route` (🟠 ACTIVE): hosted continuation transport landed `a3872a6`; route refusal is unimplemented, with its failing counterexample preserved at `b14b5fe` and the Pi-interface/generated-spend decision open (`interface-question.md`); no generated probe, retries, model selection, or PROVEN claim.
+- `F091-finish-job-shows-bot-turn-receipt` (🟠 ACTIVE): implement observed/unobserved CLI from bounded receiver exports after transport landing `2dabae7`, with offline harness and exact Mac proof steps; boundary: operator-designated evidence trust, no guessed bot API, polling or signing infrastructure, and no PROVEN mark before Alice Mac → Johnny/Tony proof.
+- `F081-spawn-refuses-an-unusable-route` (🟠 ACTIVE): safe transport already landed `a3872a6`; installed Pi 0.84.2 still offers no supported non-generating route probe (`checks-2.md`), so refusal waits on that interface or Adam spend authorization; failing candidate `b14b5fe` retained, no generated probe, auth/catalog proof, retries, model substitution or PROVEN claim.
 
 ## NEXT
 
