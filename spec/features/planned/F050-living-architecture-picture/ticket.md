@@ -1,7 +1,5 @@
-# F050 — Living architecture picture (proposal + wireframe)
+# F050 · A background field guide explains the application
 
-**Status:** active · research/proposal (no product merge required)  
-**Owner:** limen limen `living-architecture-picture`  
 **Adam 2026-09-08 (via Tony / Alice dogfood):** Study **limen** (`~/.overment/limen`) and how **Alice** is developed with it (vision, board, feature folders, styleguide, quality, picture role). Propose how limen can run an **entirely background** worker that watches landed changes and presents the **whole application** so a technical human — forever a bit “day one” — can grasp alignment with vision/styleguide, module relationships, and condition, from broad overview down into details.
 
 ## Constraints (hard)
