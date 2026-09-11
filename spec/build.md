@@ -2,11 +2,12 @@
 
 ## TRACK
 
-- **Ops remediation lock 2026-09-10 (Adam):** (1) two unsuccessful automatic wake attempts then deliberate recovery; park-and-preserve on quota — no silent model substitution. (2) First finish→bot proof on **alice** (Mac); intended receivers Johnny + Tony; HTTP ≠ bot turn. (3) Landing/board writer = the feature coordinator **or** the coordinator-manager (Johnny/Tony); Adam reviews these slices; named-job `limen watch <id>` for takeovers — not `watch --running`. Sequence for the authorized narrow 1.0 cut: F090 wake ceiling → F092 neutral webhook names → F091 finish receipts → F081 unusable route → F048 hosted runtime start → F049 running-owner truth → F087 policy-on-resume.
+- **Ops remediation lock 2026-09-10 (Adam):** (1) two unsuccessful automatic wake attempts then deliberate recovery; park-and-preserve on quota — no silent model substitution. (2) First finish→bot proof on **alice** (Mac); intended receivers Johnny + Tony; HTTP ≠ bot turn. (3) Landing/board writer = the feature coordinator **or** the coordinator-manager (Johnny/Tony); Adam reviews these slices; named-job `limen watch <id>` for takeovers — not `watch --running`. Adam's continuation parks F090 for later review; the remaining sequence is F092 neutral webhook names → F091 finish receipts → F081 unusable route → F048 hosted runtime start → F049 running-owner truth → F087 policy-on-resume.
 
 - **Narrow 1.0 authorized 2026-09-11 (Adam):** Phase 0 PASS recorded in `tmp/evidence/limen-1.0-ship/GATE-RESULT.md`; dependable core only, with no new control plane, silent fallback, unsolicited ownership, or blanket review gates.
-- **Narrow 1.0 landing owner:** this `dependable core` coordinator (session `01a09092-4a87-7e2a-ad1a-05cfb253b364`) owns landings and the board; Adam reviews, workers run sequentially in isolated worktrees, and takeovers name one job.
-- **Narrow 1.0 proof boundary:** installed wake-storm replay and Alice Mac → Johnny/Tony correlated bot turns remain required; VPS transport acceptance is not receiver proof.
+- **Narrow 1.0 landing owner:** this `dependable core` coordinator (session `01a09092-4a87-7e2a-ad1a-05cfb253b364`) is the sole landing/board writer; one hosted worker per ticket runs sequentially in an isolated worktree with `--provider openai-codex --model gpt-6-astra --thinking high`.
+- **Narrow 1.0 continuation (Adam):** deliver the remaining six tickets without the parked wake candidate; no F090 merge, rebase, third repair, or widening, and its unchanged checkout is Git-locked against automatic pruning.
+- **Narrow 1.0 proof boundary:** Alice Mac → Johnny/Tony correlated bot turns remain required; VPS transport acceptance is not receiver proof, and parking the wake ceiling is not a claim that it shipped.
 - **Narrow 1.0 deferrals:** field guide, Claude perspective, closing overview, history retention, remote rollout, GitHub doorbell, and expanded job automation wait beyond this wave; landed explicit-model work is not reopened.
 - Reliable in-flight control on one seat; a laptop is a window; GitHub may ring the doorbell later.
 - Settled Herdr panes keep RUNNING jobs and stall warnings visible; external finish delivery remains per-project opt-in.
@@ -22,8 +23,7 @@
 
 ## NOW
 
-- `F090-wake-errors-count-toward-attempt-ceiling` (🟠 ACTIVE): corrected candidate `0fa48fa` passed refusal and installed wake proof, but full lane timed out at 20m with four failures; wave held unmerged and one-repair loop closed (`checks-2.md`), Adam review pending; boundary: no third run or widened repair, no provider retries or model switching.
-- `F092-finish-webhook-names-are-bot-agnostic` (🟠 ACTIVE): drop TONY_* env key names; LIMEN_FINISH_WEBHOOK_* only. After F090.
+- `F092-finish-webhook-names-are-bot-agnostic` (🟠 ACTIVE): implementation starts the remaining wave with only LIMEN_FINISH_WEBHOOK_* configuration; boundary: helper, caller, tests, docs and packaged guidance, with no aliases, payload/receiver changes, or private-env edits.
 - `F091-finish-job-shows-bot-turn-receipt` (🟠 ACTIVE): job inspection separates configured / transport / completed bot turn; first proof on Alice Mac → Johnny/Tony, after F092.
 - `F081-spawn-refuses-an-unusable-route` (🟠 ACTIVE): spawn rejects an unusable route before planting a job, after F091; boundary: preflight and hosted-start argument transport, with no retries or model selection.
 - `F048-hosted-runtime-start` (🟠 ACTIVE): spawn prints the ID in seconds and the detached supervisor starts pi, after F081; boundary: move the existing hosted start into its supervisor, before F049.
@@ -32,6 +32,7 @@
 
 - `F049-running-owner-truth` (🔴 PLANNED): restore watch-only supervision or fail a job with no live owner, after F048; boundary: process recovery for existing jobs, never coordinator adoption or a new worker.
 - `F087-prompt-policy-has-one-home` (🔴 PLANNED): prompt policy has one prose owner, after F049; boundary: templates and prose-only assertions, with runtime model resolution unchanged and owner choices retained on resume.
+- `F090-wake-errors-count-toward-attempt-ceiling` (🔴 PLANNED): parked unchanged at `0fa48fa` for Adam's later review, outside the remaining wave; refusal and installed proof passed, full lane timed out with four failures (`checks-2.md`); no merge, third repair, or widening.
 - `F050-living-architecture-picture` (🔴 PLANNED): background application field guide proposal is retained but deferred beyond narrow 1.0; no product merge.
 - `F074-claude-perspective` (🔴 PLANNED): Claude advisor engine is deferred beyond narrow 1.0; existing partial work is not part of this wave.
 - `F075-closing-overview` (🔴 PLANNED): closing-overview speech rule is deferred beyond narrow 1.0; no new state.

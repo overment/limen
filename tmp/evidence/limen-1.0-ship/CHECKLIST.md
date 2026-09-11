@@ -10,20 +10,22 @@ Legend: `[ ]` open · `[~]` partial / ops-proven only · `[x]` proven on main ·
 
 ## Must-land for narrow 1.0 (build.md sequence)
 
+Adam's continuation parks the wake-ceiling candidate unchanged for later review. It is not a blocker for implementing the remaining six tickets and must not be merged or widened. The coordinator remains the sole landing/board writer; hosted workers use `--provider openai-codex --model gpt-6-astra --thinking high`.
+
 | # | Ticket | Board | Ship bar | Status |
 |---|--------|-------|----------|--------|
-| 1 | **F090** wake errors count toward attempt ceiling | ACTIVE | Two unsuccessful automatic wakes → deliberate recovery; quota parks (no silent model swap); reset-on-resume; inspectable blocked claims | `[~]` corrected candidate `0fa48fa`: refusal + installed replay pass; full run timed out at 20m with four failures; wave held, Adam review pending |
-| 2 | **F092** finish webhook names are bot-agnostic | ACTIVE | Only `LIMEN_FINISH_WEBHOOK_*` in file contents; drop `TONY_*` keys; helper filename may remain | `[~]` env + README ops on Mac; ticket still ACTIVE until product settle on main |
-| 3 | **F091** finish job shows bot-turn receipt | ACTIVE | Inspection separates configured / transport / completed bot turn; first E2E proof on **alice (Mac)** → Johnny/Tony (HTTP alone ≠ pass) | `[~]` live finish→bot wakes ops-proven; ticket acceptance still open |
-| 4 | **F081** spawn refuses an unusable route | ACTIVE | Spawn preflight rejects bad route before planting; no retries / model selection in scope | `[ ]` |
-| 5 | **F048** hosted runtime starts its own agent | ACTIVE | `spawn --tab` returns ID in seconds; detached supervisor starts pi + owns lifecycle (closes 2026-08-27 orphan) | `[ ]` |
-| 6 | **F049** running owner truth | PLANNED | Reaper adopts hosted job that lost supervisor; fails job with no live owner; no shape-based skips. After F048, before F013 | `[ ]` |
-| 7 | **F087** prompt policy has one home | PLANNED | One prose owner for prompt policy; templates + prose assertions only; survives resume | `[ ]` |
+| — | **F090** wake errors count toward attempt ceiling | PLANNED | Parked for Adam's later review, outside the remaining wave | `[~]` unchanged `0fa48fa`; no merge, third repair, or widening; incomplete full-native proof retained |
+| 1 | **F092** finish webhook names are bot-agnostic | ACTIVE | Only `LIMEN_FINISH_WEBHOOK_*` in file contents; drop `TONY_*` keys; helper filename may remain | `[~]` product implementation starts; env + README ops on Mac are not a product landing |
+| 2 | **F091** finish job shows bot-turn receipt | ACTIVE | Inspection separates configured / transport / completed bot turn; first E2E proof on **alice (Mac)** → Johnny/Tony (HTTP alone ≠ pass) | `[~]` live finish→bot wakes ops-proven; ticket acceptance still open |
+| 3 | **F081** spawn refuses an unusable route | ACTIVE | Spawn preflight rejects bad route before planting; no retries / model selection in scope | `[ ]` |
+| 4 | **F048** hosted runtime starts its own agent | ACTIVE | `spawn --tab` returns ID in seconds; detached supervisor starts pi + owns lifecycle (closes 2026-08-27 orphan) | `[ ]` |
+| 5 | **F049** running owner truth | PLANNED | Reaper adopts hosted job that lost supervisor; fails job with no live owner; no shape-based skips. After F048, before F013 | `[ ]` |
+| 6 | **F087** prompt policy has one home | PLANNED | One prose owner for prompt policy; templates + prose assertions only; survives resume | `[ ]` |
 
 ### Ops proof gates (not tickets, still ship blockers)
 
 - [x] Adam authorized dependable-core as the 1.0 boundary in the 2026-09-11 coordinator instruction; Phase 0 PASS is recorded in `GATE-RESULT.md`
-- [ ] F090: original focused 64/64; corrected `0fa48fa` passed refusal + installed replay, but full lane timed out with four failures; one-repair loop closed, unmerged, Adam review pending; findings in `spec/features/active/F090-wake-errors-count-toward-attempt-ceiling/checks-2.md`
+- [D] F090 is parked by Adam, not proven or merged; incomplete native evidence remains in `spec/features/planned/F090-wake-errors-count-toward-attempt-ceiling/checks-2.md` and does not block the remaining wave
 - [ ] F091: correlated bot-turn receipt on an authorized Alice Mac job (not HTTP-only)
 - [ ] F092: no `TONY_*` keys remaining in product paths; CI/docs match
 - [x] Landing writer for this wave: the `dependable core` coordinator; Adam reviews; takeovers via named `limen watch <id>` only
@@ -56,14 +58,15 @@ Also deferred per vision: seat/doorbell expansion, job-shape expansion, workflow
 
 ## Suggested build order (do not parallel-own the same checkout)
 
-1. F090 → merge + prove ceiling
-2. F092 (can ride after/with F090 docs) → settle naming on main
-3. F091 → bot-turn receipt + Alice Mac E2E
-4. F081 → unusable-route refuse
-5. F048 → hosted start ownership
-6. F049 → reaper/adoption
-7. F087 → policy-on-resume prose home
-8. Adam review pass on the cut; tag/release decision
+1. F092 → settle naming on main
+2. F091 → bot-turn receipt + Alice Mac E2E
+3. F081 → unusable-route refuse
+4. F048 → hosted start ownership
+5. F049 → watch-only supervision recovery
+6. F087 → policy-on-resume prose home
+7. Adam review pass on the cut; tag/release decision
+
+F090 stays unchanged for Adam's later review; no automatic resumption.
 
 ---
 
