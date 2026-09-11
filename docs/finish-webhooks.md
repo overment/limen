@@ -7,6 +7,21 @@ is retained for compatibility; recipients need not be Tony. It requires Node.js
 never enter child-process arguments. HTTP acceptance does **not** prove any bot
 woke or read the handoff.
 
+## Migration: bot-agnostic configuration keys
+
+Existing private env files must use `LIMEN_FINISH_WEBHOOK_TARGETS` or the
+single-target `LIMEN_FINISH_WEBHOOK_URL` + `LIMEN_FINISH_WEBHOOK_AUTH` pair.
+Set `LIMEN_FINISH_WEBHOOK_ENV` in callers and manual launchers that select a file.
+The retired `TONY_*` keys stop working when this lands; there are no aliases.
+A file containing only retired URL/auth keys fails before any request and names
+the required new key. The retired env-path override is ignored; normal project
+selection (or the standalone outside-Git home default) still applies.
+
+The helper filename and legacy home paths remain unchanged in this slice.
+Operators migrate their own private files and launcher settings; installation
+neither reads nor rewrites them. Existing jobs retain their recorded config path,
+so the selected file must use the new keys before those jobs finish.
+
 ## Install the reviewed helper
 
 The repository file is the only sending implementation. Keep the reviewed Limen
@@ -24,7 +39,7 @@ absolute installed canonical executable. For an installation at
 mkdir -p "$HOME/.overment"
 cat > "$HOME/.overment/tony-finish-ping.sh" <<'SH'
 #!/bin/sh
-export TONY_FINISH_WEBHOOK_ENV="${TONY_FINISH_WEBHOOK_ENV-$HOME/.overment/tony-finish-webhook.env}"
+export LIMEN_FINISH_WEBHOOK_ENV="${LIMEN_FINISH_WEBHOOK_ENV-$HOME/.overment/tony-finish-webhook.env}"
 exec "$HOME/.overment/limen/bin/tony-finish-ping.sh" "$@"
 SH
 chmod 755 "$HOME/.overment/tony-finish-ping.sh"
@@ -54,7 +69,7 @@ the rest of Limen beside it.
 
 For a manual helper invocation, selection is fail-closed, in this order:
 
-1. If `TONY_FINISH_WEBHOOK_ENV` is set, it must be an **absolute env-file path**.
+1. If `LIMEN_FINISH_WEBHOOK_ENV` is set, it must be an **absolute env-file path**.
    Empty, relative, unreadable or invalid overrides fail; they never fall back.
 2. Inside Git, resolve `git rev-parse --git-common-dir` to its real path. The
    selected file is `.limen/finish-webhook.env` beside that directory: for
@@ -79,7 +94,7 @@ can still launch the sender. Manual launchers still need Node.js 24+ on `PATH`.
 
 At `limen spawn`, selection is deliberately narrower than the standalone helper:
 
-- An explicit `TONY_FINISH_WEBHOOK_ENV` resolves relative to the spawn directory
+- An explicit `LIMEN_FINISH_WEBHOOK_ENV` resolves relative to the spawn directory
   and is stored as an absolute path. An explicitly empty value disables automatic
   delivery; it is never passed to the helper. A nonempty missing path is retained
   so completion records a visible sender failure, not a fallback destination.
@@ -119,8 +134,8 @@ shell expansion, command substitution, shell-escaped spaces or executable setup
 commands. Exported URL/auth variables are not a substitute for a selected file.
 
 ```dotenv
-TONY_FINISH_WEBHOOK_URL='https://your-endpoint.example.invalid/finish'
-TONY_FINISH_WEBHOOK_AUTH='Bearer REPLACE_WITH_TOKEN'
+LIMEN_FINISH_WEBHOOK_URL='https://your-endpoint.example.invalid/finish'
+LIMEN_FINISH_WEBHOOK_AUTH='Bearer REPLACE_WITH_TOKEN'
 ```
 
 `AUTH` is the complete header value, including exactly `Bearer ` followed by a
@@ -134,8 +149,8 @@ paste private env contents into job logs.
 ## Two bots on one project
 
 Set `LIMEN_FINISH_WEBHOOK_TARGETS` in the same private env file to a nonempty JSON
-array of `{url, auth}` objects. This explicit list **replaces** the legacy Tony
-URL/auth pair; it never appends an implicit Tony recipient or falls back to one.
+array of `{url, auth}` objects. This explicit list **replaces** the single-target
+URL/auth pair; it never appends an implicit recipient or falls back to one.
 The same HTTPS and Bearer validation applies to every target. Unknown object
 fields, malformed JSON, an empty list or any invalid target fail before any send.
 The setting is read from the selected file, not inherited from the process env.
@@ -194,8 +209,8 @@ mkdir -p "$PROJECT/.limen"
 printf '/.limen/finish-webhook.env\n' >> "$COMMON/info/exclude"
 if [ ! -e "$CONFIG" ]; then
   (umask 077; printf '%s\n' \
-    "TONY_FINISH_WEBHOOK_URL='https://your-endpoint.example.invalid/finish'" \
-    "TONY_FINISH_WEBHOOK_AUTH='Bearer REPLACE_WITH_TOKEN'" > "$CONFIG")
+    "LIMEN_FINISH_WEBHOOK_URL='https://your-endpoint.example.invalid/finish'" \
+    "LIMEN_FINISH_WEBHOOK_AUTH='Bearer REPLACE_WITH_TOKEN'" > "$CONFIG")
 fi
 chmod 600 "$CONFIG"
 "${EDITOR:-vi}" "$CONFIG"
@@ -210,7 +225,7 @@ is not a remedy: the operator must remove it from tracking and address exposure.
 After replacing the placeholders, deliberately test one request:
 
 ```sh
-TONY_FINISH_WEBHOOK_ENV="$CONFIG" \
+LIMEN_FINISH_WEBHOOK_ENV="$CONFIG" \
   "$HOME/.overment/tony-finish-ping.sh" setup-check done "$(git branch --show-current)"
 ```
 
@@ -230,7 +245,7 @@ source the credential file or depend on login-shell exports:
 
 ```sh
 cd /srv/projects/my-project
-export TONY_FINISH_WEBHOOK_ENV=/srv/projects/my-project/.limen/finish-webhook.env
+export LIMEN_FINISH_WEBHOOK_ENV=/srv/projects/my-project/.limen/finish-webhook.env
 "$HOME/.overment/tony-finish-ping.sh" vps-setup-check done "$(git branch --show-current)"
 ```
 
@@ -239,7 +254,7 @@ For a project-specific systemd unit, the equivalent nonsecret setting is:
 ```ini
 [Service]
 WorkingDirectory=/srv/projects/my-project
-Environment=TONY_FINISH_WEBHOOK_ENV=/srv/projects/my-project/.limen/finish-webhook.env
+Environment=LIMEN_FINISH_WEBHOOK_ENV=/srv/projects/my-project/.limen/finish-webhook.env
 # Include the directory containing Node.js 24+ if it is not installed in /usr/bin.
 Environment=PATH=/usr/local/bin:/usr/bin:/bin
 ```
@@ -251,7 +266,7 @@ space in `Bearer …`.
 
 ## Inspect failures and deliberately retry
 
-In legacy single-target mode, exit 0 prints `finish webhook: accepted (HTTP NNN)`
+In single-target mode, exit 0 prints `finish webhook: accepted (HTTP NNN)`
 for 200–299 only. Other responses print `finish webhook: HTTP NNN rejected` and
 exit 1. An explicit target list prints one indexed result per destination and
 exits 0 only when all are accepted. Redirects are not
@@ -301,7 +316,7 @@ It uses the recorded path and original fields, never a home fallback or a
 replacement `done` state for a failed job:
 
 ```sh
-TONY_FINISH_WEBHOOK_ENV="$(tr -d '\n' < "$job/finish-webhook-env")" \
+LIMEN_FINISH_WEBHOOK_ENV="$(tr -d '\n' < "$job/finish-webhook-env")" \
   bin/tony-finish-ping.sh "$(tr -d '\n' < "$job/label")" \
   "$(tr -d '\n' < "$job/state")" "$(tr -d '\n' < "$job/branch")"
 result=$?
@@ -315,7 +330,7 @@ before using the fallback; do not select a home destination on its behalf.
 For a standalone manual request without a Limen job record:
 
 ```sh
-TONY_FINISH_WEBHOOK_ENV=/absolute/project/.limen/finish-webhook.env \
+LIMEN_FINISH_WEBHOOK_ENV=/absolute/project/.limen/finish-webhook.env \
   "$HOME/.overment/tony-finish-ping.sh" 'original-label' 'failed' 'original-branch'
 result=$?
 printf 'finish sender exit=%s\n' "$result"
@@ -388,7 +403,9 @@ Lifecycle tests additionally exercise automatic hosted/detached finalization,
 worktree/workspace selection, continuation, one-send claims, safe failures and
 bounded shutdown with synthetic executables. A combined test invokes the actual
 canonical helper through automatic finalization with intercepted transport.
-Multi-target checks assert distinct routes and credentials, no implicit Tony
+Migration checks reject retired-only URL/auth configuration before any request
+and show that the retired env-path override cannot select a file or opt in a job.
+Multi-target checks assert distinct routes and credentials, no implicit
 recipient, full validation before transport, and second-bot delivery despite a
 failed or stalled first bot. Automatic two-route tests exercise both all-accepted
 and partial-failure outcomes after durable terminal state. These HTTP-only

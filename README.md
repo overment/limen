@@ -25,6 +25,8 @@ Put that file beside the primary Git checkout (linked worktrees use the canonica
 
 **What “accepted” means.** HTTP 2xx means the sender reached the endpoint. It does **not** mean a bot finished a turn — expect latency, and confirm the wake in the bot chat / routine run. Inspect with `limen jobs <id>` (`finish-webhook-env`, `finish-webhook-attempt`, `finish-webhook`).
 
+Configuration uses only `LIMEN_FINISH_WEBHOOK_*` keys; retired bot-specific keys no longer work. Existing private files and launchers need the [migration steps](docs/finish-webhooks.md#migration-bot-agnostic-configuration-keys). The helper filename remains `tony-finish-ping.sh`.
+
 Full setup, multi-target notes, deliberate retry, and troubleshooting: [docs/finish-webhooks.md](docs/finish-webhooks.md).
 
 

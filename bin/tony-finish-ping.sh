@@ -14,9 +14,9 @@ function fail(message) {
 const args = process.argv.slice(2);
 if (args.length !== 3) fail('usage: tony-finish-ping.sh <label> <status> <branch>');
 
-let envFile = process.env.TONY_FINISH_WEBHOOK_ENV;
+let envFile = process.env.LIMEN_FINISH_WEBHOOK_ENV;
 if (envFile !== undefined) {
-  if (!isAbsolute(envFile)) fail('TONY_FINISH_WEBHOOK_ENV must be an absolute file path');
+  if (!isAbsolute(envFile)) fail('LIMEN_FINISH_WEBHOOK_ENV must be an absolute file path');
 } else {
   const git = spawnSync('git', ['rev-parse', '--git-common-dir'], {
     encoding: 'utf8', timeout: 2000, env: { ...process.env, LC_ALL: 'C' },
@@ -43,7 +43,7 @@ try {
   fail('cannot read the selected env file');
 }
 const multi = config.LIMEN_FINISH_WEBHOOK_TARGETS !== undefined;
-let targets = [{ url: config.TONY_FINISH_WEBHOOK_URL, auth: config.TONY_FINISH_WEBHOOK_AUTH }];
+let targets = [{ url: config.LIMEN_FINISH_WEBHOOK_URL, auth: config.LIMEN_FINISH_WEBHOOK_AUTH }];
 if (multi) {
   try {
     targets = JSON.parse(config.LIMEN_FINISH_WEBHOOK_TARGETS);
@@ -56,7 +56,7 @@ if (multi) {
 }
 // Validate the entire selection before contacting any destination. Explicit fan-out never falls back.
 for (const [index, target] of targets.entries()) {
-  const prefix = multi ? `target ${index + 1}` : 'TONY_FINISH_WEBHOOK';
+  const prefix = multi ? `target ${index + 1}` : 'LIMEN_FINISH_WEBHOOK';
   if (typeof target.auth !== 'string' || !/^Bearer [A-Za-z0-9._~+/-]+=*$/.test(target.auth)) {
     fail(`${prefix}${multi ? ' auth' : '_AUTH'} must be a complete Bearer value`);
   }

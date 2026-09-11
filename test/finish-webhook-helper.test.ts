@@ -57,7 +57,7 @@ globalThis.fetch = async (url, options) => {
 		home,
 		capture,
 		env,
-		async config(path: string, content = `TONY_FINISH_WEBHOOK_URL='${DESTINATION}'\nexport TONY_FINISH_WEBHOOK_AUTH="${AUTH}"\n`) {
+		async config(path: string, content = `LIMEN_FINISH_WEBHOOK_URL='${DESTINATION}'\nexport LIMEN_FINISH_WEBHOOK_AUTH="${AUTH}"\n`) {
 			await mkdir(dirname(path), { recursive: true });
 			await writeFile(path, content, { mode: 0o600 });
 			return path;
@@ -84,7 +84,7 @@ test("helper safely encodes all CLI fields, sends Bearer in memory, and reports 
 	t.after(f.cleanup);
 	const path = await f.config(join(f.root, "private config.env"));
 	const args = ['job "quoted"\\\n\t🙂', "done\r\n", 'feature/\\branch"\n'];
-	const result = f.run({ TONY_FINISH_WEBHOOK_ENV: path }, f.root, args);
+	const result = f.run({ LIMEN_FINISH_WEBHOOK_ENV: path }, f.root, args);
 	assert.equal(result.status, 0, result.stderr);
 	assert.equal(result.stdout, "finish webhook: accepted (HTTP 204)\n");
 	assert.equal(result.stderr, "");
@@ -100,7 +100,7 @@ test("helper safely encodes all CLI fields, sends Bearer in memory, and reports 
 	assert.equal(readFileSync(`${f.capture}.timeout`, "utf8"), "10000");
 });
 
-test("explicit targets fan out to two bot routes without sending to legacy Tony", async (t) => {
+test("explicit targets fan out to two routes without an implicit single-target recipient", async (t) => {
 	const f = await fixture();
 	t.after(f.cleanup);
 	const targets = [
@@ -109,9 +109,9 @@ test("explicit targets fan out to two bot routes without sending to legacy Tony"
 	];
 	const path = await f.config(
 		join(f.root, "multi.env"),
-		`LIMEN_FINISH_WEBHOOK_TARGETS='${JSON.stringify(targets)}'\nTONY_FINISH_WEBHOOK_URL='${DESTINATION}'\nTONY_FINISH_WEBHOOK_AUTH='${AUTH}'\n`,
+		`LIMEN_FINISH_WEBHOOK_TARGETS='${JSON.stringify(targets)}'\nLIMEN_FINISH_WEBHOOK_URL='${DESTINATION}'\nLIMEN_FINISH_WEBHOOK_AUTH='${AUTH}'\n`,
 	);
-	const result = f.run({ TONY_FINISH_WEBHOOK_ENV: path });
+	const result = f.run({ LIMEN_FINISH_WEBHOOK_ENV: path });
 	assert.equal(result.status, 0, result.stderr);
 	const requests = readFileSync(`${f.capture}.requests`, "utf8")
 		.trim()
@@ -136,7 +136,7 @@ test("a failed or stalled first bot does not block the second bot; acceptance is
 				{ url: "https://finish.example.test/grok-two", auth: "Bearer second-synthetic-secret" },
 			];
 			const path = await f.config(join(f.root, "multi.env"), `LIMEN_FINISH_WEBHOOK_TARGETS='${JSON.stringify(targets)}'\n`);
-			const result = f.run({ TONY_FINISH_WEBHOOK_ENV: path, TRANSPORT: "mixed-timeout" });
+			const result = f.run({ LIMEN_FINISH_WEBHOOK_ENV: path, TRANSPORT: "mixed-timeout" });
 			assert.equal(result.status, 1);
 			const expected = route === "error" ? "request failed" : route === "reject" ? "HTTP 503 rejected" : "request timed out after 10000ms";
 			assert.ok(result.stdout.includes(`target 1 ${expected}; owner wake unobserved`), result.stdout);
@@ -147,7 +147,7 @@ test("a failed or stalled first bot does not block the second bot; acceptance is
 	}
 });
 
-test("invalid explicit target lists fail before all transport and never fall back to Tony", async (t) => {
+test("invalid explicit target lists fail before all transport and never fall back to the single target", async (t) => {
 	const valid = { url: DESTINATION, auth: AUTH };
 	const invalid = [
 		"",
@@ -169,12 +169,34 @@ test("invalid explicit target lists fail before all transport and never fall bac
 			t.after(f.cleanup);
 			const path = await f.config(
 				join(f.root, "invalid.env"),
-				`LIMEN_FINISH_WEBHOOK_TARGETS='${value}'\nTONY_FINISH_WEBHOOK_URL='${DESTINATION}'\nTONY_FINISH_WEBHOOK_AUTH='${AUTH}'\n`,
+				`LIMEN_FINISH_WEBHOOK_TARGETS='${value}'\nLIMEN_FINISH_WEBHOOK_URL='${DESTINATION}'\nLIMEN_FINISH_WEBHOOK_AUTH='${AUTH}'\n`,
 			);
-			assert.equal(f.run({ TONY_FINISH_WEBHOOK_ENV: path }).status, 1);
+			assert.equal(f.run({ LIMEN_FINISH_WEBHOOK_ENV: path }).status, 1);
 			assert.equal(existsSync(`${f.capture}.requests`), false);
 		});
 	}
+});
+
+test("legacy-only configuration fails closed and names the new key before any request", async (t) => {
+	const f = await fixture();
+	t.after(f.cleanup);
+	// Retired names appear only as rejection inputs, never as supported configuration.
+	const path = await f.config(join(f.root, "legacy.env"), `TONY_FINISH_WEBHOOK_URL='${DESTINATION}'\nTONY_FINISH_WEBHOOK_AUTH='${AUTH}'\n`);
+	const result = f.run({ LIMEN_FINISH_WEBHOOK_ENV: path });
+	assert.equal(result.status, 1);
+	assert.equal(result.stderr, "finish webhook: LIMEN_FINISH_WEBHOOK_AUTH must be a complete Bearer value\n");
+	assert.equal(existsSync(`${f.capture}.requests`), false);
+});
+
+test("the retired env-path override cannot select a destination", async (t) => {
+	const f = await fixture();
+	t.after(f.cleanup);
+	const path = await f.config(join(f.root, "ignored.env"));
+	await f.config(join(f.home, ".overment", "tony-finish-webhook.env"), "# no target selected\n");
+	const result = f.run({ TONY_FINISH_WEBHOOK_ENV: path });
+	assert.equal(result.status, 1);
+	assert.match(result.stderr, /LIMEN_FINISH_WEBHOOK_AUTH/);
+	assert.equal(existsSync(`${f.capture}.requests`), false);
 });
 
 test("helper rejects missing, raw, Basic and malformed Bearer auth before transport", async (t) => {
@@ -198,8 +220,8 @@ test("helper rejects missing, raw, Basic and malformed Bearer auth before transp
 		await t.test(JSON.stringify(auth) ?? "missing", async (t) => {
 			const f = await fixture();
 			t.after(f.cleanup);
-			const path = await f.config(join(f.root, "invalid.env"), `TONY_FINISH_WEBHOOK_URL='${DESTINATION}'\n${auth === undefined ? "" : `TONY_FINISH_WEBHOOK_AUTH='${auth}'`}\n`);
-			const result = f.run({ TONY_FINISH_WEBHOOK_ENV: path, TONY_FINISH_WEBHOOK_AUTH: AUTH });
+			const path = await f.config(join(f.root, "invalid.env"), `LIMEN_FINISH_WEBHOOK_URL='${DESTINATION}'\n${auth === undefined ? "" : `LIMEN_FINISH_WEBHOOK_AUTH='${auth}'`}\n`);
+			const result = f.run({ LIMEN_FINISH_WEBHOOK_ENV: path, LIMEN_FINISH_WEBHOOK_AUTH: AUTH });
 			assert.equal(result.status, 1);
 			assert.match(result.stderr, /must be a complete Bearer value/);
 			assert.equal(existsSync(f.capture), false);
@@ -219,8 +241,8 @@ test("helper rejects missing or unsafe destinations without revealing their cont
 		await t.test(url, async (t) => {
 			const f = await fixture();
 			t.after(f.cleanup);
-			const path = await f.config(join(f.root, "invalid.env"), `TONY_FINISH_WEBHOOK_AUTH='${AUTH}'\nTONY_FINISH_WEBHOOK_URL='${url}'\n`);
-			assert.equal(f.run({ TONY_FINISH_WEBHOOK_ENV: path }).status, 1);
+			const path = await f.config(join(f.root, "invalid.env"), `LIMEN_FINISH_WEBHOOK_AUTH='${AUTH}'\nLIMEN_FINISH_WEBHOOK_URL='${url}'\n`);
+			assert.equal(f.run({ LIMEN_FINISH_WEBHOOK_ENV: path }).status, 1);
 			assert.equal(existsSync(f.capture), false);
 		});
 	}
@@ -232,7 +254,7 @@ test("helper fails redirects, non-2xx, transport errors and a bounded stalled re
 			const f = await fixture();
 			t.after(f.cleanup);
 			const path = await f.config(join(f.root, "config.env"));
-			const result = f.run({ TONY_FINISH_WEBHOOK_ENV: path, HTTP_STATUS: String(status) });
+			const result = f.run({ LIMEN_FINISH_WEBHOOK_ENV: path, HTTP_STATUS: String(status) });
 			assert.equal(result.status, status < 300 ? 0 : 1);
 			assert.match(result.stdout + result.stderr, new RegExp(`HTTP ${status}`));
 			assert.equal(f.request().redirect, "manual");
@@ -243,7 +265,7 @@ test("helper fails redirects, non-2xx, transport errors and a bounded stalled re
 			const f = await fixture();
 			t.after(f.cleanup);
 			const path = await f.config(join(f.root, "config.env"));
-			const result = f.run({ TONY_FINISH_WEBHOOK_ENV: path, TRANSPORT: transport });
+			const result = f.run({ LIMEN_FINISH_WEBHOOK_ENV: path, TRANSPORT: transport });
 			assert.equal(result.status, 1);
 			assert.match(result.stderr, transport === "timeout" ? /timed out after 10000ms/ : /request failed/);
 			assert.equal(readFileSync(`${f.capture}.timeout`, "utf8"), "10000");
@@ -256,7 +278,7 @@ test("an unauthenticated receiver body is not a sender diagnosis or a wake ackno
 	t.after(f.cleanup);
 	const path = await f.config(join(f.root, "config.env"));
 	for (const status of [200, 401, 403]) {
-		const result = f.run({ TONY_FINISH_WEBHOOK_ENV: path, HTTP_STATUS: String(status), RECEIVER_BODY: "[unauthenticated] Error synthetic-secret" });
+		const result = f.run({ LIMEN_FINISH_WEBHOOK_ENV: path, HTTP_STATUS: String(status), RECEIVER_BODY: "[unauthenticated] Error synthetic-secret" });
 		assert.equal(result.status, status === 200 ? 0 : 1);
 		assert.equal(result.stdout + result.stderr, `finish webhook: ${status === 200 ? "accepted (HTTP 200)" : `HTTP ${status} rejected`}\n`);
 		assert.equal(existsSync(`${f.capture}.response-read`), false, "receiver response content must not become a sender receipt");
@@ -268,12 +290,12 @@ test("absolute override wins; missing, empty and relative overrides never fall b
 	const f = await fixture();
 	t.after(f.cleanup);
 	await f.config(join(f.home, ".overment", "tony-finish-webhook.env"));
-	const selected = await f.config(join(f.root, "explicit.env"), `TONY_FINISH_WEBHOOK_URL='https://explicit.example.test'\nTONY_FINISH_WEBHOOK_AUTH='${AUTH}'\n`);
-	assert.equal(f.run({ TONY_FINISH_WEBHOOK_ENV: selected }).status, 0);
+	const selected = await f.config(join(f.root, "explicit.env"), `LIMEN_FINISH_WEBHOOK_URL='https://explicit.example.test'\nLIMEN_FINISH_WEBHOOK_AUTH='${AUTH}'\n`);
+	assert.equal(f.run({ LIMEN_FINISH_WEBHOOK_ENV: selected }).status, 0);
 	assert.equal(f.request().url, "https://explicit.example.test/");
 	await rm(f.capture);
 	for (const override of ["", "explicit.env", join(f.root, "missing.env"), f.root]) {
-		assert.equal(f.run({ TONY_FINISH_WEBHOOK_ENV: override }).status, 1);
+		assert.equal(f.run({ LIMEN_FINISH_WEBHOOK_ENV: override }).status, 1);
 		assert.equal(existsSync(f.capture), false);
 	}
 });
@@ -293,13 +315,13 @@ test("Git common directory selects the canonical project's config from an extern
 	await f.config(join(worktree, ".limen", "finish-webhook.env"));
 	assert.equal(f.run({}, nested).status, 1, "missing canonical config must not use worktree or home config");
 	assert.equal(existsSync(f.capture), false);
-	const canonical = await f.config(join(repo, ".limen", "finish-webhook.env"), `TONY_FINISH_WEBHOOK_URL='https://canonical.example.test'\nTONY_FINISH_WEBHOOK_AUTH='${AUTH}'\n`);
+	const canonical = await f.config(join(repo, ".limen", "finish-webhook.env"), `LIMEN_FINISH_WEBHOOK_URL='https://canonical.example.test'\nLIMEN_FINISH_WEBHOOK_AUTH='${AUTH}'\n`);
 	assert.equal(f.run({}, nested).status, 0);
 	assert.equal(f.request().url, "https://canonical.example.test/");
 	assert.equal(f.run({}, repo).status, 0);
 	assert.equal(f.request().url, "https://canonical.example.test/");
 	const selected = await f.config(join(f.root, "selected.env"));
-	assert.equal(f.run({ TONY_FINISH_WEBHOOK_ENV: selected }, nested).status, 0);
+	assert.equal(f.run({ LIMEN_FINISH_WEBHOOK_ENV: selected }, nested).status, 0);
 	assert.equal(f.request().url, DESTINATION);
 	await f.config(canonical, "# empty config\n");
 	await rm(f.capture);
@@ -311,7 +333,7 @@ test("legacy home config is available only for manual invocation outside Git, no
 	const f = await fixture();
 	t.after(f.cleanup);
 	assert.equal(
-		f.run({ TONY_FINISH_WEBHOOK_URL: DESTINATION, TONY_FINISH_WEBHOOK_AUTH: AUTH, LIMEN_FINISH_WEBHOOK_TARGETS: JSON.stringify([{ url: DESTINATION, auth: AUTH }]) }).status,
+		f.run({ LIMEN_FINISH_WEBHOOK_URL: DESTINATION, LIMEN_FINISH_WEBHOOK_AUTH: AUTH, LIMEN_FINISH_WEBHOOK_TARGETS: JSON.stringify([{ url: DESTINATION, auth: AUTH }]) }).status,
 		1,
 	);
 	assert.equal(existsSync(f.capture), false);
@@ -324,12 +346,12 @@ test("env files are data, never shell scripts, and the CLI requires exactly thre
 	const f = await fixture();
 	t.after(f.cleanup);
 	const marker = join(f.root, "executed");
-	const path = await f.config(join(f.root, "shell.env"), `touch '${marker}'\nTONY_FINISH_WEBHOOK_URL='${DESTINATION}'\nTONY_FINISH_WEBHOOK_AUTH="Bearer $(touch '${marker}')"\n`);
-	assert.equal(f.run({ TONY_FINISH_WEBHOOK_ENV: path }).status, 1);
+	const path = await f.config(join(f.root, "shell.env"), `touch '${marker}'\nLIMEN_FINISH_WEBHOOK_URL='${DESTINATION}'\nLIMEN_FINISH_WEBHOOK_AUTH="Bearer $(touch '${marker}')"\n`);
+	assert.equal(f.run({ LIMEN_FINISH_WEBHOOK_ENV: path }).status, 1);
 	assert.equal(existsSync(marker), false);
 	assert.equal(existsSync(f.capture), false);
 	for (const args of [[], ["label"], ["label", "done"], ["label", "done", "branch", "extra"]]) {
-		const result = f.run({ TONY_FINISH_WEBHOOK_ENV: path }, f.root, args);
+		const result = f.run({ LIMEN_FINISH_WEBHOOK_ENV: path }, f.root, args);
 		assert.equal(result.status, 1);
 		assert.match(result.stderr, /usage:/);
 	}

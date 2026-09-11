@@ -9,7 +9,7 @@ import { appendLimenLog, atomicWrite, textFile } from "./wrapper.ts";
 const SENDER = fileURLToPath(new URL("../bin/tony-finish-ping.sh", import.meta.url));
 // Shorter than the detached wrapper's 5s termination grace, including a hung sender.
 const SEND_MS = 3_000;
-export function finishWebhookEnv(root: string, cwd: string, explicit = process.env.TONY_FINISH_WEBHOOK_ENV): string {
+export function finishWebhookEnv(root: string, cwd: string, explicit = process.env.LIMEN_FINISH_WEBHOOK_ENV): string {
 	if (explicit !== undefined) return explicit.trim() ? resolve(cwd, explicit) : "";
 	const project = workspaceRoot(root) ? root : (listWorktrees(root)[0]?.path ?? root);
 	const path = resolve(project, ".limen/finish-webhook.env");
@@ -45,7 +45,7 @@ export async function deliverFinishWebhook(jobDir: string, shutdownDeadline = Nu
 function send(config: string, label: string, state: string, branch: string, timeoutMs: number): Promise<string> {
 	return new Promise((resolve) => {
 		const child = spawn(SENDER, [label, state, branch], {
-			env: { ...process.env, PATH: `${dirname(process.execPath)}${delimiter}${process.env.PATH ?? ""}`, TONY_FINISH_WEBHOOK_ENV: config },
+			env: { ...process.env, PATH: `${dirname(process.execPath)}${delimiter}${process.env.PATH ?? ""}`, LIMEN_FINISH_WEBHOOK_ENV: config },
 			stdio: "ignore",
 			detached: true,
 		});

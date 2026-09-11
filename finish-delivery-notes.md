@@ -4,9 +4,9 @@ Candidate scope: shared terminal/config wiring, lifecycle tests, worker/coordina
 
 ## Integration contract
 
-- `src/commands/spawn.ts` snapshots only an absolute path in the private-mode job file `finish-webhook-env`. Explicit `TONY_FINISH_WEBHOOK_ENV` resolves against the spawn cwd; an explicitly empty value disables opt-in. Otherwise use the primary Git worktree's `.limen/finish-webhook.env`, or the non-Git workspace coordinator's equivalent. No home lookup. Worktree-local decoys are ignored.
+- `src/commands/spawn.ts` snapshots only an absolute path in the private-mode job file `finish-webhook-env`. Explicit `LIMEN_FINISH_WEBHOOK_ENV` resolves against the spawn cwd; an explicitly empty value disables opt-in. Otherwise use the primary Git worktree's `.limen/finish-webhook.env`, or the non-Git workspace coordinator's equivalent. No home lookup. Worktree-local decoys are ignored.
 - `src/commands/continue.ts` inherits the parent's path or its absence, never the continuation caller's environment. A fresh `spawn --branch` selects configuration at spawn as usual.
-- `src/wrapper.ts` finalizes both detached and hosted jobs. After terminal state and pid cleanup, `src/finish-webhook.ts` executes the package-relative canonical sender with exactly `<label> <state> <branch>` and the snapshotted path in `TONY_FINISH_WEBHOOK_ENV`.
+- `src/wrapper.ts` finalizes both detached and hosted jobs. After terminal state and pid cleanup, `src/finish-webhook.ts` executes the package-relative canonical sender with exactly `<label> <state> <branch>` and the snapshotted path in `LIMEN_FINISH_WEBHOOK_ENV`.
 - `finish-webhook-attempt` is an exclusive, flushed claim. Never reclaim it automatically: HTTP acceptance followed by a crash is ambiguous. A later finalizer cannot double-send. A crash before a claim can leave terminal state without an attempt; inspect and retry deliberately, not through finalization.
 - `finish-webhook` holds `attempting`, `accepted`, or `failed` plus timestamps and manual retry guidance. `log` carries safe status summaries visible through `limen jobs <id>`. Sender stdout/stderr are discarded. `accepted` means sender exit 0, not an observed owner wake. No coordinator notification/subscriber files change.
 - The sender process group has a 3000ms cap, shortened to the detached wrapper's remaining termination grace with a 500ms reserve. If no budget remains, record not sent. No daemon, queue, retry command, extra runtime dependency, or installed/home changes.
@@ -16,7 +16,7 @@ Candidate scope: shared terminal/config wiring, lifecycle tests, worker/coordina
 Inspect terminal `state`, `finish-webhook`, and `finish-webhook-attempt` after the finalizer has settled. An interrupted attempt may already have sent. From the installed Limen package, with `job` set to the absolute job directory:
 
 ```sh
-TONY_FINISH_WEBHOOK_ENV="$(tr -d '\n' < "$job/finish-webhook-env")" \
+LIMEN_FINISH_WEBHOOK_ENV="$(tr -d '\n' < "$job/finish-webhook-env")" \
   bin/tony-finish-ping.sh "$(tr -d '\n' < "$job/label")" \
   "$(tr -d '\n' < "$job/state")" "$(tr -d '\n' < "$job/branch")"
 ```
