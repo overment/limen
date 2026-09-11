@@ -24,8 +24,8 @@
 ## NOW
 
 - `F091-finish-job-shows-bot-turn-receipt` (🟠 ACTIVE): transport inspection landed `2dabae7`, but CLI bot-turn stays unobserved; completed-turn evidence source/contract and Alice Mac → Johnny/Tony proof remain open (`checks-1.md`), no PROVEN claim; boundary: no guessed receiver API or polling system.
-- `F081-spawn-refuses-an-unusable-route` (🟠 ACTIVE): implementation starts after the partial transport landing to reject unusable routes before planting jobs; boundary: preflight and hosted-start argument transport, no retries/model selection or unapproved generated probe; authentication alone is not route proof (`notes.md`).
-- `F048-hosted-runtime-start` (🟠 ACTIVE): spawn prints the ID in seconds and the detached supervisor starts pi, after F081; boundary: move the existing hosted start into its supervisor, before F049.
+- `F081-spawn-refuses-an-unusable-route` (🟠 ACTIVE): hosted continuation transport landed `a3872a6`; route refusal is unimplemented, with its failing counterexample preserved at `b14b5fe` and the Pi-interface/generated-spend decision open (`interface-question.md`); no generated probe, retries, model selection, or PROVEN claim.
+- `F048-hosted-runtime-start` (🟠 ACTIVE): finish/proof worker verifies the existing supervisor-first startup on the landed continuation fix (`notes.md`); boundary: close actual startup gaps and retain killed-caller proof, no duplicate start mechanism or reaper adoption, before F049.
 
 ## NEXT
 

@@ -17,8 +17,8 @@ Adam's continuation parks the wake-ceiling candidate unchanged for later review.
 | — | **F090** wake errors count toward attempt ceiling | PLANNED | Parked for Adam's later review, outside the remaining wave | `[~]` unchanged `0fa48fa`; no merge, third repair, or widening; incomplete full-native proof retained |
 | 1 | **F092** finish webhook names are bot-agnostic | PROVEN | Only `LIMEN_FINISH_WEBHOOK_*` in file contents; drop `TONY_*` keys; helper filename may remain | `[x]` landed `a76e0ae`; focused 76/76 + coordinator 79/79; full native 371 passed, one registry-lock timeout retained |
 | 2 | **F091** finish job shows bot-turn receipt | ACTIVE | Inspection separates configured / transport / completed bot turn; first E2E proof on **alice (Mac)** → Johnny/Tony (HTTP alone ≠ pass) | `[~]` transport portion landed `2dabae7`, focused 138/138; observed-turn path and Mac receiver proof still missing; not PROVEN |
-| 3 | **F081** spawn refuses an unusable route | ACTIVE | Spawn preflight rejects bad route before planting; no retries / model selection in scope | `[~]` implementation starts after transport landing; authentication-only proof remains insufficient |
-| 4 | **F048** hosted runtime starts its own agent | ACTIVE | `spawn --tab` returns ID in seconds; detached supervisor starts pi + owns lifecycle (closes 2026-08-27 orphan) | `[ ]` |
+| 3 | **F081** spawn refuses an unusable route | ACTIVE | Spawn preflight rejects bad route before planting; no retries / model selection in scope | `[~]` continuation transport landed `a3872a6`; route refusal still fails, awaiting Pi interface or explicit generated-probe spend decision; not PROVEN |
+| 4 | **F048** hosted runtime starts its own agent | ACTIVE | `spawn --tab` returns ID in seconds; detached supervisor starts pi + owns lifecycle (closes 2026-08-27 orphan) | `[~]` finish/proof starts from the existing supervisor-first implementation, not a rewrite |
 | 5 | **F049** running owner truth | PLANNED | Reaper adopts hosted job that lost supervisor; fails job with no live owner; no shape-based skips. After F048, before F013 | `[ ]` |
 | 6 | **F087** prompt policy has one home | PLANNED | One prose owner for prompt policy; templates + prose assertions only; survives resume | `[ ]` |
 
@@ -27,6 +27,7 @@ Adam's continuation parks the wake-ceiling candidate unchanged for later review.
 - [x] Adam authorized dependable-core as the 1.0 boundary in the 2026-09-11 coordinator instruction; Phase 0 PASS is recorded in `GATE-RESULT.md`
 - [D] F090 is parked by Adam, not proven or merged; incomplete native evidence remains in `spec/features/planned/F090-wake-errors-count-toward-attempt-ceiling/checks-2.md` and does not block the remaining wave
 - [ ] F091: observed completed-turn inspection path requires receiver-owned evidence source/contract; correlated Alice Mac proof is missing, and the landed transport portion is not feature completion
+- [ ] F081: true route refusal remains unimplemented; no supported non-generating Pi check was found, and generated-probe cost/latency is not authorized; `interface-question.md` and retained failing regression preserve the gap
 - [x] F092: retired operational key reads/aliases removed; setup docs and packaged guidance match, legacy literals retained only for negative tests and retirement prose; no private migration or live send claimed
 - [x] Landing writer for this wave: the `dependable core` coordinator; Adam reviews; takeovers via named `limen watch <id>` only
 
