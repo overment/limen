@@ -19,6 +19,7 @@
 ## NOW
 
 - `F090-wake-errors-count-toward-attempt-ceiling` (🟠 ACTIVE): provider error/aborted/injection failures charge the two-attempt wake ceiling; exhausted claims stay inspectable; deliberate recovery. Highest-leverage ops remediation.
+- `F092-finish-webhook-names-are-bot-agnostic` (🟠 ACTIVE): drop TONY_* env key names; LIMEN_FINISH_WEBHOOK_* only. After F090.
 - `F091-finish-job-shows-bot-turn-receipt` (🟠 ACTIVE): job inspection separates configured / transport / completed bot turn; first proof on alice → Johnny/Tony. After F090.
 - `F050-living-architecture-picture` (🟠 ACTIVE): a background application field guide is under proposal; no product merge.
 - `F048-hosted-runtime-start` (🟠 ACTIVE): spawn prints the ID in seconds; the detached supervisor starts pi and owns the job. This closes the live 2026-08-27 caller-timeout orphaning before F049.
