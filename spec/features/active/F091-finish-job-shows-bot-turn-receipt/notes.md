@@ -1,6 +1,6 @@
 # Finish inspection: transport and receiver-exported turns
 
-The receiver-evidence candidate supersedes the transport-only constant-unobserved implementation described in `checks-1.md`. F091 remains ACTIVE: authorized Alice Mac proof and Adam's review are still required. Johnny actively shepherds delivery, independently of webhook acceptance.
+Receiver-export inspection landed as `87dd357`, superseding the transport-only constant-unobserved behavior recorded in `checks-1.md`. Johnny actively shepherds the outstanding Alice Mac proof independently of webhook acceptance; Adam reviews the result.
 
 ## Product seams
 
@@ -14,8 +14,6 @@ The receiver-evidence candidate supersedes the transport-only constant-unobserve
 
 `test/finish-webhook.test.ts` is the offline end-to-end harness: the real canonical helper runs through automatic finalization against intercepted fetch and synthetic env files. Both CLI views are captured for accepted/no-export, one correlated/one mismatched export, and two correlated exports. Rejected/stalled transport can independently coexist with observed exports. Repeat finalization leaves request count at two. `test/finish-receipt.test.ts` rejects unselected sources, local flags, wrong event/target/receiver, incomplete turns, malformed/oversized/nonregular/symlink exports and extra/unsafe fields.
 
-Retained round-two evidence: `/home/overment/limen-evidence/f091-51bb62b9/`. The first probe passed three receipt tests; its typecheck caught an unused test import before the negative test was added. The initial discriminating run passed 25 tests and failed only the architecture budget (4006 source lines versus 3915). The budget is now 4010 to account explicitly for bounded receiver-export inspection; no unrelated source was compressed or refactored. TypeScript and scoped Biome checks passed; the focused helper/lifecycle/receipt/finalize/jobs/view/structure lane passed 121/121. Full-native results belong in the retained handoff, not inferred from the focused result.
+Retained round-two evidence: `/home/overment/limen-evidence/f091-51bb62b9/`. `checks-2.md` binds the landing to coordinator checks and records both full-native failures without inferring their cause. Earlier transport evidence remains at `/home/overment/limen-evidence/f091-5932f3a5/`.
 
-The transport landing `2dabae7` and its original evidence `/home/overment/limen-evidence/f091-5932f3a5/` remain historical. The former claim that the CLI cannot promote any evidence is superseded by this candidate, not by live proof.
-
-Next: Adam reviews the candidate, then the authorized operator runs the exact Alice Mac procedure in `docs/finish-webhooks.md`. It uses one fresh automatic-only job, an owner-held HTTP-accepted/no-turn control on that same event, then Johnny/Tony completed-turn exports with externally followed history. Do not claim Mac proof from this VPS, synthetic exports or the implementation worker's automatic finish receipt. Do not widen into the unrelated registry-lock timeout, route probes, board edits or merge.
+Next: Adam reviews the cut and Johnny shepherds the authorized Alice Mac procedure in `docs/finish-webhooks.md`. It uses one fresh automatic-only job, an owner-held HTTP-accepted/no-turn control on that same event, then Johnny/Tony completed-turn exports with externally followed history. If a supported hold is unavailable, obtain an authorized alternative control before sending; do not guess an API. Do not claim Mac proof from this VPS, synthetic exports or the implementation worker's automatic finish receipt. Route refusal and the native-check failures remain separate open items.

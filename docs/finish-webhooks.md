@@ -521,11 +521,13 @@ private env files.
    id=REPLACE_WITH_RETURNED_JOB_ID
    job="$ALICE/.limen/jobs/$id"
    test -s "$job/finish-webhook-env" || { echo 'No automatic selection; stop'; exit 1; }
-   "$LIMEN" watch "$id"
    ```
 
-   Johnny follows this **named job**, not `watch --running`, through terminal
-   state and settled finalizer. The selection check reads no private env values.
+   Johnny follows this **named job** through terminal state and settled finalizer
+   using `"$LIMEN" jobs "$id"` and its durable job files. From a Pi coordinator,
+   that coordinator runs `"$LIMEN" watch "$id"` through its own Bash tool; outside
+   Pi, inspect the records directly rather than inventing a `PI_SESSION_ID`.
+   Do not use `watch --running`. The selection check reads no private env values.
    Do not send manually, clear a claim, or retry to manufacture a passing result.
 3. After finalization, retain the safe records and inspect **before import**:
 
