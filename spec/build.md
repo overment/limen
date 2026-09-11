@@ -22,7 +22,7 @@
 
 ## NOW
 
-- `F090-wake-errors-count-toward-attempt-ceiling` (🟠 ACTIVE): first narrow 1.0 worker implements the two-attempt wake ceiling; boundary: existing completion/advisory/fallback claims and deliberate recovery, with no provider retry engine or model switching.
+- `F090-wake-errors-count-toward-attempt-ceiling` (🟠 ACTIVE): candidate `a477285` passed installed wake proof and 64 focused tests; one test-only repair resolves the full-lane snapshot race in `checks-1.md`, then one full run; boundary: wake runtime unchanged during repair, no provider retries or model switching; Adam review pending.
 - `F092-finish-webhook-names-are-bot-agnostic` (🟠 ACTIVE): drop TONY_* env key names; LIMEN_FINISH_WEBHOOK_* only. After F090.
 - `F091-finish-job-shows-bot-turn-receipt` (🟠 ACTIVE): job inspection separates configured / transport / completed bot turn; first proof on Alice Mac → Johnny/Tony, after F092.
 - `F081-spawn-refuses-an-unusable-route` (🟠 ACTIVE): spawn rejects an unusable route before planting a job, after F091; boundary: preflight and hosted-start argument transport, with no retries or model selection.
