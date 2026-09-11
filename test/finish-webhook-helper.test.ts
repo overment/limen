@@ -162,6 +162,7 @@ test("invalid explicit target lists fail before all transport and never fall bac
 		JSON.stringify([valid, { url: DESTINATION }]),
 		JSON.stringify([valid, { auth: AUTH }]),
 		JSON.stringify([valid, { ...valid, bot: "grok-two" }]),
+		JSON.stringify(Array.from({ length: 65 }, () => valid)),
 	];
 	for (const [index, value] of invalid.entries()) {
 		await t.test(`invalid selection ${index + 1}`, async (t) => {

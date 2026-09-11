@@ -24,6 +24,7 @@ export type JobRecord = {
 	readonly commits?: string;
 	readonly result?: string;
 	readonly cleanup?: string;
+	readonly finishWebhook?: string;
 	readonly diffstat?: string;
 	readonly logTail?: string;
 };
@@ -103,6 +104,7 @@ export function humanDetail(record: JobRecord, paint: Paint): string {
 	put("result", record.result);
 	put("diff", record.diffstat);
 	put("cleanup", record.cleanup);
+	put("finish-hook", record.finishWebhook);
 	put("log", renderLogTail(record.logTail ?? "", paint));
 	return lines.join("\n");
 }

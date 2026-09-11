@@ -276,8 +276,27 @@ has a separate two-second limit. Config/usage errors exit 1 before transport.
 No response body is read, so even a server that echoes credentials cannot put
 them in a handoff.
 
-Automatic delivery discards sender stdout/stderr and records only safe status.
-Inspect `limen jobs <id>` for the log summary, then the plain job records.
+Automatic delivery discards sender stdout/stderr. A separate private pipe records
+only allowlisted target ordinals (1–64), UTC timestamps, transport states and
+HTTP categories, never URLs, auth, labels from config, or response bodies.
+Selections larger than 64 targets fail validation before any request. Each
+validated target is recorded as pending before concurrent requests start; each
+result is flushed independently. The parent consumes at most 32 KiB and keeps
+at most a start and one result per target. Killing a stalled sender does not
+erase another target's acceptance.
+
+`limen jobs <id>` (compact and human views) now separates:
+
+- **Configured:** whether the job recorded a selection; not a validity check.
+  Inspection never opens the selected env file.
+- **Transport:** accepted for HTTP 2xx, rejected for other HTTP categories,
+  unknown for a network error, a timeout, or an attempt without a result.
+  No per-target evidence, including older aggregate-only jobs, means unknown.
+- **Bot-turn:** unobserved. Limen has no receiver-owned completed-turn verifier;
+  HTTP success, a run ID, local assertions and response-body claims cannot
+  promote this field. Receiver history must be checked separately for now.
+
+The aggregate receipt is still shown separately, including its retry guidance.
 Do not substitute `notify/delivered/*/accepted`: those are native Pi injection
 records, not HTTP receipts or external Grok Bot acknowledgements. Multiple
 native delivery slots may simply be different subscribed coordinators.
@@ -291,6 +310,7 @@ must not hide a failed ping.
 | `finish-webhook-env` | Selected absolute private env path only; absence means not opted in. |
 | `finish-webhook-attempt` | Flushed timestamp claiming the one automatic attempt. |
 | `finish-webhook` | Timestamped `attempting`, `accepted`, or `failed`, plus retry guidance. |
+| `finish-webhook-targets` | Mode-600 JSON lines: target ordinal, timestamp, transport (`pending`, `accepted`, `rejected`, `unknown`), HTTP category or `none`. |
 | `state` / `finished-at` | Job outcome and completion time, independent of delivery success. |
 
 `accepted: sender exited 0 (owner wake unobserved)` means the canonical sender
@@ -306,7 +326,7 @@ To inspect without printing config, set `job` to the absolute job directory:
 
 ```sh
 job=/absolute/project/.limen/jobs/JOB_ID
-for record in state finished-at finish-webhook-attempt finish-webhook; do
+for record in state finished-at finish-webhook-attempt finish-webhook finish-webhook-targets; do
   if [ -f "$job/$record" ]; then printf '%s: ' "$record"; cat "$job/$record"; fi
 done
 ```
@@ -316,6 +336,7 @@ It uses the recorded path and original fields, never a home fallback or a
 replacement `done` state for a failed job:
 
 ```sh
+LIMEN_FINISH_EVENT="$(node --input-type=module -e 'import { finishEvent } from "./src/finish-receipt.ts"; console.log(finishEvent(process.argv[1]))' "$job")" \
 LIMEN_FINISH_WEBHOOK_ENV="$(tr -d '\n' < "$job/finish-webhook-env")" \
   bin/tony-finish-ping.sh "$(tr -d '\n' < "$job/label")" \
   "$(tr -d '\n' < "$job/state")" "$(tr -d '\n' < "$job/branch")"
@@ -387,10 +408,49 @@ its operator for the failed run address and failing step, with secrets removed.
 A fresh webhook key is appropriate only after ingress authentication is
 identified as the problem; a receiver-side provider login is a different repair.
 
+## Alice Mac receiver-owned proof (outstanding)
+
+Automatic payloads retain `job` (the label), `status`, and `branch`, and add
+`finishEvent`: `limen-finish-` plus the lowercase SHA-256 of the job directory's
+basename (the job ID). This identity is stable across paths and seats; it is not
+an authentication token or a receiver idempotency guarantee. Both targets get
+the same identity. Continuations have new job IDs and therefore new events.
+Manual sends omit correlation unless `LIMEN_FINISH_EVENT` is supplied in this
+format; the job-based retry example above preserves it.
+
+The first operational proof must use **alice on Mac**, with Johnny and Tony as
+intended receivers. This VPS's synthetic transport cannot satisfy that proof.
+No receiver API, polling or waiting for completed turns is implemented here.
+
+1. Receiver owners identify the authorized Johnny/Tony destinations privately
+   and attest which target ordinal maps to which receiver. They must preserve
+   the incoming `finishEvent` in the bot's completed turn. Do not put endpoint
+   URLs, credentials or raw ingress bodies into the proof record.
+2. With authorization, configure only alice's private project env and spawn
+   one new alice job on Mac. Let automatic finalization send; no worker or
+   coordinator manual ping. Retain its job ID, finish event, terminal state,
+   attempt timestamp, aggregate, per-target records and both inspection views.
+3. Each selected receiver owner supplies a sanitized durable session/history
+   reference and completed turn ID, completion timestamp and excerpt explicitly
+   naming that exact `finishEvent`, plus the receiver identity and target
+   ordinal. A queued run, ingress log or HTTP 2xx alone is insufficient.
+4. Follow each target independently to that completed turn. Also retain an
+   intentionally accepted HTTP case with no completed turn and its **unobserved**
+   inspection. Missing, mismatched, incomplete or inaccessible history remains
+   unobserved; don't retry the whole list after partial acceptance.
+
+Outstanding evidence: the authorized newly spawned Alice Mac job and its
+transport records; receiver-owned Johnny/Tony ordinal mapping and completed-turn
+history with the exact event identity; the accepted-without-turn control.
+An owner/reviewer must verify those references externally. This version's CLI
+continues to say unobserved even after an external proof: integrating a verified
+receiver evidence source requires its owners' actual contract, not a made-up
+local receipt or guessed endpoint. Adam's review is also required.
+
 ## Synthetic checks
 
 ```sh
-node --test --test-concurrency=1 test/finish-webhook-helper.test.ts test/finish-webhook.test.ts
+node --test --test-concurrency=1 test/finish-webhook-helper.test.ts test/finish-webhook.test.ts test/finish-receipt.test.ts test/finalize.test.ts test/jobs-command.test.ts test/view.test.ts
 ```
 
 The tests execute the real helper with synthetic env files, an intercepted Node
