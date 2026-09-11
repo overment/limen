@@ -1,8 +1,9 @@
 import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
+import { appendFileSync, existsSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
 import { delimiter, dirname, isAbsolute, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { finishEvent, parseFinishReceipt } from "./finish-receipt.ts";
 import { listWorktrees, workspaceRoot } from "./git.ts";
 import { appendLimenLog, atomicWrite, textFile } from "./wrapper.ts";
 
@@ -38,16 +39,33 @@ export async function deliverFinishWebhook(jobDir: string, shutdownDeadline = Nu
 		? "failed: config path is not absolute"
 		: timeoutMs <= 0
 			? "failed: no shutdown time remains; not sent"
-			: await send(config, label, state, branch, timeoutMs);
+			: await send(jobDir, config, label, state, branch, timeoutMs);
 	await atomicWrite(`${jobDir}/finish-webhook`, `${result} ${new Date().toISOString()}\n${retry}\n`);
 	await appendLimenLog(jobDir, `finish webhook: ${result}; inspect finish-webhook for manual finish-ping retry`);
 }
-function send(config: string, label: string, state: string, branch: string, timeoutMs: number): Promise<string> {
+function send(jobDir: string, config: string, label: string, state: string, branch: string, timeoutMs: number): Promise<string> {
 	return new Promise((resolve) => {
 		const child = spawn(SENDER, [label, state, branch], {
-			env: { ...process.env, PATH: `${dirname(process.execPath)}${delimiter}${process.env.PATH ?? ""}`, LIMEN_FINISH_WEBHOOK_ENV: config },
-			stdio: "ignore",
+			env: { ...process.env, PATH: `${dirname(process.execPath)}${delimiter}${process.env.PATH ?? ""}`, LIMEN_FINISH_WEBHOOK_ENV: config, LIMEN_FINISH_EVENT: finishEvent(jobDir) },
+			stdio: ["ignore", "ignore", "ignore", "pipe"],
 			detached: true,
+		});
+		// Dedicated channel: never retain sender stdout/stderr or unvalidated bytes.
+		let pending = "";
+		let bytes = 0;
+		const seen = new Map<number, string>();
+		child.stdio[3]?.on("data", (chunk: Buffer) => {
+			bytes += chunk.length;
+			if (bytes > 32_768) return;
+			pending += chunk.toString("utf8");
+			const lines = pending.split("\n");
+			pending = lines.pop() ?? "";
+			for (const line of lines) {
+				const receipt = parseFinishReceipt(line);
+				if (!receipt || (seen.has(receipt.target) && (seen.get(receipt.target) !== "pending" || receipt.transport === "pending"))) continue;
+				seen.set(receipt.target, receipt.transport);
+				appendFileSync(`${jobDir}/finish-webhook-targets`, `${JSON.stringify(receipt)}\n`, { mode: 0o600, flush: true });
+			}
 		});
 		const timer = setTimeout(() => {
 			if (child.pid) {
@@ -64,7 +82,7 @@ function send(config: string, label: string, state: string, branch: string, time
 			resolve(result);
 		};
 		child.once("error", () => finish("failed: sender could not start"));
-		child.once("exit", (code, signal) =>
+		child.once("close", (code, signal) =>
 			finish(code === 0 ? "accepted: sender exited 0 (owner wake unobserved)" : `failed: sender ${signal ? "interrupted" : `exited ${code ?? "unknown"}`}`),
 		);
 	});

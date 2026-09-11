@@ -4,6 +4,7 @@ import { chmod, copyFile, cp, mkdir, readFile, realpath, rm, stat, writeFile } f
 import { dirname, join } from "node:path";
 import test, { type TestContext } from "node:test";
 import { fileURLToPath } from "node:url";
+import { finishEvent } from "../src/finish-receipt.ts";
 import { finishWebhookEnv } from "../src/finish-webhook.ts";
 import { git, onlyJobId, scratchRepo, waitForState } from "./scratch.ts";
 
@@ -16,6 +17,7 @@ const job = process.env.LIMEN_JOB_DIR || process.env.TEST_JOB_DIR;
 fs.appendFileSync(config.observations, JSON.stringify({ args: process.argv.slice(2), config: process.env.LIMEN_FINISH_WEBHOOK_ENV, state: fs.readFileSync(job + "/state", "utf8").trim(), finished: fs.existsSync(job + "/finished-at"), pid: fs.existsSync(job + "/pid") }) + "\\n");
 console.log("synthetic-secret-must-not-leak");
 console.error("synthetic-secret-must-not-leak");
+if (config.receipts) fs.writeSync(3, config.receipts);
 if (config.hang) {
   const child = require("node:child_process").spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], { stdio: "ignore" });
   fs.writeFileSync(config.descendant, String(child.pid));
@@ -99,7 +101,7 @@ test("automatic delivery invokes the real canonical helper with synthetic dotenv
 	const job = join(f.root, ".limen/jobs", id);
 	assert.match(await delivery(job), /^accepted:/);
 	const request = (await observe(f.observations))[0];
-	assert.deepEqual(request.body, { job: 'real helper "quoted" \\', status: "done", branch: (await readFile(join(job, "branch"), "utf8")).trim() });
+	assert.deepEqual(request.body, { job: 'real helper "quoted" \\', status: "done", branch: (await readFile(join(job, "branch"), "utf8")).trim(), finishEvent: finishEvent(job) });
 	assert.deepEqual(request.headers, { Authorization: "Bearer synthetic-only", "Content-Type": "application/json" });
 	assert.equal(request.state, "done");
 	assert.equal(request.method, "POST");
@@ -132,7 +134,7 @@ test("automatic delivery finds Limen's Node runtime when the inherited PATH cann
 	assert.equal(await readFile(join(job, "state"), "utf8"), "done\n");
 });
 
-for (const firstStatus of [204, 503]) {
+for (const firstStatus of [204, 503, "stall"]) {
 	test(`automatic fan-out reaches two bot routes after terminal state; first HTTP ${firstStatus} stays HTTP-only`, async (context) => {
 		const f = await fixture(context);
 		await copyFile(join(ROOT, "bin/tony-finish-ping.sh"), join(f.pkg, "bin/tony-finish-ping.sh"));
@@ -146,13 +148,21 @@ for (const firstStatus of [204, 503]) {
 			transport,
 			`import { appendFileSync, readFileSync } from 'node:fs'; globalThis.fetch = async (url, options) => {
 				appendFileSync(${JSON.stringify(f.observations)}, JSON.stringify({ url: String(url), auth: options.headers.Authorization, body: JSON.parse(options.body), state: readFileSync(process.env.LIMEN_JOB_DIR + '/state', 'utf8').trim() }) + '\\n');
-				return { status: String(url).endsWith('/grok-one') ? ${firstStatus} : 204 };
+				if (String(url).endsWith('/grok-one')) return ${firstStatus === "stall" ? "new Promise(() => {})" : `{ status: ${firstStatus} }`};
+				return { status: 204 };
 			};`,
 		);
 		const id = onlyJobId(f.command(["spawn", "--detached", "--label", "two bots", "finish without manual ping"], { NODE_OPTIONS: `--import=${transport}` }));
 		const job = join(f.root, ".limen/jobs", id);
 		const result = await delivery(job);
-		assert.match(result, firstStatus === 204 ? /^accepted: sender exited 0 \(owner wake unobserved\)/ : /^failed: sender exited 1/);
+		assert.match(
+			result,
+			firstStatus === 204
+				? /^accepted: sender exited 0 \(owner wake unobserved\)/
+				: firstStatus === "stall"
+					? /^failed: sender exceeded 3000ms; acceptance unknown/
+					: /^failed: sender exited 1/,
+		);
 		const requests = await observe(f.observations);
 		assert.deepEqual(
 			requests.map(({ url, auth }) => ({ url, auth })),
@@ -160,14 +170,69 @@ for (const firstStatus of [204, 503]) {
 		);
 		for (const request of requests) {
 			assert.equal(request.state, "done");
-			assert.deepEqual(request.body, { job: "two bots", status: "done", branch: (await readFile(join(job, "branch"), "utf8")).trim() });
+			assert.deepEqual(request.body, { job: "two bots", status: "done", branch: (await readFile(join(job, "branch"), "utf8")).trim(), finishEvent: finishEvent(job) });
 		}
 		assert.equal(await readFile(join(job, "state"), "utf8"), "done\n");
 		assert.doesNotMatch(result + (await readFile(join(job, "log"), "utf8")), /synthetic-one|synthetic-two|synthetic\.example/);
 		// The receiver only accepts HTTP: no bot session/turn is created by this fixture or claimed by the receipt.
 		assert.match(result, /Acceptance is not proof of owner wake/);
+		const receipts = await readFile(join(job, "finish-webhook-targets"), "utf8");
+		assert.equal((await stat(join(job, "finish-webhook-targets"))).mode & 0o777, 0o600);
+		const inspections: string[] = [];
+		for (const view of ["compact", "human"]) {
+			const detail = f.command(["jobs", id], { LIMEN_VIEW: view });
+			assert.match(detail, /configured: yes/);
+			assert.ok(detail.includes(finishEvent(job)));
+			assert.match(detail, /target 2: transport accepted · HTTP 2xx/);
+			assert.match(
+				detail,
+				firstStatus === 204
+					? /target 1: transport accepted/
+					: firstStatus === "stall"
+						? /target 1: transport unknown \(attempt started; no result\)/
+						: /target 1: transport rejected · HTTP 5xx/,
+			);
+			assert.match(detail, /bot-turn: unobserved/);
+			assert.doesNotMatch(detail + receipts, /synthetic-one|synthetic-two|synthetic\.example|Bearer|grok-one|grok-two/);
+			inspections.push(detail);
+		}
+		await runModule(f.pkg, f.env, `const { finalizeJob } = await import('./src/wrapper.ts'); await finalizeJob(${JSON.stringify(job)}, 'done', 'repeat');`);
+		assert.equal((await observe(f.observations)).length, 2, "repeat finalization sends nothing");
+		assert.equal(await readFile(join(job, "finish-webhook-targets"), "utf8"), receipts);
+		if (process.env.LIMEN_TEST_FINISH_EVIDENCE) {
+			const evidence = join(process.env.LIMEN_TEST_FINISH_EVIDENCE, `two-target-${firstStatus}`);
+			await mkdir(evidence, { recursive: true });
+			await writeFile(join(evidence, "targets.jsonl"), receipts);
+			await writeFile(join(evidence, "aggregate.txt"), result);
+			await writeFile(join(evidence, "inspection.txt"), inspections.join("\n\n"));
+			await writeFile(join(evidence, "proof.txt"), `job=${id}\nevent=${finishEvent(job)}\nautomatic requests=2; after repeat=2\nreceiver turns=0; both views unobserved\n`);
+		}
 	});
 }
+
+test("private receipt channel discards malformed, secret-bearing, duplicate and overflowing sender output", async (context) => {
+	const f = await fixture(context);
+	const job = await bareJob(f.root);
+	const pending = { target: 1, at: "2026-09-11T12:00:00.000Z", transport: "pending", http: "none" };
+	const accepted = { ...pending, transport: "accepted", http: "2xx" };
+	const safe = `${JSON.stringify(pending)}\n${JSON.stringify(accepted)}\n`;
+	const selected = await f.config(join(f.parent, "channel.env"), {
+		receipts:
+			safe +
+			[accepted, { ...accepted, token: "synthetic-secret" }, { ...accepted, target: 65 }, { ...accepted, transport: "observed" }].map((value) => JSON.stringify(value)).join("\n") +
+			`\n${"synthetic-secret".repeat(3000)}\n`,
+	});
+	await writeFile(join(job, "finish-webhook-env"), `${selected}\n`);
+	await runModule(
+		f.pkg,
+		{ ...f.env, TEST_JOB_DIR: job },
+		`const { finalizeJob } = await import('./src/wrapper.ts'); await finalizeJob(${JSON.stringify(job)}, 'done', 'channel');`,
+	);
+	// The OS may coalesce the oversized stream: dropping the entire chunk is also safe.
+	const retained = await readFile(join(job, "finish-webhook-targets"), "utf8").catch(() => "");
+	assert.ok(["", `${JSON.stringify(pending)}\n`, safe].includes(retained), retained);
+	assert.doesNotMatch(retained + (await readFile(join(job, "log"), "utf8")), /synthetic-secret|observed"|target":65/);
+});
 
 test("detached completion sends exact arguments only after durable state using an absolute explicit config snapshot", async (context) => {
 	const f = await fixture(context);

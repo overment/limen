@@ -1,5 +1,6 @@
 import { open, readdir, readFile, stat } from "node:fs/promises";
 import { processGroupAlive } from "../contain.ts";
+import { inspectFinishWebhook } from "../finish-receipt.ts";
 import { limenRoot, liveDiffstat, workspaceRepository } from "../git.ts";
 import { hostedAgentStatus } from "../herdr.ts";
 import { derivePulse, parseJob, producedNothing, renderJob } from "../job.ts";
@@ -104,6 +105,7 @@ async function renderJobDirectory(root: string, jobsRoot: string, id: string, de
 	const [result, stopReason, versions] = detailed ? await Promise.all([text(`${jobDir}/result`), text(`${jobDir}/stop-reason`), text(`${jobDir}/versions`)]) : ["", "", ""];
 	const [taskStat, logStat] = await Promise.all([optionalStat(`${jobDir}/task.md`), optionalStat(`${jobDir}/log`)]);
 	const cleanup = detailed ? await text(`${jobDir}/cleanup`) : "";
+	const finishWebhook = detailed ? await inspectFinishWebhook(jobDir) : "";
 	if (!taskStat || !logStat) return { compact: `INVALID ${id} · missing task.md or log`, record: { id, invalid: "missing task.md or log" } };
 	const log = detailed || human ? await readLog(`${jobDir}/log`) : { tail: "", detail: "" };
 	const display = (value: string) => (detailed || value.length <= 160 ? value : `${value.slice(0, 159)}…`);
@@ -151,6 +153,7 @@ async function renderJobDirectory(root: string, jobsRoot: string, id: string, de
 		if (versions) blocks.push(indented("versions", versions));
 		if (detailed && commits) blocks.push(indented("commits", commits));
 		if (result) blocks.push(indented("result", result));
+		if (finishWebhook) blocks.push(indented("finish-webhook", finishWebhook));
 		if (cleanup)
 			blocks.push(
 				`  cleanup:\n${cleanup
@@ -182,6 +185,7 @@ async function renderJobDirectory(root: string, jobsRoot: string, id: string, de
 			...(detailed && commits ? { commits } : {}),
 			...(result ? { result } : {}),
 			...(cleanup ? { cleanup } : {}),
+			...(finishWebhook ? { finishWebhook } : {}),
 			...(diffstat ? { diffstat } : {}),
 			...(log.tail ? { logTail: log.tail } : {}),
 		};
