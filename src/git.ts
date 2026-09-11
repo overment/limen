@@ -78,12 +78,12 @@ export function commitList(cwd: string, base: string, branch: string): string | 
 }
 export function cleanWorktree(cwd: string): boolean {
 	if (!existsSync(cwd)) return false;
-	const result = git(cwd, ["status", "--porcelain"]);
+	const result = git(cwd, ["--no-optional-locks", "status", "--porcelain"]);
 	return result.status === 0 && result.stdout.trim() === "";
 }
 export function changedFileCount(cwd: string): number | undefined {
 	if (!existsSync(cwd)) return undefined;
-	const result = git(cwd, ["status", "--porcelain"]);
+	const result = git(cwd, ["--no-optional-locks", "status", "--porcelain"]);
 	return result.status !== 0 ? undefined : result.stdout.trim() === "" ? 0 : result.stdout.trimEnd().split("\n").length;
 }
 export function liveDiffstat(cwd: string, branch: string): string {
