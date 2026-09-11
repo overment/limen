@@ -25,11 +25,10 @@
 
 - `F091-finish-job-shows-bot-turn-receipt` (🟠 ACTIVE): transport inspection landed `2dabae7`, but CLI bot-turn stays unobserved; completed-turn evidence source/contract and Alice Mac → Johnny/Tony proof remain open (`checks-1.md`), no PROVEN claim; boundary: no guessed receiver API or polling system.
 - `F081-spawn-refuses-an-unusable-route` (🟠 ACTIVE): hosted continuation transport landed `a3872a6`; route refusal is unimplemented, with its failing counterexample preserved at `b14b5fe` and the Pi-interface/generated-spend decision open (`interface-question.md`); no generated probe, retries, model selection, or PROVEN claim.
-- `F049-running-owner-truth` (🟠 ACTIVE): implementation restores watch-only supervision or fails ownerless work after the proven startup contract; boundary: existing reaper/supervisor recovery, no new worker, coordinator adoption, notification routing, or new control plane.
+- `F087-prompt-policy-has-one-home` (🟠 ACTIVE): implementation consolidates prompt policy after owner recovery; boundary: templates and prose-only assertions, runtime model resolution unchanged, owner model/review/proof/quota choices retained on resume.
 
 ## NEXT
 
-- `F087-prompt-policy-has-one-home` (🔴 PLANNED): prompt policy has one prose owner, after F049; boundary: templates and prose-only assertions, with runtime model resolution unchanged and owner choices retained on resume.
 - `F090-wake-errors-count-toward-attempt-ceiling` (🔴 PLANNED): parked unchanged at `0fa48fa` for Adam's later review, outside the remaining wave; refusal and installed proof passed, full lane timed out with four failures (`checks-2.md`); no merge, third repair, or widening.
 - `F050-living-architecture-picture` (🔴 PLANNED): background application field guide proposal is retained but deferred beyond narrow 1.0; no product merge.
 - `F074-claude-perspective` (🔴 PLANNED): Claude advisor engine is deferred beyond narrow 1.0; existing partial work is not part of this wave.
@@ -40,6 +39,7 @@
 
 ## PROVEN
 
+- `F049-running-owner-truth` (🟢 PROVEN): watch-only supervisor recovery landed `6662bac` after a test-only wake-fixture correction; focused 103 passed and corrected wake/recovery 50 passed, original full native 385 passed with wake failure plus registry timeout retained; open coordinators need reload.
 - `F048-hosted-runtime-start` (🟢 PROVEN): killed-caller startup ownership proof landed `c6d4d6c` without runtime changes; focused 87 passed, coordinator's three falsifiers passed, full native 381 passed with one registry-lock cancellation retained.
 - `F092-finish-webhook-names-are-bot-agnostic` (🟢 PROVEN): neutral configuration keys landed `a76e0ae`; worker focused 76/76 and coordinator 79/79 passed, full native 371 passed with one registry-lock timeout retained; coordinator-inspected, private migration operator-owned.
 - `F707-herdr-limen-truthful-status` (🟢 PROVEN): settled panes show RUNNING jobs without erasing warnings; the operator guide separates job, merge, and wake evidence. Adam authorized landing `756c747`; 70 candidate checks passed, one post-merge timing timeout passed recheck, full suite incomplete.
@@ -49,6 +49,5 @@
 - `F083-spec-folder-says-one-thing-once` (🟢 PROVEN): specs keep one check and one constraint per line, and delete files when they stop being true. Landed `7d966e5`. Review PASS of `e386591`.
 - `F078-a-picture-is-evidence-when-seen` (🟢 PROVEN): visual evidence names what opened frames showed; identical frames that should differ fail the check. Landed `5067c69`. Review PASS of `5067c69`.
 - `F077-evidence-outlives-the-worktree` (🟢 PROVEN): proof runs at the clean candidate commit, retained artifacts reach review, and mismatched evidence is unverified. Landed `cf3e9e0`. Review PASS of `85d57d2`.
-- `F084-every-number-arrives-with-its-meaning` (🟢 PROVEN): the reply cue and the specs reminder name the failing sentence, not the property; the identifier rule leads the Human register. Landed `0d3f2fd`. Coordinator-inspected.
-- 2026-09: 37 landed. Hosted jobs end themselves; review loops stop at a ceiling; failed turns and changed-file counts are visible; tab titles name the change; handoffs point at board-owned boundaries; one living picture follows system shape; human-asked research compares named sources before judgment; workers falsify candidates before handoff; one correction reaches every watched live job. spec/features/done/2026-09/
+- 2026-09: 38 landed. Hosted jobs end themselves; review loops stop at a ceiling; failed turns and changed-file counts are visible; titles name the change and identifiers carry their meaning; handoffs point at board-owned boundaries; one living picture follows system shape; authorized research compares named sources before judgment; workers falsify candidates before handoff; one correction reaches watched live jobs. spec/features/done/2026-09/
 - 2026-08: 44 landed. Hosted jobs run in a named tab; wakes retry; the process tree is contained. spec/features/done/2026-08/

@@ -19,8 +19,8 @@ Adam's continuation parks the wake-ceiling candidate unchanged for later review.
 | 2 | **F091** finish job shows bot-turn receipt | ACTIVE | Inspection separates configured / transport / completed bot turn; first E2E proof on **alice (Mac)** → Johnny/Tony (HTTP alone ≠ pass) | `[~]` transport portion landed `2dabae7`, focused 138/138; observed-turn path and Mac receiver proof still missing; not PROVEN |
 | 3 | **F081** spawn refuses an unusable route | ACTIVE | Spawn preflight rejects bad route before planting; no retries / model selection in scope | `[~]` continuation transport landed `a3872a6`; route refusal still fails, awaiting Pi interface or explicit generated-probe spend decision; not PROVEN |
 | 4 | **F048** hosted runtime starts its own agent | PROVEN | `spawn --tab` returns ID in seconds; detached supervisor starts pi + owns lifecycle (closes 2026-08-27 orphan) | `[x]` proof landed `c6d4d6c`, runtime unchanged; focused 87 passed, coordinator three startup falsifiers passed; full native 381 passed with one registry-lock cancellation |
-| 5 | **F049** running owner truth | ACTIVE | Reaper adopts hosted job that lost supervisor; fails job with no live owner; no shape-based skips. After F048, before F013 | `[~]` implementation starts on proven startup; watch-only process recovery, never a new worker or coordinator takeover |
-| 6 | **F087** prompt policy has one home | PLANNED | One prose owner for prompt policy; templates + prose assertions only; survives resume | `[ ]` |
+| 5 | **F049** running owner truth | PROVEN | Reaper adopts hosted job that lost supervisor; fails job with no live owner; no shape-based skips. After F048, before F013 | `[x]` landed `6662bac`; focused 103 passed, corrected wake/recovery 50 passed; original native wake failure and registry timeout retained; existing coordinators need reload |
+| 6 | **F087** prompt policy has one home | ACTIVE | One prose owner for prompt policy; templates + prose assertions only; survives resume | `[~]` consolidation starts; model resolution and owner review/proof/quota choices must remain unchanged |
 
 ### Ops proof gates (not tickets, still ship blockers)
 
