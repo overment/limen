@@ -11,9 +11,9 @@ const ROOT = fileURLToPath(new URL("..", import.meta.url));
 const sender = `#!/bin/sh
 exec node --input-type=commonjs - "$@" <<'SENDER'
 const fs = require("node:fs");
-const config = JSON.parse(fs.readFileSync(process.env.TONY_FINISH_WEBHOOK_ENV, "utf8"));
+const config = JSON.parse(fs.readFileSync(process.env.LIMEN_FINISH_WEBHOOK_ENV, "utf8"));
 const job = process.env.LIMEN_JOB_DIR || process.env.TEST_JOB_DIR;
-fs.appendFileSync(config.observations, JSON.stringify({ args: process.argv.slice(2), config: process.env.TONY_FINISH_WEBHOOK_ENV, state: fs.readFileSync(job + "/state", "utf8").trim(), finished: fs.existsSync(job + "/finished-at"), pid: fs.existsSync(job + "/pid") }) + "\\n");
+fs.appendFileSync(config.observations, JSON.stringify({ args: process.argv.slice(2), config: process.env.LIMEN_FINISH_WEBHOOK_ENV, state: fs.readFileSync(job + "/state", "utf8").trim(), finished: fs.existsSync(job + "/finished-at"), pid: fs.existsSync(job + "/pid") }) + "\\n");
 console.log("synthetic-secret-must-not-leak");
 console.error("synthetic-secret-must-not-leak");
 if (config.hang) {
@@ -89,7 +89,7 @@ test("automatic delivery invokes the real canonical helper with synthetic dotenv
 	const f = await fixture(context);
 	await copyFile(join(ROOT, "bin/tony-finish-ping.sh"), join(f.pkg, "bin/tony-finish-ping.sh"));
 	const config = join(f.root, ".limen/finish-webhook.env");
-	await writeFile(config, "TONY_FINISH_WEBHOOK_URL='https://synthetic.example.invalid/finish'\nTONY_FINISH_WEBHOOK_AUTH='Bearer synthetic-only'\n", { mode: 0o600 });
+	await writeFile(config, "LIMEN_FINISH_WEBHOOK_URL='https://synthetic.example.invalid/finish'\nLIMEN_FINISH_WEBHOOK_AUTH='Bearer synthetic-only'\n", { mode: 0o600 });
 	const transport = join(f.parent, "transport.mjs");
 	await writeFile(
 		transport,
@@ -113,7 +113,7 @@ test("automatic delivery finds Limen's Node runtime when the inherited PATH cann
 	await copyFile(join(ROOT, "bin/tony-finish-ping.sh"), join(f.pkg, "bin/tony-finish-ping.sh"));
 	const job = await bareJob(f.root);
 	const config = join(f.parent, "runtime.env");
-	await writeFile(config, "TONY_FINISH_WEBHOOK_URL='https://synthetic.example.invalid/finish'\nTONY_FINISH_WEBHOOK_AUTH='Bearer synthetic-only'\n", { mode: 0o600 });
+	await writeFile(config, "LIMEN_FINISH_WEBHOOK_URL='https://synthetic.example.invalid/finish'\nLIMEN_FINISH_WEBHOOK_AUTH='Bearer synthetic-only'\n", { mode: 0o600 });
 	await writeFile(join(job, "finish-webhook-env"), `${config}\n`);
 	// Simulate a stale/missing node in a service PATH, independently of the host's installed binaries.
 	await writeFile(join(f.fakeBin, "node"), "#!/bin/sh\nexit 127\n", { mode: 0o755 });
@@ -175,7 +175,7 @@ test("detached completion sends exact arguments only after durable state using a
 	const selected = await f.config(join(f.root, "private config.env"));
 	const label = 'quote " slash \\ $(no-shell) ☃';
 	const branch = 'limen/quote"branch';
-	const id = onlyJobId(f.command(["spawn", "--detached", "--label", label, "--branch", branch, "finish without manual ping"], { TONY_FINISH_WEBHOOK_ENV: "private config.env" }));
+	const id = onlyJobId(f.command(["spawn", "--detached", "--label", label, "--branch", branch, "finish without manual ping"], { LIMEN_FINISH_WEBHOOK_ENV: "private config.env" }));
 	const job = join(f.root, ".limen/jobs", id);
 	assert.match(await delivery(job), /^accepted: sender exited 0 \(owner wake unobserved\)/);
 	assert.deepEqual(await observe(f.observations), [{ args: [label, "done", branch], config: selected, state: "done", finished: true, pid: false }]);
@@ -212,6 +212,18 @@ test("workspace jobs use the coordinator project's config rather than a child re
 	assert.equal((await observe(f.observations))[0].config, selected);
 });
 
+test("a retired env-path override does not opt an unconfigured job into delivery", async (context) => {
+	const f = await fixture(context);
+	const ignored = await f.config(join(f.parent, "ignored.env"));
+	const id = onlyJobId(f.command(["spawn", "--detached", "finish"], { TONY_FINISH_WEBHOOK_ENV: ignored }));
+	await waitForState(f.root, id, "done");
+	const job = join(f.root, ".limen/jobs", id);
+	await runModule(f.pkg, f.env, `const { finalizeJob } = await import('./src/wrapper.ts'); await finalizeJob(${JSON.stringify(job)}, 'done', 'repeat');`);
+	await assert.rejects(readFile(join(job, "finish-webhook-env")));
+	await assert.rejects(readFile(join(job, "finish-webhook-attempt")));
+	await assert.rejects(readFile(f.observations));
+});
+
 test("unconfigured jobs never inherit home config or a later finalizer environment", async (context) => {
 	const f = await fixture(context);
 	const homeConfig = await f.config(join(f.parent, ".overment/finish-webhook.env"));
@@ -220,7 +232,7 @@ test("unconfigured jobs never inherit home config or a later finalizer environme
 	const job = join(f.root, ".limen/jobs", id);
 	await runModule(
 		f.pkg,
-		{ ...f.env, TONY_FINISH_WEBHOOK_ENV: homeConfig },
+		{ ...f.env, LIMEN_FINISH_WEBHOOK_ENV: homeConfig },
 		`const { finalizeJob } = await import('./src/wrapper.ts'); await finalizeJob(${JSON.stringify(job)}, 'failed', 'repeat');`,
 	);
 	await assert.rejects(readFile(join(job, "finish-webhook-env")));
@@ -323,7 +335,7 @@ test("missing config and unavailable sender fail safely, while an interrupted cl
 test("detached exhaustion records a bounded delivery failure before its self-kill grace", async (context) => {
 	const f = await fixture(context, '#!/usr/bin/env node\nprocess.on("SIGTERM", () => {}); setInterval(() => {}, 1000);\n');
 	const selected = await f.config(join(f.parent, "exhaust.env"), { hang: true, descendant: join(f.parent, "descendant") });
-	const id = onlyJobId(f.command(["spawn", "--detached", "--timeout", "1s", "exhaust"], { TONY_FINISH_WEBHOOK_ENV: selected }));
+	const id = onlyJobId(f.command(["spawn", "--detached", "--timeout", "1s", "exhaust"], { LIMEN_FINISH_WEBHOOK_ENV: selected }));
 	const job = join(f.root, ".limen/jobs", id);
 	assert.match(await delivery(job), /^failed: (sender exceeded \d+ms; acceptance unknown|no shutdown time remains; not sent)/);
 	assert.equal(await readFile(join(job, "state"), "utf8"), "failed\n");
@@ -336,12 +348,12 @@ test("continuation retains only its parent's config path even when the caller se
 	const f = await fixture(context);
 	const selected = await f.config(join(f.parent, "first.env"));
 	const other = await f.config(join(f.parent, "other.env"), { exit: 99 });
-	const id = onlyJobId(f.command(["spawn", "--detached", "finish"], { TONY_FINISH_WEBHOOK_ENV: selected }));
+	const id = onlyJobId(f.command(["spawn", "--detached", "finish"], { LIMEN_FINISH_WEBHOOK_ENV: selected }));
 	const parentJob = join(f.root, ".limen/jobs", id);
 	await delivery(parentJob);
 	await mkdir(join(parentJob, "session"));
 	await writeFile(join(parentJob, "session/one.jsonl"), "{}\n");
-	const next = onlyJobId(f.command(["continue", "--detached", id, "follow up"], { TONY_FINISH_WEBHOOK_ENV: other }));
+	const next = onlyJobId(f.command(["continue", "--detached", id, "follow up"], { LIMEN_FINISH_WEBHOOK_ENV: other }));
 	const job = join(f.root, ".limen/jobs", next);
 	assert.match(await delivery(job), /^accepted:/);
 	assert.equal(await readFile(join(job, "finish-webhook-env"), "utf8"), `${selected}\n`);
