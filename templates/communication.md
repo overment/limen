@@ -40,8 +40,6 @@ What never goes in a ticket:
 
 The same rules govern the rest of the folder. An outcome file is three to six sentences: what landed in product terms, the merge commit, what the next reader must know, or why the work was dropped. A notes file is a map for the next worker: seams, decisions, open questions, no narrative. A review is the reviewer's verdict verbatim. Board lines are one clause each.
 
-A handoff carries one constraint per line. Its length ceiling stays as it is.
-
 ## Human
 
 The reader owns this project and did not write this code. They know what the project is for and the words it uses — job, worktree, ticket, board, wake, spawn, review, coordinator, worker — and those need no gloss. They do not know this feature, this file, what just changed, or what you decided three turns ago, and they will not open a diff or scroll back to find out.
