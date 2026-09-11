@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { execFileSync, spawn } from "node:child_process";
 import { chmod, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -6,7 +7,7 @@ import test from "node:test";
 import { hostedAgentName, makeJobId } from "../src/commands/spawn.ts";
 import { hostedAgentStatus, hostedTerminalReason, startHostedPi, stopHostedAgent } from "../src/herdr.ts";
 import { DEFAULT_HOSTED_IDLE_MS, DEFAULT_STALL_RERING_MS, type HostedIdleWatch, noteHostedIdle, writeHostedResult } from "../src/supervisor.ts";
-import { git, limen, limenWithEnv, onlyJobId, scratchRepo, waitForState } from "./scratch.ts";
+import { git, limen, limenWithEnv, onlyJobId, type Scratch, scratchRepo, waitForState } from "./scratch.ts";
 
 test("hosted completion is session end or vanished agent, not Herdr idle", () => {
 	assert.equal(hostedTerminalReason("idle", false), undefined);
@@ -602,7 +603,7 @@ test("hosted spawn and continuation keep quoted multiline tasks out of shell arg
 	}
 });
 
-test("hosted spawn returns on the supervisor PID while agent start is still busy", async (context) => {
+test("hosted spawn survives a killed caller while agent start exceeds its 20s deadline", async (context) => {
 	const scratch = await scratchRepo();
 	context.after(scratch.cleanup);
 	assert.equal(limen(scratch, "init").status, 0);
@@ -612,22 +613,30 @@ test("hosted spawn returns on the supervisor PID while agent start is still busy
 		LIMEN_HERDR: herdr.bin,
 		FAKE_HERDR_STATE: herdr.dir,
 		FAKE_HERDR_PERSIST: "1",
-		FAKE_HERDR_START_BUSY_MS: "8000",
+		FAKE_HERDR_START_BUSY_MS: "30000",
+		LIMEN_HOSTED_START_MS: "22000",
+		LIMEN_HOSTED_IDLE_MS: "200",
 		HERDR_TAB_ID: "coord:t0",
 	};
 	const before = Date.now();
-	const launched = limenWithEnv(scratch, env, "spawn", "--label", "F048 handshake", "stay hosted");
-	assert.equal(launched.status, 0, launched.stderr);
-	assert.ok(Date.now() - before < 6_000, "spawn must not wait for agent readiness");
-	const id = onlyJobId(launched.stdout);
+	const { stdout, returnedMs } = await killHostedCaller(scratch, env, ["spawn", "--tab", "--label", "F048 handshake", "stay hosted"]);
+	assert.ok(returnedMs < 6_000, `spawn must not wait for agent readiness: ${returnedMs}ms`);
+	const id = onlyJobId(stdout);
 	const job = join(scratch.root, ".limen/jobs", id);
 	const pid = Number((await readFile(join(job, "pid"), "utf8")).trim());
 	assert.ok(Number.isSafeInteger(pid) && pid > 0);
 	assert.doesNotThrow(() => process.kill(pid, 0));
 	await waitForFile(join(herdr.dir, "start-busy"), /\d+/);
 	await assert.rejects(readFile(join(job, "herdr/agent")), "the caller returned before agent start completed");
-	await waitForFile(join(job, "herdr/agent"), /w1:p1/);
+	await waitForFile(join(job, "herdr/agent"), /w1:p1/, 30_000);
+	assert.ok(Date.now() - before > 20_000, "agent start must outlast the caller deadline");
 	await waitForFile(join(job, "log"), /hosted agent ready after start warning/);
+	assert.doesNotThrow(() => process.kill(pid, 0));
+	await writeFile(join(job, "tool-calls"), "2\n");
+	await writeFile(join(job, "activity"), "wait\n");
+	await waitForFile(join(job, "advisory"), /idle \d+s after 2 tool calls, session still open/);
+	assert.equal(await readFile(join(job, "state"), "utf8"), "running\n");
+	context.diagnostic(`caller printed ID and was killed in ${returnedMs}ms; supervisor ${pid} recorded agent after 20s and wrote idle advisory`);
 	assert.equal(await readFile(join(job, "role"), "utf8"), "worker\n");
 	assert.match(await readFile(join(job, "agent-name"), "utf8"), /^limen-f048-[0-9a-f]{8}\n$/);
 	await writeFile(join(job, "session-ended"), `${new Date().toISOString()}\n`);
@@ -671,16 +680,89 @@ test("hosted start finalizes failed after two pane-shell failures", async (conte
 		LIMEN_HERDR: herdr.bin,
 		FAKE_HERDR_STATE: herdr.dir,
 		FAKE_HERDR_START_PANE_FAILURES: "2",
+		FAKE_HERDR_SHELL_BUSY_MS: "500",
+		PI_SESSION_ID: "startup-subscriber",
 		HERDR_TAB_ID: "coord:t0",
 	};
 	const launched = limenWithEnv(scratch, env, "spawn", "--label", "F044 fail", "do not start");
 	assert.equal(launched.status, 0, launched.stderr);
 	const id = onlyJobId(launched.stdout);
 	const job = join(scratch.root, ".limen/jobs", id);
+	assert.equal(await readFile(join(job, "state"), "utf8"), "running\n", "start failure belongs to the supervisor after spawn returns");
+	const pid = Number((await readFile(join(job, "pid"), "utf8")).trim());
+	assert.doesNotThrow(() => process.kill(pid, 0));
 	await waitForState(scratch.root, id, "failed");
 	assert.equal((await readFile(join(job, "state"), "utf8")).trim(), "failed");
+	assert.match(await readFile(join(job, "finished-at"), "utf8"), /^\d{4}-/);
+	assert.ok((await readdir(join(job, "notify/subscribers"))).includes("startup-subscriber"));
+	assert.equal(await readFile(join(job, "notify/ready"), "utf8"), "1\n");
+	await assert.rejects(readdir(join(job, "notify/delivered/startup-subscriber")));
 	await waitForFile(join(job, "log"), /failed: hosted start failed: agent target pane w1:p1 is not an available shell/);
 	assert.equal([...(await readFile(herdr.calls, "utf8")).matchAll(/^agent start /gm)].length, 2);
+});
+
+test("hosted tab creation refusal fails synchronously without launching a supervisor", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	assert.equal(limen(scratch, "init").status, 0);
+	const herdr = await installHostedFakeHerdr(scratch.root, scratch.fakeBin);
+	const env = { HERDR_ENV: "1", LIMEN_HERDR: herdr.bin, FAKE_HERDR_STATE: herdr.dir, FAKE_HERDR_TAB_REFUSED: "1" };
+	const launched = limenWithEnv(scratch, env, "spawn", "--tab", "do not start");
+	assert.equal(launched.status, 1);
+	assert.match(launched.stderr, /herdr skipped opening the hosted tab/);
+	const jobs = await readdir(join(scratch.root, ".limen/jobs"));
+	assert.equal(jobs.length, 1);
+	const job = join(scratch.root, ".limen/jobs", jobs[0] as string);
+	assert.equal(await readFile(join(job, "state"), "utf8"), "failed\n");
+	assert.match(await readFile(join(job, "log"), "utf8"), /failed: hosted start failed: herdr skipped opening the hosted tab/);
+	await assert.rejects(readFile(join(job, "pid")));
+	assert.doesNotMatch(await readFile(herdr.calls, "utf8"), /agent start /);
+});
+
+test("hosted start does not restore focus over a human tab change", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	assert.equal(limen(scratch, "init").status, 0);
+	const herdr = await installHostedFakeHerdr(scratch.root, scratch.fakeBin);
+	const env = { HERDR_ENV: "1", LIMEN_HERDR: herdr.bin, FAKE_HERDR_STATE: herdr.dir, FAKE_HERDR_PERSIST: "1", FAKE_HERDR_START_BUSY_MS: "8000", HERDR_TAB_ID: "coord:t0" };
+	const launched = limenWithEnv(scratch, env, "spawn", "--tab", "stay hosted");
+	assert.equal(launched.status, 0, launched.stderr);
+	const id = onlyJobId(launched.stdout);
+	const job = join(scratch.root, ".limen/jobs", id);
+	await waitForFile(join(herdr.dir, "start-busy"), /\d+/);
+	execFileSync(process.execPath, [herdr.bin, "tab", "focus", "human:t0"], { env: { ...process.env, ...env } });
+	await waitForFile(join(job, "herdr/agent"), /w1:p1/);
+	await waitForFile(join(job, "log"), /focus restore skipped: another tab took focus/);
+	assert.doesNotMatch(await readFile(herdr.calls, "utf8"), /tab focus coord:t0/);
+	await writeFile(join(job, "session-ended"), `${new Date().toISOString()}\n`);
+	await waitForState(scratch.root, id, "done");
+});
+
+test("hosted supervisor follows a moved pane and finalizes when its tab closes", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	assert.equal(limen(scratch, "init").status, 0);
+	const herdr = await installHostedFakeHerdr(scratch.root, scratch.fakeBin);
+	const env = { HERDR_ENV: "1", LIMEN_HERDR: herdr.bin, FAKE_HERDR_STATE: herdr.dir, FAKE_HERDR_PERSIST: "1" };
+	const launched = limenWithEnv(scratch, env, "spawn", "--tab", "follow the pane");
+	assert.equal(launched.status, 0, launched.stderr);
+	const id = onlyJobId(launched.stdout);
+	const job = join(scratch.root, ".limen/jobs", id);
+	await waitForFile(join(job, "herdr/agent"), /w1:p1/);
+	const statePath = join(herdr.dir, "state.json");
+	const state = JSON.parse(await readFile(statePath, "utf8")) as { tabs: Record<string, { pane: string }>; agents: Record<string, unknown> };
+	state.agents["w2:p9"] = state.agents["w1:p1"];
+	delete state.agents["w1:p1"];
+	state.tabs["w2:t9"] = { pane: "w2:p9" };
+	delete state.tabs["w1:t1"];
+	await writeFile(statePath, JSON.stringify(state));
+	await waitForFile(join(job, "herdr/agent"), /w2:p9/);
+	assert.equal(await readFile(join(job, "herdr/pane"), "utf8"), "w2:p9\n");
+	assert.equal(await readFile(join(job, "state"), "utf8"), "running\n");
+	execFileSync(process.execPath, [herdr.bin, "tab", "close", "w2:t9"], { env: { ...process.env, ...env } });
+	await waitForState(scratch.root, id, "done");
+	assert.match(await readFile(join(job, "log"), "utf8"), /done: hosted agent ended/);
+	assert.equal([...(await readFile(herdr.calls, "utf8")).matchAll(/^agent start /gm)].length, 1, "pane-follow must not start another agent");
 });
 
 test("hosted start does not retry a non-pane-shell error", async (context) => {
@@ -968,7 +1050,7 @@ test("garbage agent get never counts toward missing", async (context) => {
 	await waitForState(scratch.root, id, "done");
 });
 
-test("continue in Herdr is hosted and passes --continue with @continue, not @task", async (context) => {
+test("hosted continue survives a killed caller and passes durable @continue, not @task", async (context) => {
 	const continuing = `#!/usr/bin/env node
 const { writeFileSync, mkdirSync } = require("node:fs");
 const args = process.argv.slice(2);
@@ -987,14 +1069,20 @@ console.log(JSON.stringify({ type: "message_end", message: { role: "assistant", 
 	const parent = onlyJobId(limen(scratch, "spawn", "--detached", "--label", "F037 parent", "first slice").stdout);
 	await waitForState(scratch.root, parent, "done");
 	const herdr = await installHostedFakeHerdr(scratch.root, scratch.fakeBin);
-	const env = { HERDR_ENV: "1", LIMEN_HERDR: herdr.bin, FAKE_HERDR_STATE: herdr.dir, HERDR_TAB_ID: "coord:t0" };
-	const launched = limenWithEnv(scratch, { ...env, LIMEN_WORKER_MODEL: "" }, "continue", parent, "now refine the seam");
-	assert.equal(launched.status, 0, launched.stderr);
-	assert.match(launched.stdout, /\(hosted\)/);
-	const id = onlyJobId(launched.stdout);
+	const env = { HERDR_ENV: "1", LIMEN_HERDR: herdr.bin, FAKE_HERDR_STATE: herdr.dir, HERDR_TAB_ID: "coord:t0", FAKE_HERDR_SHELL_BUSY_MS: "2000", LIMEN_WORKER_MODEL: "" };
+	const { stdout, returnedMs } = await killHostedCaller(scratch, env, ["continue", "--tab", parent, "now refine the seam"]);
+	assert.ok(returnedMs < 6_000, `continue must return on the PID handshake: ${returnedMs}ms`);
+	assert.match(stdout, /\(hosted\)/);
+	const id = onlyJobId(stdout);
 	const job = join(scratch.root, ".limen/jobs", id);
 	assert.match(await readFile(join(job, "hosted"), "utf8"), /weaker guarantees/);
 	assert.equal(await readFile(join(job, "continue"), "utf8"), "now refine the seam\n");
+	const pid = Number((await readFile(join(job, "pid"), "utf8")).trim());
+	assert.doesNotThrow(() => process.kill(pid, 0));
+	await assert.rejects(readFile(join(herdr.dir, "prompt-read")), "caller must be gone before Herdr reads the continuation");
+	const prompt = JSON.parse(await waitForFile(join(herdr.dir, "prompt-read"), /refine the seam/)) as { file: string; text: string };
+	assert.deepEqual(prompt, { file: join(job, "continue"), text: "now refine the seam\n" });
+	context.diagnostic(`continue caller printed ID and was killed in ${returnedMs}ms; supervisor ${pid} then passed the durable continuation to Herdr`);
 	const calls = await waitForFile(herdr.calls, /agent start /);
 	assert.match(calls, /agent start /);
 	assert.match(calls, /--continue @\S+\/continue/);
@@ -1233,6 +1321,50 @@ test("two long hosted labels keep distinct agent names", async (context) => {
 	}
 });
 
+// Kill only this fixture's shell-equivalent caller, after its limen child returns the ID.
+async function killHostedCaller(scratch: Scratch, env: NodeJS.ProcessEnv, args: readonly string[]): Promise<{ stdout: string; returnedMs: number }> {
+	const before = Date.now();
+	const caller = spawn(
+		process.execPath,
+		[
+			"--input-type=module",
+			"-e",
+			`
+		import { limenWithEnv } from ${JSON.stringify(new URL("./scratch.ts", import.meta.url).href)};
+		const result = limenWithEnv(${JSON.stringify(scratch)}, ${JSON.stringify(env)}, ...${JSON.stringify(args)});
+		if (result.status !== 0) { console.error(result.stderr); process.exit(result.status); }
+		process.stdout.write(result.stdout);
+		setInterval(() => {}, 1000);
+	`,
+		],
+		{ stdio: ["ignore", "pipe", "pipe"] },
+	);
+	let stdout = "";
+	let stderr = "";
+	caller.stderr.on("data", (chunk) => {
+		stderr += chunk;
+	});
+	let deadline: ReturnType<typeof setTimeout> | undefined;
+	try {
+		await new Promise<void>((resolve, reject) => {
+			deadline = setTimeout(() => reject(new Error(`caller missed 20s deadline: ${stdout}\n${stderr}`)), 20_000);
+			caller.on("error", reject);
+			caller.on("exit", (code, signal) => {
+				if (signal === "SIGKILL" && /\n\d{4}-\d{2}-\d{2}-[^\n]+\n$/.test(stdout)) resolve();
+				else reject(new Error(`caller exited ${code}/${signal}: ${stdout}\n${stderr}`));
+			});
+			caller.stdout.on("data", (chunk) => {
+				stdout += chunk;
+				if (/\n\d{4}-\d{2}-\d{2}-[^\n]+\n$/.test(stdout)) caller.kill("SIGKILL");
+			});
+		});
+		return { stdout, returnedMs: Date.now() - before };
+	} finally {
+		clearTimeout(deadline);
+		caller.kill("SIGKILL");
+	}
+}
+
 async function waitForFile(path: string, expected: RegExp | ((value: string) => boolean), timeoutMs = 10_000): Promise<string> {
 	const deadline = Date.now() + timeoutMs;
 	while (Date.now() < deadline) {
@@ -1286,6 +1418,7 @@ if (args[0] === "workspace" && args[1] === "list") {
 } else if (args[0] === "workspace" && args[1] === "focus") {
   ok({ type: "workspace_focused", workspace: { workspace_id: args[2] } });
 } else if (args[0] === "tab" && args[1] === "create") {
+  if (process.env.FAKE_HERDR_TAB_REFUSED === "1") fail("tab_refused", "tab creation refused");
   state.n = (state.n || 0) + 1;
   const tab = "w1:t" + state.n;
   const pane = "w1:p" + state.n;
@@ -1295,7 +1428,7 @@ if (args[0] === "workspace" && args[1] === "list") {
 } else if (args[0] === "tab" && args[1] === "get") {
   const tab = args[2];
   if (!state.tabs[tab]) fail("tab_not_found", "missing");
-  ok({ type: "tab_info", tab: { tab_id: tab } });
+  ok({ type: "tab_info", tab: { tab_id: tab, focused: state.tabs[tab].focused === true } });
 } else if (args[0] === "tab" && args[1] === "rename") {
   ok({ type: "tab_renamed" });
 } else if (args[0] === "tab" && args[1] === "focus") {
@@ -1308,6 +1441,8 @@ if (args[0] === "workspace" && args[1] === "list") {
   writeFileSync(path, JSON.stringify(state));
   ok({ type: "tab_focused" });
 } else if (args[0] === "tab" && args[1] === "close") {
+  const tab = state.tabs[args[2]];
+  if (tab) delete state.agents[tab.pane];
   delete state.tabs[args[2]];
   writeFileSync(path, JSON.stringify(state));
   ok({ type: "tab_closed" });
@@ -1328,8 +1463,10 @@ if (args[0] === "workspace" && args[1] === "list") {
   if (state.startAttempts <= Number(process.env.FAKE_HERDR_START_PANE_FAILURES || 0)) fail("agent_pane_busy", "agent target pane " + pane + " is not an available shell");
   if (args.slice(args.indexOf("--") + 1).some((arg) => /[\\r\\n]/.test(arg))) fail("unsafe_args", "agent arguments cannot be encoded safely for the target shell");
   if (process.env.FAKE_HERDR_START_ERROR === "1") fail("auth_failed", "authentication denied");
+  const promptFile = args.at(-1);
+  if (promptFile.startsWith("@")) writeFileSync(dir + "/prompt-read", JSON.stringify({ file: promptFile.slice(1), text: readFileSync(promptFile.slice(1), "utf8") }));
   if (!tab || !state.tabs[tab].focused) fail("agent_pane_busy", "agent target pane " + pane + " is not an available shell");
-  state.agents[pane] = { status: "working", ticks: 0 };
+  state.agents[pane] = { status: "working", ticks: 0, name: args[2] };
   writeFileSync(path, JSON.stringify(state));
   const busyMs = Number(process.env.FAKE_HERDR_START_BUSY_MS || 0);
   if (busyMs > 0) {
@@ -1337,6 +1474,8 @@ if (args[0] === "workspace" && args[1] === "list") {
     Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, busyMs);
   }
   ok({ type: "agent_started", pane: { pane_id: pane }, agent_status: "working" });
+} else if (args[0] === "agent" && args[1] === "list") {
+  ok({ type: "agent_list", agents: Object.entries(state.agents).map(([pane_id, agent]) => ({ pane_id, name: agent.name })) });
 } else if (args[0] === "agent" && args[1] === "get") {
   const target = args[2];
   const agent = state.agents[target];
