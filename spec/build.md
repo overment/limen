@@ -23,8 +23,7 @@
 
 ## NOW
 
-- `F092-finish-webhook-names-are-bot-agnostic` (🟠 ACTIVE): implementation starts the remaining wave with only LIMEN_FINISH_WEBHOOK_* configuration; boundary: helper, caller, tests, docs and packaged guidance, with no aliases, payload/receiver changes, or private-env edits.
-- `F091-finish-job-shows-bot-turn-receipt` (🟠 ACTIVE): job inspection separates configured / transport / completed bot turn; first proof on Alice Mac → Johnny/Tony, after F092.
+- `F091-finish-job-shows-bot-turn-receipt` (🟠 ACTIVE): implementation now separates configured / transport / completed bot turn on the landed neutral keys; boundary: safe per-target receipts and inspection, opt-in and finalizer bounds unchanged, no receiver API or polling system; Alice Mac → Johnny/Tony proof remains receiver-owned.
 - `F081-spawn-refuses-an-unusable-route` (🟠 ACTIVE): spawn rejects an unusable route before planting a job, after F091; boundary: preflight and hosted-start argument transport, with no retries or model selection.
 - `F048-hosted-runtime-start` (🟠 ACTIVE): spawn prints the ID in seconds and the detached supervisor starts pi, after F081; boundary: move the existing hosted start into its supervisor, before F049.
 
@@ -42,6 +41,7 @@
 
 ## PROVEN
 
+- `F092-finish-webhook-names-are-bot-agnostic` (🟢 PROVEN): neutral configuration keys landed `a76e0ae`; worker focused 76/76 and coordinator 79/79 passed, full native 371 passed with one registry-lock timeout retained; coordinator-inspected, private migration operator-owned.
 - `F707-herdr-limen-truthful-status` (🟢 PROVEN): settled panes show RUNNING jobs without erasing warnings; the operator guide separates job, merge, and wake evidence. Adam authorized landing `756c747`; 70 candidate checks passed, one post-merge timing timeout passed recheck, full suite incomplete.
 - `F089-workers-accept-explicit-pi-flags` (🟢 PROVEN): spawn and continuation forward literal Pi provider/model/thinking flags in both modes. Landed `cd8cbb1`; exact-argv checks passed, full native lane incomplete; Adam owns review.
 - `F088-spawns-use-explicit-model-defaults` (🟢 PROVEN): coordinators use Codex/xhigh and Pi jobs default to Codex/high without inheriting global Grok. Landed `aa5382e`; focused checks passed, full native lane incomplete; Adam owns review.
@@ -51,6 +51,5 @@
 - `F077-evidence-outlives-the-worktree` (🟢 PROVEN): proof runs at the clean candidate commit, retained artifacts reach review, and mismatched evidence is unverified. Landed `cf3e9e0`. Review PASS of `85d57d2`.
 - `F084-every-number-arrives-with-its-meaning` (🟢 PROVEN): the reply cue and the specs reminder name the failing sentence, not the property; the identifier rule leads the Human register. Landed `0d3f2fd`. Coordinator-inspected.
 - `F079-job-line-shows-changed-files` (🟢 PROVEN): a running job line shows its changed-file count; a missing worktree leaves the signal absent. Landed `a98fa51`. Coordinator-inspected.
-- `F082-handoff-points-at-the-board` (🟢 PROVEN): a handoff points at the board line that owns its boundary; changes and steers name that line instead of duplicating the rule. Landed `88a2627`. Coordinator-inspected.
-- 2026-09: 35 landed. Hosted jobs end themselves; review loops stop at a ceiling; a failed turn is visible; a tab title says what the work changes; one living picture follows system shape; human-asked research compares named sources across models before judgment; workers falsify their own candidate before handoff; one correction reaches every watched live job. spec/features/done/2026-09/
+- 2026-09: 36 landed. Hosted jobs end themselves; review loops stop at a ceiling; a failed turn is visible; tab titles name the change; handoffs point at board-owned boundaries; one living picture follows system shape; human-asked research compares named sources before judgment; workers falsify candidates before handoff; one correction reaches every watched live job. spec/features/done/2026-09/
 - 2026-08: 44 landed. Hosted jobs run in a named tab; wakes retry; the process tree is contained. spec/features/done/2026-08/
