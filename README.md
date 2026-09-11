@@ -10,7 +10,23 @@ Requires macOS or Linux, Node.js 24+, Git, and `pi` on `PATH`. Windows is unsupp
 
 Jobs can live on an always-on **seat** (a VPS on Tailscale) while your laptop is only a window. See [docs/remote.md](docs/remote.md). The walkthrough we actually ran is [docs/vps.md](docs/vps.md).
 
-Opt-in terminal webhooks: [finish-ping setup, inspection and deliberate retry](docs/finish-webhooks.md).
+## Finish webhooks (opt-in)
+
+When a job reaches a terminal state (`done` / `failed` / `stopped`), limen can POST `{job, status, branch}` to one or more destinations so a bot or routine can wake. **Off by default.** Installing limen does not enable any project.
+
+**Opt in per project** with a private, git-excluded file:
+
+```bash
+# <project>/.limen/finish-webhook.env  (mode 600; never commit)
+LIMEN_FINISH_WEBHOOK_TARGETS='[{"url":"https://api2.cursor.sh/automations/webhook/…","auth":"Bearer …"}]'
+```
+
+Put that file beside the primary Git checkout (linked worktrees use the canonical root). Fresh spawns snapshot the path onto the job; continuations inherit the parent's choice. Home/legacy config does **not** opt a project into automation.
+
+**What “accepted” means.** HTTP 2xx means the sender reached the endpoint. It does **not** mean a bot finished a turn — expect latency, and confirm the wake in the bot chat / routine run. Inspect with `limen jobs <id>` (`finish-webhook-env`, `finish-webhook-attempt`, `finish-webhook`).
+
+Full setup, multi-target notes, deliberate retry, and troubleshooting: [docs/finish-webhooks.md](docs/finish-webhooks.md).
+
 
 ## Trust boundary
 
