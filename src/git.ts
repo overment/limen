@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
-import { basename, relative, resolve } from "node:path";
+import { existsSync, realpathSync } from "node:fs";
+import { basename, dirname, relative, resolve } from "node:path";
 export type GitWorktree = { readonly path: string; readonly branch?: string; readonly detached: boolean };
 type GitResult = { readonly stdout: string; readonly stderr: string; readonly status: number };
 export function repoRoot(cwd: string): string {
@@ -78,12 +78,12 @@ export function commitList(cwd: string, base: string, branch: string): string | 
 }
 export function cleanWorktree(cwd: string): boolean {
 	if (!existsSync(cwd)) return false;
-	const result = git(cwd, ["status", "--porcelain"]);
+	const result = git(cwd, ["--no-optional-locks", "status", "--porcelain"]);
 	return result.status === 0 && result.stdout.trim() === "";
 }
 export function changedFileCount(cwd: string): number | undefined {
 	if (!existsSync(cwd)) return undefined;
-	const result = git(cwd, ["status", "--porcelain"]);
+	const result = git(cwd, ["--no-optional-locks", "status", "--porcelain"]);
 	return result.status !== 0 ? undefined : result.stdout.trim() === "" ? 0 : result.stdout.trimEnd().split("\n").length;
 }
 export function liveDiffstat(cwd: string, branch: string): string {
@@ -92,7 +92,11 @@ export function liveDiffstat(cwd: string, branch: string): string {
 }
 export function ticketAuthor(cwd: string, ticket: string): { path: string; commit: string; name: string; email: string } {
 	const root = repoRoot(cwd);
-	const path = relative(root, resolve(cwd, ticket));
+	const absolute = resolve(realpathSync(cwd), ticket);
+	// Git reports the physical root (e.g. /private/var on macOS). Resolve directory
+	// aliases too, but leave the filename literal so tracked symlinks keep their identity.
+	const parent = dirname(absolute);
+	const path = relative(root, resolve(existsSync(parent) ? realpathSync(parent) : parent, basename(absolute)));
 	if (!path || path === ".." || path.startsWith("../")) throw new Error("ticket path must be a file inside this repository");
 	if (git(root, ["cat-file", "-t", `HEAD:${path}`]).stdout.trim() !== "blob") throw new Error(`ticket author unavailable: ${path} is not a committed file at HEAD`);
 	if (requireGit(root, ["rev-parse", "--is-shallow-repository"]).stdout.trim() === "true")

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, symlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import test from "node:test";
 import { pathToFileURL } from "node:url";
@@ -102,10 +102,14 @@ test("paths are literal and resolve from subdirectories, absolute paths, and wor
 	git(scratch.root, "add", ".");
 	git(scratch.root, "commit", "--author", "Filer <filer@example.test>", "-m", "file literal path");
 	const commit = git(scratch.root, "rev-parse", "HEAD");
+	const alias = join(dirname(scratch.root), "alias");
+	await symlink(scratch.root, alias, "dir");
 	const worktree = join(dirname(scratch.root), "worker");
 	git(scratch.root, "worktree", "add", "-b", "worker", worktree);
 	for (const [cwd, ticket] of [
 		[scratch.root, join(scratch.root, path)],
+		[scratch.root, join(alias, path)],
+		[join(alias, "tickets"), "[draft] ticket.md"],
 		[join(scratch.root, "tickets"), "[draft] ticket.md"],
 		[worktree, path],
 	] as const) {

@@ -141,7 +141,9 @@ export async function waitForState(root: string, id: string, expected: string, t
 		if (state === expected) return;
 		await new Promise((resolve) => setTimeout(resolve, 25));
 	}
-	throw new Error(`job ${id} did not reach ${expected}`);
+	const job = join(root, ".limen", "jobs", id);
+	const details = await Promise.all(["state", "log"].map(async (name) => `${name}: ${await readFile(join(job, name), "utf8").catch(() => "(missing)")}`));
+	throw new Error(`job ${id} did not reach ${expected}\n${details.join("\n")}`);
 }
 
 export function git(cwd: string, ...args: readonly string[]): string {
