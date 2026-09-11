@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { open } from "node:fs/promises";
 import { basename } from "node:path";
+import { inspectFinishTurns } from "./finish-turn.ts";
 import { textFile } from "./wrapper.ts";
 
 type FinishReceipt = { target: number; at: string; transport: "pending" | "accepted" | "rejected" | "unknown"; http: "none" | "1xx" | "2xx" | "3xx" | "4xx" | "5xx" };
@@ -47,13 +48,19 @@ export async function inspectFinishWebhook(jobDir: string): Promise<string> {
 		}
 	}
 	if (!targets.size) lines.push("transport: unknown (no per-target evidence)");
-	for (const target of [...targets.values()].sort((a, b) => a.target - b.target)) {
-		lines.push(
-			`target ${target.target}: transport ${target.transport === "pending" ? "unknown (attempt started; no result)" : target.transport} · HTTP ${target.http} · ${target.at} · bot-turn unobserved`,
-		);
+	const turns = await inspectFinishTurns(finishEvent(jobDir));
+	for (const ordinal of [...new Set([...targets.keys(), ...turns.keys()])].sort((a, b) => a - b)) {
+		const target = targets.get(ordinal);
+		const transport = target
+			? `${target.transport === "pending" ? "unknown (attempt started; no result)" : target.transport} · HTTP ${target.http} · ${target.at}`
+			: "unknown (no per-target evidence)";
+		lines.push(`target ${ordinal}: transport ${transport} · bot-turn ${turns.get(ordinal) ?? "unobserved"}`);
 	}
-	// No receiver-owned verification contract is available. HTTP and local claims cannot fill this in.
-	lines.push("bot-turn: unobserved (receiver-owned completed-turn evidence not verified)");
+	lines.push(
+		turns.size
+			? `bot-turn: observed for ${turns.size} target(s) (operator-trusted exports; not origin authentication)`
+			: "bot-turn: unobserved (no matching completed-turn export from an operator-trusted source)",
+	);
 	const aggregate = await textFile(`${jobDir}/finish-webhook`);
 	if (aggregate) lines.push(`aggregate: ${aggregate}`);
 	return lines.join("\n");
