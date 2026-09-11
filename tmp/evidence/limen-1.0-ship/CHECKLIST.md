@@ -12,6 +12,8 @@ Legend: `[ ]` open · `[~]` partial / ops-proven only · `[x]` proven on main ·
 
 Adam's continuation parks the wake-ceiling candidate unchanged for later review. It is not a blocker for implementing the remaining six tickets and must not be merged or widened. The coordinator remains the sole landing/board writer; hosted workers use `--provider openai-codex --model gpt-6-astra --thinking high`.
 
+Delivery checkpoint: neutral webhook names, hosted startup, watch-only recovery and prompt-policy consolidation are proven on main. Receipts and route refusal remain partial; the registry-lock timeout is unresolved. No 1.0 tag or release is claimed.
+
 | # | Ticket | Board | Ship bar | Status |
 |---|--------|-------|----------|--------|
 | — | **F090** wake errors count toward attempt ceiling | PLANNED | Parked for Adam's later review, outside the remaining wave | `[~]` unchanged `0fa48fa`; no merge, third repair, or widening; incomplete full-native proof retained |
@@ -20,7 +22,7 @@ Adam's continuation parks the wake-ceiling candidate unchanged for later review.
 | 3 | **F081** spawn refuses an unusable route | ACTIVE | Spawn preflight rejects bad route before planting; no retries / model selection in scope | `[~]` continuation transport landed `a3872a6`; route refusal still fails, awaiting Pi interface or explicit generated-probe spend decision; not PROVEN |
 | 4 | **F048** hosted runtime starts its own agent | PROVEN | `spawn --tab` returns ID in seconds; detached supervisor starts pi + owns lifecycle (closes 2026-08-27 orphan) | `[x]` proof landed `c6d4d6c`, runtime unchanged; focused 87 passed, coordinator three startup falsifiers passed; full native 381 passed with one registry-lock cancellation |
 | 5 | **F049** running owner truth | PROVEN | Reaper adopts hosted job that lost supervisor; fails job with no live owner; no shape-based skips. After F048, before F013 | `[x]` landed `6662bac`; focused 103 passed, corrected wake/recovery 50 passed; original native wake failure and registry timeout retained; existing coordinators need reload |
-| 6 | **F087** prompt policy has one home | ACTIVE | One prose owner for prompt policy; templates + prose assertions only; survives resume | `[~]` consolidation starts; model resolution and owner review/proof/quota choices must remain unchanged |
+| 6 | **F087** prompt policy has one home | PROVEN | One prose owner for prompt policy; templates + prose assertions only; survives resume | `[x]` landed `ec65dc2`; focused 71 and coordinator 12 passed; all nine packaged templates/histories verified; full native 368 passed, one registry cancellation retained |
 
 ### Ops proof gates (not tickets, still ship blockers)
 
@@ -30,6 +32,7 @@ Adam's continuation parks the wake-ceiling candidate unchanged for later review.
 - [ ] F081: true route refusal remains unimplemented; no supported non-generating Pi check was found, and generated-probe cost/latency is not authorized; `interface-question.md` and retained failing regression preserve the gap
 - [x] F092: retired operational key reads/aliases removed; setup docs and packaged guidance match, legacy literals retained only for negative tests and retirement prose; no private migration or live send claimed
 - [x] Landing writer for this wave: the `dependable core` coordinator; Adam reviews; takeovers via named `limen watch <id>` only
+- [ ] Native verification remains incomplete: latest full lane at prompt-policy candidate `6e40398` passed TypeScript/Biome and 368 tests, with the registry-lock test cancelled at 60000ms; cause unproven, no repair or repeat run claimed
 
 ---
 
