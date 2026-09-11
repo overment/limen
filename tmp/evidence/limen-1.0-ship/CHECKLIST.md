@@ -12,7 +12,7 @@ Legend: `[ ]` open · `[~]` partial / ops-proven only · `[x]` proven on main ·
 
 | # | Ticket | Board | Ship bar | Status |
 |---|--------|-------|----------|--------|
-| 1 | **F090** wake errors count toward attempt ceiling | ACTIVE | Two unsuccessful automatic wakes → deliberate recovery; quota parks (no silent model swap); reset-on-resume; inspectable blocked claims | `[~]` candidate `a477285`: focused 64/64 + installed replay pass; full 386/387; test-only repair and Adam review pending |
+| 1 | **F090** wake errors count toward attempt ceiling | ACTIVE | Two unsuccessful automatic wakes → deliberate recovery; quota parks (no silent model swap); reset-on-resume; inspectable blocked claims | `[~]` corrected candidate `0fa48fa`: refusal + installed replay pass; full run timed out at 20m with four failures; wave held, Adam review pending |
 | 2 | **F092** finish webhook names are bot-agnostic | ACTIVE | Only `LIMEN_FINISH_WEBHOOK_*` in file contents; drop `TONY_*` keys; helper filename may remain | `[~]` env + README ops on Mac; ticket still ACTIVE until product settle on main |
 | 3 | **F091** finish job shows bot-turn receipt | ACTIVE | Inspection separates configured / transport / completed bot turn; first E2E proof on **alice (Mac)** → Johnny/Tony (HTTP alone ≠ pass) | `[~]` live finish→bot wakes ops-proven; ticket acceptance still open |
 | 4 | **F081** spawn refuses an unusable route | ACTIVE | Spawn preflight rejects bad route before planting; no retries / model selection in scope | `[ ]` |
@@ -23,7 +23,7 @@ Legend: `[ ]` open · `[~]` partial / ops-proven only · `[x]` proven on main ·
 ### Ops proof gates (not tickets, still ship blockers)
 
 - [x] Adam authorized dependable-core as the 1.0 boundary in the 2026-09-11 coordinator instruction; Phase 0 PASS is recorded in `GATE-RESULT.md`
-- [ ] F090: candidate `a477285` passed focused 64/64 and isolated installed-Pi replay; full check 386/387 needs snapshot-race repair; candidate not merged, Adam review pending
+- [ ] F090: original focused 64/64; corrected `0fa48fa` passed refusal + installed replay, but full lane timed out with four failures; one-repair loop closed, unmerged, Adam review pending; findings in `spec/features/active/F090-wake-errors-count-toward-attempt-ceiling/checks-2.md`
 - [ ] F091: correlated bot-turn receipt on an authorized Alice Mac job (not HTTP-only)
 - [ ] F092: no `TONY_*` keys remaining in product paths; CI/docs match
 - [x] Landing writer for this wave: the `dependable core` coordinator; Adam reviews; takeovers via named `limen watch <id>` only
