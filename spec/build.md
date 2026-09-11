@@ -23,8 +23,8 @@
 
 ## NOW
 
-- `F091-finish-job-shows-bot-turn-receipt` (🟠 ACTIVE): implementation now separates configured / transport / completed bot turn on the landed neutral keys; boundary: safe per-target receipts and inspection, opt-in and finalizer bounds unchanged, no receiver API or polling system; Alice Mac → Johnny/Tony proof remains receiver-owned.
-- `F081-spawn-refuses-an-unusable-route` (🟠 ACTIVE): spawn rejects an unusable route before planting a job, after F091; boundary: preflight and hosted-start argument transport, with no retries or model selection.
+- `F091-finish-job-shows-bot-turn-receipt` (🟠 ACTIVE): transport inspection landed `2dabae7`, but CLI bot-turn stays unobserved; completed-turn evidence source/contract and Alice Mac → Johnny/Tony proof remain open (`checks-1.md`), no PROVEN claim; boundary: no guessed receiver API or polling system.
+- `F081-spawn-refuses-an-unusable-route` (🟠 ACTIVE): implementation starts after the partial transport landing to reject unusable routes before planting jobs; boundary: preflight and hosted-start argument transport, no retries/model selection or unapproved generated probe; authentication alone is not route proof (`notes.md`).
 - `F048-hosted-runtime-start` (🟠 ACTIVE): spawn prints the ID in seconds and the detached supervisor starts pi, after F081; boundary: move the existing hosted start into its supervisor, before F049.
 
 ## NEXT
