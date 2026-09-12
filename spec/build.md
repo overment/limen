@@ -31,6 +31,7 @@
 
 ## NEXT
 
+- Ticket finishes wake the author's bots (`F708-ticket-finishes-wake-the-authors-bots`, 🔴 PLANNED): private author-to-target map with explicit fallback or visible no-send; recommended after narrow 1.0, spec only, with no identity service or ownership transfer.
 - `F090-wake-errors-count-toward-attempt-ceiling` (🔴 PLANNED): parked unchanged at `0fa48fa` for Adam's later review, outside the remaining wave; refusal and installed proof passed, full lane timed out with four failures (`checks-2.md`); no merge, third repair, or widening.
 - `F050-living-architecture-picture` (🔴 PLANNED): background application field guide proposal is retained but deferred beyond narrow 1.0; no product merge.
 - `F074-claude-perspective` (🔴 PLANNED): Claude advisor engine is deferred beyond narrow 1.0; existing partial work is not part of this wave.
