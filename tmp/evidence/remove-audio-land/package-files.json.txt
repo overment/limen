@@ -1,0 +1,376 @@
+[
+  {
+    "id": "@overment/limen@0.1.0",
+    "name": "@overment/limen",
+    "version": "0.1.0",
+    "size": 112103,
+    "unpackedSize": 360716,
+    "shasum": "b4b404c356ec211f06805a391efd2f059610744b",
+    "integrity": "sha512-DKmXQLULLXRQloToQGEid/ArZePFUlKhxWKL29A3hJcGj7TBuD8fgQOVTgY45zHwp4+gsriw/kipMax6PjOHLQ==",
+    "filename": "overment-limen-0.1.0.tgz",
+    "files": [
+      {
+        "path": "LICENSE",
+        "size": 1074,
+        "mode": 420
+      },
+      {
+        "path": "README.md",
+        "size": 15170,
+        "mode": 420
+      },
+      {
+        "path": "bin/limen",
+        "size": 309,
+        "mode": 493
+      },
+      {
+        "path": "bin/tony-finish-ping.sh",
+        "size": 5124,
+        "mode": 493
+      },
+      {
+        "path": "hook/communication.ts",
+        "size": 11615,
+        "mode": 420
+      },
+      {
+        "path": "hook/hosted.ts",
+        "size": 5370,
+        "mode": 420
+      },
+      {
+        "path": "hook/inherit.ts",
+        "size": 6080,
+        "mode": 420
+      },
+      {
+        "path": "hook/seat.ts",
+        "size": 5679,
+        "mode": 420
+      },
+      {
+        "path": "hook/steering.ts",
+        "size": 4318,
+        "mode": 420
+      },
+      {
+        "path": "hook/wake.ts",
+        "size": 39162,
+        "mode": 420
+      },
+      {
+        "path": "package.json",
+        "size": 1121,
+        "mode": 420
+      },
+      {
+        "path": "src/commands/close.ts",
+        "size": 370,
+        "mode": 420
+      },
+      {
+        "path": "src/commands/continue.ts",
+        "size": 9281,
+        "mode": 420
+      },
+      {
+        "path": "src/commands/diff.ts",
+        "size": 2448,
+        "mode": 420
+      },
+      {
+        "path": "src/commands/init.ts",
+        "size": 4316,
+        "mode": 420
+      },
+      {
+        "path": "src/commands/jobs.ts",
+        "size": 12646,
+        "mode": 420
+      },
+      {
+        "path": "src/commands/linear.ts",
+        "size": 2828,
+        "mode": 420
+      },
+      {
+        "path": "src/commands/open.ts",
+        "size": 677,
+        "mode": 420
+      },
+      {
+        "path": "src/commands/prune.ts",
+        "size": 3272,
+        "mode": 420
+      },
+      {
+        "path": "src/commands/spawn.ts",
+        "size": 22919,
+        "mode": 420
+      },
+      {
+        "path": "src/commands/steer.ts",
+        "size": 3810,
+        "mode": 420
+      },
+      {
+        "path": "src/commands/stop.ts",
+        "size": 3721,
+        "mode": 420
+      },
+      {
+        "path": "src/commands/sweep.ts",
+        "size": 2814,
+        "mode": 420
+      },
+      {
+        "path": "src/commands/ticket-author.ts",
+        "size": 725,
+        "mode": 420
+      },
+      {
+        "path": "src/commands/wait.ts",
+        "size": 1955,
+        "mode": 420
+      },
+      {
+        "path": "src/commands/watch.ts",
+        "size": 2571,
+        "mode": 420
+      },
+      {
+        "path": "src/contain.ts",
+        "size": 10166,
+        "mode": 420
+      },
+      {
+        "path": "src/finish-receipt.ts",
+        "size": 3274,
+        "mode": 420
+      },
+      {
+        "path": "src/finish-turn.ts",
+        "size": 3106,
+        "mode": 420
+      },
+      {
+        "path": "src/finish-webhook.ts",
+        "size": 5243,
+        "mode": 420
+      },
+      {
+        "path": "src/git.ts",
+        "size": 6866,
+        "mode": 420
+      },
+      {
+        "path": "src/herdr.ts",
+        "size": 22569,
+        "mode": 420
+      },
+      {
+        "path": "src/job.ts",
+        "size": 5520,
+        "mode": 420
+      },
+      {
+        "path": "src/lookup.ts",
+        "size": 957,
+        "mode": 420
+      },
+      {
+        "path": "src/main.ts",
+        "size": 4594,
+        "mode": 420
+      },
+      {
+        "path": "src/proc-pidinfo.rb",
+        "size": 1505,
+        "mode": 420
+      },
+      {
+        "path": "src/reap.ts",
+        "size": 4114,
+        "mode": 420
+      },
+      {
+        "path": "src/recovery.ts",
+        "size": 4627,
+        "mode": 420
+      },
+      {
+        "path": "src/stream.ts",
+        "size": 6555,
+        "mode": 420
+      },
+      {
+        "path": "src/supervisor.ts",
+        "size": 12712,
+        "mode": 420
+      },
+      {
+        "path": "src/view.ts",
+        "size": 9315,
+        "mode": 420
+      },
+      {
+        "path": "src/wrapper.ts",
+        "size": 13627,
+        "mode": 420
+      },
+      {
+        "path": "templates/.history/advisor.md",
+        "size": 76,
+        "mode": 420
+      },
+      {
+        "path": "templates/.history/agents.md",
+        "size": 4940,
+        "mode": 420
+      },
+      {
+        "path": "templates/.history/communication.md",
+        "size": 1064,
+        "mode": 420
+      },
+      {
+        "path": "templates/.history/judge.md",
+        "size": 76,
+        "mode": 420
+      },
+      {
+        "path": "templates/.history/picture.md",
+        "size": 76,
+        "mode": 420
+      },
+      {
+        "path": "templates/.history/quality.md",
+        "size": 76,
+        "mode": 420
+      },
+      {
+        "path": "templates/.history/researcher.md",
+        "size": 76,
+        "mode": 420
+      },
+      {
+        "path": "templates/.history/reviewer.md",
+        "size": 760,
+        "mode": 420
+      },
+      {
+        "path": "templates/.history/worker.md",
+        "size": 1140,
+        "mode": 420
+      },
+      {
+        "path": "templates/advisor.md",
+        "size": 1492,
+        "mode": 420
+      },
+      {
+        "path": "templates/agents.md",
+        "size": 30957,
+        "mode": 420
+      },
+      {
+        "path": "templates/communication.md",
+        "size": 12368,
+        "mode": 420
+      },
+      {
+        "path": "templates/judge.md",
+        "size": 1247,
+        "mode": 420
+      },
+      {
+        "path": "templates/limen-extension.ts",
+        "size": 841,
+        "mode": 420
+      },
+      {
+        "path": "templates/linear.md",
+        "size": 5856,
+        "mode": 420
+      },
+      {
+        "path": "templates/picture.md",
+        "size": 1064,
+        "mode": 420
+      },
+      {
+        "path": "templates/quality.md",
+        "size": 1171,
+        "mode": 420
+      },
+      {
+        "path": "templates/researcher.md",
+        "size": 1254,
+        "mode": 420
+      },
+      {
+        "path": "templates/reviewer.md",
+        "size": 3012,
+        "mode": 420
+      },
+      {
+        "path": "templates/spec/build.md",
+        "size": 1331,
+        "mode": 420
+      },
+      {
+        "path": "templates/spec/features/_template/outcome.md",
+        "size": 209,
+        "mode": 420
+      },
+      {
+        "path": "templates/spec/features/_template/ticket.md",
+        "size": 889,
+        "mode": 420
+      },
+      {
+        "path": "templates/spec/features/active/.gitkeep",
+        "size": 0,
+        "mode": 420
+      },
+      {
+        "path": "templates/spec/features/done/.gitkeep",
+        "size": 0,
+        "mode": 420
+      },
+      {
+        "path": "templates/spec/features/dropped/.gitkeep",
+        "size": 0,
+        "mode": 420
+      },
+      {
+        "path": "templates/spec/features/planned/.gitkeep",
+        "size": 0,
+        "mode": 420
+      },
+      {
+        "path": "templates/spec/vision.md",
+        "size": 605,
+        "mode": 420
+      },
+      {
+        "path": "templates/spec/workspace.md",
+        "size": 420,
+        "mode": 420
+      },
+      {
+        "path": "templates/styleguide.md",
+        "size": 562,
+        "mode": 420
+      },
+      {
+        "path": "templates/worker.md",
+        "size": 5029,
+        "mode": 420
+      }
+    ],
+    "entryCount": 72,
+    "bundled": []
+  }
+]
