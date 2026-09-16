@@ -1,0 +1,35 @@
+(node:59308) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ two human turns with unchanged files share a system prompt, and a wake turn matches (2315.206958ms)
+✔ the system prompt holds shop, register, vision, styleguide, then the NOW/NEXT digest (11.63025ms)
+✔ the per-turn cue names the audience and the three reply rules and stays under one kilobyte (3.091125ms)
+✔ a 130-line board adds one advisory line; an 80-line board does not (11.344083ms)
+✔ a wake turn puts the wake cue in the per-turn note, not the system prompt (3.086292ms)
+✔ a write under spec/, an edit of code, and limen spawn recall the matching rule on the tool result (1.341125ms)
+✔ an errored previous assistant turn puts the error on the next cue, a successful one does not (2.693167ms)
+✔ the next turn names what the last turn touched (2.670375ms)
+✔ a hosted worker's system prompt holds the styleguide and both register audiences and no board body (1.987125ms)
+✔ workspace jobs resolve guidance from the workspace root (1.608459ms)
+✔ guidance is reread each turn, so a file planted mid-session appears on the next message (1.556916ms)
+✔ a project overlay wins over the package speech register (1.268292ms)
+✔ communication is reread each turn and bounded like other project files (1.858667ms)
+✔ missing communication inherits the package register (0.93975ms)
+✔ a coordinator without AGENTS.md inherits the package shop manual on the system prompt (0.916166ms)
+✔ a project AGENTS.md suppresses the inherited shop manual (10407.374792ms)
+✔ identical leftover copies are named as leftovers, overlays as overlays (2.252833ms)
+✔ over fifty simulated turns custom messages stay under fifty kilobytes (18.122375ms)
+✔ style and vision reminders name the project files and their headings (5.313708ms)
+✔ a write or edit outside spec/ recalls the styleguide unless the path is Markdown (1.267416ms)
+✔ unrelated tools are not patched (0.7635ms)
+✔ a stale copy is named with both dates in the drift section (1921.526375ms)
+(node:64066) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ communication hook never registers /speak, even with the CLI installed (1.947833ms)
+ℹ tests 23
+ℹ suites 0
+ℹ pass 23
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 14973.230166

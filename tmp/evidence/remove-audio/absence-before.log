@@ -1,0 +1,29 @@
+(node:47600) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✖ communication hook never registers /speak, even with the CLI installed (2.403875ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 181.20275
+
+✖ failing tests:
+
+test at test/speak-hook.test.ts:8:1
+✖ communication hook never registers /speak, even with the CLI installed (2.403875ms)
+  AssertionError [ERR_ASSERTION]: registered /speak with PATH=/var/folders/_2/zg9lhmwx3c53w15w_vp606340000gn/T/limen-no-speech-sQOhBT
+
+  true !== false
+
+      at TestContext.<anonymous> (file:///Users/overment/.overment/.limen-limen-worktrees/2026-09-16-remove-audio-995a164f/test/speak-hook.test.ts:29:10)
+      at async Test.run (node:internal/test_runner/test:1069:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:332:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: true,
+    expected: false,
+    operator: 'strictEqual'
+  }
