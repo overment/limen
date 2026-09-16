@@ -9,6 +9,8 @@ import { finishWebhookEnv } from "../src/finish-webhook.ts";
 import { git, onlyJobId, scratchRepo, waitForState } from "./scratch.ts";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
+const TIP_A = "a".repeat(40);
+const TIP_B = "b".repeat(40);
 const sender = `#!/bin/sh
 exec node --input-type=commonjs - "$@" <<'SENDER'
 const fs = require("node:fs");
@@ -71,8 +73,8 @@ async function observe(path: string) {
 		.split("\n")
 		.map((line) => JSON.parse(line));
 }
-async function bareJob(root: string) {
-	const job = join(root, ".limen/jobs/direct");
+async function bareJob(root: string, id = "direct") {
+	const job = join(root, ".limen/jobs", id);
 	await mkdir(job, { recursive: true });
 	for (const [name, value] of Object.entries({ state: "running", label: "finish label", branch: "main", pid: "1", log: "", "task.md": "Synthetic finish test" }))
 		await writeFile(join(job, name), `${value}\n`);
@@ -139,6 +141,131 @@ for (const state of ["failed", "stopped", "done"]) {
 		});
 	}
 }
+
+test("second job at the same recorded tip skips automatic ping", async (context) => {
+	const f = await fixture(context);
+	const selected = await f.config(join(f.parent, "same-tip.env"));
+	const first = await bareJob(f.root, "first");
+	const second = await bareJob(f.root, "second");
+	for (const job of [first, second]) {
+		await writeFile(join(job, "finish-webhook-env"), `${selected}\n`);
+		await writeFile(join(job, "tip"), `${TIP_A}\n`);
+	}
+	const finalize = (job: string) =>
+		runModule(
+			f.pkg,
+			{ ...f.env, TEST_JOB_DIR: job },
+			`const { finalizeJob } = await import('./src/wrapper.ts'); await finalizeJob(${JSON.stringify(job)}, 'done', 'synthetic terminal detail');`,
+		);
+	await finalize(first);
+	assert.match(await readFile(join(first, "finish-webhook"), "utf8"), /^accepted:/);
+	await finalize(second);
+	const receipt = await readFile(join(second, "finish-webhook"), "utf8");
+	assert.match(receipt, /^skipped: same settled tip already notified; not sent/);
+	assert.doesNotMatch(receipt, /Manual finish-ping retry/);
+	assert.match(await readFile(join(second, "log"), "utf8"), /finish webhook: skipped: same settled tip already notified; not sent/);
+	await assert.rejects(readFile(join(second, "finish-webhook-targets")), { code: "ENOENT" });
+	assert.equal((await observe(f.observations)).length, 1);
+	for (const view of ["compact", "human"]) assert.match(f.command(["jobs", "second"], { LIMEN_VIEW: view }), /skipped: same settled tip already notified; not sent/);
+	assert.equal(await readFile(join(f.root, ".limen/finish-webhook-tips", TIP_A), "utf8"), "first\n");
+});
+
+test("a job that settles at a different recorded tip still sends", async (context) => {
+	const f = await fixture(context);
+	const selected = await f.config(join(f.parent, "diff-tip.env"));
+	const first = await bareJob(f.root, "first");
+	const second = await bareJob(f.root, "second");
+	await writeFile(join(first, "finish-webhook-env"), `${selected}\n`);
+	await writeFile(join(second, "finish-webhook-env"), `${selected}\n`);
+	await writeFile(join(first, "tip"), `${TIP_A}\n`);
+	await writeFile(join(second, "tip"), `${TIP_B}\n`);
+	for (const job of [first, second]) {
+		await runModule(
+			f.pkg,
+			{ ...f.env, TEST_JOB_DIR: job },
+			`const { finalizeJob } = await import('./src/wrapper.ts'); await finalizeJob(${JSON.stringify(job)}, 'done', 'synthetic terminal detail');`,
+		);
+	}
+	assert.match(await readFile(join(first, "finish-webhook"), "utf8"), /^accepted:/);
+	assert.match(await readFile(join(second, "finish-webhook"), "utf8"), /^accepted:/);
+	assert.equal((await observe(f.observations)).length, 2);
+});
+
+test("empty failed skip does not quiet a later job at the same tip", async (context) => {
+	const f = await fixture(context);
+	const selected = await f.config(join(f.parent, "empty-tip.env"));
+	const first = await bareJob(f.root, "first");
+	const second = await bareJob(f.root, "second");
+	for (const job of [first, second]) {
+		await writeFile(join(job, "finish-webhook-env"), `${selected}\n`);
+		await writeFile(join(job, "tip"), `${TIP_A}\n`);
+	}
+	await runModule(
+		f.pkg,
+		{ ...f.env, TEST_JOB_DIR: first },
+		`const { finalizeJob } = await import('./src/wrapper.ts'); await finalizeJob(${JSON.stringify(first)}, 'failed', 'synthetic terminal detail');`,
+	);
+	assert.match(await readFile(join(first, "finish-webhook"), "utf8"), /^skipped: failed with empty result; not sent/);
+	await assert.rejects(readFile(f.observations), { code: "ENOENT" });
+	await runModule(
+		f.pkg,
+		{ ...f.env, TEST_JOB_DIR: second },
+		`const { finalizeJob } = await import('./src/wrapper.ts'); await finalizeJob(${JSON.stringify(second)}, 'done', 'synthetic terminal detail');`,
+	);
+	assert.match(await readFile(join(second, "finish-webhook"), "utf8"), /^accepted:/);
+	assert.equal((await observe(f.observations)).length, 1);
+});
+
+test("concurrent jobs at the same recorded tip send at most once", async (context) => {
+	const f = await fixture(context);
+	const selected = await f.config(join(f.parent, "race-tip.env"));
+	const first = await bareJob(f.root, "first");
+	const second = await bareJob(f.root, "second");
+	for (const job of [first, second]) {
+		await writeFile(join(job, "finish-webhook-env"), `${selected}\n`);
+		await writeFile(join(job, "tip"), `${TIP_A}\n`);
+	}
+	const finalize = (job: string) =>
+		runModule(
+			f.pkg,
+			{ ...f.env, TEST_JOB_DIR: job },
+			`const { finalizeJob } = await import('./src/wrapper.ts'); await finalizeJob(${JSON.stringify(job)}, 'done', 'synthetic terminal detail');`,
+		);
+	await Promise.all([finalize(first), finalize(second)]);
+	assert.equal((await observe(f.observations)).length, 1);
+	const receipts = [await readFile(join(first, "finish-webhook"), "utf8"), await readFile(join(second, "finish-webhook"), "utf8")];
+	assert.equal(receipts.filter((text) => /^accepted:/.test(text)).length, 1);
+	assert.equal(receipts.filter((text) => /^skipped: same settled tip already notified; not sent/.test(text)).length, 1);
+});
+
+test("two detached jobs that settle at the same HEAD send one automatic ping", async (context) => {
+	const f = await fixture(context);
+	await f.config(join(f.root, ".limen/finish-webhook.env"));
+	const first = onlyJobId(f.command(["spawn", "--detached", "--label", "first quiet", "finish"]));
+	const job1 = join(f.root, ".limen/jobs", first);
+	assert.match(await delivery(job1), /^accepted:/);
+	const tip = (await readFile(join(job1, "tip"), "utf8")).trim();
+	assert.match(tip, /^[0-9a-f]{40}$/);
+	const second = onlyJobId(f.command(["spawn", "--detached", "--label", "second quiet", "finish"]));
+	const job2 = join(f.root, ".limen/jobs", second);
+	assert.match(await delivery(job2), /^skipped: same settled tip already notified; not sent/);
+	assert.equal((await readFile(join(job2, "tip"), "utf8")).trim(), tip);
+	assert.equal((await observe(f.observations)).length, 1);
+	assert.match(await readFile(join(job2, "log"), "utf8"), /finish webhook: skipped: same settled tip already notified; not sent/);
+});
+
+test("a detached job that commits still sends after another job at the previous tip", async (context) => {
+	const f = await fixture(context);
+	await f.config(join(f.root, ".limen/finish-webhook.env"));
+	const first = onlyJobId(f.command(["spawn", "--detached", "--label", "base tip", "finish"]));
+	const job1 = join(f.root, ".limen/jobs", first);
+	assert.match(await delivery(job1), /^accepted:/);
+	const second = onlyJobId(f.command(["spawn", "--detached", "--label", "new tip", "make commit"]));
+	const job2 = join(f.root, ".limen/jobs", second);
+	assert.match(await delivery(job2), /^accepted:/);
+	assert.equal((await observe(f.observations)).length, 2);
+	assert.notEqual((await readFile(join(job1, "tip"), "utf8")).trim(), (await readFile(join(job2, "tip"), "utf8")).trim());
+});
 
 test("automatic delivery invokes the real canonical helper with synthetic dotenv and intercepted transport", async (context) => {
 	const f = await fixture(context);
@@ -525,8 +652,7 @@ test("continuation retains only its parent's config path even when the caller se
 	await writeFile(join(parentJob, "session/one.jsonl"), "{}\n");
 	const next = onlyJobId(f.command(["continue", "--detached", id, "follow up"], { LIMEN_FINISH_WEBHOOK_ENV: other }));
 	const job = join(f.root, ".limen/jobs", next);
-	assert.match(await delivery(job), /^accepted:/);
+	assert.match(await delivery(job), /^skipped: same settled tip already notified; not sent/);
 	assert.equal(await readFile(join(job, "finish-webhook-env"), "utf8"), `${selected}\n`);
-	assert.equal((await observe(f.observations)).length, 2);
-	assert.equal((await observe(f.observations))[1].config, selected);
+	assert.equal((await observe(f.observations)).length, 1);
 });

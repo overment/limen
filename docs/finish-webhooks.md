@@ -102,6 +102,14 @@ this preserves the completion contract without treating an empty success as
 proof of useful work. Native coordinator notifications and terminal state do
 not change. Logs, commits and transcript text are not substitutes for `result`.
 
+After an automatic send or send attempt for a recorded git tip, another configured
+job that settles at that same tip stays quiet. The quieted job records
+`skipped: same settled tip already notified; not sent` in its aggregate receipt
+and log. A job at a different tip still sends. Empty failed/stopped skips do not
+consume the tip, so a later job at that tip can still notify. Missing or invalid
+recorded tips fail open and send. Finalize writes the worktree HEAD to the job
+file `tip`; the cabinet claim is `.limen/finish-webhook-tips/<sha>`.
+
 A skip consumes the existing one-automatic-decision claim and creates no target
 transport receipts. Later result edits or repeated finalization do not re-arm
 sending. It is an intentional no-send, not a sender failure or retry request.
@@ -326,6 +334,7 @@ must not hide a failed ping.
 | Job file | Meaning |
 |---|---|
 | `finish-webhook-env` | Selected absolute private env path only; absence means not opted in. |
+| `tip` | Worktree HEAD at finalize; used for cross-job same-tip quieting. Missing or invalid tips fail open. |
 | `finish-webhook-attempt` | Flushed timestamp claiming the one automatic delivery decision, including an intentional skip; not proof of a transport attempt. |
 | `finish-webhook` | Timestamped `skipped` with its no-send reason, or `attempting`, `accepted`, or `failed` with retry guidance. |
 | `finish-webhook-targets` | Mode-600 JSON lines: target ordinal, timestamp, transport (`pending`, `accepted`, `rejected`, `unknown`), HTTP category or `none`. |

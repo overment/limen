@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { appendFileSync, existsSync } from "node:fs";
-import { readFile, writeFile } from "node:fs/promises";
-import { delimiter, dirname, isAbsolute, resolve } from "node:path";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { basename, delimiter, dirname, isAbsolute, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { finishEvent, parseFinishReceipt } from "./finish-receipt.ts";
 import { listWorktrees, workspaceRoot } from "./git.ts";
@@ -41,6 +41,19 @@ export async function deliverFinishWebhook(jobDir: string, shutdownDeadline = Nu
 		await appendLimenLog(jobDir, `finish webhook: ${skipped}`);
 		return;
 	}
+	const tip = parseFinishTip(await textFile(`${jobDir}/tip`));
+	if (tip) {
+		try {
+			await mkdir(`${dirname(dirname(jobDir))}/finish-webhook-tips`, { recursive: true, mode: 0o700 });
+			await writeFile(`${dirname(dirname(jobDir))}/finish-webhook-tips/${tip}`, `${basename(jobDir)}\n`, { flag: "wx", mode: 0o600, flush: true });
+		} catch (error) {
+			if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+			const skipped = "skipped: same settled tip already notified; not sent";
+			await atomicWrite(`${jobDir}/finish-webhook`, `${skipped} ${new Date().toISOString()}\n`);
+			await appendLimenLog(jobDir, `finish webhook: ${skipped}`);
+			return;
+		}
+	}
 	const retry =
 		"Manual finish-ping retry: inspect finish-webhook-attempt and finish-webhook; use bin/tony-finish-ping.sh with this job's finish-webhook-env, label, state and branch. Acceptance is not proof of owner wake; an interrupted attempt may already have sent.";
 	await atomicWrite(`${jobDir}/finish-webhook`, `attempting ${new Date().toISOString()}\n${retry}\n`);
@@ -55,6 +68,9 @@ export async function deliverFinishWebhook(jobDir: string, shutdownDeadline = Nu
 			: await send(jobDir, config, label, state, branch, timeoutMs);
 	await atomicWrite(`${jobDir}/finish-webhook`, `${result} ${new Date().toISOString()}\n${retry}\n`);
 	await appendLimenLog(jobDir, `finish webhook: ${result}; inspect finish-webhook for manual finish-ping retry`);
+}
+function parseFinishTip(value: string): string | undefined {
+	return /^[0-9a-f]{40}$|^[0-9a-f]{64}$/.test(value) ? value : undefined;
 }
 function send(jobDir: string, config: string, label: string, state: string, branch: string, timeoutMs: number): Promise<string> {
 	return new Promise((resolve) => {

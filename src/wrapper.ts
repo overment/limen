@@ -3,7 +3,7 @@ import { appendFile, open, readdir, readFile, rename, rm } from "node:fs/promise
 import { fileURLToPath } from "node:url";
 import { containEscapedDescendants, discoverEscapedDescendants, processAlive, processInfo, signalProcessGroup } from "./contain.ts";
 import { deliverFinishWebhook } from "./finish-webhook.ts";
-import { changedFileCount, commitList } from "./git.ts";
+import { changedFileCount, commitList, headCommit } from "./git.ts";
 import { settleJobTab } from "./herdr.ts";
 import { createClaudeStreamParser, createStreamParser, type StreamEvent } from "./stream.ts";
 
@@ -211,6 +211,7 @@ export async function recordCommits(jobDir: string): Promise<void> {
 	if (!base || !branch || !worktree) return;
 	const commits = commitList(worktree, base, branch);
 	if (commits !== undefined) await atomicWrite(`${jobDir}/commits`, commits ? `${commits}\n` : "");
+	await atomicWrite(`${jobDir}/tip`, `${headCommit(worktree)}\n`);
 }
 async function recordEvents(jobDir: string, events: readonly StreamEvent[], nextCount: () => number, seen: { activity: string; assistant: string; stop: string }): Promise<void> {
 	for (const event of events) {
