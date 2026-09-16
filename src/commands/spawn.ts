@@ -251,6 +251,8 @@ export async function startHosted(input: {
 				LIMEN_JOB_LABEL: input.label,
 				LIMEN_CONTEXT_ROOT: input.root,
 				LIMEN_ROLE: input.role,
+				HERDR_ENV: "1",
+				PATH: `/usr/bin${process.env.PATH ? `:${process.env.PATH}` : ""}`,
 			},
 		});
 		const supervisorPid = await launchHostedSupervisor({

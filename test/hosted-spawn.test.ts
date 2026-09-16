@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 import { chmod, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import test from "node:test";
 import { hostedAgentName, makeJobId } from "../src/commands/spawn.ts";
 import { hostedAgentStatus, hostedTerminalReason, startHostedPi, stopHostedAgent } from "../src/herdr.ts";
@@ -532,6 +533,49 @@ test("spawn in Herdr is hosted without --tab; --detached keeps a watch tab", asy
 		await new Promise((resolve) => setTimeout(resolve, 25));
 	}
 	assert.match(logText, /hosted agent done|hosted agent ended/);
+});
+
+test("hosted start records PATH with /usr/bin and HERDR_ENV=1; detached watch tabs do not", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	assert.equal(limen(scratch, "init").status, 0);
+	const herdr = await installHostedFakeHerdr(scratch.root, scratch.fakeBin);
+	const strippedPath = `${scratch.fakeBin}:${dirname(process.execPath)}`;
+	assert.equal(
+		strippedPath.split(":").some((dir) => dir && existsSync(`${dir}/git`)),
+		false,
+	);
+	const env = { HERDR_ENV: "1", LIMEN_HERDR: herdr.bin, FAKE_HERDR_STATE: herdr.dir, HERDR_TAB_ID: "coord:t0", PATH: strippedPath };
+	const hosted = limenWithEnv(scratch, env, "spawn", "--tab", "--label", "F715 hosted path", "make a tiny commit");
+	assert.equal(hosted.status, 0, hosted.stderr);
+	await waitForState(scratch.root, onlyJobId(hosted.stdout), "done");
+	const detached = limenWithEnv(scratch, env, "spawn", "--detached", "--label", "F715 detached path", "make a tiny commit");
+	assert.equal(detached.status, 0, detached.stderr);
+	await waitForState(scratch.root, onlyJobId(detached.stdout), "done");
+	const creates = (await readFile(join(herdr.dir, "argv"), "utf8"))
+		.trim()
+		.split("\n")
+		.map((line) => JSON.parse(line) as string[])
+		.filter((args) => args[0] === "tab" && args[1] === "create");
+	assert.equal(creates.length, 2, JSON.stringify(creates));
+	const hostedEnv: Record<string, string> = {};
+	const hostedCreate = creates[0] ?? [];
+	for (let i = 0; i < hostedCreate.length; i += 1) {
+		if (hostedCreate[i] === "--env") {
+			const pair = hostedCreate[i + 1] ?? "";
+			const cut = pair.indexOf("=");
+			if (cut > 0) hostedEnv[pair.slice(0, cut)] = pair.slice(cut + 1);
+		}
+	}
+	assert.equal(hostedEnv.HERDR_ENV, "1");
+	const pathDirs = (hostedEnv.PATH ?? "").split(":").filter(Boolean);
+	assert.equal(pathDirs[0], "/usr/bin", hostedEnv.PATH);
+	assert.ok(pathDirs.includes(scratch.fakeBin), hostedEnv.PATH);
+	assert.ok(
+		pathDirs.some((dir) => existsSync(`${dir}/git`)),
+		hostedEnv.PATH,
+	);
+	assert.ok(!(creates[1] ?? []).includes("--env"));
 });
 
 test("hosted spawn and continuation forward literal Pi launch flags", async (context) => {
