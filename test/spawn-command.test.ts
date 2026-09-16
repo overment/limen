@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { access, chmod, readdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { access, chmod, mkdir, readdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import test from "node:test";
 import { defaultFakeClaude, defaultFakePi, git, limen, limenWithEnv, limenWithInput, limenWithSession, onlyJobId, scratchRepo, waitForState, writeFakeClaude } from "./scratch.ts";
@@ -583,4 +583,58 @@ test("F074: a claude job refuses a hosted tab, and an unknown engine is named", 
 	const failed = onlyJobId(limen(scratch, "spawn", "--engine", "claude", "--detached", "--label", "boom", "fail now").stdout);
 	await waitForState(scratch.root, failed, "failed");
 	assert.match(await readFile(join(scratch.root, ".limen/jobs", failed, "stop-reason"), "utf8"), /error: error_during_execution/);
+});
+
+test("spawn refuses a ticket missing from the base commit and starts when it is committed", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	assert.equal(limen(scratch, "init").status, 0);
+	const path = "spec/features/active/F714-spawn-fails-closed-without-ticket/ticket.md";
+	const task = `do work Ticket: ${path}`;
+	const missing = limen(scratch, "spawn", task);
+	assert.equal(missing.status, 1);
+	assert.match(missing.stderr, /ticket spec\/features\/active\/F714-spawn-fails-closed-without-ticket\/ticket\.md is missing from the base commit/);
+	assert.deepEqual(await readdir(join(scratch.root, ".limen/jobs")), []);
+	assert.doesNotMatch(git(scratch.root, "worktree", "list"), /limen-worktrees/);
+	assert.doesNotMatch(git(scratch.root, "branch"), /limen\//);
+	await mkdir(join(scratch.root, "spec/features/active/F714-spawn-fails-closed-without-ticket"), { recursive: true });
+	await writeFile(join(scratch.root, path), "outcome\n");
+	const untracked = limen(scratch, "spawn", task);
+	assert.equal(untracked.status, 1);
+	assert.match(untracked.stderr, /missing from the base commit/);
+	assert.deepEqual(await readdir(join(scratch.root, ".limen/jobs")), []);
+	assert.doesNotMatch(git(scratch.root, "worktree", "list"), /limen-worktrees/);
+	assert.doesNotMatch(git(scratch.root, "branch"), /limen\//);
+	git(scratch.root, "add", path);
+	git(scratch.root, "commit", "-m", "ticket");
+	const committed = limen(scratch, "spawn", task);
+	assert.equal(committed.status, 0, committed.stderr);
+	await waitForState(scratch.root, onlyJobId(committed.stdout), "done");
+});
+
+test("spawn --branch checks the ticket against that branch, not the caller's tree", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	assert.equal(limen(scratch, "init").status, 0);
+	const first = onlyJobId(limen(scratch, "spawn", "make commit").stdout);
+	await waitForState(scratch.root, first, "done");
+	const branch = `limen/${first}`;
+	const jobsBefore = await readdir(join(scratch.root, ".limen/jobs"));
+	const worktreesBefore = git(scratch.root, "worktree", "list");
+	const path = "spec/features/active/F714-resume/ticket.md";
+	await mkdir(join(scratch.root, "spec/features/active/F714-resume"), { recursive: true });
+	await writeFile(join(scratch.root, path), "dirty\n");
+	const dirty = limen(scratch, "spawn", "--branch", branch, `continue Ticket: ${path}`);
+	assert.equal(dirty.status, 1);
+	assert.match(dirty.stderr, /ticket spec\/features\/active\/F714-resume\/ticket\.md is missing from the base commit/);
+	assert.deepEqual(await readdir(join(scratch.root, ".limen/jobs")), jobsBefore);
+	assert.equal(git(scratch.root, "worktree", "list"), worktreesBefore);
+	const worktree = (await readFile(join(scratch.root, ".limen/jobs", first, "worktree"), "utf8")).trim();
+	await mkdir(join(worktree, "spec/features/active/F714-resume"), { recursive: true });
+	await writeFile(join(worktree, path), "on branch\n");
+	git(worktree, "add", path);
+	git(worktree, "commit", "-m", "ticket on branch");
+	const resumed = limen(scratch, "spawn", "--branch", branch, `continue Ticket: ${path}`);
+	assert.equal(resumed.status, 0, resumed.stderr);
+	await waitForState(scratch.root, onlyJobId(resumed.stdout), "done");
 });

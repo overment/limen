@@ -12,6 +12,7 @@ import {
 	addNewWorktree,
 	branchCommit,
 	branchExists,
+	commitHasFile,
 	headCommit,
 	repoRoot,
 	workspaceRepository,
@@ -108,18 +109,19 @@ export async function spawnCommand(args: readonly string[], cwd: string): Promis
 	const worktreeRoot = `${dirname(repository)}/.${basename(repository)}-limen-worktrees`;
 	const requestedPath = `${worktreeRoot}/${id}`;
 	await mkdir(worktreeRoot, { recursive: true });
-	const worktree = executeWorktree(
-		repository,
-		await planWorktree({
-			root: repository,
-			requestedPath,
-			branch,
-			review: options.review,
-			jobsRoot,
-			...(workspace ? { repo: options.repo ?? "" } : {}),
-			...(options.branch ? { requestedBranch: options.branch } : {}),
-		}),
-	);
+	const plan = await planWorktree({
+		root: repository,
+		requestedPath,
+		branch,
+		review: options.review,
+		jobsRoot,
+		...(workspace ? { repo: options.repo ?? "" } : {}),
+		...(options.branch ? { requestedBranch: options.branch } : {}),
+	});
+	const baseCommit = plan.kind === "add-new" ? headCommit(repository) : branchCommit(repository, branch);
+	for (const [, ticket] of task.matchAll(/\bTicket: (spec\/\S+)/g))
+		if (ticket && !commitHasFile(repository, baseCommit, ticket)) throw new Error(`ticket ${ticket} is missing from the base commit`);
+	const worktree = executeWorktree(repository, plan);
 	await pruneFinishedWorktrees(root, [worktree]).catch(() => {});
 	const candidate = options.review ? branchCommit(repository, branch) : undefined;
 	const base = headCommit(worktree);

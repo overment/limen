@@ -29,6 +29,9 @@ export function branchExists(cwd: string, branch: string): boolean {
 export function branchCommit(cwd: string, branch: string): string {
 	return requireGit(cwd, ["rev-parse", `refs/heads/${branch}`]).stdout.trim();
 }
+export function commitHasFile(cwd: string, commit: string, path: string): boolean {
+	return git(cwd, ["cat-file", "-t", `${commit}:${path}`]).stdout.trim() === "blob";
+}
 export function listWorktrees(cwd: string): readonly GitWorktree[] {
 	const fields = requireGit(cwd, ["worktree", "list", "--porcelain", "-z"]).stdout.split("\0");
 	const worktrees: GitWorktree[] = [];
