@@ -187,7 +187,7 @@ limen workspace init
 limen spawn "instruction" [--label L] [--provider P] [--model M] [--thinking T] [--branch B] [--role NAME] [--engine pi|claude] [--timeout 20m] [--task-file F|-] [--prepare CMD]
 limen spawn --repo R "instruction" [--label L] [--model M]
 limen spawn --review --branch B --label L "instruction"
-limen jobs [--running|--active|--all|<id|suffix|label>]
+limen jobs [--running|--active|--all|--label PREFIX|<id|suffix|label>]
 limen diff <id|suffix|label>
 limen prune
 limen steer <id|suffix|label> | --running "correction"

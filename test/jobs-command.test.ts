@@ -278,7 +278,7 @@ test("jobs rejects ambiguous option shapes", async (context) => {
 	const scratch = await scratchRepo();
 	context.after(scratch.cleanup);
 	limen(scratch, "init");
-	for (const args of [["--missing"], ["--running", "extra"]]) {
+	for (const args of [["--missing"], ["--running", "extra"], ["--label"], ["--label", "wave-a", "extra"]]) {
 		const result = limen(scratch, "jobs", ...args);
 		assert.equal(result.status, 1);
 		assert.match(result.stderr, /jobs/);
@@ -374,6 +374,59 @@ setInterval(() => {}, 1000);
 	assert.match(clean.stdout, /files 0/);
 	limen(scratch, "stop", cleanId, "sampled clean");
 	await waitForState(scratch.root, cleanId, "stopped");
+});
+
+test("jobs --label lists matching jobs including hidden terminal ones", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	limen(scratch, "init");
+	const root = join(scratch.root, ".limen/jobs");
+	for (const job of [
+		{ id: "wave-live", state: "running", started: "2026-09-16T20:00:00.000Z", label: "wave-a live" },
+		{ id: "wave-done", state: "done", started: "2026-09-16T19:00:00.000Z", label: "wave-a done" },
+		{ id: "other-done", state: "done", started: "2026-09-16T18:00:00.000Z", label: "other done" },
+	]) {
+		const dir = join(root, job.id);
+		await mkdir(dir);
+		await writeFile(join(dir, "task.md"), "x\n");
+		await writeFile(join(dir, "state"), `${job.state}\n`);
+		await writeFile(join(dir, "label"), `${job.label}\n`);
+		await writeFile(join(dir, "branch"), "main\n");
+		await writeFile(join(dir, "started-at"), `${job.started}\n`);
+		await writeFile(join(dir, "log"), "");
+		if (job.state === "running") {
+			await writeFile(join(dir, "pid"), `${process.pid}\n`);
+			await writeFile(join(dir, "activity"), "think\n");
+		} else await writeFile(join(dir, "tool-calls"), "1\n");
+	}
+	const snapshot = limen(scratch, "jobs");
+	assert.equal(snapshot.status, 0, snapshot.stderr);
+	assert.match(snapshot.stdout, /RUNNING wave-a live/);
+	assert.doesNotMatch(snapshot.stdout, /wave-a done|other done/);
+	assert.match(snapshot.stdout, /2 terminal jobs hidden/);
+	const matched = limen(scratch, "jobs", "--label", "wave-a");
+	assert.equal(matched.status, 0, matched.stderr);
+	assert.match(matched.stdout, /RUNNING wave-a live/);
+	assert.match(matched.stdout, /DONE wave-a done/);
+	assert.doesNotMatch(matched.stdout, /other done/);
+	assert.doesNotMatch(matched.stdout, /terminal jobs hidden|nothing matched/);
+	const human = limenWithEnv(scratch, { LIMEN_VIEW: "human" }, "jobs", "--label", "wave-a");
+	assert.equal(human.status, 0, human.stderr);
+	assert.match(human.stdout, /wave-a live/);
+	assert.match(human.stdout, /wave-a done/);
+	assert.doesNotMatch(human.stdout, /other done/);
+	const miss = limen(scratch, "jobs", "--label", "nope");
+	assert.equal(miss.status, 0, miss.stderr);
+	assert.equal(miss.stdout, "nothing matched\n");
+	assert.doesNotMatch(miss.stdout, /wave-a|other done|--all/);
+	const all = limen(scratch, "jobs", "--all");
+	assert.equal(all.status, 0, all.stderr);
+	assert.match(all.stdout, /RUNNING wave-a live/);
+	assert.match(all.stdout, /DONE wave-a done/);
+	assert.match(all.stdout, /DONE other done/);
+	const detail = limen(scratch, "jobs", "wave-done");
+	assert.equal(detail.status, 0, detail.stderr);
+	assert.match(detail.stdout, /DONE wave-a done/);
 });
 
 async function waitForRecordedCount(root: string, id: string, expected: string): Promise<void> {

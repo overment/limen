@@ -73,7 +73,7 @@ usage:
   limen diff <id|suffix|label>
   limen wait <id|suffix|label>
   limen stop <id|suffix|label> [reason]
-  limen jobs [--running|--active|--all|<id|suffix|label>]
+  limen jobs [--running|--active|--all|--label PREFIX|<id|suffix|label>]
   limen prune
   limen watch <id|suffix|label> | --running
   limen unwatch <id|suffix|label> | --all

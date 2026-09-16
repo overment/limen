@@ -25,13 +25,35 @@ export async function jobsCommand(args: readonly string[], cwd: string): Promise
 		console.log("no jobs");
 		return;
 	}
-	if (typeof selection === "object") {
+	if (typeof selection === "object" && "detail" in selection) {
 		const { id } = await resolveJob(cwd, selection.detail);
 		const loaded = await renderJobDirectory(root, jobsRoot, id, true, human);
 		console.log(human ? humanDetail(loaded.record, paint) : loaded.compact);
 		return;
 	}
 	const order = await orderedJobs(ids, jobsRoot);
+	if (typeof selection === "object") {
+		const labels = await Promise.all(order.map(([id]) => text(`${jobsRoot}/${id}/label`)));
+		const listed = order.filter(([id], index) => (labels[index] || id).startsWith(selection.prefix));
+		if (listed.length === 0) {
+			console.log("nothing matched");
+			return;
+		}
+		const loaded = await Promise.all(listed.map(([id]) => renderJobDirectory(root, jobsRoot, id, false, human)));
+		if (human) {
+			console.log(
+				humanSnapshot(
+					loaded.map((item) => item.record),
+					tallyStates(listed.map(([, state]) => state)),
+					false,
+					paint,
+				),
+			);
+			return;
+		}
+		console.log(loaded.map((item) => item.compact).join("\n"));
+		return;
+	}
 	if (human) {
 		const running = order.filter(([, state]) => state === "running");
 		const terminal = order.filter(([, state]) => state !== "running");
@@ -63,7 +85,11 @@ export async function jobsCommand(args: readonly string[], cwd: string): Promise
 	console.log(hiddenCount ? `${summary}\n${hiddenCount} terminal ${hiddenCount === 1 ? "job" : "jobs"} hidden · use limen jobs --all or limen jobs <id> for detail` : summary);
 }
 function select(args: readonly string[]) {
-	if (args.length > 1) throw new Error("jobs accepts no argument, --running, --active, --all, or one job id, suffix, or label");
+	if (args[0] === "--label") {
+		if (args.length !== 2 || !args[1] || args[1].startsWith("--")) throw new Error("jobs --label requires a prefix");
+		return { prefix: args[1] };
+	}
+	if (args.length > 1) throw new Error("jobs accepts no argument, --running, --active, --all, --label <prefix>, or one job id, suffix, or label");
 	const arg = args[0];
 	if (!arg) return "snapshot";
 	if (arg === "--running" || arg === "--active") return "running";
