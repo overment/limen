@@ -1,0 +1,22 @@
+Same settled tip does not ping twice (F713)
+
+Candidate: 1cd1f68fc1cdafa21ccd77b70442c0530f87afee
+  fix: skip automatic finish ping when the settled tip already notified
+
+Discriminating checks (also in native.log):
+- second job at the same recorded tip skips automatic ping
+- a job that settles at a different recorded tip still sends
+- empty failed skip does not quiet a later job at the same tip
+- concurrent jobs at the same recorded tip send at most once
+- two detached jobs that settle at the same HEAD send one automatic ping
+- a detached job that commits still sends after another job at the previous tip
+
+Native lane at that commit: npm run check
+- tsc --noEmit passed
+- biome check . : 82 files, no fixes
+- node --test test/*.test.ts: 399/399 passed, 0 failed, duration_ms 571060
+- exit 0 (native-exit.txt)
+
+Empty failed/stopped skip and done-with-empty-result send remain in the
+finish-webhook matrix; continuation at the same HEAD now stays quiet and still
+keeps the parent's config path.
