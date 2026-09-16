@@ -3,6 +3,7 @@ import { continueCommand } from "./commands/continue.ts";
 import { diffCommand } from "./commands/diff.ts";
 import { initCommand, workspaceCommand } from "./commands/init.ts";
 import { jobsCommand } from "./commands/jobs.ts";
+import { landCommand } from "./commands/land.ts";
 import { linearCommand } from "./commands/linear.ts";
 import { openCommand } from "./commands/open.ts";
 import { pruneCommand } from "./commands/prune.ts";
@@ -26,6 +27,7 @@ const COMMANDS = {
 	steer: steerCommand,
 	stop: stopCommand,
 	wait: waitCommand,
+	land: landCommand,
 	jobs: jobsCommand,
 	prune: pruneCommand,
 	watch: watchCommand,
@@ -44,6 +46,7 @@ const COMMANDS = {
 	| "steer"
 	| "stop"
 	| "wait"
+	| "land"
 	| "jobs"
 	| "prune"
 	| "watch"
@@ -72,6 +75,7 @@ usage:
   limen steer <id|suffix|label> | --running "correction"
   limen diff <id|suffix|label>
   limen wait <id|suffix|label>
+  limen land <id|suffix|label> [--onto BRANCH] [--yes]  # merge a done job onto the current branch
   limen stop <id|suffix|label> [reason]
   limen jobs [--running|--active|--all|--label PREFIX|<id|suffix|label>]
   limen prune

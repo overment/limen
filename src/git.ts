@@ -75,6 +75,13 @@ export function pruneWorktrees(cwd: string): void {
 export function headCommit(cwd: string): string {
 	return requireGit(cwd, ["rev-parse", "HEAD"]).stdout.trim();
 }
+export function currentBranch(cwd: string): string {
+	return requireGit(cwd, ["symbolic-ref", "--short", "HEAD"]).stdout.trim();
+}
+export function mergeBranch(cwd: string, branch: string): string {
+	requireGit(cwd, ["check-ref-format", "--branch", branch]);
+	return requireGit(cwd, ["merge", "--no-edit", branch]).stdout.trimEnd();
+}
 export function commitList(cwd: string, base: string, branch: string): string | undefined {
 	const result = git(cwd, ["log", "--oneline", `${base}..${branch}`]);
 	return result.status === 0 ? result.stdout.trimEnd() : undefined;

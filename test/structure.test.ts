@@ -17,8 +17,8 @@ test("architecture stays small, pure, direct, and dependency-free", async () => 
 	const source = await filesBelow(join(ROOT, "src"));
 	const sourceLines = (await Promise.all(source.map((path) => readFile(path, "utf8")))).reduce((sum, text) => sum + text.split("\n").length - 1, 0);
 	assert.ok(
-		sourceLines <= 4079,
-		`src has ${sourceLines} lines; includes bounded finish-turn inspection, pruned-checkout continuation, empty-result finish suppression, same-tip finish quieting, spawn fail-closed on a ticket missing from the base commit, hosted PATH plus HERDR_ENV, and jobs label-prefix filter`,
+		sourceLines <= 4160,
+		`src has ${sourceLines} lines; includes bounded finish-turn inspection, pruned-checkout continuation, empty-result finish suppression, same-tip finish quieting, spawn fail-closed on a ticket missing from the base commit, hosted PATH plus HERDR_ENV, jobs label-prefix filter, and land merging a done job`,
 	);
 	assert.doesNotMatch(await readFile(join(ROOT, "src/job.ts"), "utf8"), /from ["']node:/);
 	assert.deepEqual((await readdir(join(ROOT, "src/commands"))).sort(), [
@@ -27,6 +27,7 @@ test("architecture stays small, pure, direct, and dependency-free", async () => 
 		"diff.ts",
 		"init.ts",
 		"jobs.ts",
+		"land.ts",
 		"linear.ts",
 		"open.ts",
 		"prune.ts",
@@ -48,7 +49,7 @@ test("architecture stays small, pure, direct, and dependency-free", async () => 
 	const main = await readFile(join(ROOT, "src/main.ts"), "utf8");
 	assert.match(
 		main,
-		/satisfies\s+Record<\s*\|?\s*"init"\s*\|\s*"workspace"\s*\|\s*"spawn"\s*\|\s*"continue"\s*\|\s*"diff"\s*\|\s*"steer"\s*\|\s*"stop"\s*\|\s*"wait"\s*\|\s*"jobs"\s*\|\s*"prune"\s*\|\s*"watch"\s*\|\s*"unwatch"\s*\|\s*"open"\s*\|\s*"close"\s*\|\s*"sweep"\s*\|\s*"linear"\s*\|\s*"ticket-author"\s*,?\s*Command\s*>/,
+		/satisfies\s+Record<\s*\|?\s*"init"\s*\|\s*"workspace"\s*\|\s*"spawn"\s*\|\s*"continue"\s*\|\s*"diff"\s*\|\s*"steer"\s*\|\s*"stop"\s*\|\s*"wait"\s*\|\s*"land"\s*\|\s*"jobs"\s*\|\s*"prune"\s*\|\s*"watch"\s*\|\s*"unwatch"\s*\|\s*"open"\s*\|\s*"close"\s*\|\s*"sweep"\s*\|\s*"linear"\s*\|\s*"ticket-author"\s*,?\s*Command\s*>/,
 	);
 });
 
