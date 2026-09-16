@@ -1,0 +1,3 @@
+# Outcome
+
+Finish inspection already separates configured, per-target transport, and bot-turn. Johnny's export-hold proof on this VPS showed accepted HTTP with bot-turn unobserved while the genuine export was held, then observed for target 1 after atomic release, without a second send. Proof job `2026-09-12-f091-johnny-export-hold-proof-03388067` at source `484814c`; artifacts under `/home/overment/limen-evidence/johnny-finish-go-20260912/` (control vs observed CLI views, mapping/control/release attestations). Inspection code landed earlier as `87dd357`. This wave did not send another live ping; it verified those retained receipts. HTTP remains distinct from an observed turn. Adam reviews; no independent reviewer.
