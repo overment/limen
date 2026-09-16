@@ -1,0 +1,193 @@
+TAP version 13
+# (node:64503) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: continue refuses a pruned checkout when its branch is missing without writing records
+not ok 1 - continue refuses a pruned checkout when its branch is missing without writing records
+  ---
+  duration_ms: 13575.42575
+  type: 'test'
+  location: '/private/tmp/limen-remove-audio-main.T2VNje/test/continue-command.test.ts:226:2'
+  failureType: 'testCodeFailure'
+  error: |-
+    The expression evaluated to a falsy value:
+
+      assert.ok(refused.stderr.includes(`branch ${branch} is missing in ${scratch.root}; restore that branch before continuing`))
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    TestContext.<anonymous> (file:///private/tmp/limen-remove-audio-main.T2VNje/test/continue-command.test.ts:246:11)
+    async Test.run (node:internal/test_runner/test:1069:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:332:3)
+  ...
+# (node:68699) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: hosted continue survives a killed caller and passes durable @continue, not @task
+not ok 2 - hosted continue survives a killed caller and passes durable @continue, not @task
+  ---
+  duration_ms: 16745.884667
+  type: 'test'
+  location: '/private/tmp/limen-remove-audio-main.T2VNje/test/hosted-spawn.test.ts:1053:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly deep-equal:
+    + actual - expected
+
+      {
+    +   file: '/private/var/folders/_2/zg9lhmwx3c53w15w_vp606340000gn/T/limen-test-DRSEed/repo/.limen/jobs/2026-09-16-f037-parent-continue-bc57f6a2/continue',
+    -   file: '/var/folders/_2/zg9lhmwx3c53w15w_vp606340000gn/T/limen-test-DRSEed/repo/.limen/jobs/2026-09-16-f037-parent-continue-bc57f6a2/continue',
+        text: 'now refine the seam\n'
+      }
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    file: '/var/folders/_2/zg9lhmwx3c53w15w_vp606340000gn/T/limen-test-DRSEed/repo/.limen/jobs/2026-09-16-f037-parent-continue-bc57f6a2/continue'
+    text: |-
+      now refine the seam
+
+  actual:
+    file: '/private/var/folders/_2/zg9lhmwx3c53w15w_vp606340000gn/T/limen-test-DRSEed/repo/.limen/jobs/2026-09-16-f037-parent-continue-bc57f6a2/continue'
+    text: |-
+      now refine the seam
+
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///private/tmp/limen-remove-audio-main.T2VNje/test/hosted-spawn.test.ts:1084:9)
+    async Test.run (node:internal/test_runner/test:1069:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:332:3)
+  ...
+# (node:73898) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Preparing worktree (detached HEAD 03cedff)
+# Preparing worktree (detached HEAD 03cedff)
+# Preparing worktree (detached HEAD 03cedff)
+# Subtest: prune keeps nested running jobs owned by another checkout
+not ok 3 - prune keeps nested running jobs owned by another checkout
+  ---
+  duration_ms: 6588.891709
+  type: 'test'
+  location: '/private/tmp/limen-remove-audio-main.T2VNje/test/prune-command.test.ts:66:2'
+  failureType: 'testCodeFailure'
+  error: |-
+    The expression evaluated to a falsy value:
+
+      assert.ok(git(scratch.root, "worktree", "list", "--porcelain").includes(`worktree ${child}\n`))
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    TestContext.<anonymous> (file:///private/tmp/limen-remove-audio-main.T2VNje/test/prune-command.test.ts:98:10)
+    async Test.run (node:internal/test_runner/test:1069:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:332:3)
+  ...
+# Preparing worktree (detached HEAD d8f7ba9)
+# Preparing worktree (detached HEAD d8f7ba9)
+# Preparing worktree (detached HEAD d8f7ba9)
+# Subtest: spawn keeps nested running jobs owned by another checkout
+not ok 4 - spawn keeps nested running jobs owned by another checkout
+  ---
+  duration_ms: 11065.17725
+  type: 'test'
+  location: '/private/tmp/limen-remove-audio-main.T2VNje/test/prune-command.test.ts:66:2'
+  failureType: 'testCodeFailure'
+  error: |-
+    The expression evaluated to a falsy value:
+
+      assert.ok(git(scratch.root, "worktree", "list", "--porcelain").includes(`worktree ${child}\n`))
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    TestContext.<anonymous> (file:///private/tmp/limen-remove-audio-main.T2VNje/test/prune-command.test.ts:98:10)
+    async Test.run (node:internal/test_runner/test:1069:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:752:7)
+  ...
+# Preparing worktree (detached HEAD 4aed27d)
+# Subtest: leftover sweep keeps a nested container with a locked registered child
+not ok 5 - leftover sweep keeps a nested container with a locked registered child
+  ---
+  duration_ms: 5579.781917
+  type: 'test'
+  location: '/private/tmp/limen-remove-audio-main.T2VNje/test/prune-command.test.ts:115:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    The expression evaluated to a falsy value:
+
+      assert.ok(git(scratch.root, "worktree", "list", "--porcelain").includes(`worktree ${child}\n`))
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    TestContext.<anonymous> (file:///private/tmp/limen-remove-audio-main.T2VNje/test/prune-command.test.ts:127:9)
+    async Test.run (node:internal/test_runner/test:1069:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:752:7)
+  ...
+# (node:81109) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: independent jobs can run concurrently and are merely announced
+not ok 6 - independent jobs can run concurrently and are merely announced
+  ---
+  duration_ms: 13411.566792
+  type: 'test'
+  location: '/private/tmp/limen-remove-audio-main.T2VNje/test/spawn-command.test.ts:198:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    The input did not match the regular expression /note: 1 job already running/. Input:
+
+    'started second\n2026-09-16-second-a812d5a3\n'
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual: |-
+    started second
+    2026-09-16-second-a812d5a3
+
+  operator: 'match'
+  stack: |-
+    TestContext.<anonymous> (file:///private/tmp/limen-remove-audio-main.T2VNje/test/spawn-command.test.ts:205:9)
+    async Test.run (node:internal/test_runner/test:1069:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:332:3)
+  ...
+# (node:85372) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: sleeping descendant discovery delays stop only through its short bound
+not ok 7 - sleeping descendant discovery delays stop only through its short bound
+  ---
+  duration_ms: 9755.001833
+  type: 'test'
+  location: '/private/tmp/limen-remove-audio-main.T2VNje/test/stop-command.test.ts:212:1'
+  failureType: 'testCodeFailure'
+  error: 'stop must wait only for the bounded ps query, took 2473ms'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    TestContext.<anonymous> (file:///private/tmp/limen-remove-audio-main.T2VNje/test/stop-command.test.ts:224:9)
+    async Test.run (node:internal/test_runner/test:1069:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:332:3)
+  ...
+1..7
+# tests 7
+# suites 0
+# pass 0
+# fail 7
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 78932.495583
