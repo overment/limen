@@ -1,7 +1,6 @@
 import { join } from "node:path";
 import { assistantStopReason } from "../src/stream.ts";
 import { formatDrift, inheritFile, listDrift, readOptional } from "./inherit.ts";
-import { registerSpeak, type SpeakPiApi } from "./speak.ts";
 
 const CONTEXT_TYPE = "limen-project-context";
 const MAX_CONTEXT_LINES = 1000;
@@ -25,7 +24,7 @@ type ToolEvent = {
 	readonly content?: readonly ToolContent[];
 };
 type ToolPatch = { readonly content: ToolContent[] };
-type PiApi = SpeakPiApi & {
+type PiApi = {
 	on(event: "before_agent_start", handler: (event: StartEvent, context: Context) => StartResult | undefined): void;
 	on(event: "message_end", handler: (event: unknown) => void): void;
 	on(event: "tool_result", handler: (event: ToolEvent, context: Context) => ToolPatch | undefined): void;
@@ -35,7 +34,6 @@ type ReminderKind = "specs" | "style" | "vision";
 
 /** Stable guidance rides the system prompt once per call. The per-turn note is a short cue; tool results recall the rule that applies. */
 export default function limenCommunication(pi: PiApi): void {
-	registerSpeak(pi);
 	let lastTouch: string | undefined;
 	let lastFailure: string | undefined;
 	pi.on("before_agent_start", (event, context) => {

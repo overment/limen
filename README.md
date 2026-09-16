@@ -165,8 +165,6 @@ Optional overlays replace a package default for that file only: `AGENTS.md`, `.a
 
 The communication hook puts the shop manual, speech register, vision, and styleguide on the system prompt once per model call (board digest last, so a NOW/NEXT change does not break the cached prefix). A short per-turn note names the audience and the reply rules; a wake cue lives there, not in the system prompt. After a write or edit, the tool result recalls the rule that applies. Updating the clone updates every project on that machine.
 
-If the optional `speak` CLI is executable on `PATH`, Pi also gets a `/speak` command. It reads the latest assistant response as a compressed spoken brief without starting another model turn; `/speak full` skips compression. The command is absent when the CLI is unavailable, and Limen never starts audio on its own.
-
 ## Recovery
 
 The coordinator does this. You only need it if you are looking at a stuck tab yourself.
