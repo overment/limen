@@ -13,11 +13,10 @@
 
 ## NOW
 
-- Spawn fail-closed when the ticket path is missing from the job base commit (`F714-spawn-fails-closed-without-ticket`, 🟠 ACTIVE).
+- Hosted Herdr tabs get reliable `/usr/bin` git on PATH and `HERDR_ENV` (`F715-hosted-path-and-herdr-env`, 🟠 ACTIVE).
 
 ## NEXT
 
-- Hosted Herdr tabs get reliable `/usr/bin` git on PATH and `HERDR_ENV` (new ticket).
 - `limen jobs` can filter by label prefix or wave tag (new ticket).
 - Finish inspection shows a real bot-turn receipt (`F091-finish-job-shows-bot-turn-receipt`, 🔴 PLANNED).
 - Optional `limen land` only if the remaining slices are healthy.
@@ -31,6 +30,7 @@
 
 ## PROVEN
 
+- `F714-spawn-fails-closed-without-ticket` (🟢 PROVEN): spawn refuses a `Ticket:` path missing from the base commit, with no leftover worktree. Landed `d220b3b`; worker native 401/401 passed.
 - `F713-same-tip-finish-quiet` (🟢 PROVEN): same settled git tip sends at most one automatic finish ping. Landed `1cd1f68` / `9f3917c`; worker native 399/399 passed; empty failed/stopped skips still do not consume the tip.
 - `F711-empty-finish-webhook-quiet` (🟢 PROVEN): empty failed and stopped jobs skip automatic finish webhooks. Landed `e9b29fe`; skip is recorded in the aggregate receipt; done jobs still send.
 - `F709-native-checks-give-a-repeatable-verdict` (🟢 PROVEN): test-only registry/startup fixtures landed `2181d35`; repaired native lane passed TypeScript, Biome and all 370 tests, with earlier failures retained and no runtime, wake-ceiling or timeout changes.
@@ -40,6 +40,5 @@
 - `F092-finish-webhook-names-are-bot-agnostic` (🟢 PROVEN): neutral configuration keys landed `a76e0ae`; worker focused 76/76 and coordinator 79/79 passed, full native 371 passed with one registry-lock timeout retained; coordinator-inspected, private migration operator-owned.
 - `F707-herdr-limen-truthful-status` (🟢 PROVEN): settled panes show RUNNING jobs without erasing warnings; the operator guide separates job, merge, and wake evidence. Adam authorized landing `756c747`; 70 candidate checks passed, one post-merge timing timeout passed recheck, full suite incomplete.
 - `F089-workers-accept-explicit-pi-flags` (🟢 PROVEN): spawn and continuation forward literal Pi provider/model/thinking flags in both modes. Landed `cd8cbb1`; exact-argv checks passed, full native lane incomplete; Adam owns review.
-- `F088-spawns-use-explicit-model-defaults` (🟢 PROVEN): coordinators use Codex/xhigh and Pi jobs default to Codex/high without inheriting global Grok. Landed `aa5382e`; focused checks passed, full native lane incomplete; Adam owns review.
-- 2026-09: 42 landed. Coordinators skip settled history while completion wakes remain observable (F085, `5a00065`). Specs keep one check and one constraint per line (F083, `7d966e5`). Hosted jobs end themselves; review loops stop at a ceiling; failed turns and changed-file counts are visible; titles name the change and identifiers carry their meaning; handoffs point at board-owned boundaries; one living picture follows system shape; authorized research compares named sources before judgment; workers falsify candidates and retain commit-bound proof beyond their worktrees; one correction reaches watched live jobs; visual evidence names what opened frames showed. spec/features/done/2026-09/
+- 2026-09: 43 landed. Coordinators use Codex/xhigh and Pi jobs default to Codex/high without inheriting global Grok (F088, `aa5382e`). Coordinators skip settled history while completion wakes remain observable (F085, `5a00065`). Specs keep one check and one constraint per line (F083, `7d966e5`). Hosted jobs end themselves; review loops stop at a ceiling; failed turns and changed-file counts are visible; titles name the change and identifiers carry their meaning; handoffs point at board-owned boundaries; one living picture follows system shape; authorized research compares named sources before judgment; workers falsify candidates and retain commit-bound proof beyond their worktrees; one correction reaches watched live jobs; visual evidence names what opened frames showed. spec/features/done/2026-09/
 - 2026-08: 44 landed. Hosted jobs run in a named tab; wakes retry; the process tree is contained. spec/features/done/2026-08/
