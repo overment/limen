@@ -13,7 +13,7 @@
 
 ## NOW
 
-- Simple-path wave complete. No implementation running.
+- Shop manual names the coordinator as a Herdr Pi tab (`F718-coordinator-is-not-a-spawn`, 🟠 ACTIVE): prose only; no `--role coordinator`.
 
 ## NEXT
 

@@ -2,6 +2,21 @@
 
 This repository uses plain specifications, Git, and `limen` to coordinate one human with several coding sessions. Shop-manual, role, and speech defaults live in the installed `limen` package; a project file at the same path replaces that default.
 
+## Coordinator
+
+The coordinator is a hosted Pi session in Herdr for this plant (`LIMEN_COORDINATOR=1`). It owns tickets and `spec/build.md`, and it decides spawn and merge. It is not a limen job.
+
+Workers, reviewers, and advisors exist only through `limen spawn`. There is no `--role coordinator`. Never spawn a coordinator job.
+
+`LIMEN_COORDINATOR=1` on a spawn shell does not change the job's role.
+
+**Herdr.** Prefer a space named for the plant (`limen`, or `alice limen`) — not a space named only `workers`. Label the coordinator tab clearly. Worker tabs come from spawn. Shepherd talks to the Pi coordinator.
+
+| You say | Limen reality |
+|---|---|
+| Tony spawns a coordinator | Start a hosted Pi tab in the plant's Herdr space (`LIMEN_COORDINATOR=1`). |
+| The coordinator manages workers | That Pi session runs `limen spawn`. |
+
 ## Durable intent
 
 - `spec/vision.md` explains durable intent. It is human-owned: propose a change and ask before rewriting it. Keep compact, decision-useful bullets under **Product principles** and **Current direction**. The coordinator holds it in the system prompt; a worker is pointed at the file.
@@ -45,7 +60,7 @@ Herdr is the visible layout when it is running. Job files under `.limen/jobs/` a
 
 **`--label` is the tab title. Always pass it.** Say what a person will see change when this lands, in plain words, about forty characters; the feature number goes last, not first. A repair, a resume, or a review names its round so sibling tabs differ. That string is the Herdr tab, the job-ID slug, and — when it contains `FNNN` — the agent name `limen-fNNN-<hex>` (the id hoists the number, however the words are ordered). The sidebar description is the role (`limen <role>`), not the label. Omit `--label` and the first 80 characters of the task become the tab — that is how unreadable rows appear. Good: `inline model setup in chat · F422`, `idle backstop repair 1 · F065`, `hosted stop review 1 · F021`. Bad: the whole prompt, or a label that is only `F422`.
 
-**`--role <name>`** loads that preamble (`templates/<name>.md` or `.agents/limen/<name>.md`) and opens the space `<project> <name>s`. Default is worker. Still pass `--detached` when a later ritual says so — the name does not pick the spawn mode.
+**`--role <name>`** loads that preamble (`templates/<name>.md` or `.agents/limen/<name>.md`) and opens the space `<project> <name>s`. Default is worker. Still pass `--detached` when a later ritual says so — the name does not pick the spawn mode. Those spaces are for jobs. The coordinator tab belongs in the plant's limen space, not in `workers`.
 
 **Quality pass.** After ten proven landings since the last findings file under `spec/quality/` — the same window PROVEN keeps — or when the human asks, start one unprompted with `--role quality --detached`, using the project's chosen model (package fallback: `--model gpt-5.6-sol:xhigh`). Interleave it with seat work; do not wait. Not after every merge, not on a calendar, never as a condition of landing. The job writes `spec/quality/YYYY-MM.md` (or `YYYY-MM-2.md` if that month already has a file) and does not rewrite the tree. Turn the findings into planned tickets or one small slice; the quality job does not. Not a merge gate.
 

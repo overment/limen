@@ -63,7 +63,7 @@ pi --provider openai-codex --model gpt-6-astra --thinking xhigh
 
 `limen init` plants what the project owns (vision, board, feature lanes, styleguide) and a stub that loads package hooks. It never overwrites existing project files. It always deletes leftover `.pi/extensions/limen-*.ts` hook copies so they cannot load beside the stub. `limen init --drop-leftovers` deletes only prompt copies that still match the package.
 
-`pi` in that directory is the coordinator. From here you talk. You do not drive the job CLI.
+`pi` in that directory is the coordinator. From here you talk. You do not drive the job CLI. `limen spawn` starts workers, reviewers, and advisors — not a coordinator.
 
 ## How you work
 
