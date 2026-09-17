@@ -13,7 +13,7 @@
 
 ## NOW
 
-- Shop manual names the coordinator as a Herdr Pi tab (`F718-coordinator-is-not-a-spawn`, 🟠 ACTIVE): prose only; no `--role coordinator`.
+- Simple-path wave complete. No implementation running.
 
 ## NEXT
 
@@ -28,6 +28,7 @@
 
 ## PROVEN
 
+- `F718-coordinator-is-not-a-spawn` (🟢 PROVEN): shop manual names the coordinator as a hosted Pi tab, not a spawn. Landed `5305eeb`; focused structure, inherit, communication-hook, and init checks passed 32/32. Reload the coordinator for the new text.
 - `F717-land-merges-a-ready-job` (🟢 PROVEN): `limen land <id>` merges a done job onto the current branch with ordinary Git. Landed `659c05b`; `--yes` for plant use; focused tests passed; native 405/406 with unrelated wake-sweep timing miss.
 - `F091-finish-job-shows-bot-turn-receipt` (🟢 PROVEN): finish inspection separates transport from bot turn. Johnny export-hold on this VPS: accepted HTTP stayed unobserved while the export was held, then observed after release without a second send. Inspection `87dd357`; proof job `2026-09-12-f091-johnny-export-hold-proof-03388067`.
 - `F716-jobs-filter-by-label` (🟢 PROVEN): `limen jobs --label PREFIX` lists matching jobs including hidden terminal ones. Landed `4cc8bc9`; focused tests passed; native 402/403 with unrelated wake-sweep timing miss.
@@ -37,6 +38,5 @@
 - `F711-empty-finish-webhook-quiet` (🟢 PROVEN): empty failed and stopped jobs skip automatic finish webhooks. Landed `e9b29fe`; skip is recorded in the aggregate receipt; done jobs still send.
 - `F709-native-checks-give-a-repeatable-verdict` (🟢 PROVEN): test-only registry/startup fixtures landed `2181d35`; repaired native lane passed TypeScript, Biome and all 370 tests, with earlier failures retained and no runtime, wake-ceiling or timeout changes.
 - `F087-prompt-policy-has-one-home` (🟢 PROVEN): handoff rules and owner-choice precedence landed `ec65dc2` without runtime changes; focused 71 and coordinator 12 passed, packaged histories verified, full native 368 passed with one registry-lock cancellation retained.
-- `F049-running-owner-truth` (🟢 PROVEN): watch-only supervisor recovery landed `6662bac` after a test-only wake-fixture correction; focused 103 passed and corrected wake/recovery 50 passed, original full native 385 passed with wake failure plus registry timeout retained; open coordinators need reload.
-- 2026-09: 47 landed. Hosted jobs start under a killed caller (F048, `c6d4d6c`). Neutral finish-webhook names (F092, `a76e0ae`). Settled panes show RUNNING jobs without erasing warnings (F707, `756c747`). Spawn and continuation forward literal Pi flags (F089, `cd8cbb1`). Coordinators use Codex/xhigh and Pi jobs default to Codex/high without inheriting global Grok (F088, `aa5382e`). Coordinators skip settled history while completion wakes remain observable (F085, `5a00065`). Specs keep one check and one constraint per line (F083, `7d966e5`). Hosted jobs end themselves; review loops stop at a ceiling; failed turns and changed-file counts are visible; titles name the change and identifiers carry their meaning; handoffs point at board-owned boundaries; one living picture follows system shape; authorized research compares named sources before judgment; workers falsify candidates and retain commit-bound proof beyond their worktrees; one correction reaches watched live jobs; visual evidence names what opened frames showed. spec/features/done/2026-09/
+- 2026-09: 48 landed. A dead supervisor on a live hosted job regains watch-only recovery (F049, `6662bac`). Hosted jobs start under a killed caller (F048, `c6d4d6c`). Neutral finish-webhook names (F092, `a76e0ae`). Settled panes show RUNNING jobs without erasing warnings (F707, `756c747`). Spawn and continuation forward literal Pi flags (F089, `cd8cbb1`). Coordinators use Codex/xhigh and Pi jobs default to Codex/high without inheriting global Grok (F088, `aa5382e`). Coordinators skip settled history while completion wakes remain observable (F085, `5a00065`). Specs keep one check and one constraint per line (F083, `7d966e5`). Hosted jobs end themselves; review loops stop at a ceiling; failed turns and changed-file counts are visible; titles name the change and identifiers carry their meaning; handoffs point at board-owned boundaries; one living picture follows system shape; authorized research compares named sources before judgment; workers falsify candidates and retain commit-bound proof beyond their worktrees; one correction reaches watched live jobs; visual evidence names what opened frames showed. spec/features/done/2026-09/
 - 2026-08: 44 landed. Hosted jobs run in a named tab; wakes retry; the process tree is contained. spec/features/done/2026-08/
