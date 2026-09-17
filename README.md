@@ -63,7 +63,7 @@ pi --provider openai-codex --model gpt-6-astra --thinking xhigh
 
 `limen init` plants what the project owns (vision, board, feature lanes, styleguide) and a stub that loads package hooks. It never overwrites existing project files. It always deletes leftover `.pi/extensions/limen-*.ts` hook copies so they cannot load beside the stub. `limen init --drop-leftovers` deletes only prompt copies that still match the package.
 
-`pi` in that directory is the coordinator. From here you talk. You do not drive the job CLI. `limen spawn` starts workers, reviewers, and advisors — not a coordinator.
+`pi` in that directory is the coordinator (`LIMEN_COORDINATOR=1`). From here you talk. You do not drive the job CLI. `limen spawn` starts workers, reviewers, and advisors — not a coordinator; the same env var on a spawn shell does not change the job's role. Prefer a Herdr space named for the plant (`limen`, or `alice limen`), not a space named only `workers`. Label the coordinator tab clearly. Worker tabs come from spawn. The inherited shop manual (`templates/agents.md`; a project `AGENTS.md` overlays it) carries the same layout rules.
 
 ## How you work
 
