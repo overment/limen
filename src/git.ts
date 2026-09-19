@@ -26,6 +26,9 @@ export function branchExists(cwd: string, branch: string): boolean {
 	requireGit(cwd, ["check-ref-format", "--branch", branch]);
 	return git(cwd, ["show-ref", "--verify", "--quiet", `refs/heads/${branch}`]).status === 0;
 }
+export function branchMerged(cwd: string, branch: string): boolean {
+	return git(cwd, ["merge-base", "--is-ancestor", `refs/heads/${branch}`, "HEAD"]).status === 0;
+}
 export function branchCommit(cwd: string, branch: string): string {
 	return requireGit(cwd, ["rev-parse", `refs/heads/${branch}`]).stdout.trim();
 }

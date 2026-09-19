@@ -74,7 +74,7 @@ Herdr is the visible layout when it is running. Job files under `.limen/jobs/` a
 - `limen open <id|label>` — focus the job’s Herdr tab, or recreate a log/watch place if it was closed.
 - `limen close FNNN` — close leftover tabs for a feature already in `done/` or `dropped/`.
 - `limen stop <id|label> [reason]` — stop a running job.
-- `limen prune` — drop finished worktrees that no live job still needs, and job directories with no `state`.
+- `limen prune` — drop finished worktrees that no live job still needs, and job directories with no `state`. `limen prune --retire` deletes finished job records whose branches are merged or dropped; `--dry-run` prints the ids and removes nothing. Spawn and sweep never retire records.
 - `--prepare CMD` or `LIMEN_PREPARE` — run in the worktree after it exists, before Pi starts; failure is logged, not fatal. Usual value: `pnpm install --frozen-lockfile --prefer-offline`.
 
 **This conversation's tab.** When `HERDR_ENV=1`, the coordinator owns this tab title. It is not a `--label`: a worker label names a landing, a conversation tab names a subject. Do not borrow the label shape here. The title is a stable stem plus an optional stage tail — `chat settings`, then `chat settings · 2 running`. The stem is what the human calls this conversation; the tail is the only part that ever moves.

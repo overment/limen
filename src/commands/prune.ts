@@ -1,12 +1,42 @@
 import { readdir, readFile, realpath, rm } from "node:fs/promises";
 import { basename, dirname, resolve } from "node:path";
-import { limenRoot, listWorktrees, pruneWorktrees, removeWorktree, workspaceRepository } from "../git.ts";
+import { branchExists, branchMerged, limenRoot, listWorktrees, pruneWorktrees, removeWorktree, workspaceRepository } from "../git.ts";
 import { liveJob } from "../reap.ts";
 
 export async function pruneCommand(args: readonly string[], cwd: string): Promise<void> {
-	if (args.length) throw new Error("prune takes no arguments");
-	const removed = await pruneFinishedWorktrees(limenRoot(cwd));
-	console.log(removed === 0 ? "no finished worktrees" : `pruned ${removed} finished worktree${removed === 1 ? "" : "s"}`);
+	const retire = args.includes("--retire"),
+		dryRun = args.includes("--dry-run");
+	if (args.some((value) => value !== "--retire" && value !== "--dry-run")) throw new Error("prune accepts no arguments, --retire, or --retire --dry-run");
+	if (dryRun && !retire) throw new Error("prune --dry-run requires --retire");
+	if (!retire) {
+		const removed = await pruneFinishedWorktrees(limenRoot(cwd));
+		console.log(removed === 0 ? "no finished worktrees" : `pruned ${removed} finished worktree${removed === 1 ? "" : "s"}`);
+		return;
+	}
+	const ids = await retireFinishedJobs(limenRoot(cwd), dryRun);
+	if (dryRun && ids.length) console.log(ids.map((id) => `would retire ${id}`).join("\n"));
+	else console.log(ids.length === 0 ? "no finished jobs to retire" : `retired ${ids.length} job${ids.length === 1 ? "" : "s"}`);
+}
+
+async function retireFinishedJobs(root: string, dryRun: boolean): Promise<readonly string[]> {
+	const jobsRoot = `${root}/.limen/jobs`,
+		retired: string[] = [];
+	for (const id of (await jobIds(jobsRoot)).sort()) {
+		const jobDir = `${jobsRoot}/${id}`;
+		const state = await text(`${jobDir}/state`);
+		if (state !== "done" && state !== "failed" && state !== "stopped") continue;
+		try {
+			const branch = await text(`${jobDir}/branch`);
+			const repo = branch ? await text(`${jobDir}/repo`) : "";
+			const repository = repo ? workspaceRepository(root, repo) : root;
+			if (branch && branchExists(repository, branch) && !branchMerged(repository, branch)) continue;
+		} catch {
+			continue;
+		}
+		if (!dryRun) await rm(jobDir, { recursive: true, force: true });
+		retired.push(id);
+	}
+	return retired;
 }
 
 export async function pruneFinishedWorktrees(root: string, keep: readonly string[] = []): Promise<number> {
@@ -15,13 +45,8 @@ export async function pruneFinishedWorktrees(root: string, keep: readonly string
 	for (const path of keep) keepPaths.add(await resolved(path));
 	const repositories = new Set<string>();
 	let removed = 0;
-	const entries = await readdir(jobsRoot, { withFileTypes: true }).catch((error: unknown) => {
-		if (typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT") return [];
-		throw error;
-	});
-	for (const entry of entries) {
-		if (!entry.isDirectory()) continue;
-		const jobDir = `${jobsRoot}/${entry.name}`;
+	for (const id of await jobIds(jobsRoot)) {
+		const jobDir = `${jobsRoot}/${id}`;
 		if (!(await text(`${jobDir}/state`))) {
 			await rm(jobDir, { recursive: true, force: true });
 			removed += 1;
@@ -64,6 +89,13 @@ export async function pruneFinishedWorktrees(root: string, keep: readonly string
 	return removed;
 }
 
+async function jobIds(jobsRoot: string): Promise<string[]> {
+	const entries = await readdir(jobsRoot, { withFileTypes: true }).catch((error: unknown) => {
+		if (typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT") return [];
+		throw error;
+	});
+	return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
+}
 function resolved(path: string): Promise<string> {
 	return realpath(path).then(
 		(value) => value,

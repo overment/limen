@@ -99,7 +99,7 @@ limen spawn --branch limen/<job-id> "Focused resume instruction"
 
 The last line of `spawn` is the durable job ID. A running job picks up a steer between tool calls. Stop sends TERM, then escalates. Resume reuses the branch and its worktree, uncommitted files included. The coordinator inspects that state first.
 
-Finished jobs keep their files under `.limen/jobs/`. Extra checkouts do not stay: the next spawn drops finished worktrees, and `limen prune` does the same on demand. Resume with `--branch` keeps that checkout.
+Finished jobs keep their files under `.limen/jobs/`. Extra checkouts do not stay: the next spawn drops finished worktrees, and `limen prune` does the same on demand. Resume with `--branch` keeps that checkout. `limen prune --retire` deletes finished job records whose branches are already merged or dropped; `--dry-run` prints the ids and removes nothing. Spawn and sweep never retire records.
 
 To keep a finished Pi job's conversation, run `limen continue <job-id> "Follow-up instruction"`. If its checkout was pruned, Limen restores the recorded path from the surviving local branch and copies the saved session into a new linked job. Only committed branch contents return; pruned uncommitted files are lost. A missing branch or transcript prevents recovery, and a branch checked out elsewhere is not taken over.
 
@@ -187,7 +187,7 @@ limen spawn --repo R "instruction" [--label L] [--model M]
 limen spawn --review --branch B --label L "instruction"
 limen jobs [--running|--active|--all|--label PREFIX|<id|suffix|label>]
 limen diff <id|suffix|label>
-limen prune
+limen prune [--retire [--dry-run]]
 limen steer <id|suffix|label> | --running "correction"
 limen stop <id|suffix|label> [reason]
 limen wait <id|suffix|label>

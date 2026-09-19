@@ -78,7 +78,7 @@ usage:
   limen land <id|suffix|label> [--onto BRANCH] [--yes]  # merge a done job onto the current branch
   limen stop <id|suffix|label> [reason]
   limen jobs [--running|--active|--all|--label PREFIX|<id|suffix|label>]
-  limen prune
+  limen prune [--retire [--dry-run]]           # retire finished job records whose branches are merged or gone
   limen watch <id|suffix|label> | --running
   limen unwatch <id|suffix|label> | --all
   limen open <id|suffix|label>

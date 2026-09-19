@@ -3,7 +3,7 @@ import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import test from "node:test";
 import { liveJob } from "../src/reap.ts";
-import { git, limen, onlyJobId, scratchRepo, waitForState, writeFakePi } from "./scratch.ts";
+import { git, limen, onlyJobId, scratchRepo, scratchWorkspace, waitForState, writeFakePi } from "./scratch.ts";
 
 const completingPi = `#!/usr/bin/env node
 console.log("done");
@@ -173,3 +173,134 @@ test("prune deletes a job directory with no state", async (context) => {
 	assert.match(pruned.stdout, /pruned /);
 	await assert.rejects(access(job));
 });
+
+test("prune --retire removes merged and dropped finished jobs, keeps running and unmerged", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	limen(scratch, "init");
+	git(scratch.root, "add", ".");
+	git(scratch.root, "commit", "-m", "init");
+	git(scratch.root, "checkout", "-b", "limen/bbbb-unmerged");
+	await writeFile(join(scratch.root, "unmerged.txt"), "keep\n");
+	git(scratch.root, "add", "unmerged.txt");
+	git(scratch.root, "commit", "-m", "unmerged");
+	git(scratch.root, "checkout", "main");
+	git(scratch.root, "checkout", "-b", "limen/cccc-merged");
+	await writeFile(join(scratch.root, "merged.txt"), "landed\n");
+	git(scratch.root, "add", "merged.txt");
+	git(scratch.root, "commit", "-m", "merged");
+	git(scratch.root, "checkout", "main");
+	git(scratch.root, "merge", "--no-edit", "limen/cccc-merged");
+	const jobs = join(scratch.root, ".limen/jobs");
+	await recordJob(jobs, "aaaa-running", { state: "running", label: "running", branch: "limen/gone", "started-at": new Date().toISOString() });
+	await recordJob(jobs, "bbbb-unmerged", { state: "done", label: "unmerged", branch: "limen/bbbb-unmerged" });
+	await recordJob(jobs, "cccc-merged", { state: "done", label: "merged", branch: "limen/cccc-merged" });
+	await recordJob(jobs, "dddd-dropped", { state: "failed", label: "dropped", branch: "limen/dddd-dropped" });
+	await recordJob(jobs, "eeee-stopped", { state: "stopped", label: "stopped", branch: "limen/eeee-stopped" });
+	const dry = limen(scratch, "prune", "--retire", "--dry-run");
+	assert.equal(dry.status, 0, dry.stderr);
+	assert.equal(dry.stdout.trim(), "would retire cccc-merged\nwould retire dddd-dropped\nwould retire eeee-stopped");
+	await access(join(jobs, "cccc-merged"));
+	await access(join(jobs, "dddd-dropped"));
+	await access(join(jobs, "eeee-stopped"));
+	const retired = limen(scratch, "prune", "--retire");
+	assert.equal(retired.status, 0, retired.stderr);
+	assert.equal(retired.stdout.trim(), "retired 3 jobs");
+	await access(join(jobs, "aaaa-running"));
+	await access(join(jobs, "bbbb-unmerged"));
+	await assert.rejects(access(join(jobs, "cccc-merged")));
+	await assert.rejects(access(join(jobs, "dddd-dropped")));
+	await assert.rejects(access(join(jobs, "eeee-stopped")));
+	const listed = limen(scratch, "jobs", "--all");
+	assert.equal(listed.status, 0, listed.stderr);
+	assert.match(listed.stdout, /RUNNING running/);
+	assert.match(listed.stdout, /DONE unmerged/);
+	assert.doesNotMatch(listed.stdout, /cccc-merged|dddd-dropped|eeee-stopped/);
+	assert.equal(limen(scratch, "jobs", "bbbb-unmerged").status, 0);
+	assert.equal(limen(scratch, "jobs", "aaaa-running").status, 0);
+});
+
+test("prune --retire never retires a running job whose branch is gone", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	limen(scratch, "init");
+	const jobs = join(scratch.root, ".limen/jobs");
+	await recordJob(jobs, "stale-running", {
+		state: "running",
+		label: "stale",
+		branch: "limen/missing",
+		"started-at": new Date(Date.now() - 60 * 60_000).toISOString(),
+	});
+	const retired = limen(scratch, "prune", "--retire");
+	assert.equal(retired.status, 0, retired.stderr);
+	assert.match(retired.stdout, /no finished jobs to retire/);
+	await access(join(jobs, "stale-running"));
+});
+
+test("prune and spawn leave finished records whose branches are merged", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	limen(scratch, "init");
+	git(scratch.root, "add", ".");
+	git(scratch.root, "commit", "-m", "init");
+	git(scratch.root, "checkout", "-b", "limen/keep-record");
+	await writeFile(join(scratch.root, "landed.txt"), "x\n");
+	git(scratch.root, "add", "landed.txt");
+	git(scratch.root, "commit", "-m", "landed");
+	git(scratch.root, "checkout", "main");
+	git(scratch.root, "merge", "--no-edit", "limen/keep-record");
+	const jobs = join(scratch.root, ".limen/jobs");
+	await recordJob(jobs, "keep-record", { state: "done", label: "keep", branch: "limen/keep-record" });
+	assert.equal(limen(scratch, "prune").status, 0);
+	await access(join(jobs, "keep-record"));
+	const spawned = limen(scratch, "spawn", "hello");
+	assert.equal(spawned.status, 0, spawned.stderr);
+	await waitForState(scratch.root, onlyJobId(spawned.stdout), "done");
+	await access(join(jobs, "keep-record"));
+});
+
+test("prune --retire uses the job's recorded repository for merge checks", async (context) => {
+	const workspace = await scratchWorkspace();
+	context.after(workspace.cleanup);
+	assert.equal(limen(workspace, "workspace", "init").status, 0);
+	const api = workspace.repositories.api;
+	git(api, "checkout", "-b", "limen/ws-merged");
+	await writeFile(join(api, "landed.txt"), "x\n");
+	git(api, "add", "landed.txt");
+	git(api, "commit", "-m", "landed");
+	git(api, "checkout", "main");
+	git(api, "merge", "--no-edit", "limen/ws-merged");
+	git(api, "checkout", "-b", "limen/ws-unmerged");
+	await writeFile(join(api, "open.txt"), "x\n");
+	git(api, "add", "open.txt");
+	git(api, "commit", "-m", "open");
+	git(api, "checkout", "main");
+	const jobs = join(workspace.root, ".limen/jobs");
+	await recordJob(jobs, "ws-merged", { state: "done", label: "merged", branch: "limen/ws-merged", repo: "api" });
+	await recordJob(jobs, "ws-unmerged", { state: "done", label: "unmerged", branch: "limen/ws-unmerged", repo: "api" });
+	const retired = limen(workspace, "prune", "--retire");
+	assert.equal(retired.status, 0, retired.stderr);
+	assert.equal(retired.stdout.trim(), "retired 1 job");
+	await assert.rejects(access(join(jobs, "ws-merged")));
+	await access(join(jobs, "ws-unmerged"));
+});
+
+test("prune --retire rejects unknown arguments and dry-run without --retire", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	limen(scratch, "init");
+	const unknown = limen(scratch, "prune", "--nope");
+	assert.equal(unknown.status, 1);
+	assert.match(unknown.stderr, /prune accepts no arguments, --retire, or --retire --dry-run/);
+	const dry = limen(scratch, "prune", "--dry-run");
+	assert.equal(dry.status, 1);
+	assert.match(dry.stderr, /prune --dry-run requires --retire/);
+});
+
+async function recordJob(jobsRoot: string, id: string, fields: Record<string, string>): Promise<void> {
+	const job = join(jobsRoot, id);
+	await mkdir(job, { recursive: true });
+	await writeFile(join(job, "task.md"), "task\n");
+	await writeFile(join(job, "log"), "log\n");
+	for (const [name, value] of Object.entries(fields)) await writeFile(join(job, name), `${value}\n`);
+}
