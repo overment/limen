@@ -8,7 +8,7 @@ The structure suite still guards architecture: empty runtime dependencies, uniqu
 
 - Start at the spawn/continue/jobs filename-`includes` table in `test/structure.test.ts`.
 - Replace those selected assertions with equivalent coverage of real job records and jobs output. Spawn already writes a canonical record; extend that style rather than grepping command source.
-- Leave watch and pulse-law checks intact. Keep the architecture guards, including that jobs must not treat Herdr `working` as pulse, and do not raise the 4160-line cap.
+- Leave watch and pulse-law checks intact. Keep the architecture guards, including that jobs must not treat Herdr `working` as pulse, and preserve the size allowance recorded on the board.
 
 ## Out of scope
 

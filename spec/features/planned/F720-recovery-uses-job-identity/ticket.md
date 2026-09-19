@@ -25,7 +25,7 @@ Hosted-owner recovery no longer loads the spawn command to name an agent. The fa
 - Existing recovery tests still wait rather than finalize when Herdr cannot provide a reliable answer.
 - Recovery derives the unchanged fallback name from the job id when `agent-name` is absent.
 - Continue still writes `agent-name` with that same function.
-- `src/` stays at or below 4160 lines.
+- `src/` stays within the size allowance recorded on the board without compressing logic to make room.
 
 ## Notes
 

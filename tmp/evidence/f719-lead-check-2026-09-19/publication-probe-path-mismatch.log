@@ -1,0 +1,12 @@
+(node:83105) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+started publication probe
+2026-09-19-publication-probe-05a7671a
+file:///Users/overment/.overment/limen/tmp/evidence/f719-lead-check-2026-09-19/publication-probe.mjs:40
+    throw new Error('Unexpected success; inspect probe before interpreting the result');
+          ^
+
+Error: Unexpected success; inspect probe before interpreting the result
+    at file:///Users/overment/.overment/limen/tmp/evidence/f719-lead-check-2026-09-19/publication-probe.mjs:40:11
+
+Node.js v24.1.0

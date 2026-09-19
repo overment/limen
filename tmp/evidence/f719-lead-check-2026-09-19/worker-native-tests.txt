@@ -1,0 +1,661 @@
+npm warn Unknown user config "min-release-age". This will stop working in the next major version of npm.
+
+> @overment/limen@0.1.0 test
+> node --test --test-concurrency=1 --test-timeout=60000 test/*.test.ts
+
+(node:59334) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ two human turns with unchanged files share a system prompt, and a wake turn matches (5393.769375ms)
+✔ the system prompt holds shop, register, vision, styleguide, then the NOW/NEXT digest (9.95475ms)
+✔ the per-turn cue names the audience and the three reply rules and stays under one kilobyte (6.110084ms)
+✔ a 130-line board adds one advisory line; an 80-line board does not (6.978417ms)
+✔ a wake turn puts the wake cue in the per-turn note, not the system prompt (4.242667ms)
+✔ a write under spec/, an edit of code, and limen spawn recall the matching rule on the tool result (2.552667ms)
+✔ an errored previous assistant turn puts the error on the next cue, a successful one does not (5.647792ms)
+✔ the next turn names what the last turn touched (3.715084ms)
+✔ a hosted worker's system prompt holds the styleguide and both register audiences and no board body (3.808041ms)
+✔ workspace jobs resolve guidance from the workspace root (3.43925ms)
+✔ guidance is reread each turn, so a file planted mid-session appears on the next message (2.419333ms)
+✔ a project overlay wins over the package speech register (2.450125ms)
+✔ communication is reread each turn and bounded like other project files (3.229917ms)
+✔ missing communication inherits the package register (1.59125ms)
+✔ a coordinator without AGENTS.md inherits the package shop manual on the system prompt (1.718917ms)
+✔ a project AGENTS.md suppresses the inherited shop manual (12865.928708ms)
+✔ identical leftover copies are named as leftovers, overlays as overlays (3.117792ms)
+✔ over fifty simulated turns custom messages stay under fifty kilobytes (29.956375ms)
+✔ style and vision reminders name the project files and their headings (6.522667ms)
+✔ a write or edit outside spec/ recalls the styleguide unless the path is Markdown (3.607875ms)
+✔ unrelated tools are not patched (2.00575ms)
+✔ a stale copy is named with both dates in the drift section (2726.636958ms)
+(node:64558) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ continue resumes a finished job in its own session and links the record (8400.781292ms)
+✔ continue sends an explicit model rather than inheriting Pi settings or the old session (16614.976708ms)
+✔ detached spawn and continuation forward literal provider, model, and thinking flags (6837.266875ms)
+✔ continue without --review loads the parent role preamble (7006.175791ms)
+✔ continue restores a pruned finished checkout from its branch and saved session (12387.186334ms)
+✔ continue refuses a running job or missing transcript without writing records (9002.88ms)
+✔ workspace continue copies repo and uses the child's branch (pruned: false) (8677.167917ms)
+✔ workspace continue copies repo and uses the child's branch (pruned: true) (11621.535ms)
+✖ continue refuses a pruned checkout when its branch is missing without writing records (7397.120042ms)
+Preparing worktree (checking out 'limen/2026-09-19-first-slice-4b957be7')
+✔ continue refuses a pruned checkout when its branch is occupied without writing records (8239.762459ms)
+Preparing worktree (detached HEAD ef06566)
+Preparing worktree (detached HEAD ef06566)
+✔ continue after prune leaves a live nested child owned by another checkout untouched (8359.641625ms)
+✔ continue --detached stays a wrapper even in Herdr (8367.538333ms)
+✔ LIMEN_PREFLIGHT=auth fails continue with no record (6999.969833ms)
+✔ hosted continue start failure finalizes the child record (9639.413625ms)
+(node:98448) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ diff resolves a pruned job and prints its exact recorded changeset (13518.618916ms)
+✔ diff does not launch hunk without a TTY and fresh jobs record its version (10847.087292ms)
+✔ diff opens one Herdr review tab, focuses it again, and close sweeps it (18341.947708ms)
+✔ diff watches a running job from its live worktree without touching the job (14998.709ms)
+✔ diff requires one job selector (2511.614917ms)
+(node:14117) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ finalizeJob writes state before a hanging rename, once, and sweeps leftovers (4301.53325ms)
+✔ a provider-error stream fails with its stop reason and preserves prior commits (16305.937458ms)
+✔ an aborted stream fails with its stop reason (11760.361667ms)
+✔ a recovered provider error follows the clean final turn (9577.718417ms)
+✔ a clean run writes no stop-reason (12227.334459ms)
+✔ an unseen steer is counted at finalize (8233.507875ms)
+✔ exhaustion finalizes failed while tab close hangs (14525.439167ms)
+✔ limen stop leaves one finished-at and one terminal state line (15701.058416ms)
+(node:36485) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ receipt allowlist rejects secrets, unbounded ordinals, invalid timestamps and contradictory HTTP claims (1.039375ms)
+✔ finish identity follows the job ID across seats, not labels or worktree paths (0.41025ms)
+✔ inspection keeps absent, legacy and unverifiable bot evidence unobserved without reading config (15.185917ms)
+✔ only explicitly trusted, bounded, correlated completed-turn exports promote inspection (29.300041ms)
+(node:36557) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ helper safely encodes all CLI fields, sends Bearer in memory, and reports only HTTP acceptance (304.370417ms)
+✔ explicit targets fan out to two routes without an implicit single-target recipient (353.797292ms)
+▶ a failed or stalled first bot does not block the second bot; acceptance is never called a wake
+  ✔ error (247.185625ms)
+  ✔ reject (629.4725ms)
+  ✔ stall (399.159875ms)
+✔ a failed or stalled first bot does not block the second bot; acceptance is never called a wake (1276.185833ms)
+▶ invalid explicit target lists fail before all transport and never fall back to the single target
+  ✔ invalid selection 1 (272.073291ms)
+  ✔ invalid selection 2 (296.901209ms)
+  ✔ invalid selection 3 (345.585ms)
+  ✔ invalid selection 4 (331.713167ms)
+  ✔ invalid selection 5 (710.534334ms)
+  ✔ invalid selection 6 (382.056125ms)
+  ✔ invalid selection 7 (240.819625ms)
+  ✔ invalid selection 8 (334.262291ms)
+  ✔ invalid selection 9 (292.71775ms)
+  ✔ invalid selection 10 (288.572084ms)
+  ✔ invalid selection 11 (1078.503167ms)
+  ✔ invalid selection 12 (634.362542ms)
+  ✔ invalid selection 13 (1039.937042ms)
+✔ invalid explicit target lists fail before all transport and never fall back to the single target (6248.895125ms)
+✔ legacy-only configuration fails closed and names the new key before any request (283.825792ms)
+✔ the retired env-path override cannot select a destination (633.131334ms)
+▶ helper rejects missing, raw, Basic and malformed Bearer auth before transport
+  ✔ missing (113.654375ms)
+  ✔ "" (234.261875ms)
+  ✔ "synthetic-secret" (238.197916ms)
+  ✔ "Basic synthetic-secret" (232.132875ms)
+  ✔ "bearer synthetic-secret" (233.731208ms)
+  ✔ "Bearer" (245.7845ms)
+  ✔ "Bearer " (245.882083ms)
+  ✔ "Bearer  synthetic-secret" (242.477042ms)
+  ✔ "Bearer synthetic-secret extra" (243.774333ms)
+  ✔ "Bearer synthetic-secret=bad" (233.862209ms)
+  ✔ "Bearer synthetic-secret\n" (246.696208ms)
+  ✔ "Bearer synthetic-secret\r\nX-Evil: yes" (307.20375ms)
+  ✔ "Bearer synthetic-secret\t" (167.734ms)
+  ✔ "Bearer sécret" (244.54475ms)
+✔ helper rejects missing, raw, Basic and malformed Bearer auth before transport (3230.864791ms)
+▶ helper rejects missing or unsafe destinations without revealing their contents
+  ✔ <anonymous> (229.823125ms)
+  ✔ not-a-url (238.018667ms)
+  ✔ http://finish.example.test (233.347875ms)
+  ✔ ftp://finish.example.test (245.290708ms)
+  ✔ https://user:synthetic-secret@finish.example.test (232.283834ms)
+  ✔ https://finish.example.test/#synthetic-secret (227.281083ms)
+✔ helper rejects missing or unsafe destinations without revealing their contents (1406.368333ms)
+▶ helper fails redirects, non-2xx, transport errors and a bounded stalled request
+  ✔ HTTP 200 (238.071875ms)
+  ✔ HTTP 299 (230.469625ms)
+  ✔ HTTP 300 (362.720625ms)
+  ✔ HTTP 302 (301.488375ms)
+  ✔ HTTP 307 (352.5885ms)
+  ✔ HTTP 400 (215.566292ms)
+  ✔ HTTP 401 (215.917208ms)
+  ✔ HTTP 403 (223.898041ms)
+  ✔ HTTP 500 (215.779417ms)
+  ✔ error (218.484208ms)
+  ✔ timeout (82.002625ms)
+✔ helper fails redirects, non-2xx, transport errors and a bounded stalled request (2657.464875ms)
+✔ an unauthenticated receiver body is not a sender diagnosis or a wake acknowledgement (598.031333ms)
+✔ absolute override wins; missing, empty and relative overrides never fall back (887.764834ms)
+✔ Git common directory selects the canonical project's config from an external worktree (2919.967208ms)
+✔ legacy home config is available only for manual invocation outside Git, not inherited credentials (764.086209ms)
+✔ env files are data, never shell scripts, and the CLI requires exactly three arguments (852.751208ms)
+(node:41732) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ automatic finish decision: failed with missing result (4484.109292ms)
+✔ automatic finish decision: failed with "" result (4410.909125ms)
+✔ automatic finish decision: failed with " \n\t" result (7274.272584ms)
+✔ automatic finish decision: failed with "Failure investigated; see committed repair." result (4704.524166ms)
+✔ automatic finish decision: failed with "unreadable" result (3273.37425ms)
+✔ automatic finish decision: stopped with missing result (4864.842625ms)
+✔ automatic finish decision: stopped with "" result (5325.861834ms)
+✔ automatic finish decision: stopped with " \n\t" result (6149.02475ms)
+✔ automatic finish decision: stopped with "Failure investigated; see committed repair." result (3894.0415ms)
+✔ automatic finish decision: stopped with "unreadable" result (3398.412042ms)
+✔ automatic finish decision: done with missing result (3378.467167ms)
+✔ automatic finish decision: done with "" result (3379.12375ms)
+✔ automatic finish decision: done with " \n\t" result (4651.632208ms)
+✔ automatic finish decision: done with "Failure investigated; see committed repair." result (3670.905542ms)
+✔ automatic finish decision: done with "unreadable" result (3461.544416ms)
+✔ second job at the same recorded tip skips automatic ping (7193.97ms)
+✔ a job that settles at a different recorded tip still sends (3617.198416ms)
+✔ empty failed skip does not quiet a later job at the same tip (4015.609542ms)
+✔ concurrent jobs at the same recorded tip send at most once (3405.920416ms)
+✔ two detached jobs that settle at the same HEAD send one automatic ping (15185.882ms)
+✔ a detached job that commits still sends after another job at the previous tip (17829.124833ms)
+✔ automatic delivery invokes the real canonical helper with synthetic dotenv and intercepted transport (8700.819ms)
+✔ automatic delivery finds Limen's Node runtime when the inherited PATH cannot run node (3149.750334ms)
+✔ automatic fan-out reaches two bot routes after terminal state; first HTTP 204 stays HTTP-only (18485.19575ms)
+✔ automatic fan-out reaches two bot routes after terminal state; first HTTP 503 stays HTTP-only (17012.560834ms)
+✔ automatic fan-out reaches two bot routes after terminal state; first HTTP stall stays HTTP-only (17930.3265ms)
+✔ private receipt channel discards malformed, secret-bearing, duplicate and overflowing sender output (5528.63225ms)
+✔ detached completion sends exact arguments only after durable state using an absolute explicit config snapshot (12835.143167ms)
+Preparing worktree (new branch 'linked')
+✔ canonical project config is selected from a linked worktree, never the worktree-local decoy (13137.441292ms)
+✔ workspace jobs use the coordinator project's config rather than a child repository destination (10608.326208ms)
+✔ a retired env-path override does not opt an unconfigured job into delivery (9770.801125ms)
+✔ unconfigured jobs never inherit home config or a later finalizer environment (9251.763041ms)
+✔ concurrent processes and repeated finalization make one automatic attempt; failure preserves outcome and routing (3001.537458ms)
+✔ hosted supervisor completion uses the same automatic path without a worker manual ping (3027.045292ms)
+✔ hanging sender and its descendant are killed within shutdown grace without changing stopped state (5988.883083ms)
+✔ an exhausted shutdown budget records not sent without launching the helper (2112.055542ms)
+✔ missing config and unavailable sender fail safely, while an interrupted claim is never retried automatically (3257.015708ms)
+✔ detached exhaustion without a result skips delivery before its self-kill grace (8685.525958ms)
+✔ continuation retains only its parent's config path even when the caller selects another destination (12850.156041ms)
+(node:9039) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ cleanWorktree observes changes without refreshing the worker's index (2136.732459ms)
+✔ changedFileCount observes changes without refreshing the worker's index (2175.867458ms)
+(node:10068) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ hosted refresh preserves supervisor warnings, promptly recovers RUNNING labels, and cleans up on shutdown (2054.962958ms)
+✔ hosted finish writes the handoff and shuts down; a text-only turn records zero tools (7.04675ms)
+(node:10673) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ hosted completion is session end or vanished agent, not Herdr idle (0.7665ms)
+✔ hosted result capture follows the last assistant stop reason (4.489417ms)
+✔ hosted result capture keeps a tool-written result over later assistant text (2.464708ms)
+✔ hosted idle bound defaults to 60s and re-ring to 15m (0.080625ms)
+✔ noteHostedIdle finalizes a clean idle turn with no tool call and writes no advisory (2284.63025ms)
+✔ noteHostedIdle finalizes a clean tool-using turn without claiming the session ended (2194.498583ms)
+✔ noteHostedIdle writes one stall marker, skips zero tools, and re-arms after working (15.211542ms)
+✔ noteHostedIdle rings and stamps unheard stalls until delivery, then restores and re-arms (1760.155833ms)
+✔ noteHostedIdle treats blocked as immediate and ignores unknown (6.611708ms)
+✔ noteHostedIdle ignores idle while activity is think or tool (7.453542ms)
+✔ noteHostedIdle writes an errored advisory when the last assistant turn failed (1232.064ms)
+✔ noteHostedIdle snapshots result and commits without finishing (2540.74675ms)
+✔ hostedAgentStatus reads nested 0.8.0 envelope and flat legacy (1473.830834ms)
+✔ hostedAgentStatus keeps last known status across a non-not-found CLI failure (691.881459ms)
+✔ stopHostedAgent sends ctrl+c (1338.125667ms)
+✔ spawn --tab refuses without Herdr and leaves no job record (3199.815334ms)
+✔ spawn in Herdr is hosted without --tab; --detached keeps a watch tab (13962.270625ms)
+✔ hosted start records PATH with /usr/bin and HERDR_ENV=1; detached watch tabs do not (10117.701375ms)
+✔ hosted spawn and continuation forward literal Pi launch flags (15114.185916ms)
+✔ hosted spawn and continuation keep quoted multiline tasks out of shell arguments (15179.03675ms)
+✔ hosted spawn survives a killed caller while agent start exceeds its 20s deadline (30634.811ms)
+ℹ caller printed ID and was killed in 3226ms; supervisor 29287 recorded agent after 20s and wrote idle advisory
+✔ hosted start retries one pane-shell failure and logs both attempts (5875.135417ms)
+✔ hosted start finalizes failed after two pane-shell failures (7050.425375ms)
+✔ hosted tab creation refusal fails synchronously without launching a supervisor (4435.731208ms)
+✔ hosted start does not restore focus over a human tab change (10116.338083ms)
+✖ hosted supervisor follows a moved pane and finalizes when its tab closes (5473.089875ms)
+✔ hosted start does not retry a non-pane-shell error (5024.51475ms)
+✔ hosted supervisor writes one idle advisory and stays running (12582.924625ms)
+✔ hosted supervisor finalizes a clean tool-using idle without claiming the session ended (6443.931958ms)
+✔ spawn --role opens that Herdr space and a second spawn reuses it (9227.723042ms)
+✔ spawn --review in Herdr is hosted; --detached keeps a watch tab (26071.586959ms)
+✔ a hosted job finalizes on session end, never on unseen idle after tools (10150.305917ms)
+✔ a hosted session error fails with its stop reason (4967.41825ms)
+✔ supervisor does not stamp wait over a hook tool write (7119.289792ms)
+✔ one failed agent get between good samples does not finalize (8199.350792ms)
+✔ garbage agent get never counts toward missing (8301.283792ms)
+✖ hosted continue survives a killed caller and passes durable @continue, not @task (10724.451334ms)
+✔ makeJobId hoists a feature number from anywhere in the label (0.701583ms)
+✔ hostedAgentName keeps the hex suffix when the slug is long (0.079708ms)
+✔ startHostedPi recovery does not adopt another pane by name (1533.701167ms)
+✔ spawn --tab --timeout errors before creating a job (1732.137625ms)
+✔ hosted stop before pi starts finalizes with the requested reason (13506.539917ms)
+✔ hosted stop while agent start resolves stops the appeared worker (19090.919917ms)
+✔ hosted stop records stopped after two interrupts (15104.304625ms)
+✔ hosted stop with a done: reason records done (13918.920084ms)
+✔ hosted stop leaves running when the agent ignores interrupts (10911.305208ms)
+✔ hosted stop finalizes when the supervisor is gone and the agent is missing (11069.369625ms)
+✔ two long hosted labels keep distinct agent names (11828.684333ms)
+(node:96065) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ a git package root classifies leftover, stale, and overlay (1644.899458ms)
+✔ a shipped hash list classifies leftover, stale, and overlay without git (4.739042ms)
+✔ shipped template history matches git log/show of this clone (18080.984083ms)
+(node:2408) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ migrate is an unknown command (865.912083ms)
+✔ init refuses leftover Control paths before creating Limen files (1158.727833ms)
+✔ init refuses a non-Git directory with guidance (1752.733833ms)
+✔ init plants project-owned files and a hook stub, never role or hook copies (23113.751625ms)
+✔ init removes leftover hook copies so the stub is the only project extension (1465.898917ms)
+✔ init --drop-leftovers deletes only byte-identical copies (7895.386959ms)
+✔ init names a stale copy and --drop-leftovers leaves it (7253.512458ms)
+(node:15346) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ duration parsing is explicit and bounded (0.5275ms)
+✔ jobs use one discriminated union and derived display facts (0.224083ms)
+✔ pulse is observed activity and liveness, never a timer (0.062583ms)
+✔ a running job with no pid is the handshake, not invalid (0.074166ms)
+✔ job ids resolve uniquely by suffix or label (0.474875ms)
+(node:15375) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ malformed records are informational and do not get rewritten (1664.158917ms)
+✔ a running record without pid is starting, not invalid (1618.375834ms)
+✔ jobs tails a rambling log and keeps the last limen detail line (2056.875667ms)
+✔ jobs detail shows result and commits for a terminal job that has them (2832.291584ms)
+✔ jobs marks a terminal job with zero tool calls and no commits as produced nothing (4340.060125ms)
+✔ jobs lists running first, then newest started-at (2136.505958ms)
+✔ the default jobs snapshot stays compact and exposes every live job (2595.428042ms)
+✔ compact snapshots cap malformed live diagnostics (1629.848375ms)
+✔ hosted jobs pulse follows activity, not Herdr unseen-idle (3180.400708ms)
+✔ jobs shows the advisory line on a running hosted job (1631.947167ms)
+✔ jobs rejects ambiguous option shapes (1697.408416ms)
+✔ jobs names a directory with no state as an orphan (2900.11475ms)
+✔ jobs reports an empty set before init (1558.059209ms)
+✔ a running job line shows the sampled changed-file count (3208.075583ms)
+✔ activity sampling records how many files the worktree has changed (10235.604458ms)
+✔ jobs --label lists matching jobs including hidden terminal ones (4643.499833ms)
+(node:28871) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ land --yes fast-forwards a done job onto the current branch (6808.961375ms)
+✔ land --yes merges when the target has moved (9310.917792ms)
+✔ land refuses missing id, running job, empty commits, dirty target, and unconfirmed merge (27359.740834ms)
+(node:41630) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ linear toggle renames the config file and reports state (6698.715875ms)
+(node:43842) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ open focuses a recorded tab while running and recreates a log tab once terminal (8187.599458ms)
+✔ open creates a log tab for a job spawned without herdr (6288.317084ms)
+✔ open recreates a live watch tab and says why when herdr is missing (7591.585167ms)
+✔ close leftover tabs for a proven feature and leaves job files (11062.52175ms)
+✔ close matches a feature number anywhere in the label or job id (15924.374125ms)
+(node:58452) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ prune and spawn keep a live reviewer's detached worktree (28372.015958ms)
+✔ leftover sweep leaves a worktree git still has registered (11374.167042ms)
+Preparing worktree (detached HEAD ffb23d8)
+Preparing worktree (detached HEAD ffb23d8)
+Preparing worktree (detached HEAD ffb23d8)
+✖ prune keeps nested running jobs owned by another checkout (5778.688583ms)
+Preparing worktree (detached HEAD 46eb924)
+Preparing worktree (detached HEAD 46eb924)
+Preparing worktree (detached HEAD 46eb924)
+✖ spawn keeps nested running jobs owned by another checkout (10559.364667ms)
+Preparing worktree (detached HEAD 08dea96)
+✖ leftover sweep keeps a nested container with a locked registered child (5217.549292ms)
+Preparing worktree (detached HEAD 84b1164)
+✔ startup window is live; expired running-without-pid is not (14917.418042ms)
+✔ prune deletes a job directory with no state (4978.25225ms)
+(node:84113) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ recycled pgids cannot fake life when born mismatches (2441.076875ms)
+✔ dead valid PIDs confirm immediately regardless of job age (1952.906958ms)
+✔ shared running candidates preserve reaper grace and clear omitted observations (1731.08075ms)
+Preparing worktree (detached HEAD 46aedbe)
+✔ limen jobs reaps a dead record, then spawn and prune may use the branch (7545.525958ms)
+✔ a hosted job with a live agent gets a watch-only owner when its young supervisor is gone (2917.276666ms)
+✔ a reaped hosted job keeps the session jsonl handoff (3072.930708ms)
+✔ handshake records wrapper birth on macOS (5471.042625ms)
+(node:92020) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ competing real sweeps replace a killed young supervisor exactly once, then can replace it again and finish (5607.523ms)
+ℹ {"original":92352,"adopted":92507,"readopted":92506,"supervisorStarts":3,"state":"done","advisory":true,"agentStarts":0,"coordinatorUnchanged":true}
+✔ a killed recovery claimant is reclaimed by competing sweeps (1368.167875ms)
+ℹ {"deadClaimant":93468,"adopted":93483,"supervisorStarts":1,"claimReleased":true}
+✔ missing and malformed PID/timestamp shapes expire; a real startup grace alone waits (1556.862458ms)
+ℹ pidless young hosted agent adopted after grace; absent/malformed/2026-08-27 detached records failed after confirmation
+✔ uncertain Herdr never adopts or fails, including cached life and a failed relocation probe (1446.483334ms)
+ℹ cached-working transport failure, unknown status, and list outage all waited; concrete moved pane adopted via pre-F048 fallbacks
+✔ uncertain then concretely missing agent fails with handoff and wake eligibility; terminal records cannot revive (1368.529ms)
+ℹ uncertain stayed pending; missing captured handoff, failed with hosted supervisor lost, retained subscriber; recovery candidate left terminal record unchanged
+(node:94056) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ spawn creates isolated branch, canonical record, runs pi, and resumes its worktree (6939.936209ms)
+✔ failure is durable and detailed jobs render facts (3428.713875ms)
+✔ a project worker overlay replaces the package birth text (3198.684375ms)
+✔ review gets fresh detached worktree and reviewer birth text (6773.142458ms)
+✔ stage model defaults respect review roles and explicit overrides (19086.821959ms)
+✔ independent jobs can run concurrently and are merely announced (5230.621375ms)
+✔ prune drops a finished worktree and spawn keeps a resumed one (9917.240709ms)
+✔ spawn opens a named Herdr tab when a fake herdr is on PATH (4316.352291ms)
+✔ spawn prints failed when the wrapper dies before writing pid (2701.77825ms)
+✔ spawn without pi on PATH fails before worktree add (1105.096208ms)
+✔ LIMEN_PREFLIGHT=auth fails spawn with pi's message and creates no job (1326.754833ms)
+✔ explicit provider reaches authentication preflight without a fallback job (1236.25ms)
+✔ Pi-only flags are refused for Claude before creating a job (1153.977625ms)
+✔ LIMEN_PREFLIGHT=auth proceeds when check passes (3314.479125ms)
+✔ task-file and stdin write task.md bytes untouched (5323.2165ms)
+✔ spawn warns on a number-only or live-duplicate label and still starts (9417.121583ms)
+✔ positional empty backticks or doubled spaces warn once (3068.785458ms)
+✔ git missing from PATH falls back or leaves no job dir (1498.494167ms)
+✔ spawn --role quality loads the packaged preamble (3170.981083ms)
+✔ spawn --role loads that overlay preamble and persists the name (3193.407708ms)
+✔ spawn --role picture loads the packaged preamble (3016.965833ms)
+✔ spawn --role researcher and --role judge load the packaged preambles (5207.000625ms)
+✔ spawn --role without a preamble or with --review plants no job (1397.27675ms)
+✔ LIMEN_PREPARE runs in the worktree before Pi and is logged (2957.3825ms)
+✔ F074: a claude job keeps the ordinary record and files the closing result (4665.745583ms)
+✔ F074: a claude job refuses a hosted tab, and an unknown engine is named (3593.348208ms)
+✔ spawn refuses a ticket missing from the base commit and starts when it is committed (6017.99275ms)
+✔ spawn --branch checks the ticket against that branch, not the caller's tree (6885.870291ms)
+Preparing worktree (detached HEAD 57af352)
+✔ overlapping starts keep both worktrees; prune still drops a genuine leftover (6177.588167ms)
+✔ a second spawn cannot delete a worktree still being added (3478.736333ms)
+(node:24099) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ /speak briefs the latest response by default and supports full mode (258.303166ms)
+✔ speak stays absent without the optional CLI (0.219667ms)
+✔ latestAssistantText does not fall back past an empty latest response (0.058125ms)
+(node:24104) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ steer reaches a running worker and leaves durable evidence (5616.125708ms)
+✔ steer refuses a finished job and writes nothing (3665.901458ms)
+✔ steer --running places the same message in every live watched inbox (10067.415875ms)
+✔ steer --running with no live watched job says nothing was reached (1272.288ms)
+✔ steer --running reports a job that ended between selection and delivery (3847.085917ms)
+✔ steer reports unavailable when the worker extension never loaded (5866.554917ms)
+(node:29910) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ worker extension delivers inbox files once as steer messages (135.877833ms)
+✔ a delivered steer is not sent again after a later sweep (270.674875ms)
+✔ steering stays inert outside a worker (0.191542ms)
+(node:29915) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ stop terminates an escaped-group child or records it in a cleanup note (6466.4595ms)
+✔ timeout terminates an escaped-group child or records it in cleanup (7967.220041ms)
+✔ a cleanup note names unconfirmed survivors and limen jobs detail shows it (1611.941875ms)
+✔ stop completes delayed discovery before a fast parent exit (7259.197958ms)
+✖ timeout completes delayed discovery before a fast parent exit (4599.904625ms)
+✔ one deadline bounds delayed ps and all birth captures before TERM (4781.829875ms)
+✔ sleeping descendant discovery delays stop only through its short bound (4719.752709ms)
+✔ sleeping descendant discovery delays timeout only through its short bound (4114.009ms)
+✔ proc_pidinfo distinguishes present and confirmed absent PIDs (128.051167ms)
+✔ a changed birth identity is never signaled (1029.244459ms)
+✔ an unavailable identity recheck is recorded without signaling (1009.933ms)
+✔ a helper-timeout-style unavailable recheck records the captured process (2953.447709ms)
+✔ confirmed absence after TERM needs neither KILL nor cleanup (2921.665959ms)
+✔ stop with a done: reason records done and silences the stopping session (8450.633042ms)
+✔ a successful hosted stop marks the caller delivered after terminal state (1257.245708ms)
+✔ a hosted stop that is still running does not mark the caller delivered (1485.1475ms)
+✔ stop interrupts a process group and is idempotent (9726.730042ms)
+✔ timeout is portable and leaves failed durable truth (3195.364333ms)
+✔ a runaway tool loop is bounded and says so (9542.805917ms)
+✔ stop preserves terminal truth written while interruption settles (7502.648917ms)
+(node:44913) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ json events become a human log and last-tool names (0.784209ms)
+✔ assistantStopReason keeps only error and aborted (0.07075ms)
+✔ claude events become the same log, tool names, and one closing result (0.174917ms)
+(node:44914) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✖ architecture stays small, pure, direct, and dependency-free (3.900791ms)
+✔ strict TypeScript and templates preserve the capability-judgment line (9.812209ms)
+✔ pulse law is one function (0.729417ms)
+✔ job-file table is written by spawn and read by jobs (0.561792ms)
+(node:44915) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ sweep rings unheard jobs on cadence without consuming wakes, honors liveness, and prunes the registry (12315.233917ms)
+✔ registry registration and pruning repeatedly reclaim dead locks across processes (3514.675667ms)
+ℹ round 1: 80 registrations, 12 prunes, 11 ready children; 335.309 ms
+ℹ round 2: 80 registrations, 12 prunes, 11 ready children; 327.196 ms
+ℹ round 3: 80 registrations, 12 prunes, 11 ready children; 321.544 ms
+ℹ round 4: 80 registrations, 12 prunes, 11 ready children; 364.317 ms
+ℹ round 5: 80 registrations, 12 prunes, 11 ready children; 346.771 ms
+ℹ round 6: 80 registrations, 12 prunes, 11 ready children; 364.052 ms
+ℹ round 7: 80 registrations, 12 prunes, 11 ready children; 347.740 ms
+ℹ round 8: 80 registrations, 12 prunes, 11 ready children; 322.456 ms
+✔ sweep reaps dead jobs and a later pass rings the unheard completion (1530.886417ms)
+✔ sweep install writes a valid absolute launchd interval job and uninstall removes only it (961.300167ms)
+(node:46020) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ ticket authors survive another collaborator's edits and lane moves (3226.293791ms)
+✔ copied ticket content belongs to its filer, not the template author (1767.1125ms)
+✔ uncommitted, missing, directory, and outside paths do not invent an author (3206.915166ms)
+Cloning into '/var/folders/_2/zg9lhmwx3c53w15w_vp606340000gn/T/limen-test-L9r9Sw/shallow'...
+✔ shallow history reports unavailable instead of attributing an edit as creation (1364.4635ms)
+Preparing worktree (new branch 'worker')
+✔ paths are literal and resolve from subdirectories, absolute paths, and worktrees (5122.662ms)
+✔ a recreated ticket has its own author and local mailmap cannot rewrite the recorded identity (2030.680625ms)
+(node:49416) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ a running human row is glyph, label, suffix, then live facts (0.523291ms)
+✔ a running human row names how many files the job has changed (0.0975ms)
+✔ a terminal human row carries age, duration, work, and flags once each (0.179459ms)
+✔ silence colors only when it means something (0.093125ms)
+✔ the cabinet line counts states and names odd ones invalid (0.162ms)
+✔ human detail sections identity, work, and a filtered log (1.150833ms)
+✔ the log filter keeps events and prose, drops activity beats (0.12475ms)
+✔ view selection follows LIMEN_VIEW, then the TTY; color needs a willing terminal (0.068709ms)
+✔ ages read like a human said them (0.061375ms)
+✔ the human snapshot prints rows and a footer, never id chains, and the suffix resolves (2337.370125ms)
+✔ an odd state renders a red-glyph row and an invalid count without rewriting the file (1319.715625ms)
+(node:50150) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ wait blocks for terminal state and reports the readable label (3462.212833ms)
+✔ wait rejects unknown jobs (852.038417ms)
+(node:51000) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ wake ignores history, announces start, and steers once on terminal change (345.636666ms)
+✔ a completion wake carries bounded commits and the worker's final message (120.838084ms)
+✔ a completion wake says when a terminal job produced nothing (177.675292ms)
+✔ wake shows existing unwatched jobs without claiming their notifications (25.147084ms)
+✔ a reloaded coordinator tab resubscribes to its running jobs (35.10025ms)
+✔ wake recreates the ignored jobs directory on session start (12.763459ms)
+✔ wake remains inert inside workers (0.114167ms)
+✔ wake stays out of foreign projects and honors LIMEN_WAKE=0 (2.555584ms)
+✔ wake finds the project root from a subdirectory (193.487667ms)
+✔ /limen off mutes the session and /limen on catches up once (177.289333ms)
+✔ subscriptions scope wakes and one idle coordinator receives fallback (619.195125ms)
+✔ already-delivered jobs never re-enter the fallback claim path (1607.18225ms)
+✔ two windows on one Pi session share start and completion receipts (570.997083ms)
+✔ herdr pane naming follows running jobs and each terminal state notifies once (385.984834ms)
+✔ settled coordinator labels count watched and visible unwatched RUNNING jobs beyond truncated detail (639.779833ms)
+✔ the coordinator tab keeps a running count on its stem and loses it when the last job ends (545.068625ms)
+✔ a tab still carrying herdr's own number is never decorated (263.01275ms)
+✔ herdr surfaces stay live while the conversation is muted (518.591292ms)
+✔ a concretely missing hosted job is reaped once and wakes while a pidless young job keeps grace (767.407208ms)
+✔ an idle advisory wakes once, stays running, and does not block completion (110.736084ms)
+✔ an errored advisory wake says the last turn failed (109.880083ms)
+✔ work resuming then stalling again re-arms one further advisory wake (130.509083ms)
+✔ first idle wake in a sweep is a real turn; later wakes are followUp (29.982417ms)
+✔ one assistant response confirms every batched followUp wake in the turn (680.019333ms)
+✔ a busy session injects every wake as followUp (26.311791ms)
+✔ a muted session holds the advisory until unmuted (229.449083ms)
+✔ wake does not crash Pi after a stale reload context (257.653625ms)
+✔ a rejected injection releases the claim and the next sweep retries (222.077667ms)
+✔ an accepted wake is recovered after shutdown when no turn ran (604.028875ms)
+✔ another listener does not recover a live accepted claim (683.896958ms)
+✔ a provider-error turn releases the claim without spending an attempt (579.068ms)
+✔ two unconfirmed injections retain the claim and stop automatic retries (701.838833ms)
+✔ a footer failure leaves completion delivery and sweeps alive (111.387958ms)
+✔ session start delivers a standing advisory before a completion (30.239958ms)
+✔ an open coordinator stamps last-sweep and shutdown stops refreshing it (1303.941958ms)
+✔ a stop-marked session receives no completion wake (228.52625ms)
+✔ fallback waits out the grace window and skips sessions that own no jobs (829.262667ms)
+✔ a wake opens with label and task and ends with the instruction (761.19375ms)
+(node:51271) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ unwatched completion crosses fallback grace on the timer alone (22.448ms)
+✔ busy completion stays claimed until its one followUp turn finishes (12.820416ms)
+✔ second full sweep skips 473 settled records and shares two running jobs with status and reaper (1409.743125ms)
+ℹ 475 records (473 settled, 2 running): second full sweep including reaper and status 4.768 ms; 51 sync filesystem calls; 0 settled-record reads
+✔ settlement keeps fallback, blocked claims, and new subscriptions observable (13.154458ms)
+✔ cache invalidates ready, subscriptions, whole-job changes, and manual delivery repair (22.56925ms)
+✔ ownership cache notices whole-job addition and deletion (16.078375ms)
+✔ missed events and watcher failure recover settled records and ownership within thirty seconds (21.498083ms)
+✔ progress events neither invalidate settled records nor schedule sweeps (6.779667ms)
+(node:51285) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ a coordinator can watch and unwatch any durable job (5058.116167ms)
+✔ watch snapshots running jobs and unwatch clears this session (4256.48375ms)
+(node:53117) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ workspace coordinates explicit child repositories while its specs stay outside Git (8317.404ms)
+✔ workspace permits the same live branch name in different child repositories (5685.850166ms)
+✔ workspace stop resolves parent job records (8160.551834ms)
+✔ workspace init refuses a Git repository (1345.625625ms)
+ℹ tests 408
+ℹ suites 0
+ℹ pass 400
+ℹ fail 8
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1642744.951375
+
+✖ failing tests:
+
+test at test/continue-command.test.ts:226:2
+✖ continue refuses a pruned checkout when its branch is missing without writing records (7397.120042ms)
+  AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:
+  
+    assert.ok(refused.stderr.includes(`branch ${branch} is missing in ${scratch.root}; restore that branch before continuing`))
+  
+      at TestContext.<anonymous> (file:///Users/overment/.overment/.limen-limen-worktrees/2026-09-19-f719-concurrent-starts-keep-work-8f1a6434/test/continue-command.test.ts:246:11)
+      at async Test.run (node:internal/test_runner/test:1069:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:752:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '=='
+  }
+
+test at test/hosted-spawn.test.ts:785:1
+✖ hosted supervisor follows a moved pane and finalizes when its tab closes (5473.089875ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + 'w1:p1\n'
+  - 'w2:p9\n'
+  
+      at TestContext.<anonymous> (file:///Users/overment/.overment/.limen-limen-worktrees/2026-09-19-f719-concurrent-starts-keep-work-8f1a6434/test/hosted-spawn.test.ts:804:9)
+      at async Test.run (node:internal/test_runner/test:1069:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:752:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'w1:p1\n',
+    expected: 'w2:p9\n',
+    operator: 'strictEqual'
+  }
+
+test at test/hosted-spawn.test.ts:1097:1
+✖ hosted continue survives a killed caller and passes durable @continue, not @task (10724.451334ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+  
+    {
+  +   file: '/private/var/folders/_2/zg9lhmwx3c53w15w_vp606340000gn/T/limen-test-MyNWZb/repo/.limen/jobs/2026-09-19-f037-parent-continue-6fde41b8/continue',
+  -   file: '/var/folders/_2/zg9lhmwx3c53w15w_vp606340000gn/T/limen-test-MyNWZb/repo/.limen/jobs/2026-09-19-f037-parent-continue-6fde41b8/continue',
+      text: 'now refine the seam\n'
+    }
+  
+      at TestContext.<anonymous> (file:///Users/overment/.overment/.limen-limen-worktrees/2026-09-19-f719-concurrent-starts-keep-work-8f1a6434/test/hosted-spawn.test.ts:1128:9)
+      at async Test.run (node:internal/test_runner/test:1069:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:752:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: { file: '/private/var/folders/_2/zg9lhmwx3c53w15w_vp606340000gn/T/limen-test-MyNWZb/repo/.limen/jobs/2026-09-19-f037-parent-continue-6fde41b8/continue', text: 'now refine the seam\n' },
+    expected: { file: '/var/folders/_2/zg9lhmwx3c53w15w_vp606340000gn/T/limen-test-MyNWZb/repo/.limen/jobs/2026-09-19-f037-parent-continue-6fde41b8/continue', text: 'now refine the seam\n' },
+    operator: 'deepStrictEqual'
+  }
+
+test at test/prune-command.test.ts:66:2
+✖ prune keeps nested running jobs owned by another checkout (5778.688583ms)
+  AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:
+  
+    assert.ok(git(scratch.root, "worktree", "list", "--porcelain").includes(`worktree ${child}\n`))
+  
+      at TestContext.<anonymous> (file:///Users/overment/.overment/.limen-limen-worktrees/2026-09-19-f719-concurrent-starts-keep-work-8f1a6434/test/prune-command.test.ts:98:10)
+      at async Test.run (node:internal/test_runner/test:1069:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:752:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '=='
+  }
+
+test at test/prune-command.test.ts:66:2
+✖ spawn keeps nested running jobs owned by another checkout (10559.364667ms)
+  AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:
+  
+    assert.ok(git(scratch.root, "worktree", "list", "--porcelain").includes(`worktree ${child}\n`))
+  
+      at TestContext.<anonymous> (file:///Users/overment/.overment/.limen-limen-worktrees/2026-09-19-f719-concurrent-starts-keep-work-8f1a6434/test/prune-command.test.ts:98:10)
+      at async Test.run (node:internal/test_runner/test:1069:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:752:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '=='
+  }
+
+test at test/prune-command.test.ts:115:1
+✖ leftover sweep keeps a nested container with a locked registered child (5217.549292ms)
+  AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:
+  
+    assert.ok(git(scratch.root, "worktree", "list", "--porcelain").includes(`worktree ${child}\n`))
+  
+      at TestContext.<anonymous> (file:///Users/overment/.overment/.limen-limen-worktrees/2026-09-19-f719-concurrent-starts-keep-work-8f1a6434/test/prune-command.test.ts:127:9)
+      at async Test.run (node:internal/test_runner/test:1069:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:752:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '=='
+  }
+
+test at test/stop-command.test.ts:169:1
+✖ timeout completes delayed discovery before a fast parent exit (4599.904625ms)
+  Error: job 2026-09-19-escape-a03240af did not reach failed
+  state: running
+  
+  log: [limen 2026-09-19T17:49:15.732Z] worker started
+  escapee started
+  [limen 2026-09-19T17:49:17.411Z] timeout after 1000ms; sending TERM
+  [limen 2026-09-19T17:49:17.411Z] terminating 1 escaped job process(es): 33669
+  
+      at waitForState (file:///Users/overment/.overment/.limen-limen-worktrees/2026-09-19-f719-concurrent-starts-keep-work-8f1a6434/test/scratch.ts:146:8)
+      at async TestContext.<anonymous> (file:///Users/overment/.overment/.limen-limen-worktrees/2026-09-19-f719-concurrent-starts-keep-work-8f1a6434/test/stop-command.test.ts:181:2)
+      at async Test.run (node:internal/test_runner/test:1069:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:752:7)
+
+test at test/structure.test.ts:9:1
+✖ architecture stays small, pure, direct, and dependency-free (3.900791ms)
+  AssertionError [ERR_ASSERTION]: src has 4169 lines; includes bounded finish-turn inspection, pruned-checkout continuation, empty-result finish suppression, same-tip finish quieting, spawn fail-closed on a ticket missing from the base commit, hosted PATH plus HERDR_ENV, jobs label-prefix filter, and land merging a done job
+      at TestContext.<anonymous> (file:///Users/overment/.overment/.limen-limen-worktrees/2026-09-19-f719-concurrent-starts-keep-work-8f1a6434/test/structure.test.ts:19:9)
+      at async Test.run (node:internal/test_runner/test:1069:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:332:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '=='
+  }
+EXIT:1

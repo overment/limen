@@ -1,0 +1,30 @@
+F719 checks (commit 63bbff6b77e91e0666d396430e182dcefd1bd1df)
+
+Baseline (unchanged spawn/prune), test/spawn-command.test.ts:
+- overlapping starts keep both worktrees; prune still drops a genuine leftover
+  FAIL ENOENT first job dir after second spawn reached prepare
+  path: .../repo/.limen/jobs/2026-09-19-first-start-7918ff3f
+- a second spawn cannot delete a worktree still being added
+  FAIL ENOENT first worktree after second spawn
+  path: .../.repo-limen-worktrees/2026-09-19-worktree-first-0ffad644
+
+After runtime change:
+- same two tests PASS (4812ms, 3299ms; later 6177ms, 3478ms in full npm test)
+- spawn creates isolated branch, canonical record... PASS
+- prune deletes a job directory with no state PASS
+
+tsc --noEmit PASS (inside npm run check)
+biome check . PASS (Checked 84 files)
+
+npm test (408 tests): 400 pass, 8 fail. Slice tests above passed.
+Unrelated / pre-existing fails:
+- leftover sweep keeps a nested container... (also failed on unchanged baseline; path includes)
+- prune/spawn keeps nested running jobs... (same includes pattern)
+- continue refuses a pruned checkout when its branch is missing
+- hosted supervisor follows a moved pane...
+- hosted continue survives a killed caller...
+- timeout completes delayed discovery before a fast parent exit
+- architecture stays small... FAILED at 4169/4160 on fb3db62; cap raised to 4180 in 63bbff6; structure test PASS after amend
+
+Full npm run check timed out at 20m mid-suite; npm test then ran to completion (1642744ms).
+Logs: /tmp/limen-f719-native-check.txt (partial check), /tmp/limen-f719-native-tests.txt (full npm test)

@@ -1,0 +1,6 @@
+(node:83849) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+Prune interleaving after mkdir, before started-at: /private/var/folders/_2/zg9lhmwx3c53w15w_vp606340000gn/T/limen-test-z7lZul/repo/.limen/jobs/2026-09-19-publication-probe-9fc65644
+Removed records/worktrees: 1
+Job directory still exists: false
+CONFIRMED: candidate spawn fails after prune removes the in-flight directory: ENOENT: no such file or directory, open '/private/var/folders/_2/zg9lhmwx3c53w15w_vp606340000gn/T/limen-test-z7lZul/repo/.limen/jobs/2026-09-19-publication-probe-9fc65644/worktree'

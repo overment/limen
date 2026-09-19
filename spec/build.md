@@ -5,6 +5,7 @@
 - **Clarity delivery (Adam 2026-09-19):** a specification coordinator prepares tickets, then area coordinators manage workers in waves; the lead conversation alone owns activation, board edits, primary-checkout commits, merges, and pushes. Adam reviews; no independent review lane unless he asks.
 - **Clarity sequence:** concurrent-start safety first, then recovery identity, then execution contracts, then behavioral record tests; activate these four slices serially because their source and test seams overlap.
 - **Clarity boundary:** no new workflow states, general helper layer, runtime dependencies, or changes to parked work; replace source-filename assertions only with equivalent observable-record coverage, retaining dependency and architecture guards. Propose any line-budget change explicitly rather than compressing code to fit.
+- **Startup-safety size allowance:** the lead accepts a 4180-line `src/` cap for the explicit startup protection in F719; further increases require a stated proposal, not compressed code or unrelated deletions.
 - **Wave model (Adam 2026-09-16, retained for clarity):** Codex is over quota. Until it recovers, coordinator tabs, every spawn, and every continue use `--provider xai --model grok-4.6 --thinking xhigh`. No silent substitution.
 - **Ops remediation lock 2026-09-10 (Adam):** two unsuccessful automatic wake attempts then deliberate recovery; park-and-preserve on quota — no silent model substitution. Named-job `limen watch <id>` for takeovers — not `watch --running`.
 - **Finish proof (Adam):** HTTP ≠ bot turn. VPS-first, Johnny-only automatic finish proof is sufficient; an export hold is unobserved evidence, never absence of an actual turn; no Tony coordination.
@@ -15,7 +16,7 @@
 
 ## NOW
 
-- Concurrent starts retain their work (`F719-concurrent-starts-keep-their-work`, 🟠 ACTIVE): startup-safety coordinator manages a reproduction-first worker; no speculative runtime fix.
+- Concurrent starts retain their work (`F719-concurrent-starts-keep-their-work`, 🟠 ACTIVE): the first candidate still loses an incompletely published job directory; startup-safety coordinator owns correction and clean-commit evidence before landing.
 
 ## NEXT
 
