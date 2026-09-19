@@ -17,6 +17,10 @@ Workers, reviewers, and advisors exist only through `limen spawn`. There is no `
 | Tony spawns a coordinator | Start a hosted Pi tab in the plant's Herdr space (`LIMEN_COORDINATOR=1`). |
 | The coordinator manages workers | That Pi session runs `limen spawn`. |
 
+## Seat and window
+
+One always-on host is the **seat**: Git checkouts, worktrees, and `.limen/jobs/` live there. A laptop is a **window**: attach with `herdr --remote` or session attach, look, type, leave. Spawn only on the seat. Closing the lid must not kill a worker. Operator flow and Linux gaps: `docs/remote.md`.
+
 ## Durable intent
 
 - `spec/vision.md` explains durable intent. It is human-owned: propose a change and ask before rewriting it. Keep compact, decision-useful bullets under **Product principles** and **Current direction**. The coordinator holds it in the system prompt; a worker is pointed at the file.

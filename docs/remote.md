@@ -30,11 +30,11 @@ browser: tailscale serve URL         app, tests, workers
 optional local git clone             never a second .limen/
 ```
 
-Do not: SSHFS the worktrees; run a coordinator on the laptop against a different disk; copy `.limen/` between machines.
+Do not: SSHFS the worktrees; run a coordinator on the laptop against a different disk; copy `.limen/` between machines; `limen spawn` from a laptop clone.
 
 ## Daily loop
 
-1. **Direct agents** — Tailscale up, `herdr --remote you@seat-name`. Coordinator Pi runs *there*. On the seat, spawn `--detached` unless you are attached and intend to type. Close the window; jobs keep running.
+1. **Direct agents** — Tailscale up, attach with `herdr --remote you@seat-name` (optional `--session` if the seat is not the default). Coordinator Pi runs *there*. Spawn only on the seat: `--detached` unless you are attached and intend to type. Close the window; jobs keep running. No Limen command needs the laptop awake.
 2. **Judge** — wake, `limen jobs`, or `limen open`. Job files on the seat are truth; the footer can lag.
 3. **See the product**
    - Usual: preview bound to localhost on the seat, published with `tailscale serve` — open that HTTPS URL. No pull.
@@ -74,7 +74,13 @@ These are operational facts that keep a seat alive. They are not Limen features.
 - Two jobs on one repo still share whatever database you pointed them at. Files isolate; schema may not.
 - Herdr/`tmux` is the layer that survives a GUI dying. A browser IDE is a viewer.
 
-F007 process containment is macOS-shaped (`src/proc.ts` shells Darwin `proc_pidinfo`). On Linux, `limen stop` is best-effort and writes an `unavailable` cleanup note. Accept that. Do not port a second identity stack unless stop-on-Linux actually hurts. `package.json` lists `linux`; the claim is “runs,” not “containment parity.”
+## Linux gaps
+
+These change guarantees on a typical VPS seat. They are not a porting list.
+
+- Process containment (F007) is macOS-shaped: Darwin process identity. `package.json` lists `linux`; the claim is “runs,” not containment parity.
+- Hosted tabs (`--tab`, or spawn inside Herdr) already dropped it on every OS. Herdr owns that tree. Recorded on the job as `hosted`.
+- On Linux, `limen stop` is best-effort and may write an `unavailable` cleanup note. Job files stay truth. Do not port a second identity stack unless stop-on-Linux actually hurts.
 
 ## Traps (will bite on day one)
 
@@ -82,6 +88,7 @@ F007 process containment is macOS-shaped (`src/proc.ts` shells Darwin `proc_pidi
 - **Hosted-by-default is wrong on a seat.** Inside Herdr, `limen spawn` is hosted (`HERDR_ENV=1`) — no 90-minute timeout, no tool-call cap, no F007. That encodes “you are watching.” On the seat, pass `--detached` unless you are attached and intend to type. `LIMEN_SPAWN` is not a flag yet.
 - **`--tab` must start while the new tab is focused.** Herdr 0.8 will not launch an agent in a background pane (`not an available shell`, or a start that never lands). Limen focuses the new tab, starts `pi`, then restores the coordinator. First smoke on a seat is still `--detached`. Hosted tabs need `herdr integration install pi`.
 - **Herdr `done` is unseen idle**, not process exit. On a seat you attach twice a day, so almost every tab reads `done`. Limen must not treat that as terminal (already true as of `c316fce`). A quiet think in a background tab is the same lie — no idle-after-tools timer. Complete on `session-ended` or a vanished agent. Do not “fix” `idle` vs `done` for headless.
+- **A laptop clone is not a Limen root.** Attach; do not `limen spawn` from it. That is a second cabinet.
 - **Checkout the work branch.** `origin/HEAD` plus `limen init` is a blank cabinet. `gh` on the box is HTTPS — do not `git@` unless you added a key. Do not copy `.limen/` to the laptop.
 - **Two coordinators can double-deliver a wake.** A machine suspended mid-claim for over 30 s can produce a rare duplicate wake — at-least-once is the designed failure direction, not a bug to file.
 
@@ -108,5 +115,5 @@ See `spec/features/planned/F014-github-doorbell/ticket.md`. Promote into Limen o
 ## Related
 
 - [Vision](../spec/vision.md) — durable intent, including the seat/window split.
-- [F013 remote seat](../spec/features/planned/F013-remote-seat/ticket.md) — what Limen still owes the seat.
+- [F013 remote seat](../spec/features/active/F013-remote-seat/ticket.md) — what Limen still owes that map.
 - [SECURITY.md](../SECURITY.md) — `pi --approve` is still you, wherever the seat is.
