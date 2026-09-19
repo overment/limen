@@ -7,6 +7,8 @@ const MAX_CONTEXT_LINES = 1000;
 const BOARD_ADVISORY_LINES = 120;
 const REPLY_RULES =
 	"First line is the answer. Not `F048 is active now.` — `The change that makes spawn return in seconds (F048) is being implemented now.` Never open a reply with a feature number. Size the reply to the question.";
+const OVERVIEW_CUE =
+	"When this reply hands control back with work in flight, end with a short overview: what is finished, what is running and which job has it, what is waiting on the owner.";
 const SPECS_REMINDER =
 	"[limen] Specs: a ticket is about 300 words: outcome, scope, out of scope, acceptance. No status line, no progress markers. Another feature is named by what it does, then its number: not `consumes F373`, but `builds on the shared transcript renderer (F373)`. Title is `FNNN · what becomes true`.";
 const STYLE_FILE = ".agents/limen/styleguide.md";
@@ -116,6 +118,7 @@ function turnCue(cwd: string, job: boolean, wake: boolean, lastTouch: string | u
 		}
 	}
 	lines.push(REPLY_RULES);
+	if (!job) lines.push(OVERVIEW_CUE);
 	if (lastTouch) lines.push(lastTouch);
 	if (!job) {
 		const drift = formatDrift(listDrift(cwd));

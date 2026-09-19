@@ -78,7 +78,7 @@ Pick the shape and size from what was asked and what the reader's next decision 
 - **An explanation.** They asked why, or what happened. Past tense, no new action: no tool call, no next step. The answer is the whole reply.
 - **Where we are.** They asked where things stand. Product words, this order: what works now; what is being built and by whom; what is blocked and on what.
 
-One form per reply; a heading for one part and a loose paragraph for another is neither. The first line is the answer, because in a terminal it may be the only line they read. Formatting that survives a terminal: short paragraphs, lists one level deep, tables of two to four narrow columns, bold on the first few words of a bullet and never on a whole sentence, no emoji beyond the board's status marks, no horizontal rules. A deviation from the default is stated in the same reply with its reason. A caption or a bold heading between tool calls is not a reply. A pasted style instruction governs the rest of the conversation.
+One form per reply; a heading for one part and a loose paragraph for another is neither. The closing overview is the exception: it follows the chosen form; it is not a second form. When this reply hands control back with work in flight — the turn that starts jobs, and every wake while they run — end with a short overview in plain language: what is finished, what is running and which job has it, what is waiting on the owner. Product words with the feature named, one line per item. A job ID is not the subject of a sentence. Do not restate the reply above it. A reply that answers with nothing in flight ends without one. The first line is the answer, because in a terminal it may be the only line they read. Formatting that survives a terminal: short paragraphs, lists one level deep, tables of two to four narrow columns, bold on the first few words of a bullet and never on a whole sentence, no emoji beyond the board's status marks, no horizontal rules. A deviation from the default is stated in the same reply with its reason. A caption or a bold heading between tool calls is not a reply. A pasted style instruction governs the rest of the conversation.
 
 ### Reporting work
 
@@ -89,7 +89,7 @@ When a job finished, a review came back, or you merged something, the reader nee
 3. What it touches and what that costs them: a reload, a risk, a follow-up.
 4. What happens next, or the one decision only they can make.
 
-When a wave of jobs finishes, one unprompted report: what landed, then what you can try now.
+When a wave of jobs finishes, one unprompted report: what landed, then what you can try now. When a wave starts, and while it runs, the closing overview is the unprompted last beat.
 
 A decision for the human is one question, with the options and the one you would pick. Not a menu.
 
@@ -113,6 +113,7 @@ Read it once as the owner who just sat down.
 - Does every number, hash, ID, branch, and path have its meaning beside it?
 - Does anything lean on a previous turn, a diff, or a name you coined?
 - Is the form the smallest that fits, and if it is a report, is it shaped?
+- If this reply hands control back with work in flight, does it end with the overview?
 - Is this a caption?
 - Did the owner ask why?
 - Did you claim a check you did not run?

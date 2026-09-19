@@ -167,6 +167,25 @@ test("a wake turn puts the wake cue in the per-turn note, not the system prompt"
 	assert.doesNotMatch(result.systemPrompt ?? "", /opened by a job wake/);
 });
 
+test("the per-turn note carries the overview cue on a human turn and a wake, not on a job session", async (context) => {
+	const root = await projectRoot(context);
+	await coordinatorFiles(root);
+	const overview = /When this reply hands control back with work in flight, end with a short overview:/;
+	const human = start(root);
+	assert.match(human.message?.content ?? "", overview);
+	assert.match(human.message?.content ?? "", /Audience for this reply: human/);
+	assert.doesNotMatch(human.systemPrompt ?? "", overview);
+	const wake = start(root, { prompt: 'Limen job "F031 retry" is done (abc) on branch limen/abc.', systemPrompt: "base" });
+	assert.match(wake.message?.content ?? "", overview);
+	assert.match(wake.message?.content ?? "", /opened by a job wake/);
+	assert.doesNotMatch(wake.systemPrompt ?? "", overview);
+	stashEnv(context, { LIMEN_JOB: "1", LIMEN_CONTEXT_ROOT: root });
+	const job = start(root, { systemPrompt: "pi-base" });
+	assert.match(job.message?.content ?? "", /Audience for this reply: agent/);
+	assert.doesNotMatch(job.message?.content ?? "", overview);
+	assert.doesNotMatch(job.systemPrompt ?? "", overview);
+});
+
 test("a write under spec/, an edit of code, and limen spawn recall the matching rule on the tool result", async (context) => {
 	const root = await projectRoot(context);
 	const spec = tool(root, {
@@ -323,6 +342,10 @@ test("missing communication inherits the package register", async (context) => {
 	assert.match(prompt, /\*\*An explanation\.\*\* They asked why, or what happened\. Past tense, no new action: no tool call, no next step/);
 	assert.match(prompt, /what works now; what is being built and by whom; what is blocked and on what/);
 	assert.match(prompt, /what you can try now/);
+	assert.match(prompt, /The closing overview is the exception/);
+	assert.match(prompt, /hands control back with work in flight/);
+	assert.match(prompt, /what is finished, what is running and which job has it, what is waiting on the owner/);
+	assert.match(prompt, /When a wave starts, and while it runs, the closing overview is the unprompted last beat/);
 	assert.match(prompt, /A pasted style instruction governs the rest of the conversation/);
 	assert.match(prompt, /A wake for a job already closed is not news: one line, or nothing/);
 	assert.match(result.message?.content ?? "", /Audience for this reply: human/);
