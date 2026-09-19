@@ -13,18 +13,17 @@
 
 ## NOW
 
-- Parked spawn-route refusal. Optional `/speak` removal landed `d45fed2`; reload Pi to unload the old command.
+- Wake errors count toward the two-attempt ceiling. Optional `/speak` removal landed `d45fed2`; reload Pi to unload the old command.
 
 ## NEXT
 
-- Parked finish, sequential: spawn refuses an unusable route; wake errors count toward the attempt ceiling; ticket finishes wake the author's bots; job history can be retired. Claude perspective, closing overview, and living architecture picture only if still parked and tractable. Remote seat and GitHub doorbell last, solid partial over half-broken.
+- Parked finish, sequential after the wake ceiling: ticket finishes wake the author's bots; job history can be retired. Claude perspective, closing overview, and living architecture picture only if still parked and tractable. Remote seat and GitHub doorbell last, solid partial over half-broken.
 
 ## PARKED
 
-- `F081-spawn-refuses-an-unusable-route` (🔴 PLANNED): until cheap Pi proof; failing candidate `b14b5fe` stays locked; no auth/catalog substitution.
-- Ticket finishes wake the author's bots (`F708-ticket-finishes-wake-the-authors-bots`, 🔴 PLANNED): after this wave, spec only.
-- `F090-wake-errors-count-toward-attempt-ceiling` (🔴 PLANNED): parked unchanged at `0fa48fa`; no merge, third repair, or widening.
-- `F050-living-architecture-picture`, `F074-claude-perspective`, `F075-closing-overview`, `F086-job-history-can-be-retired`, `F013-remote-seat`, `F014-github-doorbell` (🔴 PLANNED): deferred beyond this wave.
+- `F081-spawn-refuses-an-unusable-route` (🔴 PLANNED): still waiting for a Pi-supported non-generating route probe. Rechecked installed Pi 0.84.2 on 2026-09-19: `auth check` still proves credentials only; model runtime has stream/complete, no exact-route validation. Failing candidate `b14b5fe` stays locked; no auth/catalog substitution. Hosted continuation file transport already landed.
+- Ticket finishes wake the author's bots (`F708-ticket-finishes-wake-the-authors-bots`, 🔴 PLANNED): after the wake ceiling, spec only.
+- `F050-living-architecture-picture`, `F074-claude-perspective`, `F075-closing-overview`, `F086-job-history-can-be-retired`, `F013-remote-seat`, `F014-github-doorbell` (🔴 PLANNED): deferred beyond earlier slices.
 
 ## DROPPED
 
