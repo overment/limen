@@ -13,7 +13,7 @@
 
 ## NOW
 
-- GitHub doorbell next, solid partial over half-broken. Overlapping starts keep both worktrees landed `e5feac5`. Remote-seat shop-manual partial landed `d33e334`; reload Pi for the new shop text.
+- GitHub doorbell next, solid partial over half-broken. Overlapping starts keep both worktrees landed `e5feac5`; publication window closed `30cff7a`. Remote-seat shop-manual partial landed `d33e334`; reload Pi for the new shop text.
 
 ## NEXT
 
@@ -31,7 +31,7 @@
 
 ## PROVEN
 
-- `F719-concurrent-starts-keep-their-work` (🟢 PROVEN): overlapping starts keep both worktrees. Landed `e5feac5` from Mac tip `63bbff6`. Focused spawn 30/30, prune 12/12; TypeScript clean. Full native not rerun here; Mac reported 400/8 baseline-same outside the slice.
+- `F719-concurrent-starts-keep-their-work` (🟢 PROVEN): overlapping starts keep both worktrees; the empty job-directory publication window is closed. Landed `e5feac5` / `30cff7a` from Mac tips `63bbff6` / `8cc3ba6`. Focused spawn and prune 45/45; TypeScript clean. Full native not rerun here.
 - `F013-remote-seat` (🟢 PROVEN): shop manual names seat vs window and links the remote doc. Landed `d33e334`. Docs only; no host-mismatch advisory, no Linux containment port. Structure 4/4; native split after a 600s cap, remaining 100/100. Reload Pi for the new shop text.
 - `F075-closing-overview` (🟢 PROVEN): coordinator handbacks with work in flight end with a short overview. Landed `dd85e7c`; communication-hook 23/23; native 452/453 with an unrelated wake-sweep timing miss. Reload Pi for the new register and cue.
 - `F086-job-history-can-be-retired` (🟢 PROVEN): `limen prune --retire` deletes finished job records whose branches are merged or gone. Landed `58c9c4f`; focused prune 12/12; native 452/452. Running jobs and unmerged branches stay; spawn and sweep never retire records.

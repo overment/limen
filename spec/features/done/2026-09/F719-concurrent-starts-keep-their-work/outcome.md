@@ -1,3 +1,3 @@
 # Outcome
 
-Two overlapping starts keep both job records and both worktrees. Spawn publishes started-at and the worktree path before adding the worktree; prune keeps a recent start that has no state yet and still deletes a genuine leftover. Landed `e5feac5` on this plant from Mac tip `63bbff6`, applied over prune `--retire` and author-finish routing. Focused spawn 30/30 and prune 12/12; TypeScript clean. Full native was not rerun here; the Mac run was 400/8 with baseline-same fails outside the slice.
+Two overlapping starts keep both job records and both worktrees. Spawn publishes markers in a hidden directory and renames it into place, so prune cannot delete an empty in-flight job directory. Prune refreshes its keep set from a current listing before removing worktrees. First land `e5feac5`; publication-window close `30cff7a` from Mac tip `8cc3ba6`. Focused spawn and prune 45/45; TypeScript clean. Full native was not rerun here.
