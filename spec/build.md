@@ -13,11 +13,11 @@
 
 ## NOW
 
-- Remote seat as a solid partial: shop manual names seat vs window and links the remote doc. Closing overview landed `dd85e7c`; reload Pi for the new register and cue.
+- Overlapping starts keep both worktrees. Remote-seat shop-manual partial landed `d33e334`; reload Pi for the new shop text.
 
 ## NEXT
 
-- GitHub doorbell after a real seat partial, solid partial over half-broken.
+- GitHub doorbell after this keep-worktrees land, solid partial over half-broken.
 
 ## PARKED
 
@@ -31,6 +31,7 @@
 
 ## PROVEN
 
+- `F013-remote-seat` (🟢 PROVEN): shop manual names seat vs window and links the remote doc. Landed `d33e334`. Docs only; no host-mismatch advisory, no Linux containment port. Structure 4/4; native split after a 600s cap, remaining 100/100. Reload Pi for the new shop text.
 - `F075-closing-overview` (🟢 PROVEN): coordinator handbacks with work in flight end with a short overview. Landed `dd85e7c`; communication-hook 23/23; native 452/453 with an unrelated wake-sweep timing miss. Reload Pi for the new register and cue.
 - `F086-job-history-can-be-retired` (🟢 PROVEN): `limen prune --retire` deletes finished job records whose branches are merged or gone. Landed `58c9c4f`; focused prune 12/12; native 452/452. Running jobs and unmerged branches stay; spawn and sweep never retire records.
 - `F708-ticket-finishes-wake-the-authors-bots` (🟢 PROVEN): ticket finishes wake only the author's mapped bots. Landed `ec6c645`; collaborator/skip/invalid-map tests passed; native split after a 600s cap, remaining 120/120. Live two-author receiver proof was not run on this seat.
@@ -40,6 +41,5 @@
 - `F091-finish-job-shows-bot-turn-receipt` (🟢 PROVEN): finish inspection separates transport from bot turn. Johnny export-hold on this VPS: accepted HTTP stayed unobserved while the export was held, then observed after release without a second send. Inspection `87dd357`; proof job `2026-09-12-f091-johnny-export-hold-proof-03388067`.
 - `F716-jobs-filter-by-label` (🟢 PROVEN): `limen jobs --label PREFIX` lists matching jobs including hidden terminal ones. Landed `4cc8bc9`; focused tests passed; native 402/403 with unrelated wake-sweep timing miss.
 - `F715-hosted-path-and-herdr-env` (🟢 PROVEN): hosted tabs get `/usr/bin` on PATH and `HERDR_ENV=1`. Landed `ccf3e7e` / `75cf1a7`; discriminating hosted-start test passed; native 401/402 with an unrelated wake-sweep timing miss retained.
-- `F714-spawn-fails-closed-without-ticket` (🟢 PROVEN): spawn refuses a `Ticket:` path missing from the base commit, with no leftover worktree. Landed `d220b3b`; worker native 401/401 passed.
-- 2026-09: 53 landed. Same settled git tip sends at most one automatic finish ping (F713, `1cd1f68`). Empty failed and stopped jobs skip automatic finish webhooks (F711, `e9b29fe`). A job can run on Claude instead of Pi (F074, `96832c3`). Native checks give a repeatable verdict (F709, `2181d35`). Handoff rules and owner-choice precedence have one home (F087, `ec65dc2`). A dead supervisor on a live hosted job regains watch-only recovery (F049, `6662bac`). Hosted jobs start under a killed caller (F048, `c6d4d6c`). Neutral finish-webhook names (F092, `a76e0ae`). Settled panes show RUNNING jobs without erasing warnings (F707, `756c747`). Spawn and continuation forward literal Pi flags (F089, `cd8cbb1`). Coordinators use Codex/xhigh and Pi jobs default to Codex/high without inheriting global Grok (F088, `aa5382e`). Coordinators skip settled history while completion wakes remain observable (F085, `5a00065`). Specs keep one check and one constraint per line (F083, `7d966e5`). Hosted jobs end themselves; review loops stop at a ceiling; failed turns and changed-file counts are visible; titles name the change and identifiers carry their meaning; handoffs point at board-owned boundaries; one living picture follows system shape; authorized research compares named sources before judgment; workers falsify candidates and retain commit-bound proof beyond their worktrees; one correction reaches watched live jobs; visual evidence names what opened frames showed. spec/features/done/2026-09/
+- 2026-09: 54 landed. Spawn refuses a ticket missing from the base commit (F714, `d220b3b`). Same settled git tip sends at most one automatic finish ping (F713, `1cd1f68`). Empty failed and stopped jobs skip automatic finish webhooks (F711, `e9b29fe`). A job can run on Claude instead of Pi (F074, `96832c3`). Native checks give a repeatable verdict (F709, `2181d35`). Handoff rules and owner-choice precedence have one home (F087, `ec65dc2`). A dead supervisor on a live hosted job regains watch-only recovery (F049, `6662bac`). Hosted jobs start under a killed caller (F048, `c6d4d6c`). Neutral finish-webhook names (F092, `a76e0ae`). Settled panes show RUNNING jobs without erasing warnings (F707, `756c747`). Spawn and continuation forward literal Pi flags (F089, `cd8cbb1`). Coordinators use Codex/xhigh and Pi jobs default to Codex/high without inheriting global Grok (F088, `aa5382e`). Coordinators skip settled history while completion wakes remain observable (F085, `5a00065`). Specs keep one check and one constraint per line (F083, `7d966e5`). Hosted jobs end themselves; review loops stop at a ceiling; failed turns and changed-file counts are visible; titles name the change and identifiers carry their meaning; handoffs point at board-owned boundaries; one living picture follows system shape; authorized research compares named sources before judgment; workers falsify candidates and retain commit-bound proof beyond their worktrees; one correction reaches watched live jobs; visual evidence names what opened frames showed. spec/features/done/2026-09/
 - 2026-08: 44 landed. Hosted jobs run in a named tab; wakes retry; the process tree is contained. spec/features/done/2026-08/

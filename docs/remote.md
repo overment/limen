@@ -115,5 +115,5 @@ See `spec/features/planned/F014-github-doorbell/ticket.md`. Promote into Limen o
 ## Related
 
 - [Vision](../spec/vision.md) — durable intent, including the seat/window split.
-- [F013 remote seat](../spec/features/active/F013-remote-seat/ticket.md) — what Limen still owes that map.
+- [F013 remote seat](../spec/features/done/2026-09/F013-remote-seat/ticket.md) — shop manual names seat vs window; Linux containment port is still out of scope.
 - [SECURITY.md](../SECURITY.md) — `pi --approve` is still you, wherever the seat is.
