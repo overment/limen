@@ -1,7 +1,7 @@
 import { readdir, readFile, realpath, rm } from "node:fs/promises";
 import { basename, dirname, resolve } from "node:path";
 import { branchExists, branchMerged, limenRoot, listWorktrees, pruneWorktrees, removeWorktree, workspaceRepository } from "../git.ts";
-import { liveJob } from "../reap.ts";
+import { liveJob, STARTUP_GRACE_MS } from "../reap.ts";
 
 export async function pruneCommand(args: readonly string[], cwd: string): Promise<void> {
 	const retire = args.includes("--retire"),
@@ -48,6 +48,12 @@ export async function pruneFinishedWorktrees(root: string, keep: readonly string
 	for (const id of await jobIds(jobsRoot)) {
 		const jobDir = `${jobsRoot}/${id}`;
 		if (!(await text(`${jobDir}/state`))) {
+			const startedAt = Date.parse(await text(`${jobDir}/started-at`));
+			if (Number.isFinite(startedAt) && Date.now() - startedAt < STARTUP_GRACE_MS) {
+				const recorded = await text(`${jobDir}/worktree`);
+				if (recorded) keepPaths.add(await resolved(recorded));
+				continue;
+			}
 			await rm(jobDir, { recursive: true, force: true });
 			removed += 1;
 			continue;

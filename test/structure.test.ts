@@ -18,7 +18,7 @@ test("architecture stays small, pure, direct, and dependency-free", async () => 
 	const sourceLines = (await Promise.all(source.map((path) => readFile(path, "utf8")))).reduce((sum, text) => sum + text.split("\n").length - 1, 0);
 	assert.ok(
 		sourceLines <= 4280,
-		`src has ${sourceLines} lines; includes bounded finish-turn inspection, pruned-checkout continuation, empty-result finish suppression, same-tip finish quieting, spawn fail-closed on a ticket missing from the base commit, hosted PATH plus HERDR_ENV, jobs label-prefix filter, land merging a done job, author-filtered finish routing, and finished-job retirement`,
+		`src has ${sourceLines} lines; includes bounded finish-turn inspection, pruned-checkout continuation, empty-result finish suppression, same-tip finish quieting, spawn fail-closed on a ticket missing from the base commit, hosted PATH plus HERDR_ENV, jobs label-prefix filter, land merging a done job, author-filtered finish routing, finished-job retirement, and overlapping-start keep`,
 	);
 	assert.doesNotMatch(await readFile(join(ROOT, "src/job.ts"), "utf8"), /from ["']node:/);
 	assert.deepEqual((await readdir(join(ROOT, "src/commands"))).sort(), [

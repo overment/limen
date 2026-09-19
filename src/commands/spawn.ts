@@ -121,13 +121,18 @@ export async function spawnCommand(args: readonly string[], cwd: string): Promis
 	const baseCommit = plan.kind === "add-new" ? headCommit(repository) : branchCommit(repository, branch);
 	for (const [, ticket] of task.matchAll(/\bTicket: (spec\/\S+)/g))
 		if (ticket && !commitHasFile(repository, baseCommit, ticket)) throw new Error(`ticket ${ticket} is missing from the base commit`);
-	const worktree = executeWorktree(repository, plan);
-	await pruneFinishedWorktrees(root, [worktree]).catch(() => {});
-	const candidate = options.review ? branchCommit(repository, branch) : undefined;
-	const base = headCommit(worktree);
 	const jobDir = `${jobsRoot}/${id}`;
 	await mkdir(jobDir);
+	let worktree: string;
 	try {
+		await Promise.all([
+			writeFile(`${jobDir}/started-at`, `${new Date().toISOString()}\n`, { flag: "wx", flush: true }),
+			writeFile(`${jobDir}/worktree`, `${plan.path}\n`, { flag: "wx", flush: true }),
+		]);
+		worktree = executeWorktree(repository, plan);
+		await pruneFinishedWorktrees(root, [worktree]).catch(() => {});
+		const candidate = options.review ? branchCommit(repository, branch) : undefined;
+		const base = headCommit(worktree);
 		await mkdir(`${jobDir}/notify/subscribers`, { recursive: true });
 		const taskBody = loaded.raw ? loaded.bytes : candidate ? `${task.trim()}\n\nCandidate commit: ${candidate}.\n` : `${task.trim()}\n`;
 		await Promise.all([
@@ -135,10 +140,8 @@ export async function spawnCommand(args: readonly string[], cwd: string): Promis
 			...(candidate ? [writeFile(`${jobDir}/candidate`, `${candidate}\n`, { flag: "wx", flush: true })] : []),
 			writeFile(`${jobDir}/label`, `${options.label}\n`, { flag: "wx", flush: true }),
 			writeFile(`${jobDir}/branch`, `${branch}\n`, { flag: "wx", flush: true }),
-			writeFile(`${jobDir}/worktree`, `${worktree}\n`, { flag: "wx", flush: true }),
 			writeFile(`${jobDir}/base`, `${base}\n`, { flag: "wx", flush: true }),
 			...(workspace ? [writeFile(`${jobDir}/repo`, `${options.repo}\n`, { flag: "wx", flush: true })] : []),
-			writeFile(`${jobDir}/started-at`, `${new Date().toISOString()}\n`, { flag: "wx", flush: true }),
 			writeFile(`${jobDir}/tool-calls`, "0\n", { flag: "wx", flush: true }),
 			writeFile(`${jobDir}/last-tool`, "", { flag: "wx", flush: true }),
 			writeFile(`${jobDir}/activity`, "think\n", { flag: "wx", flush: true }),
