@@ -2,8 +2,10 @@
 
 ## TRACK
 
-- **Simple-path wave (Adam 2026-09-16):** this VPS plant coordinator is the sole landing/board writer; spawn sequential implementation workers; merge + push each ready slice to origin/main when the focused/native bar is met. Adam reviews; no independent review lane unless he asks. Out of scope: remote seat, GitHub doorbell, Claude advisors, F090, audio.
-- **Wave model (Adam 2026-09-16):** Codex is over quota. Until it recovers, every spawn and continue uses `--provider xai --model grok-4.6 --thinking xhigh`. No silent substitution.
+- **Clarity delivery (Adam 2026-09-19):** a specification coordinator prepares tickets, then area coordinators manage workers in waves; the lead conversation alone owns activation, board edits, primary-checkout commits, merges, and pushes. Adam reviews; no independent review lane unless he asks.
+- **Clarity sequence:** reproduce and settle concurrent-start safety first; dependency cleanup and accurate execution contracts next; behavioral record tests last. Launch workers serially; concurrent execution requires disjoint seams.
+- **Clarity boundary:** no new workflow states, general helper layer, runtime dependencies, or changes to parked work; replace source-filename assertions only with equivalent observable-record coverage, retaining dependency and architecture guards. Propose any line-budget change explicitly rather than compressing code to fit.
+- **Wave model (Adam 2026-09-16, retained for clarity):** Codex is over quota. Until it recovers, coordinator tabs, every spawn, and every continue use `--provider xai --model grok-4.6 --thinking xhigh`. No silent substitution.
 - **Ops remediation lock 2026-09-10 (Adam):** two unsuccessful automatic wake attempts then deliberate recovery; park-and-preserve on quota — no silent model substitution. Named-job `limen watch <id>` for takeovers — not `watch --running`.
 - **Finish proof (Adam):** HTTP ≠ bot turn. VPS-first, Johnny-only automatic finish proof is sufficient; an export hold is unobserved evidence, never absence of an actual turn; no Tony coordination.
 - **Review and models (Adam):** Adam performs reviews. Outside this wave override, coordinators use `openai-codex/gpt-6-astra:xhigh` and Pi workers default to `openai-codex/gpt-6-astra:high`. Research pair: `gpt-5.6-sol:xhigh` and `grok-4.6:xhigh`. Quality: `gpt-5.6-sol:xhigh`. Picture: `gpt-5.6-sol`.
@@ -13,11 +15,11 @@
 
 ## NOW
 
-- Simple-path wave complete. No implementation running.
+- Specification coordinator drafting the code-clarity wave; feature numbers F719–F722 reserved, no implementation running.
 
 ## NEXT
 
-- None in this wave.
+- Concurrent-start safety, then dependency and contract clarity, then behavioral record tests; acceptance and file overlap must be checked before activation.
 
 ## PARKED
 
