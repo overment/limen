@@ -238,9 +238,9 @@ export async function noteHostedIdle(jobDir: string, status: HostedAgentStatus, 
 }
 async function clearHostedAdvisory(jobDir: string): Promise<void> {
 	await rm(`${jobDir}/advisory`, { force: true });
-	for (const dir of [`${jobDir}/notify/claims`, `${jobDir}/notify/delivered`, `${jobDir}/notify/herdr`]) {
+	for (const dir of [`${jobDir}/notify/claims`, `${jobDir}/notify/delivered`, `${jobDir}/notify/herdr`, `${jobDir}/notify/unconfirmed`]) {
 		for (const name of await readdir(dir).catch(() => [] as string[])) {
-			if (name.startsWith("_advisory.")) await rm(`${dir}/${name}`, { recursive: true, force: true });
+			if (name === "_advisory" || name.startsWith("_advisory.")) await rm(`${dir}/${name}`, { recursive: true, force: true });
 		}
 	}
 	const pane = await textFile(`${jobDir}/herdr/pane`);

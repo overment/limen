@@ -164,8 +164,14 @@ test("noteHostedIdle writes one stall marker, skips zero tools, and re-arms afte
 		await noteHostedIdle(dir, "idle", watch, 10 * 60_000, 10 * 60_000);
 		assert.equal(await readFile(join(dir, "advisory"), "utf8"), "idle 10m after 14 tool calls, session still open\n");
 		assert.equal(watch.armed, false);
+		await mkdir(join(dir, "notify/unconfirmed"), { recursive: true });
+		await writeFile(join(dir, "notify/unconfirmed/_advisory"), "1\n1\n");
+		await writeFile(join(dir, "notify/unconfirmed/_completion"), "1\n1\n");
+		await mkdir(join(dir, "notify/claims/_advisory.coord"), { recursive: true });
+		await writeFile(join(dir, "notify/claims/_advisory.coord/blocked"), "automatic retries stopped\n");
 		await noteHostedIdle(dir, "idle", watch, 20 * 60_000, 10 * 60_000);
 		assert.equal(await readFile(join(dir, "advisory"), "utf8"), "idle 10m after 14 tool calls, session still open\n", "same stall must not nag");
+		assert.equal(await readFile(join(dir, "notify/unconfirmed/_advisory"), "utf8"), "1\n1\n", "same stall cannot reopen exhausted wakes");
 		await mkdir(join(dir, "notify/delivered/_advisory.coord"), { recursive: true });
 		await writeFile(join(dir, "notify/delivered/_advisory.coord/accepted"), "1\n");
 		await noteHostedIdle(dir, "working", watch, 21 * 60_000, 10 * 60_000);
@@ -173,6 +179,9 @@ test("noteHostedIdle writes one stall marker, skips zero tools, and re-arms afte
 		assert.equal(watch.leftWorkingAt, undefined);
 		await assert.rejects(readFile(join(dir, "advisory")));
 		await assert.rejects(readdir(join(dir, "notify/delivered/_advisory.coord")));
+		await assert.rejects(readdir(join(dir, "notify/claims/_advisory.coord")));
+		await assert.rejects(readFile(join(dir, "notify/unconfirmed/_advisory")), "resumed work rearms the next advisory");
+		assert.equal(await readFile(join(dir, "notify/unconfirmed/_completion"), "utf8"), "1\n1\n", "advisory rearming must not reopen completion");
 		await noteHostedIdle(dir, "idle", watch, 21 * 60_000, 10 * 60_000);
 		await noteHostedIdle(dir, "idle", watch, 31 * 60_000, 10 * 60_000);
 		assert.equal(await readFile(join(dir, "advisory"), "utf8"), "idle 10m after 14 tool calls, session still open\n");

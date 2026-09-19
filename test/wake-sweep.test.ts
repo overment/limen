@@ -189,7 +189,53 @@ test("progress events neither invalidate settled records nor schedule sweeps", a
 	);
 });
 
-function harness(context: TestContext) {
+for (const advisory of [false, true]) {
+	for (const fallback of [false, true]) {
+		for (const failure of ["error", "aborted", "reject", "throw"]) {
+			test(`${advisory ? "advisory" : "completion"} ${fallback ? "fallback" : "subscriber"} stops after two ${failure} failures`, async (context) => {
+				const h = harness(context, failure);
+				h.job("mine", "done", "coordinator", "coordinator");
+				h.job("unheard", advisory ? "running" : "done", fallback ? "closed-session" : "coordinator");
+				if (advisory) {
+					h.put("unheard/advisory", "errored: fixture provider unavailable");
+					fs.utimesSync(join(h.jobs, "unheard/advisory"), new Date(0), new Date(0));
+				}
+				h.put("unheard/finished-at", "2000-01-01T00:00:00.000Z");
+				await h.start();
+				assert.equal(h.messages.length, advisory && (failure === "reject" || failure === "throw") ? 2 : 1);
+				if (failure === "error" || failure === "aborted") await h.answer(failure);
+				await h.sweep();
+				assert.equal(h.messages.length, 2);
+				if (failure === "error" || failure === "aborted") await h.answer(failure);
+				const kind = advisory ? "_advisory" : "_completion";
+				const slot = `${advisory ? "_advisory." : ""}${fallback ? "_fallback" : "coordinator"}`;
+				const claim = join(h.jobs, "unheard/notify/claims", slot);
+				assert.equal(fs.readFileSync(join(h.jobs, "unheard/notify/unconfirmed", kind), "utf8"), "1\n1\n");
+				assert.match(fs.readFileSync(join(claim, "blocked"), "utf8"), /automatic retries stopped/);
+				assert.match(fs.readFileSync(join(h.jobs, "unheard/log"), "utf8"), /claim retained for human recovery/);
+				h.shutdown();
+				await h.start();
+				await h.answer("stop");
+				for (let sweep = 0; sweep < 5; sweep += 1) {
+					h.advance(31_000);
+					await h.sweep();
+				}
+				assert.equal(h.messages.length, 2, "restart, stale claims, cache refresh and late confirmation cannot reopen the event");
+				assert.deepEqual(fs.readdirSync(join(h.jobs, "unheard/notify/delivered")), []);
+				h.shutdown();
+				h.sessionId("new-listener");
+				h.put("mine/notify/subscribers/new-listener", "1");
+				h.put("mine/notify/delivered/new-listener/accepted", "1");
+				await h.start();
+				h.advance(31_000);
+				await h.sweep();
+				assert.equal(h.messages.length, 2, "a new fallback listener cannot reopen exhaustion");
+			});
+		}
+	}
+}
+
+function harness(context: TestContext, failure = "") {
 	const root = fs.mkdtempSync(join(tmpdir(), "limen-wake-sweep-"));
 	const jobs = join(root, ".limen/jobs");
 	fs.mkdirSync(join(root, ".agents/limen"), { recursive: true });
@@ -255,12 +301,13 @@ function harness(context: TestContext) {
 	const handlers = new Map<string, Handler>();
 	const messages: Array<{ content: string; deliverAs?: string }> = [];
 	let idle = true;
+	let sessionId = "coordinator";
 	let status: string | undefined;
 	let swept: () => void = () => {};
 	const session = {
 		cwd: root,
 		isIdle: () => idle,
-		sessionManager: { getSessionId: () => "coordinator" },
+		sessionManager: { getSessionId: () => sessionId },
 		ui: {
 			notify() {},
 			setStatus(_key: string, value: string | undefined) {
@@ -275,6 +322,8 @@ function harness(context: TestContext) {
 		},
 		sendUserMessage(content, options) {
 			messages.push({ content, ...(options ? { deliverAs: options.deliverAs } : {}) });
+			if (failure === "throw") throw new Error("fixture injection failure");
+			if (failure === "reject") return Promise.reject(new Error("fixture injection failure"));
 		},
 	});
 	const emit = (event: string, payload: unknown = {}) => handlers.get(event)?.(payload, session);
@@ -320,17 +369,21 @@ function harness(context: TestContext) {
 		idle: (value: boolean) => {
 			idle = value;
 		},
+		sessionId: (value: string) => {
+			sessionId = value;
+		},
 		status: () => status,
 		event: (filename: string | null) => {
 			events.push(filename);
 			changed("rename", filename);
 		},
+		shutdown: () => emit("session_shutdown"),
 		start: () => measure(() => emit("session_start")),
 		sweep: () => measure(() => intervals.get(500)?.()),
-		answer: () =>
+		answer: (stopReason = "stop") =>
 			measure(() => {
 				emit("message_start", { message: { role: "user", content: [{ type: "text", text: messages.at(-1)?.content }] } });
-				emit("message_end", { message: { role: "assistant", content: [{ type: "text", text: "acknowledged" }], stopReason: "stop" } });
+				emit("message_end", { message: { role: "assistant", content: [{ type: "text", text: "acknowledged" }], stopReason } });
 				emit("agent_settled");
 			}),
 		job(id: string, state: string, subscriber?: string, delivered?: string) {

@@ -1520,7 +1520,55 @@ test("another listener does not recover a live accepted claim", async (context) 
 	assert.equal(existsSync(join(job, "notify/delivered/coordinator-a")), true);
 });
 
-test("a provider-error turn releases the claim without spending an attempt", async (context) => {
+for (const failure of [false, true]) {
+	test(`competing subscribers ${failure ? "share two failures without a late confirmation reset" : "still fan out successful wakes"}`, async (context) => {
+		stashEnv(context, "LIMEN_JOB", undefined);
+		stashEnv(context, "LIMEN_HERDR", "0");
+		const root = await mkdtemp(join(tmpdir(), "limen-wake-competing-"));
+		context.after(() => rm(root, { recursive: true, force: true }));
+		await mkdir(join(root, ".agents/limen"), { recursive: true });
+		const jobs = join(root, ".limen/jobs");
+		const job = join(jobs, "shared");
+		for (const id of ["a", "b", "c"]) await subscribe(jobs, "shared", id);
+		await writeFile(join(job, "state"), "done\n");
+		const listeners = ["a", "b", "c"].map((id) => {
+			const handlers = new Map<string, (event: unknown, context: TestContext) => void>();
+			const messages: string[] = [];
+			limenWake({
+				on: (event, handler) => handlers.set(event, handler),
+				sendUserMessage: (message) => {
+					messages.push(message);
+				},
+			});
+			const session = { cwd: root, isIdle: () => true, sessionManager: sessionManager(id), ui: { notify() {}, setStatus() {} } };
+			context.after(() => handlers.get("session_shutdown")?.({}, session));
+			return { handlers, session, messages };
+		});
+		for (const listener of listeners) listener.handlers.get("session_start")?.({}, listener.session);
+		const count = () => listeners.reduce((sum, listener) => sum + listener.messages.length, 0);
+		await waitUntil(() => count() === 2);
+		for (const listener of listeners.filter((listener) => listener.messages.length)) {
+			emitWakeTurn(listener.handlers, listener.session, listener.messages[0] ?? "", failure ? "error" : "stop");
+		}
+		if (!failure) {
+			await waitUntil(() => count() === 3);
+			for (const listener of listeners) emitWakeTurn(listener.handlers, listener.session, listener.messages[0] ?? "");
+			const { readdir } = await import("node:fs/promises");
+			assert.deepEqual((await readdir(join(job, "notify/delivered"))).sort(), ["a", "b", "c"]);
+		} else {
+			for (const listener of listeners) {
+				emitWakeTurn(listener.handlers, listener.session, listener.messages[0] ?? "");
+				listener.handlers.get("session_shutdown")?.({}, listener.session);
+				listener.handlers.get("session_start")?.({}, listener.session);
+			}
+			await new Promise((resolve) => setTimeout(resolve, 1100));
+			assert.equal(count(), 2, "a different subscriber cannot gain a third attempt");
+			assert.equal(await readFile(join(job, "notify/unconfirmed/_completion"), "utf8"), "1\n1\n");
+		}
+	});
+}
+
+test("provider-error turns exhaust the allowance after two failures", async (context) => {
 	stashEnv(context, "LIMEN_JOB", undefined);
 	stashEnv(context, "LIMEN_HERDR", "0");
 	const root = await import("node:fs/promises").then(({ mkdtemp }) => mkdtemp(join(process.env.TMPDIR ?? "/tmp", "limen-wake-error-turn-")));
@@ -1550,14 +1598,19 @@ test("a provider-error turn releases the claim without spending an attempt", asy
 	emitWakeTurn(handlers, session, messages[0] ?? "", "error");
 	const { existsSync } = await import("node:fs");
 	assert.equal(existsSync(join(job, "notify/delivered/coordinator-a")), false);
-	assert.equal(existsSync(join(job, "notify/unconfirmed/_completion")), false, "error must not spend a confirmation attempt");
+	assert.equal(await readFile(join(job, "notify/unconfirmed/_completion"), "utf8"), "1\n", "error spends an attempt");
 	await waitUntil(() => messages.length === 2);
-	assert.match(await readFile(join(job, "log"), "utf8"), /without counting an attempt/);
+	emitWakeTurn(handlers, session, messages[1] ?? "", "error");
+	assert.equal(existsSync(join(job, "notify/delivered/coordinator-a")), false);
+	assert.equal(await readFile(join(job, "notify/unconfirmed/_completion"), "utf8"), "1\n1\n");
+	assert.match(await readFile(join(job, "notify/claims/coordinator-a/blocked"), "utf8"), /automatic retries stopped/);
+	assert.match(await readFile(join(job, "log"), "utf8"), /claim retained for human recovery/);
+	handlers.get("session_shutdown")?.({}, session);
+	handlers.get("session_start")?.({}, session);
 	emitWakeTurn(handlers, session, messages[1] ?? "");
-	assert.equal(existsSync(join(job, "notify/delivered/coordinator-a")), true);
-	assert.equal(existsSync(join(job, "notify/unconfirmed/_completion")), false);
-	await new Promise((resolve) => setTimeout(resolve, 550));
-	assert.equal(messages.length, 2, "confirmation prevents a third injection");
+	await new Promise((resolve) => setTimeout(resolve, 1100));
+	assert.equal(messages.length, 2, "reload, late confirmation and further sweeps cannot reopen exhaustion");
+	assert.equal(existsSync(join(job, "notify/delivered/coordinator-a")), false);
 });
 
 test("two unconfirmed injections retain the claim and stop automatic retries", async (context) => {

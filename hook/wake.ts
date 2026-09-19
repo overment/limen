@@ -362,8 +362,7 @@ export default function limenWake(pi: PiApi): void {
 	const confirmDeliveries = () => {
 		for (const pending of pendingDeliveries.values()) {
 			if (!pending.accepted || !pending.settled) continue;
-			if (pending.errored) releaseUncounted(pending.claim);
-			else if (pending.entered && pending.answered) confirmClaim(pending.claim, pending.delivered);
+			if (!pending.errored && pending.entered && pending.answered) confirmClaim(pending.claim, pending.delivered);
 			else if (recordUnconfirmed(pending.claim)) pending.blocked();
 			pendingDeliveries.delete(pending.claim);
 		}
@@ -692,6 +691,7 @@ type DeliveryCallbacks = {
 function claimDelivery(job: string, slot: string, eligible: () => boolean, send: () => void | Promise<void>, callbacks: DeliveryCallbacks): boolean {
 	const claim = join(job, "notify", "claims", slot);
 	const delivered = join(job, "notify", "delivered", slot);
+	if (unsuccessfulAttempts(claim) >= 2) return false;
 	mkdirSync(join(job, "notify", "claims"), { recursive: true });
 	mkdirSync(join(job, "notify", "delivered"), { recursive: true });
 	if (!callbacks.protected(claim)) {
@@ -715,32 +715,27 @@ function claimDelivery(job: string, slot: string, eligible: () => boolean, send:
 		rmSync(claim, { recursive: true, force: true });
 		return false;
 	}
-	if (!eligible()) {
+	const sameKind = isAdvisorySlot(slot) ? advisorySlots(claimSlots(job)) : completionSlots(claimSlots(job));
+	if (!eligible() || sameKind.length + unsuccessfulAttempts(claim) > 2) {
 		rmSync(claim, { recursive: true, force: true });
 		return false;
 	}
 	callbacks.pending(claim, delivered);
+	const reject = () => {
+		callbacks.released(claim);
+		if (recordUnconfirmed(claim, "wake injection failed")) callbacks.blocked();
+	};
 	try {
 		const injected = send();
 		const accept = () => {
 			writeFileSync(join(claim, "accepted"), "1\n");
 			callbacks.accepted(claim);
 		};
-		const reject = () => {
-			callbacks.released(claim);
-			rmSync(claim, { recursive: true, force: true });
-			try {
-				appendFileSync(join(job, "log"), `[limen ${new Date().toISOString()}] wake injection failed; the next sweep retries\n`);
-			} catch {
-				// The log is best-effort; the released claim is the durable fact.
-			}
-		};
 		if (injected instanceof Promise) injected.then(accept, reject);
 		else accept();
 		return true;
 	} catch {
-		callbacks.released(claim);
-		rmSync(claim, { recursive: true, force: true });
+		reject();
 		return false;
 	}
 }
@@ -768,38 +763,41 @@ function refreshClaim(claim: string): void {
 		// A missing claim was confirmed or recovered between the sweep and this heartbeat.
 	}
 }
-function recordUnconfirmed(claim: string): boolean {
+function attemptsPath(claim: string): string {
+	return join(dirname(dirname(claim)), "unconfirmed", isAdvisorySlot(claim.slice(claim.lastIndexOf("/") + 1)) ? "_advisory" : "_completion");
+}
+function unsuccessfulAttempts(claim: string): number {
+	return text(attemptsPath(claim))
+		.split("\n")
+		.reduce((sum, line) => sum + Number(line), 0);
+}
+function recordUnconfirmed(claim: string, reason = "wake turn errored, aborted or remained unconfirmed"): boolean {
 	try {
 		if (!existsSync(claim) || existsSync(join(claim, "blocked"))) return false;
-		const slot = claim.slice(claim.lastIndexOf("/") + 1);
-		const notify = dirname(dirname(claim));
-		const attemptsDir = join(notify, "unconfirmed");
-		const attemptsFile = join(attemptsDir, isAdvisorySlot(slot) ? "_advisory" : "_completion");
-		mkdirSync(attemptsDir, { recursive: true });
-		const attempts = Number(text(attemptsFile)) + 1;
-		writeFileSync(attemptsFile, `${attempts}\n`);
-		if (attempts < 2) {
-			rmSync(claim, { recursive: true, force: true });
-			return false;
+		writeFileSync(join(claim, "unsuccessful"), "1\n", { flag: "wx" });
+		const attemptsFile = attemptsPath(claim);
+		mkdirSync(dirname(attemptsFile), { recursive: true });
+		// Append atomically: competing subscribers must not overwrite each other's failure.
+		appendFileSync(attemptsFile, "1\n");
+		const attempts = unsuccessfulAttempts(claim);
+		if (attempts < 2) rmSync(claim, { recursive: true, force: true });
+		else writeFileSync(join(claim, "blocked"), "automatic retries stopped after two unsuccessful attempts\n", { flag: "wx" });
+		try {
+			const stopped = attempts >= 2 ? "; automatic retries stopped; claim retained for human recovery" : "";
+			appendFileSync(join(dirname(dirname(dirname(claim))), "log"), `[limen ${new Date().toISOString()}] ${reason}; unsuccessful wake attempt ${attempts}/2${stopped}\n`);
+		} catch {
+			// The allowance and retained claim remain authoritative if logging fails.
 		}
-		writeFileSync(join(claim, "blocked"), "automatic retries stopped after two unconfirmed injections\n", { flag: "wx" });
-		const job = dirname(notify);
-		appendFileSync(
-			join(job, "log"),
-			`[limen ${new Date().toISOString()}] wake remained unconfirmed after two accepted injections; automatic retries stopped; claim retained for human recovery\n`,
-		);
-		return true;
+		return attempts >= 2;
 	} catch {
 		return false;
 	}
 }
 function confirmClaim(claim: string, delivered: string): void {
 	try {
-		if (!existsSync(join(claim, "accepted"))) return;
+		if (!existsSync(join(claim, "accepted")) || existsSync(join(claim, "blocked")) || unsuccessfulAttempts(claim) >= 2) return;
 		if (!existsSync(delivered)) renameSync(claim, delivered);
 		else rmSync(claim, { recursive: true, force: true });
-		const slot = delivered.slice(delivered.lastIndexOf("/") + 1);
-		rmSync(join(dirname(dirname(delivered)), "unconfirmed", isAdvisorySlot(slot) ? "_advisory" : "_completion"), { force: true });
 	} catch {
 		// Another coordinator confirmed or recovered it first.
 	}
@@ -879,21 +877,6 @@ function sessionOwnsJobs(jobs: string, session: string): boolean {
 		// Missing jobs directory means this session owns nothing here.
 	}
 	return false;
-}
-function releaseUncounted(claim: string): void {
-	try {
-		rmSync(claim, { recursive: true, force: true });
-	} catch {
-		// Already recovered or confirmed.
-	}
-	try {
-		appendFileSync(
-			join(dirname(dirname(dirname(claim))), "log"),
-			`[limen ${new Date().toISOString()}] wake turn ended error or aborted; claim released without counting an attempt\n`,
-		);
-	} catch {
-		// The released claim is the durable fact.
-	}
 }
 function isAdvisorySlot(slot: string): boolean {
 	return slot.startsWith("_advisory.");
