@@ -1,6 +1,4 @@
-# F046-optional-speech-command · Optional spoken response
-
-[2026-08-26] [🟢] [PROVEN] [COORDINATOR] PROVEN · F046-optional-speech-command
+# F046 · Optional spoken response
 
 ## Outcome
 

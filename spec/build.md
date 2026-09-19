@@ -13,7 +13,7 @@
 
 ## NOW
 
-- Landing optional `/speak` removal (already stripped on `limen/2026-09-16-remove-audio-995a164f`), then parked spawn-route refusal.
+- Parked spawn-route refusal. Optional `/speak` removal landed `d45fed2`; reload Pi to unload the old command.
 
 ## NEXT
 
@@ -25,6 +25,10 @@
 - Ticket finishes wake the author's bots (`F708-ticket-finishes-wake-the-authors-bots`, 🔴 PLANNED): after this wave, spec only.
 - `F090-wake-errors-count-toward-attempt-ceiling` (🔴 PLANNED): parked unchanged at `0fa48fa`; no merge, third repair, or widening.
 - `F050-living-architecture-picture`, `F074-claude-perspective`, `F075-closing-overview`, `F086-job-history-can-be-retired`, `F013-remote-seat`, `F014-github-doorbell` (🔴 PLANNED): deferred beyond this wave.
+
+## DROPPED
+
+- `F046-optional-speech-command` (⚪ DROPPED): optional `/speak` shipped, then removed at owner request. Removal `d45fed2`.
 
 ## PROVEN
 
