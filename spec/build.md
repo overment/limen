@@ -2,8 +2,8 @@
 
 ## TRACK
 
-- **Simple-path wave (Adam 2026-09-16):** this VPS plant coordinator is the sole landing/board writer; spawn sequential implementation workers; merge + push each ready slice to origin/main when the focused/native bar is met. Adam reviews; no independent review lane unless he asks. Out of scope: remote seat, GitHub doorbell, Claude advisors, F090, audio.
-- **Wave model (Adam 2026-09-16):** Codex is over quota. Until it recovers, every spawn and continue uses `--provider xai --model grok-4.6 --thinking xhigh`. No silent substitution.
+- **Parked-finish wave (Adam 2026-09-19):** this VPS plant coordinator is the sole landing/board writer. Sequential workers; merge + push each ready slice to origin/main when the focused/native honesty bar is met. Adam reviews; no independent review lane unless he asks. Out of scope: rewriting Alice/API plants; do not regress coordinator = hosted Herdr Pi tab.
+- **Wave model (Adam 2026-09-19):** Codex ChatGPT rejected gpt-5.4-astra. Every spawn and continue uses `--provider xai --model grok-4.6 --thinking xhigh`. No silent substitution.
 - **Ops remediation lock 2026-09-10 (Adam):** two unsuccessful automatic wake attempts then deliberate recovery; park-and-preserve on quota — no silent model substitution. Named-job `limen watch <id>` for takeovers — not `watch --running`.
 - **Finish proof (Adam):** HTTP ≠ bot turn. VPS-first, Johnny-only automatic finish proof is sufficient; an export hold is unobserved evidence, never absence of an actual turn; no Tony coordination.
 - **Review and models (Adam):** Adam performs reviews. Outside this wave override, coordinators use `openai-codex/gpt-6-astra:xhigh` and Pi workers default to `openai-codex/gpt-6-astra:high`. Research pair: `gpt-5.6-sol:xhigh` and `grok-4.6:xhigh`. Quality: `gpt-5.6-sol:xhigh`. Picture: `gpt-5.6-sol`.
@@ -13,11 +13,11 @@
 
 ## NOW
 
-- Simple-path wave complete. No implementation running.
+- Landing optional `/speak` removal (already stripped on `limen/2026-09-16-remove-audio-995a164f`), then parked spawn-route refusal.
 
 ## NEXT
 
-- None in this wave.
+- Parked finish, sequential: spawn refuses an unusable route; wake errors count toward the attempt ceiling; ticket finishes wake the author's bots; job history can be retired. Claude perspective, closing overview, and living architecture picture only if still parked and tractable. Remote seat and GitHub doorbell last, solid partial over half-broken.
 
 ## PARKED
 
