@@ -3,7 +3,7 @@
 ## TRACK
 
 - **Clarity delivery (Adam 2026-09-19):** a specification coordinator prepares tickets, then area coordinators manage workers in waves; the lead conversation alone owns activation, board edits, primary-checkout commits, merges, and pushes. Adam reviews; no independent review lane unless he asks.
-- **Clarity sequence:** reproduce and settle concurrent-start safety first; dependency cleanup and accurate execution contracts next; behavioral record tests last. Launch workers serially; concurrent execution requires disjoint seams.
+- **Clarity sequence:** concurrent-start safety first, then recovery identity, then execution contracts, then behavioral record tests; activate these four slices serially because their source and test seams overlap.
 - **Clarity boundary:** no new workflow states, general helper layer, runtime dependencies, or changes to parked work; replace source-filename assertions only with equivalent observable-record coverage, retaining dependency and architecture guards. Propose any line-budget change explicitly rather than compressing code to fit.
 - **Wave model (Adam 2026-09-16, retained for clarity):** Codex is over quota. Until it recovers, coordinator tabs, every spawn, and every continue use `--provider xai --model grok-4.6 --thinking xhigh`. No silent substitution.
 - **Ops remediation lock 2026-09-10 (Adam):** two unsuccessful automatic wake attempts then deliberate recovery; park-and-preserve on quota — no silent model substitution. Named-job `limen watch <id>` for takeovers — not `watch --running`.
@@ -15,11 +15,13 @@
 
 ## NOW
 
-- Specification coordinator drafting the code-clarity wave; feature numbers F719–F722 reserved, no implementation running.
+- Concurrent starts retain their work (`F719-concurrent-starts-keep-their-work`, 🟠 ACTIVE): startup-safety coordinator manages a reproduction-first worker; no speculative runtime fix.
 
 ## NEXT
 
-- Concurrent-start safety, then dependency and contract clarity, then behavioral record tests; acceptance and file overlap must be checked before activation.
+- Recovery imports job identity rather than the spawn command (`F720-recovery-uses-job-identity`, 🔴 PLANNED), after concurrent-start safety is settled.
+- Execution documentation matches run modes and uncertain recovery (`F721-execution-contracts-match-reality`, 🔴 PLANNED), after the identity move.
+- Record behavior replaces selected source-filename checks (`F722-record-tests-prove-behavior`, 🔴 PLANNED), after the execution contracts.
 
 ## PARKED
 
