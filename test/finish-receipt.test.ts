@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { finishEvent, inspectFinishWebhook, parseFinishReceipt } from "../src/finish-receipt.ts";
+import { finishEvent, inspectFinishWebhook, parseFinishReceipt, parseFinishSelection } from "../src/finish-receipt.ts";
 
 const inheritedSource = process.env.LIMEN_FINISH_EVIDENCE_DIR;
 test.beforeEach(() => {
@@ -34,6 +34,13 @@ test("receipt allowlist rejects secrets, unbounded ordinals, invalid timestamps 
 		assert.equal(parseFinishReceipt(JSON.stringify(value)), undefined);
 	assert.equal(parseFinishReceipt("partial JSON"), undefined);
 });
+test("selection allowlist rejects secrets and unknown reasons", () => {
+	assert.equal(parseFinishSelection(JSON.stringify({ selection: "mapped @alice -> 1, 2" })), "mapped @alice -> 1, 2");
+	assert.equal(parseFinishSelection(JSON.stringify({ selection: "not sent: no author route" })), "not sent: no author route");
+	for (const value of [{ selection: "https://secret.invalid" }, { selection: "fan-out", token: "x" }, { route: "fan-out" }, { selection: "mapped @Alice -> 1" }]) {
+		assert.equal(parseFinishSelection(JSON.stringify(value)), undefined);
+	}
+});
 test("finish identity follows the job ID across seats, not labels or worktree paths", () => {
 	assert.equal(finishEvent("/mac/alice/.limen/jobs/job-a"), finishEvent("/vps/alice/.limen/jobs/job-a"));
 	assert.notEqual(finishEvent("/jobs/job-a"), finishEvent("/jobs/job-b"));
@@ -47,7 +54,11 @@ test("inspection keeps absent, legacy and unverifiable bot evidence unobserved w
 	assert.match(await inspectFinishWebhook(job), /configured: no[\s\S]*transport: unknown[\s\S]*bot-turn: unobserved/);
 	await writeFile(join(job, "finish-webhook-env"), "/must-not-be-opened/private.env\n");
 	await writeFile(join(job, "finish-webhook"), "accepted: sender exited 0 (owner wake unobserved)\n");
-	assert.match(await inspectFinishWebhook(job), /configured: yes[\s\S]*transport: unknown[\s\S]*bot-turn: unobserved/);
+	assert.match(await inspectFinishWebhook(job), /configured: yes[\s\S]*author: unavailable · missing evidence[\s\S]*transport: unknown[\s\S]*bot-turn: unobserved/);
+	await writeFile(join(job, "finish-webhook-author"), "@alice\n" + "a".repeat(40) + "\n");
+	await writeFile(join(job, "finish-webhook-route"), "mapped @alice -> 1, 2\n");
+	assert.match(await inspectFinishWebhook(job), /author: @alice · commit a{40}/);
+	assert.match(await inspectFinishWebhook(job), /route: mapped @alice -> 1, 2/);
 	await writeFile(join(job, "finish-webhook-targets"), `${JSON.stringify(accepted)}\n${JSON.stringify({ ...accepted, transport: "observed", body: "secret" })}\n{"partial":`);
 	await writeFile(join(job, "finish-webhook-bot-turn"), JSON.stringify({ event: finishEvent(job), completed: true }));
 	const detail = await inspectFinishWebhook(job);

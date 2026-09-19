@@ -218,7 +218,8 @@ for (const pruned of [false, true]) {
 		assert.equal(git(workspace.repositories.web, "rev-parse", branch), webTip);
 		const detail = limen(workspace, "jobs", id);
 		assert.match(detail.stdout, /repo api/);
-		assert.doesNotMatch(detail.stdout, /unavailable/);
+		assert.doesNotMatch(detail.stdout, /\(unavailable/);
+		assert.match(detail.stdout, /author: unavailable · non-Git workspace ticket/);
 	});
 }
 

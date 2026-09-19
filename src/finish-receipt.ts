@@ -5,8 +5,19 @@ import { inspectFinishTurns } from "./finish-turn.ts";
 import { textFile } from "./wrapper.ts";
 
 type FinishReceipt = { target: number; at: string; transport: "pending" | "accepted" | "rejected" | "unknown"; http: "none" | "1xx" | "2xx" | "3xx" | "4xx" | "5xx" };
+const FINISH_SELECTION = /^(fan-out|mapped @[a-z\d](?:[a-z\d-]{0,37}[a-z\d])? -> \d+(?:, \d+)*|fallback \* -> \d+(?:, \d+)*|not sent: no author route|invalid author map)$/;
 export function finishEvent(jobDir: string): string {
 	return `limen-finish-${createHash("sha256").update(basename(jobDir)).digest("hex")}`;
+}
+export function parseFinishSelection(line: string): string | undefined {
+	if (line.length > 256) return;
+	try {
+		const value = JSON.parse(line);
+		if (!value || Object.keys(value).join() !== "selection" || typeof value.selection !== "string" || !FINISH_SELECTION.test(value.selection)) return;
+		return value.selection;
+	} catch {
+		return;
+	}
 }
 export function parseFinishReceipt(line: string): FinishReceipt | undefined {
 	if (line.length > 256) return;
@@ -33,6 +44,14 @@ export function parseFinishReceipt(line: string): FinishReceipt | undefined {
 export async function inspectFinishWebhook(jobDir: string): Promise<string> {
 	const configured = Boolean(await textFile(`${jobDir}/finish-webhook-env`));
 	const lines = [`configured: ${configured ? "yes (selection recorded; validity not checked)" : "no"}`, `event: ${finishEvent(jobDir)}`];
+	const [first, second, third] = (await textFile(`${jobDir}/finish-webhook-author`)).split("\n");
+	const commit = second && /^[0-9a-f]{40}$|^[0-9a-f]{64}$/.test(second) ? second : third && /^[0-9a-f]{40}$|^[0-9a-f]{64}$/.test(third) ? third : "";
+	if (first && /^@[a-z\d](?:[a-z\d-]{0,37}[a-z\d])?$/.test(first)) lines.push(`author: ${first}${commit ? ` · commit ${commit}` : ""}`);
+	else if (first === "unavailable" && second && /^[a-zA-Z0-9 :._-]{1,80}$/.test(second))
+		lines.push(`author: unavailable · ${second}${third && commit === third ? ` · commit ${third}` : ""}`);
+	else lines.push("author: unavailable · missing evidence");
+	const route = await textFile(`${jobDir}/finish-webhook-route`);
+	if (route && FINISH_SELECTION.test(route)) lines.push(`route: ${route}`);
 	const targets = new Map<number, FinishReceipt>();
 	const handle = await open(`${jobDir}/finish-webhook-targets`, "r").catch(() => undefined);
 	if (handle) {

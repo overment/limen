@@ -79,7 +79,43 @@ function receipt(index, transport, http = 'none') {
     // Manual invocation may carry correlation without the private receipt channel.
   }
 }
-for (const index of targets.keys()) receipt(index, 'pending');
+function emitSelection(selection) {
+  if (!event) return;
+  try {
+    writeSync(3, JSON.stringify({ selection }) + '\n');
+  } catch {}
+}
+let chosen = targets.map((_, index) => index);
+let selection = 'fan-out';
+const mapRaw = config.LIMEN_FINISH_WEBHOOK_AUTHOR_TARGETS;
+if (mapRaw !== undefined) {
+  let map;
+  try {
+    map = JSON.parse(mapRaw);
+    if (!map || typeof map !== 'object' || Array.isArray(map)) throw new Error();
+    for (const [key, value] of Object.entries(map)) {
+      if (key !== '*' && !/^@[a-z\d](?:[a-z\d-]{0,37}[a-z\d])?$/.test(key)) throw new Error();
+      if (!Array.isArray(value) || !value.length || new Set(value).size !== value.length) throw new Error();
+      if (value.some(n => !Number.isInteger(n) || n < 1 || n > targets.length)) throw new Error();
+    }
+  } catch {
+    emitSelection('invalid author map');
+    fail('LIMEN_FINISH_WEBHOOK_AUTHOR_TARGETS is invalid; not sent');
+  }
+  const raw = process.env.LIMEN_FINISH_WEBHOOK_AUTHOR ?? '';
+  const author = /^@[a-z\d](?:[a-z\d-]{0,37}[a-z\d])?$/i.test(raw) ? raw.toLowerCase() : '';
+  const ordinals = (author && map[author]) || map['*'];
+  if (!ordinals) {
+    emitSelection('not sent: no author route');
+    console.log('finish webhook: not sent: no author route');
+    process.exit(0);
+  }
+  chosen = ordinals.map(n => n - 1);
+  selection = author && map[author] ? `mapped ${author} -> ${ordinals.join(', ')}` : `fallback * -> ${ordinals.join(', ')}`;
+}
+emitSelection(selection);
+for (const index of chosen) receipt(index, 'pending');
+const labeled = multi || mapRaw !== undefined;
 function send(target, index) {
   return new Promise(resolve => {
     const controller = new AbortController();
@@ -90,8 +126,8 @@ function send(target, index) {
       clearTimeout(timer);
       controller.abort(); // Do not read or print a possibly sensitive response body.
       receipt(index, accepted ? 'accepted' : http === 'none' ? 'unknown' : 'rejected', http);
-      const line = multi ? `target ${index + 1} ${message}; owner wake unobserved` : message;
-      console[accepted || multi ? 'log' : 'error'](`finish webhook: ${line}`);
+      const line = labeled ? `target ${index + 1} ${message}; owner wake unobserved` : message;
+      console[accepted || labeled ? 'log' : 'error'](`finish webhook: ${line}`);
       resolve(accepted);
     };
     const timer = setTimeout(() => finish(false, 'request timed out after 10000ms'), 10000);
@@ -106,6 +142,6 @@ function send(target, index) {
   });
 }
 // Start every route before waiting: a failed or stalled bot must not prevent another bot's request.
-const results = await Promise.all(targets.map(send));
+const results = await Promise.all(chosen.map(index => send(targets[index], index)));
 process.exit(results.every(Boolean) ? 0 : 1);
 NODE

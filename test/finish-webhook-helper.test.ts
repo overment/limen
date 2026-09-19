@@ -357,3 +357,138 @@ test("env files are data, never shell scripts, and the CLI requires exactly thre
 		assert.match(result.stderr, /usage:/);
 	}
 });
+
+test("author map sends only mapped original ordinals and never renumbers them", async (t) => {
+	const f = await fixture();
+	t.after(f.cleanup);
+	const targets = [
+		{ url: "https://finish.example.test/alice-primary", auth: AUTH },
+		{ url: "https://finish.example.test/alice-secondary", auth: "Bearer second-synthetic-secret" },
+		{ url: "https://finish.example.test/bob", auth: "Bearer third-synthetic-secret" },
+	];
+	const path = await f.config(
+		join(f.root, "authors.env"),
+		`LIMEN_FINISH_WEBHOOK_TARGETS='${JSON.stringify(targets)}'\nLIMEN_FINISH_WEBHOOK_AUTHOR_TARGETS='${JSON.stringify({ "@alice": [1, 2], "@bob": [3] })}'\n`,
+	);
+	const alice = f.run({ LIMEN_FINISH_WEBHOOK_ENV: path, LIMEN_FINISH_WEBHOOK_AUTHOR: "@alice" });
+	assert.equal(alice.status, 0, alice.stderr);
+	assert.match(alice.stdout, /target 1 accepted/);
+	assert.match(alice.stdout, /target 2 accepted/);
+	assert.doesNotMatch(alice.stdout, /target 3/);
+	const bob = f.run({ LIMEN_FINISH_WEBHOOK_ENV: path, LIMEN_FINISH_WEBHOOK_AUTHOR: "@bob" });
+	assert.equal(bob.status, 0, bob.stderr);
+	assert.match(bob.stdout, /target 3 accepted/);
+	assert.doesNotMatch(bob.stdout, /target 1 |target 2 /);
+	const requests = readFileSync(`${f.capture}.requests`, "utf8")
+		.trim()
+		.split("\n")
+		.map((line) => JSON.parse(line).url);
+	assert.deepEqual(
+		requests,
+		targets.map((target) => target.url),
+	);
+});
+
+test("unmapped authors use only explicit fallback or skip, never fan-out", async (t) => {
+	const f = await fixture();
+	t.after(f.cleanup);
+	const targets = [
+		{ url: "https://finish.example.test/alice-primary", auth: AUTH },
+		{ url: "https://finish.example.test/bob", auth: "Bearer second-synthetic-secret" },
+	];
+	const mapped = await f.config(
+		join(f.root, "mapped.env"),
+		`LIMEN_FINISH_WEBHOOK_TARGETS='${JSON.stringify(targets)}'\nLIMEN_FINISH_WEBHOOK_AUTHOR_TARGETS='${JSON.stringify({ "@alice": [1] })}'\n`,
+	);
+	const skip = f.run({ LIMEN_FINISH_WEBHOOK_ENV: mapped, LIMEN_FINISH_WEBHOOK_AUTHOR: "@carol" });
+	assert.equal(skip.status, 0, skip.stderr);
+	assert.match(skip.stdout, /not sent: no author route/);
+	assert.equal(existsSync(`${f.capture}.requests`), false);
+	const fallback = await f.config(
+		join(f.root, "fallback.env"),
+		`LIMEN_FINISH_WEBHOOK_TARGETS='${JSON.stringify(targets)}'\nLIMEN_FINISH_WEBHOOK_AUTHOR_TARGETS='${JSON.stringify({ "@alice": [1], "*": [2] })}'\n`,
+	);
+	const result = f.run({ LIMEN_FINISH_WEBHOOK_ENV: fallback });
+	assert.equal(result.status, 0, result.stderr);
+	assert.match(result.stdout, /target 2 accepted/);
+	assert.doesNotMatch(result.stdout, /target 1 /);
+	assert.deepEqual(
+		readFileSync(`${f.capture}.requests`, "utf8")
+			.trim()
+			.split("\n")
+			.map((line) => JSON.parse(line).url),
+		targets.slice(1).map((target) => target.url),
+	);
+});
+
+test("invalid author maps and target references send nothing", async (t) => {
+	const targets = [
+		{ url: DESTINATION, auth: AUTH },
+		{ url: "https://finish.example.test/grok-two", auth: "Bearer second-synthetic-secret" },
+	];
+	const cases = [
+		"",
+		"not-json",
+		"null",
+		"[]",
+		'{"@alice":1}',
+		'{"alice":[1]}',
+		'{"@Alice":[1]}',
+		'{"@alice":[]}',
+		'{"@alice":[1,1]}',
+		'{"@alice":[0]}',
+		'{"@alice":[3]}',
+		'{"@alice":[1.5]}',
+	];
+	for (const [index, value] of cases.entries()) {
+		await t.test(`invalid map ${index + 1}`, async (t) => {
+			const f = await fixture();
+			t.after(f.cleanup);
+			const path = await f.config(join(f.root, "invalid-map.env"), `LIMEN_FINISH_WEBHOOK_TARGETS='${JSON.stringify(targets)}'\nLIMEN_FINISH_WEBHOOK_AUTHOR_TARGETS='${value}'\n`);
+			const result = f.run({ LIMEN_FINISH_WEBHOOK_ENV: path, LIMEN_FINISH_WEBHOOK_AUTHOR: "@alice" });
+			assert.equal(result.status, 1);
+			assert.equal(existsSync(`${f.capture}.requests`), false);
+		});
+	}
+	await t.test("empty object skips rather than broadcasting", async (t) => {
+		const f = await fixture();
+		t.after(f.cleanup);
+		const path = await f.config(join(f.root, "empty-map.env"), `LIMEN_FINISH_WEBHOOK_TARGETS='${JSON.stringify(targets)}'\nLIMEN_FINISH_WEBHOOK_AUTHOR_TARGETS='{}'\n`);
+		const result = f.run({ LIMEN_FINISH_WEBHOOK_ENV: path, LIMEN_FINISH_WEBHOOK_AUTHOR: "@alice" });
+		assert.equal(result.status, 0);
+		assert.match(result.stdout, /not sent: no author route/);
+		assert.equal(existsSync(`${f.capture}.requests`), false);
+	});
+	await t.test("single URL/AUTH is target 1", async (t) => {
+		const f = await fixture();
+		t.after(f.cleanup);
+		const path = await f.config(
+			join(f.root, "single.env"),
+			`LIMEN_FINISH_WEBHOOK_URL='${DESTINATION}'\nLIMEN_FINISH_WEBHOOK_AUTH='${AUTH}'\nLIMEN_FINISH_WEBHOOK_AUTHOR_TARGETS='${JSON.stringify({ "@alice": [1] })}'\n`,
+		);
+		const result = f.run({ LIMEN_FINISH_WEBHOOK_ENV: path, LIMEN_FINISH_WEBHOOK_AUTHOR: "@alice" });
+		assert.equal(result.status, 0, result.stderr);
+		assert.match(result.stdout, /target 1 accepted/);
+		assert.equal(f.request().url, DESTINATION);
+	});
+});
+
+test("filtered partial failure keeps original ordinals", async (t) => {
+	const f = await fixture();
+	t.after(f.cleanup);
+	const targets = [
+		{ url: "https://finish.example.test/reject", auth: AUTH },
+		{ url: "https://finish.example.test/skipped-bot", auth: "Bearer second-synthetic-secret" },
+		{ url: "https://finish.example.test/grok-two", auth: "Bearer third-synthetic-secret" },
+	];
+	const path = await f.config(
+		join(f.root, "partial.env"),
+		`LIMEN_FINISH_WEBHOOK_TARGETS='${JSON.stringify(targets)}'\nLIMEN_FINISH_WEBHOOK_AUTHOR_TARGETS='${JSON.stringify({ "@alice": [1, 3] })}'\n`,
+	);
+	const result = f.run({ LIMEN_FINISH_WEBHOOK_ENV: path, LIMEN_FINISH_WEBHOOK_AUTHOR: "@alice" });
+	assert.equal(result.status, 1);
+	assert.match(result.stdout, /target 1 HTTP 503 rejected/);
+	assert.match(result.stdout, /target 3 accepted/);
+	assert.doesNotMatch(result.stdout, /target 2 /);
+	assert.equal(readFileSync(`${f.capture}.requests`, "utf8").trim().split("\n").length, 2);
+});

@@ -1,10 +1,10 @@
 import { spawn } from "node:child_process";
-import { appendFileSync, existsSync } from "node:fs";
+import { appendFileSync, existsSync, writeFileSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { basename, delimiter, dirname, isAbsolute, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { finishEvent, parseFinishReceipt } from "./finish-receipt.ts";
-import { listWorktrees, workspaceRoot } from "./git.ts";
+import { finishEvent, parseFinishReceipt, parseFinishSelection } from "./finish-receipt.ts";
+import { listWorktrees, ticketAuthor, workspaceRoot } from "./git.ts";
 import { appendLimenLog, atomicWrite, textFile } from "./wrapper.ts";
 
 const SENDER = fileURLToPath(new URL("../bin/tony-finish-ping.sh", import.meta.url));
@@ -15,6 +15,29 @@ export function finishWebhookEnv(root: string, cwd: string, explicit = process.e
 	const project = workspaceRoot(root) ? root : (listWorktrees(root)[0]?.path ?? root);
 	const path = resolve(project, ".limen/finish-webhook.env");
 	return existsSync(path) ? path : "";
+}
+export function captureFinishAuthor(cwd: string, task: string, workspace = false): string {
+	if (workspace) return "unavailable\nnon-Git workspace ticket";
+	const tickets = [...task.matchAll(/\bTicket: (spec\/\S+)/g)].flatMap((match) => (match[1] ? [match[1]] : []));
+	const ticket = tickets.length === 1 ? tickets[0] : undefined;
+	if (!ticket) return `unavailable\n${tickets.length ? "ambiguous Ticket: pointer" : "missing Ticket: pointer"}`;
+	try {
+		const author = ticketAuthor(cwd, ticket);
+		const login = /^(?:\d+\+)?([a-z\d](?:[a-z\d-]{0,37}[a-z\d])?)@users\.noreply\.github\.com$/i.exec(author.email)?.[1];
+		return login ? `@${login.toLowerCase()}\n${author.commit}` : `unavailable\nordinary email\n${author.commit}`;
+	} catch (error) {
+		const message = error instanceof Error ? error.message : "";
+		const reason = message.includes("shallow")
+			? "shallow history"
+			: message.includes("not a committed file")
+				? "uncommitted ticket"
+				: message.includes("must be a file inside")
+					? "ticket path outside repository"
+					: message.includes("no creation author")
+						? "no creation author"
+						: "lookup failed";
+		return `unavailable\n${reason}`;
+	}
 }
 export async function deliverFinishWebhook(jobDir: string, shutdownDeadline = Number.POSITIVE_INFINITY): Promise<void> {
 	const config = await textFile(`${jobDir}/finish-webhook-env`);
@@ -61,27 +84,36 @@ export async function deliverFinishWebhook(jobDir: string, shutdownDeadline = Nu
 	const label = await textFile(`${jobDir}/label`);
 	const branch = await textFile(`${jobDir}/branch`);
 	const timeoutMs = Math.min(SEND_MS, shutdownDeadline - Date.now());
+	const login = (await textFile(`${jobDir}/finish-webhook-author`)).split("\n")[0] ?? "";
+	const author = /^@[a-z\d](?:[a-z\d-]{0,37}[a-z\d])?$/i.test(login) ? login.toLowerCase() : "";
 	const result = !isAbsolute(config)
 		? "failed: config path is not absolute"
 		: timeoutMs <= 0
 			? "failed: no shutdown time remains; not sent"
-			: await send(jobDir, config, label, state, branch, timeoutMs);
-	await atomicWrite(`${jobDir}/finish-webhook`, `${result} ${new Date().toISOString()}\n${retry}\n`);
-	await appendLimenLog(jobDir, `finish webhook: ${result}; inspect finish-webhook for manual finish-ping retry`);
+			: await send(jobDir, config, label, state, branch, timeoutMs, author);
+	await atomicWrite(`${jobDir}/finish-webhook`, `${result} ${new Date().toISOString()}\n${result.startsWith("skipped:") ? "" : `${retry}\n`}`);
+	await appendLimenLog(jobDir, `finish webhook: ${result}${result.startsWith("skipped:") ? "" : "; inspect finish-webhook for manual finish-ping retry"}`);
 }
 function parseFinishTip(value: string): string | undefined {
 	return /^[0-9a-f]{40}$|^[0-9a-f]{64}$/.test(value) ? value : undefined;
 }
-function send(jobDir: string, config: string, label: string, state: string, branch: string, timeoutMs: number): Promise<string> {
+function send(jobDir: string, config: string, label: string, state: string, branch: string, timeoutMs: number, author: string): Promise<string> {
 	return new Promise((resolve) => {
 		const child = spawn(SENDER, [label, state, branch], {
-			env: { ...process.env, PATH: `${dirname(process.execPath)}${delimiter}${process.env.PATH ?? ""}`, LIMEN_FINISH_WEBHOOK_ENV: config, LIMEN_FINISH_EVENT: finishEvent(jobDir) },
+			env: {
+				...process.env,
+				PATH: `${dirname(process.execPath)}${delimiter}${process.env.PATH ?? ""}`,
+				LIMEN_FINISH_WEBHOOK_ENV: config,
+				LIMEN_FINISH_EVENT: finishEvent(jobDir),
+				LIMEN_FINISH_WEBHOOK_AUTHOR: author,
+			},
 			stdio: ["ignore", "ignore", "ignore", "pipe"],
 			detached: true,
 		});
 		// Dedicated channel: never retain sender stdout/stderr or unvalidated bytes.
 		let pending = "";
 		let bytes = 0;
+		let selection = "";
 		const seen = new Map<number, string>();
 		child.stdio[3]?.on("data", (chunk: Buffer) => {
 			bytes += chunk.length;
@@ -90,6 +122,12 @@ function send(jobDir: string, config: string, label: string, state: string, bran
 			const lines = pending.split("\n");
 			pending = lines.pop() ?? "";
 			for (const line of lines) {
+				const routed = parseFinishSelection(line);
+				if (routed && !selection) {
+					selection = routed;
+					writeFileSync(`${jobDir}/finish-webhook-route`, `${routed}\n`, { mode: 0o600, flush: true });
+					continue;
+				}
 				const receipt = parseFinishReceipt(line);
 				if (!receipt || (seen.has(receipt.target) && (seen.get(receipt.target) !== "pending" || receipt.transport === "pending"))) continue;
 				seen.set(receipt.target, receipt.transport);
@@ -112,7 +150,15 @@ function send(jobDir: string, config: string, label: string, state: string, bran
 		};
 		child.once("error", () => finish("failed: sender could not start"));
 		child.once("close", (code, signal) =>
-			finish(code === 0 ? "accepted: sender exited 0 (owner wake unobserved)" : `failed: sender ${signal ? "interrupted" : `exited ${code ?? "unknown"}`}`),
+			finish(
+				selection === "not sent: no author route"
+					? "skipped: not sent: no author route"
+					: selection === "invalid author map"
+						? "failed: invalid author map; not sent"
+						: code === 0
+							? "accepted: sender exited 0 (owner wake unobserved)"
+							: `failed: sender ${signal ? "interrupted" : `exited ${code ?? "unknown"}`}`,
+			),
 		);
 	});
 }

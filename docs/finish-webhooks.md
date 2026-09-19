@@ -191,6 +191,25 @@ that contract. Limen does not infer recipients from a model or display name, nor
 does it invent a bot/session field for an unknown receiver API. If Tony should
 also receive the finish, include Tony's destination explicitly as another entry.
 
+To send a ticket finish only to that author's bots, add `LIMEN_FINISH_WEBHOOK_AUTHOR_TARGETS`
+in the same private file. Keys are lowercase `@login` or `*`; values are nonempty lists of
+distinct target numbers from the configured list (single URL/AUTH is target 1).
+Spawn records the ticket creation `@login` from GitHub noreply evidence, or an unavailable
+reason; continuations inherit that snapshot. At send time an exact login match is used
+exclusively, otherwise `*` if present, otherwise the finish is skipped. An empty or invalid
+map is not permission to broadcast: nothing is sent, and the job result is unchanged.
+Without the map, every target still receives every finish. Filtered receipts keep original
+ordinals — selecting 1 and 3 does not renumber 3 as 2.
+
+```dotenv
+LIMEN_FINISH_WEBHOOK_TARGETS='[{"url":"https://bots.example.invalid/alice-primary","auth":"Bearer ALICE_PRIMARY_TOKEN"},{"url":"https://bots.example.invalid/alice-secondary","auth":"Bearer ALICE_SECONDARY_TOKEN"},{"url":"https://bots.example.invalid/bob","auth":"Bearer BOB_TOKEN"}]'
+LIMEN_FINISH_WEBHOOK_AUTHOR_TARGETS='{"@alice":[1,2],"@bob":[3]}'
+```
+
+A wake reports the finish; it does not transfer ownership. Manual retry must pass
+`LIMEN_FINISH_WEBHOOK_AUTHOR` from the job's `finish-webhook-author` file (first line when it
+is `@login`). Standalone sends without that snapshot use fallback or skip, never a guessed human.
+
 Every request starts before the sender waits for results, so a failed or stalled
 first bot does not suppress delivery to the second. The standalone bound remains
 10 seconds per request, concurrent rather than multiplied by recipient count.
@@ -334,6 +353,8 @@ must not hide a failed ping.
 | Job file | Meaning |
 |---|---|
 | `finish-webhook-env` | Selected absolute private env path only; absence means not opted in. |
+| `finish-webhook-author` | Captured `@login` and creation commit, or `unavailable` and a short reason. Continuations inherit it. |
+| `finish-webhook-route` | Send-time selection reason and original ordinals (`fan-out`, `mapped @login -> …`, `fallback * -> …`, skip, or invalid map). No URLs or tokens. |
 | `tip` | Worktree HEAD at finalize; used for cross-job same-tip quieting. Missing or invalid tips fail open. |
 | `finish-webhook-attempt` | Flushed timestamp claiming the one automatic delivery decision, including an intentional skip; not proof of a transport attempt. |
 | `finish-webhook` | Timestamped `skipped` with its no-send reason, or `attempting`, `accepted`, or `failed` with retry guidance. |
@@ -355,7 +376,7 @@ To inspect without printing config, set `job` to the absolute job directory:
 
 ```sh
 job=/absolute/project/.limen/jobs/JOB_ID
-for record in state finished-at finish-webhook-attempt finish-webhook finish-webhook-targets; do
+for record in state finished-at finish-webhook-author finish-webhook-route finish-webhook-attempt finish-webhook finish-webhook-targets; do
   if [ -f "$job/$record" ]; then printf '%s: ' "$record"; cat "$job/$record"; fi
 done
 ```
@@ -367,6 +388,7 @@ replacement `done` state for a failed job:
 ```sh
 LIMEN_FINISH_EVENT="$(node --input-type=module -e 'import { finishEvent } from "./src/finish-receipt.ts"; console.log(finishEvent(process.argv[1]))' "$job")" \
 LIMEN_FINISH_WEBHOOK_ENV="$(tr -d '\n' < "$job/finish-webhook-env")" \
+LIMEN_FINISH_WEBHOOK_AUTHOR="$(sed -n '1p' "$job/finish-webhook-author")" \
   bin/tony-finish-ping.sh "$(tr -d '\n' < "$job/label")" \
   "$(tr -d '\n' < "$job/state")" "$(tr -d '\n' < "$job/branch")"
 result=$?

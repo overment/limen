@@ -3,7 +3,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { chmod, copyFile, cp, mkdir, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import test, { type TestContext } from "node:test";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { finishEvent } from "../src/finish-receipt.ts";
 import { finishWebhookEnv } from "../src/finish-webhook.ts";
 import { git, onlyJobId, scratchRepo, waitForState } from "./scratch.ts";
@@ -655,4 +655,209 @@ test("continuation retains only its parent's config path even when the caller se
 	assert.match(await delivery(job), /^skipped: same settled tip already notified; not sent/);
 	assert.equal(await readFile(join(job, "finish-webhook-env"), "utf8"), `${selected}\n`);
 	assert.equal((await observe(f.observations)).length, 1);
+});
+
+async function fileTicket(root: string, path: string, author: string) {
+	await mkdir(dirname(join(root, path)), { recursive: true });
+	await writeFile(join(root, path), `# ${path}\n\noutcome\n`);
+	git(root, "add", path);
+	git(root, "commit", "--author", author, "-m", `file ${path}`);
+	return git(root, "rev-parse", "HEAD");
+}
+function authorDotenv(targets: readonly { url: string; auth: string }[], map: unknown) {
+	return `LIMEN_FINISH_WEBHOOK_TARGETS='${JSON.stringify(targets)}'\nLIMEN_FINISH_WEBHOOK_AUTHOR_TARGETS='${JSON.stringify(map)}'\n`;
+}
+
+test("two collaborators' finishes reach only their mapped targets after edits and lane moves", async (context) => {
+	const f = await fixture(context);
+	await copyFile(join(ROOT, "bin/tony-finish-ping.sh"), join(f.pkg, "bin/tony-finish-ping.sh"));
+	const first = "spec/features/active/F001-first/ticket.md";
+	const second = "spec/features/active/F002-second/ticket.md";
+	const aliceCommit = await fileTicket(f.root, first, "Alice Filer <1234+alice@users.noreply.github.com>");
+	await fileTicket(f.root, second, "Bob Filer <bob@users.noreply.github.com>");
+	const moved = "spec/features/done/F001-first/ticket.md";
+	await mkdir(dirname(join(f.root, moved)), { recursive: true });
+	git(f.root, "mv", first, moved);
+	git(f.root, "commit", "--author", "Bob Filer <bob@users.noreply.github.com>", "-m", "move first ticket");
+	await writeFile(join(f.root, moved), "# First ticket\n\nReviewed by Bob.\n");
+	git(f.root, "commit", "-am", "edit first ticket", "--author", "Bob Filer <bob@users.noreply.github.com>");
+	const targets = [
+		{ url: "https://synthetic.example.invalid/alice-primary", auth: "Bearer synthetic-alice-1" },
+		{ url: "https://synthetic.example.invalid/alice-secondary", auth: "Bearer synthetic-alice-2" },
+		{ url: "https://synthetic.example.invalid/bob", auth: "Bearer synthetic-bob" },
+	];
+	await writeFile(join(f.root, ".limen/finish-webhook.env"), authorDotenv(targets, { "@alice": [1, 2], "@bob": [3] }), { mode: 0o600 });
+	const transport = join(f.parent, "transport.mjs");
+	await writeFile(
+		transport,
+		`import { appendFileSync } from 'node:fs'; globalThis.fetch = async (url, options) => { appendFileSync(${JSON.stringify(f.observations)}, JSON.stringify({ url: String(url), auth: options.headers.Authorization }) + '\\n'); return { status: 204 }; };`,
+	);
+	const extra = { NODE_OPTIONS: `--import=${transport}` };
+	const aliceId = onlyJobId(f.command(["spawn", "--detached", "--label", "alice job", `make commit Ticket: ${moved}`], extra));
+	const aliceJob = join(f.root, ".limen/jobs", aliceId);
+	assert.match(await delivery(aliceJob), /^accepted:/);
+	assert.match(await readFile(join(aliceJob, "finish-webhook-author"), "utf8"), new RegExp(`^@alice\\n${aliceCommit}\\n$`));
+	assert.equal(await readFile(join(aliceJob, "finish-webhook-route"), "utf8"), "mapped @alice -> 1, 2\n");
+	const bobId = onlyJobId(f.command(["spawn", "--detached", "--label", "bob job", `make commit Ticket: ${second}`], extra));
+	const bobJob = join(f.root, ".limen/jobs", bobId);
+	assert.match(await delivery(bobJob), /^accepted:/);
+	assert.match(await readFile(join(bobJob, "finish-webhook-author"), "utf8"), /^@bob\n[0-9a-f]{40}\n$/);
+	assert.equal(await readFile(join(bobJob, "finish-webhook-route"), "utf8"), "mapped @bob -> 3\n");
+	assert.deepEqual(
+		(await observe(f.observations)).map(({ url }) => url),
+		targets.map((target) => target.url),
+	);
+	const bobReceipts = (await readFile(join(bobJob, "finish-webhook-targets"), "utf8"))
+		.trim()
+		.split("\n")
+		.map((line) => JSON.parse(line).target);
+	assert.deepEqual([...new Set(bobReceipts)], [3]);
+	assert.match(f.command(["jobs", bobId]), /target 3: transport accepted/);
+	assert.doesNotMatch(f.command(["jobs", bobId]), /target 1:|target 2:/);
+	assert.doesNotMatch((await readFile(join(aliceJob, "log"), "utf8")) + (await readFile(join(bobJob, "log"), "utf8")), /synthetic-alice|synthetic-bob|synthetic\.example/);
+});
+
+test("missing attribution and unmapped logins skip unless fallback is explicit", async (context) => {
+	const f = await fixture(context);
+	await copyFile(join(ROOT, "bin/tony-finish-ping.sh"), join(f.pkg, "bin/tony-finish-ping.sh"));
+	const ordinary = "spec/features/active/F003-ordinary/ticket.md";
+	const extraTicket = "spec/features/active/F004-extra/ticket.md";
+	const ordinaryCommit = await fileTicket(f.root, ordinary, "Dana Filer <dana@example.test>");
+	await fileTicket(f.root, extraTicket, "Dana Filer <dana@example.test>");
+	const targets = [
+		{ url: "https://synthetic.example.invalid/mapped", auth: "Bearer synthetic-mapped" },
+		{ url: "https://synthetic.example.invalid/fallback", auth: "Bearer synthetic-fallback" },
+	];
+	await writeFile(join(f.root, ".limen/finish-webhook.env"), authorDotenv(targets, { "@alice": [1] }), { mode: 0o600 });
+	const transport = join(f.parent, "transport.mjs");
+	await writeFile(
+		transport,
+		`import { appendFileSync } from 'node:fs'; globalThis.fetch = async (url) => { appendFileSync(${JSON.stringify(f.observations)}, String(url) + '\\n'); return { status: 204 }; };`,
+	);
+	const extra = { NODE_OPTIONS: `--import=${transport}` };
+	const missing = onlyJobId(f.command(["spawn", "--detached", "--label", "missing pointer", "make commit finish"], extra));
+	const missingJob = join(f.root, ".limen/jobs", missing);
+	assert.match(await delivery(missingJob), /^skipped: not sent: no author route/);
+	assert.equal(await readFile(join(missingJob, "finish-webhook-author"), "utf8"), "unavailable\nmissing Ticket: pointer\n");
+	assert.equal(await readFile(join(missingJob, "state"), "utf8"), "done\n");
+	const ambiguous = onlyJobId(f.command(["spawn", "--detached", "--label", "ambiguous", `make commit Ticket: ${ordinary} Ticket: ${extraTicket}`], extra));
+	assert.match(await delivery(join(f.root, ".limen/jobs", ambiguous)), /^skipped: not sent: no author route/);
+	assert.equal(await readFile(join(f.root, ".limen/jobs", ambiguous, "finish-webhook-author"), "utf8"), "unavailable\nambiguous Ticket: pointer\n");
+	const email = onlyJobId(f.command(["spawn", "--detached", "--label", "ordinary email", `make commit Ticket: ${ordinary}`], extra));
+	const emailJob = join(f.root, ".limen/jobs", email);
+	assert.match(await delivery(emailJob), /^skipped: not sent: no author route/);
+	assert.equal(await readFile(join(emailJob, "finish-webhook-author"), "utf8"), `unavailable\nordinary email\n${ordinaryCommit}\n`);
+	await writeFile(join(f.root, ".limen/finish-webhook.env"), authorDotenv(targets, { "@alice": [1], "*": [2] }), { mode: 0o600 });
+	const fallback = onlyJobId(f.command(["spawn", "--detached", "--label", "fallback", "make commit finish"], extra));
+	assert.match(await delivery(join(f.root, ".limen/jobs", fallback)), /^accepted:/);
+	assert.equal(await readFile(join(f.root, ".limen/jobs", fallback, "finish-webhook-route"), "utf8"), "fallback * -> 2\n");
+	assert.equal((await readFile(f.observations, "utf8").catch(() => "")).trim(), targets.at(1)?.url);
+	await assert.rejects(readFile(join(missingJob, "finish-webhook-targets")), { code: "ENOENT" });
+});
+
+test("invalid author maps make zero requests and leave the job result intact", async (context) => {
+	const f = await fixture(context);
+	await copyFile(join(ROOT, "bin/tony-finish-ping.sh"), join(f.pkg, "bin/tony-finish-ping.sh"));
+	const path = "spec/features/active/F005-invalid/ticket.md";
+	await fileTicket(f.root, path, "Alice Filer <alice@users.noreply.github.com>");
+	const targets = [
+		{ url: "https://synthetic.example.invalid/one", auth: "Bearer synthetic-one" },
+		{ url: "https://synthetic.example.invalid/two", auth: "Bearer synthetic-two" },
+	];
+	await writeFile(join(f.root, ".limen/finish-webhook.env"), authorDotenv(targets, { "@alice": [1, 9] }), { mode: 0o600 });
+	const transport = join(f.parent, "transport.mjs");
+	await writeFile(
+		transport,
+		`import { appendFileSync } from 'node:fs'; globalThis.fetch = async (url) => { appendFileSync(${JSON.stringify(f.observations)}, String(url) + '\\n'); return { status: 204 }; };`,
+	);
+	const id = onlyJobId(f.command(["spawn", "--detached", "--label", "invalid map", `make commit Ticket: ${path}`], { NODE_OPTIONS: `--import=${transport}` }));
+	const job = join(f.root, ".limen/jobs", id);
+	assert.match(await delivery(job), /^failed: invalid author map; not sent/);
+	assert.equal(await readFile(join(job, "state"), "utf8"), "done\n");
+	assert.equal(await readFile(join(job, "result"), "utf8"), "fake pi completed\n");
+	await assert.rejects(readFile(f.observations), { code: "ENOENT" });
+	await assert.rejects(readFile(join(job, "finish-webhook-targets")), { code: "ENOENT" });
+	assert.match(f.command(["jobs", id]), /author: @alice/);
+});
+
+test("continuation keeps captured author after the ticket is removed", async (context) => {
+	const f = await fixture(context);
+	const path = "spec/features/active/F006-continue/ticket.md";
+	const commit = await fileTicket(f.root, path, "Alice Filer <alice@users.noreply.github.com>");
+	const id = onlyJobId(f.command(["spawn", "--detached", `Ticket: ${path}`]));
+	const parentJob = join(f.root, ".limen/jobs", id);
+	await waitForState(f.root, id, "done");
+	assert.equal(await readFile(join(parentJob, "finish-webhook-author"), "utf8"), `@alice\n${commit}\n`);
+	git(f.root, "rm", path);
+	git(f.root, "commit", "-m", "remove ticket");
+	await mkdir(join(parentJob, "session"));
+	await writeFile(join(parentJob, "session/one.jsonl"), "{}\n");
+	const next = onlyJobId(f.command(["continue", "--detached", id, "follow up"]));
+	const job = join(f.root, ".limen/jobs", next);
+	await waitForState(f.root, next, "done");
+	assert.equal(await readFile(join(job, "finish-webhook-author"), "utf8"), `@alice\n${commit}\n`);
+	const fresh = onlyJobId(f.command(["spawn", "--detached", "fresh without ticket"]));
+	assert.equal(await readFile(join(f.root, ".limen/jobs", fresh, "finish-webhook-author"), "utf8"), "unavailable\nmissing Ticket: pointer\n");
+});
+
+test("hosted completion filters by captured author and preserves ordinals on partial failure", async (context) => {
+	const f = await fixture(context);
+	await copyFile(join(ROOT, "bin/tony-finish-ping.sh"), join(f.pkg, "bin/tony-finish-ping.sh"));
+	const job = await bareJob(f.root);
+	const targets = [
+		{ url: "https://synthetic.example.invalid/one", auth: "Bearer synthetic-one" },
+		{ url: "https://synthetic.example.invalid/two", auth: "Bearer synthetic-two" },
+		{ url: "https://synthetic.example.invalid/three", auth: "Bearer synthetic-three" },
+	];
+	const config = join(f.parent, "hosted-authors.env");
+	await writeFile(config, authorDotenv(targets, { "@alice": [1, 3] }), { mode: 0o600 });
+	await writeFile(join(job, "finish-webhook-env"), `${config}\n`);
+	await writeFile(join(job, "finish-webhook-author"), `@alice\n${"a".repeat(40)}\n`);
+	await writeFile(join(job, "session-ended"), "1\n");
+	const herdr = join(f.fakeBin, "herdr");
+	await writeFile(herdr, '#!/usr/bin/env node\nconsole.log(JSON.stringify({ result: { status: "done" } }));\n');
+	await chmod(herdr, 0o755);
+	const transport = join(f.parent, "hosted-transport.mjs");
+	await writeFile(
+		transport,
+		`import { appendFileSync } from 'node:fs'; globalThis.fetch = async (url) => { appendFileSync(${JSON.stringify(f.observations)}, String(url) + '\\n'); return { status: String(url).endsWith('/one') ? 503 : 204 }; };`,
+	);
+	await runModule(
+		f.pkg,
+		{ ...f.env, LIMEN_HERDR: herdr, LIMEN_JOB_DIR: job, LIMEN_HOSTED_TARGET: "synthetic:p1", NODE_OPTIONS: `--import=${transport}` },
+		"const { runHostedSupervisor } = await import('./src/supervisor.ts'); await runHostedSupervisor();",
+	);
+	assert.match(await delivery(job), /^failed: sender exited 1/);
+	assert.equal(await readFile(join(job, "state"), "utf8"), "done\n");
+	assert.deepEqual(
+		(await readFile(f.observations, "utf8")).trim().split("\n"),
+		targets.filter((_, index) => index !== 1).map((target) => target.url),
+	);
+	assert.equal(await readFile(join(job, "finish-webhook-route"), "utf8"), "mapped @alice -> 1, 3\n");
+	const receipts = (await readFile(join(job, "finish-webhook-targets"), "utf8"))
+		.trim()
+		.split("\n")
+		.map((line) => JSON.parse(line));
+	assert.deepEqual(
+		[...new Set(receipts.map((row) => row.target))].sort((a, b) => a - b),
+		[1, 3],
+	);
+	assert.match(f.command(["jobs", "direct"]), /target 1: transport rejected/);
+	assert.match(f.command(["jobs", "direct"]), /target 3: transport accepted/);
+	assert.doesNotMatch(f.command(["jobs", "direct"]), /target 2:/);
+});
+
+test("workspace, shallow, and later ticket evidence do not invent an author", async (context) => {
+	const f = await fixture(context);
+	const path = "spec/features/active/F007-child/ticket.md";
+	const commit = await fileTicket(f.root, path, "Alice Filer <alice@users.noreply.github.com>");
+	f.command(["workspace", "init"], {}, f.parent);
+	const workspaceId = onlyJobId(f.command(["spawn", "--detached", "--repo", "repo", `Ticket: ${path}`], {}, f.parent));
+	assert.equal(await readFile(join(f.parent, ".limen/jobs", workspaceId, "finish-webhook-author"), "utf8"), "unavailable\nnon-Git workspace ticket\n");
+	const clone = join(f.parent, "shallow");
+	git(f.root, "clone", "--depth=1", pathToFileURL(f.root).href, clone);
+	const shallowId = onlyJobId(f.command(["spawn", "--detached", `Ticket: ${path}`], {}, clone));
+	assert.equal(await readFile(join(clone, ".limen/jobs", shallowId, "finish-webhook-author"), "utf8"), "unavailable\nshallow history\n");
+	const id = onlyJobId(f.command(["spawn", "--detached", `Ticket: ${path}`]));
+	assert.equal(await readFile(join(f.root, ".limen/jobs", id, "finish-webhook-author"), "utf8"), `@alice\n${commit}\n`);
 });

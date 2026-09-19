@@ -27,7 +27,7 @@ When a job reaches a terminal state (`done` / `failed` / `stopped`), limen can P
 LIMEN_FINISH_WEBHOOK_TARGETS='[{"url":"https://api2.cursor.sh/automations/webhook/…","auth":"Bearer …"}]'
 ```
 
-Put that file beside the primary Git checkout (linked worktrees use the canonical root). Fresh spawns snapshot the path onto the job; continuations inherit the parent's choice. Home/legacy config does **not** opt a project into automation.
+Put that file beside the primary Git checkout (linked worktrees use the canonical root). Fresh spawns snapshot the path onto the job; continuations inherit the parent's choice. Home/legacy config does **not** opt a project into automation. An optional `LIMEN_FINISH_WEBHOOK_AUTHOR_TARGETS` map sends each finish only to the ticket author's configured bots; without it, every target still gets every finish.
 
 **What “accepted” means.** HTTP 2xx means the sender reached the endpoint. It does **not** mean a bot finished a turn — expect latency, and confirm the wake in the bot chat / routine run. Inspect with `limen jobs <id>` (`finish-webhook-env`, `finish-webhook-attempt`, `finish-webhook`).
 
@@ -111,7 +111,7 @@ For collaborators sharing a project, `limen ticket-author spec/features/active/F
 
 A GitHub noreply email also yields its recorded login. Ordinary emails remain usable identities without a GitHub account or network access. This is the creation **author**, not the committer or latest editor; it is evidence from Git, not verified human identity. Shared bot credentials identify the bot, not the person who asked it to file the ticket. Keep distinct authors on filing commits when collaborators need distinct attribution.
 
-Uncommitted paths and shallow history report authorship unavailable rather than guessing. Commit a new ticket before looking it up; fetch complete history for a shallow clone. A move Git cannot recognize, a squash, or rewritten history can lose original attribution. Deleting and recreating a path starts a new ticket history. No author tags are added to ticket Markdown.
+Spawn records that creation `@login` (or an unavailable reason) on the job for finish routing. Uncommitted paths and shallow history report authorship unavailable rather than guessing. Commit a new ticket before looking it up; fetch complete history for a shallow clone. A move Git cannot recognize, a squash, or rewritten history can lose original attribution. Deleting and recreating a path starts a new ticket history. No author tags are added to ticket Markdown.
 
 ## Models
 
