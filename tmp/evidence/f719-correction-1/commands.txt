@@ -1,0 +1,12 @@
+Failing baseline: 71664647b7afe1bd3faf1330b357d69256fdd514
+Worktree: /Users/overment/.overment/.limen-limen-worktrees/2026-09-19-f719-concurrent-starts-keep-work-8f1a6434
+
+Publication schedule — prune between mkdir(jobDir) and started-at/worktree writes:
+  node --experimental-strip-types tmp/evidence/f719-lead-check-2026-09-19/publication-probe.mjs "$PWD"
+  log: publication-failing-baseline.log
+  result: prune deleted the empty job directory; spawn failed ENOENT writing started-at. Probe exit 0 means the defect was demonstrated.
+
+Stale-snapshot schedule — prune reads the job listing, then a start publishes record+worktree, then prune lists/removes worktrees:
+  node --experimental-strip-types tmp/evidence/f719-correction-1/stale-snapshot-probe.mjs "$PWD"
+  log: stale-snapshot-failing-baseline.log
+  result: job directory kept; published worktree deleted; genuine leftover still deleted. Probe exit 0 means the defect was demonstrated.

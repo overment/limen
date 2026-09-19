@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
-import { access, mkdir, readFile, writeFile } from "node:fs/promises";
+import fs from "node:fs";
+import { access, mkdir, readFile, realpath, writeFile } from "node:fs/promises";
+import { syncBuiltinESMExports } from "node:module";
 import { basename, dirname, join } from "node:path";
 import test from "node:test";
 import { liveJob } from "../src/reap.ts";
@@ -159,6 +161,48 @@ test("startup window is live; expired running-without-pid is not", async (contex
 	const allowed = limen(scratch, "spawn", "--branch", "limen/occupied", "continue");
 	assert.equal(allowed.status, 0, allowed.stderr);
 	await waitForState(scratch.root, onlyJobId(allowed.stdout), "done");
+});
+
+test("prune keeps a worktree published after its job listing", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	limen(scratch, "init");
+	const root = await realpath(scratch.root);
+	const jobsRoot = `${root}/.limen/jobs`;
+	const id = "2026-09-19-stale-snap-aaaaaaaa";
+	const worktreeRoot = join(dirname(root), `.${basename(root)}-limen-worktrees`);
+	const worktree = join(worktreeRoot, id);
+	const jobDir = `${jobsRoot}/${id}`;
+	const leftover = join(worktreeRoot, "ordinary-leftover");
+	await mkdir(leftover, { recursive: true });
+	await writeFile(join(leftover, "stale.txt"), "remove me\n");
+	const originalReaddir = fs.promises.readdir;
+	let injected = false;
+	try {
+		fs.promises.readdir = (async (path: Parameters<typeof originalReaddir>[0], options?: Parameters<typeof originalReaddir>[1]) => {
+			const result = await originalReaddir(path, options as never);
+			const resolved = await fs.promises.realpath(String(path)).catch(() => String(path));
+			if (!injected && resolved === jobsRoot) {
+				injected = true;
+				await mkdir(jobDir);
+				await writeFile(`${jobDir}/started-at`, `${new Date().toISOString()}\n`);
+				await writeFile(`${jobDir}/worktree`, `${worktree}\n`);
+				await mkdir(worktreeRoot, { recursive: true });
+				git(root, "worktree", "add", "--detach", worktree, "HEAD");
+			}
+			return result;
+		}) as typeof originalReaddir;
+		syncBuiltinESMExports();
+		const { pruneFinishedWorktrees } = await import("../src/commands/prune.ts");
+		await pruneFinishedWorktrees(root);
+		assert.ok(injected, "prune never listed job directories");
+		await access(jobDir);
+		await access(worktree);
+		await assert.rejects(access(leftover));
+	} finally {
+		fs.promises.readdir = originalReaddir;
+		syncBuiltinESMExports();
+	}
 });
 
 test("prune deletes a job directory with no state", async (context) => {

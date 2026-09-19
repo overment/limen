@@ -1,0 +1,17 @@
+command: node --experimental-strip-types /tmp/limen-f719-correction-1/stale-snapshot-probe.mjs /Users/overment/.overment/.limen-limen-worktrees/2026-09-19-f719-concurrent-starts-keep-work-8f1a6434
+cwd: /Users/overment/.overment/.limen-limen-worktrees/2026-09-19-f719-concurrent-starts-keep-work-8f1a6434
+commit: 71664647b7afe1bd3faf1330b357d69256fdd514
+git log: 71664647b7afe1bd3faf1330b357d69256fdd514 spec: retain startup publication failure and direct focused correction
+date: 2026-09-19T18:10:15Z
+---
+(node:73487) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+Preparing worktree (detached HEAD e5d73fc)
+Injected job+worktree after jobs listing: /private/var/folders/_2/zg9lhmwx3c53w15w_vp606340000gn/T/limen-test-Zu1Zvp/repo/.limen/jobs/2026-09-19-stale-snap-aaaaaaaa
+Worktree exists after inject: true
+Prune removed count: 1
+Job directory exists: true
+Worktree exists: false
+Leftover exists: false
+CONFIRMED: prune deleted the worktree published after the listing
+exit: 0

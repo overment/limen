@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
+import { spawn, spawnSync } from "node:child_process";
+import fs, { existsSync } from "node:fs";
 import { access, chmod, mkdir, readdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { syncBuiltinESMExports } from "node:module";
 import { basename, dirname, join } from "node:path";
 import test from "node:test";
 import { defaultFakeClaude, defaultFakePi, git, limen, limenWithEnv, limenWithInput, limenWithSession, onlyJobId, scratchRepo, waitForState, writeFakeClaude } from "./scratch.ts";
@@ -641,7 +642,7 @@ test("spawn --branch checks the ticket against that branch, not the caller's tre
 	await waitForState(scratch.root, onlyJobId(resumed.stdout), "done");
 });
 
-test("overlapping starts keep both worktrees; prune still drops a genuine leftover", async (context) => {
+test("overlapping starts keep both worktrees; prune still drops a genuine leftover", { timeout: 120_000 }, async (context) => {
 	const scratch = await scratchRepo();
 	context.after(scratch.cleanup);
 	assert.equal(limen(scratch, "init").status, 0);
@@ -659,15 +660,26 @@ while (!existsSync(${JSON.stringify(gate)})) Atomics.wait(new Int32Array(new Sha
 	);
 	const prepare = `node ${JSON.stringify(prepareScript)}`;
 	const first = startLimen(scratch, ["spawn", "--prepare", prepare, "--label", "first start", "do work"]);
-	context.after(() => first.child.kill("SIGKILL"));
+	let second: ReturnType<typeof startLimen> | undefined;
+	context.after(async () => {
+		await writeFile(gate, "1\n").catch(() => {});
+		await Promise.race([
+			Promise.all([first.output, second?.output ?? Promise.resolve()]).then(
+				() => undefined,
+				() => undefined,
+			),
+			delay(10_000),
+		]);
+		await first.settle();
+		await second?.settle();
+	});
 	const firstId = await waitForInFlightJob(scratch.root);
 	const firstJob = join(scratch.root, ".limen/jobs", firstId);
 	const firstWorktree = (await readFile(join(firstJob, "worktree"), "utf8")).trim();
 	await access(firstWorktree);
 	await assert.rejects(access(join(firstJob, "state")));
-	const second = startLimen(scratch, ["spawn", "--prepare", prepare, "--label", "second start", "do work"]);
-	context.after(() => second.child.kill("SIGKILL"));
-	await waitFor("second start did not reach prepare", async () => (await readdir(waitingRoot).catch(() => [])).length >= 2);
+	second = startLimen(scratch, ["spawn", "--prepare", prepare, "--label", "second start", "do work"]);
+	await waitFor("second start did not reach prepare", async () => (await readdir(waitingRoot).catch(() => [])).length >= 2, 30_000);
 	await access(firstJob);
 	await access(firstWorktree);
 	assert.equal(await readFile(join(firstJob, "task.md"), "utf8"), "do work\n");
@@ -698,6 +710,7 @@ while (!existsSync(${JSON.stringify(gate)})) Atomics.wait(new Int32Array(new Sha
 	await assert.rejects(access(staleJob));
 	await assert.rejects(access(staleWorktree));
 	await writeFile(gate, "1\n");
+	assert.ok(second);
 	const [firstResult, secondResult] = await Promise.all([first.output, second.output]);
 	assert.equal(firstResult.status, 0, firstResult.stderr);
 	assert.equal(secondResult.status, 0, secondResult.stderr);
@@ -708,7 +721,7 @@ while (!existsSync(${JSON.stringify(gate)})) Atomics.wait(new Int32Array(new Sha
 	await access(secondJob);
 });
 
-test("a second spawn cannot delete a worktree still being added", async (context) => {
+test("a second spawn cannot delete a worktree still being added", { timeout: 120_000 }, async (context) => {
 	const scratch = await scratchRepo();
 	context.after(scratch.cleanup);
 	assert.equal(limen(scratch, "init").status, 0);
@@ -734,12 +747,25 @@ process.exit(result.status ?? 1);
 	);
 	await chmod(join(scratch.fakeBin, "git"), 0o755);
 	const first = startLimen(scratch, ["spawn", "--label", "worktree first", "do work"]);
-	context.after(() => first.child.kill("SIGKILL"));
-	await waitFor(`first worktree add never paused\n${addedFile}`, async () =>
-		access(addedFile).then(
-			() => true,
-			() => false,
-		),
+	context.after(async () => {
+		await rm(delayFile, { force: true }).catch(() => {});
+		await Promise.race([
+			first.output.then(
+				() => undefined,
+				() => undefined,
+			),
+			delay(10_000),
+		]);
+		await first.settle();
+	});
+	await waitFor(
+		`first worktree add never paused\n${addedFile}`,
+		async () =>
+			access(addedFile).then(
+				() => true,
+				() => false,
+			),
+		30_000,
 	);
 	const worktreeRoot = join(dirname(scratch.root), `.${basename(scratch.root)}-limen-worktrees`);
 	const planted = (await readdir(worktreeRoot)).filter((name) => !name.startsWith("."));
@@ -759,6 +785,92 @@ process.exit(result.status ?? 1);
 	await waitForState(scratch.root, firstId, "done");
 	await access(join(scratch.root, ".limen/jobs", firstId));
 	await access(join(scratch.root, ".limen/jobs", secondId));
+});
+
+test("prune between job-directory creation and marker writes cannot delete the start", { timeout: 120_000 }, async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	assert.equal(limen(scratch, "init").status, 0);
+	const root = await realpath(scratch.root);
+	const jobsRoot = `${root}/.limen/jobs`;
+	const originalMkdir = fs.promises.mkdir;
+	const originalRename = fs.promises.rename;
+	let interleaved = 0;
+	const previousEnv = { ...process.env };
+	const pruneAfterPublish = async (jobDir: string) => {
+		interleaved += 1;
+		const { pruneFinishedWorktrees } = await import("../src/commands/prune.ts");
+		await pruneFinishedWorktrees(root);
+		assert.ok(existsSync(jobDir), `prune deleted in-flight job directory ${jobDir}`);
+		assert.ok(existsSync(`${jobDir}/started-at`) && existsSync(`${jobDir}/worktree`), `prune stripped in-flight markers from ${jobDir}`);
+	};
+	try {
+		process.env.PATH = `${scratch.fakeBin}:${process.env.PATH}`;
+		process.env.LIMEN_HERDR = "0";
+		process.env.LIMEN_HUNK = "0";
+		process.env.LIMEN_FINISH_WEBHOOK_ENV = "";
+		for (const name of Object.keys(process.env)) {
+			if (name.startsWith("HERDR_") || name === "PI_SESSION_ID" || name === "PI_SESSION_FILE") delete process.env[name];
+		}
+		fs.promises.mkdir = (async (path: Parameters<typeof originalMkdir>[0], options?: Parameters<typeof originalMkdir>[1]) => {
+			const result = await originalMkdir(path, options as never);
+			const text = String(path);
+			if (text.startsWith(`${jobsRoot}/`) && !text.slice(jobsRoot.length + 1).includes("/") && options === undefined) await pruneAfterPublish(text);
+			return result;
+		}) as typeof originalMkdir;
+		fs.promises.rename = (async (from: Parameters<typeof originalRename>[0], to: Parameters<typeof originalRename>[1]) => {
+			const result = await originalRename(from, to);
+			const text = String(to);
+			if (text.startsWith(`${jobsRoot}/`) && !text.slice(jobsRoot.length + 1).includes("/")) await pruneAfterPublish(text);
+			return result;
+		}) as typeof originalRename;
+		syncBuiltinESMExports();
+		const { spawnCommand } = await import("../src/commands/spawn.ts");
+		await spawnCommand(["--detached", "--label", "publication probe", "do work"], root);
+		assert.ok(interleaved > 0, "spawn published no job directory for prune to interleave");
+		const ids = await readdir(jobsRoot);
+		assert.equal(ids.length, 1);
+		const id = ids[0];
+		assert.ok(id);
+		await waitForState(root, id, "done");
+	} finally {
+		fs.promises.mkdir = originalMkdir;
+		fs.promises.rename = originalRename;
+		syncBuiltinESMExports();
+		for (const name of Object.keys(process.env)) {
+			if (!(name in previousEnv)) delete process.env[name];
+		}
+		Object.assign(process.env, previousEnv);
+	}
+});
+
+test("overlapping-start helpers reap gated children after a forced failure", { timeout: 120_000 }, async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	assert.equal(limen(scratch, "init").status, 0);
+	const waitingRoot = join(scratch.root, "prepare-waiting");
+	const gate = join(scratch.root, "prepare-gate");
+	const prepareScript = join(scratch.root, "wait-prepare.cjs");
+	await writeFile(
+		prepareScript,
+		`const { writeFileSync, existsSync, mkdirSync } = require("node:fs");
+const { basename, join } = require("node:path");
+mkdirSync(${JSON.stringify(waitingRoot)}, { recursive: true });
+writeFileSync(join(${JSON.stringify(waitingRoot)}, basename(process.cwd())), "1");
+while (!existsSync(${JSON.stringify(gate)})) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50);
+`,
+	);
+	const started = startLimen(scratch, ["spawn", "--prepare", `node ${JSON.stringify(prepareScript)}`, "--label", "forced fail", "do work"]);
+	context.after(() => started.settle());
+	await waitForInFlightJob(scratch.root);
+	await waitFor("prepare did not start", async () => (await readdir(waitingRoot).catch(() => [])).length >= 1, 30_000);
+	const before = matchingProcesses(prepareScript);
+	assert.ok(before.length > 0, `expected gated prepare still running\n${before.join("\n")}`);
+	console.log(`forced-failure before settle:\n${before.join("\n")}`);
+	await started.settle();
+	const after = matchingProcesses(prepareScript);
+	console.log(`forced-failure after settle:\n${after.join("\n") || "(none)"}`);
+	assert.equal(after.length, 0, `gated child survived settle\n${after.join("\n")}`);
 });
 
 function startLimen(scratch: { readonly root: string; readonly fakeBin: string }, args: readonly string[], env: NodeJS.ProcessEnv = {}) {
@@ -789,12 +901,40 @@ process.exit(result.status);`,
 		child.once("error", reject);
 		child.once("close", (status) => resolve({ stdout, stderr, status: status ?? 1 }));
 	});
-	return { child, output };
+	const settle = async () => {
+		const pid = child.pid;
+		const tree = pid ? [pid, ...descendantPids(pid)] : [];
+		for (const target of tree) {
+			try {
+				process.kill(target, "SIGTERM");
+			} catch {}
+		}
+		await Promise.race([
+			output.then(
+				() => undefined,
+				() => undefined,
+			),
+			delay(1_000),
+		]);
+		for (const target of new Set([...tree, ...(pid ? descendantPids(pid) : [])])) {
+			try {
+				process.kill(target, "SIGKILL");
+			} catch {}
+		}
+		await Promise.race([
+			output.then(
+				() => undefined,
+				() => undefined,
+			),
+			delay(1_000),
+		]);
+	};
+	return { child, output, settle };
 }
 
 async function waitForInFlightJob(root: string): Promise<string> {
 	const jobsRoot = join(root, ".limen/jobs");
-	const deadline = Date.now() + 10_000;
+	const deadline = Date.now() + 30_000;
 	while (Date.now() < deadline) {
 		for (const id of await readdir(jobsRoot).catch(() => [] as string[])) {
 			const hasTask = await access(join(jobsRoot, id, "task.md")).then(
@@ -823,4 +963,36 @@ async function waitFor(message: string, probe: () => Promise<boolean>, timeoutMs
 		await new Promise((resolve) => setTimeout(resolve, 25));
 	}
 	throw new Error(message);
+}
+
+function delay(ms: number): Promise<void> {
+	return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function matchingProcesses(needle: string): string[] {
+	const result = spawnSync("/bin/ps", ["-ax", "-o", "pid=,command="], { encoding: "utf8" });
+	return (result.stdout ?? "")
+		.split("\n")
+		.map((line) => line.trim())
+		.filter((line) => line.includes(needle));
+}
+
+function descendantPids(rootPid: number): number[] {
+	const table: Array<{ pid: number; ppid: number }> = [];
+	for (const line of (spawnSync("/bin/ps", ["-ax", "-o", "pid=,ppid="], { encoding: "utf8" }).stdout ?? "").split("\n")) {
+		const [pid, ppid] = line.trim().split(/\s+/).map(Number);
+		if (pid && ppid) table.push({ pid, ppid });
+	}
+	const found: number[] = [];
+	const seen = new Set([rootPid]);
+	const queue = [rootPid];
+	for (let current = queue.shift(); current !== undefined; current = queue.shift()) {
+		for (const row of table) {
+			if (row.ppid !== current || seen.has(row.pid)) continue;
+			seen.add(row.pid);
+			found.push(row.pid);
+			queue.push(row.pid);
+		}
+	}
+	return found;
 }

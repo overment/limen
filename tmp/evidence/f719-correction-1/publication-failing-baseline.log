@@ -1,0 +1,13 @@
+command: node --experimental-strip-types tmp/evidence/f719-lead-check-2026-09-19/publication-probe.mjs /Users/overment/.overment/.limen-limen-worktrees/2026-09-19-f719-concurrent-starts-keep-work-8f1a6434
+cwd: /Users/overment/.overment/.limen-limen-worktrees/2026-09-19-f719-concurrent-starts-keep-work-8f1a6434
+commit: 71664647b7afe1bd3faf1330b357d69256fdd514
+git log: 71664647b7afe1bd3faf1330b357d69256fdd514 spec: retain startup publication failure and direct focused correction
+date: 2026-09-19T18:10:11Z
+---
+(node:72646) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+Prune interleaving after mkdir, before started-at: /private/var/folders/_2/zg9lhmwx3c53w15w_vp606340000gn/T/limen-test-e0chUH/repo/.limen/jobs/2026-09-19-publication-probe-6d24be38
+Removed records/worktrees: 1
+Job directory still exists: false
+CONFIRMED: candidate spawn fails after prune removes the in-flight directory: ENOENT: no such file or directory, open '/private/var/folders/_2/zg9lhmwx3c53w15w_vp606340000gn/T/limen-test-e0chUH/repo/.limen/jobs/2026-09-19-publication-probe-6d24be38/started-at'
+exit: 0
