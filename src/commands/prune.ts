@@ -49,11 +49,7 @@ export async function pruneFinishedWorktrees(root: string, keep: readonly string
 		const jobDir = `${jobsRoot}/${id}`;
 		if (!(await text(`${jobDir}/state`))) {
 			const startedAt = Date.parse(await text(`${jobDir}/started-at`));
-			if (Number.isFinite(startedAt) && Date.now() - startedAt < STARTUP_GRACE_MS) {
-				const recorded = await text(`${jobDir}/worktree`);
-				if (recorded) keepPaths.add(await resolved(recorded));
-				continue;
-			}
+			if (Number.isFinite(startedAt) && Date.now() - startedAt < STARTUP_GRACE_MS) continue;
 			await rm(jobDir, { recursive: true, force: true });
 			removed += 1;
 			continue;
@@ -61,12 +57,16 @@ export async function pruneFinishedWorktrees(root: string, keep: readonly string
 		const repo = (await text(`${jobDir}/repo`)) || undefined;
 		const repository = repo ? workspaceRepository(root, repo) : root;
 		repositories.add(repository);
-		if (await liveJob(jobDir)) {
-			const recorded = await text(`${jobDir}/worktree`);
-			if (recorded) keepPaths.add(await resolved(recorded));
-		}
 	}
 	if (repositories.size === 0) repositories.add(root);
+	for (const id of await jobIds(jobsRoot)) {
+		const jobDir = `${jobsRoot}/${id}`;
+		const recorded = await text(`${jobDir}/worktree`);
+		if (!recorded) continue;
+		const state = await text(`${jobDir}/state`);
+		const startedAt = Date.parse(await text(`${jobDir}/started-at`));
+		if (state ? await liveJob(jobDir) : Number.isFinite(startedAt) && Date.now() - startedAt < STARTUP_GRACE_MS) keepPaths.add(await resolved(recorded));
+	}
 	for (const repository of repositories) {
 		const worktreeRoot = await resolved(`${dirname(repository)}/.${basename(repository)}-limen-worktrees`);
 		const primary = await resolved(repository);

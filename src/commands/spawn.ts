@@ -1,7 +1,7 @@
 import { spawn, spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
-import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { signalProcessGroup, waitForProcessGroup } from "../contain.ts";
@@ -122,13 +122,20 @@ export async function spawnCommand(args: readonly string[], cwd: string): Promis
 	for (const [, ticket] of task.matchAll(/\bTicket: (spec\/\S+)/g))
 		if (ticket && !commitHasFile(repository, baseCommit, ticket)) throw new Error(`ticket ${ticket} is missing from the base commit`);
 	const jobDir = `${jobsRoot}/${id}`;
-	await mkdir(jobDir);
-	let worktree: string;
+	const publishing = `${dirname(jobsRoot)}/.publishing-${id}`;
+	await mkdir(publishing);
 	try {
 		await Promise.all([
-			writeFile(`${jobDir}/started-at`, `${new Date().toISOString()}\n`, { flag: "wx", flush: true }),
-			writeFile(`${jobDir}/worktree`, `${plan.path}\n`, { flag: "wx", flush: true }),
+			writeFile(`${publishing}/started-at`, `${new Date().toISOString()}\n`, { flag: "wx", flush: true }),
+			writeFile(`${publishing}/worktree`, `${plan.path}\n`, { flag: "wx", flush: true }),
 		]);
+		await rename(publishing, jobDir);
+	} catch (error) {
+		await rm(publishing, { recursive: true, force: true });
+		throw error;
+	}
+	let worktree: string;
+	try {
 		worktree = executeWorktree(repository, plan);
 		await pruneFinishedWorktrees(root, [worktree]).catch(() => {});
 		const candidate = options.review ? branchCommit(repository, branch) : undefined;
