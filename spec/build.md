@@ -2,8 +2,8 @@
 
 ## TRACK
 
-- **Parked-finish wave (Adam 2026-09-19):** this VPS plant coordinator is the sole landing/board writer. Sequential workers; merge + push each ready slice to origin/main when the focused/native honesty bar is met. Adam reviews; no independent review lane unless he asks. Out of scope: rewriting Alice/API plants; do not regress coordinator = hosted Herdr Pi tab.
-- **Wave model (Adam 2026-09-19):** Codex ChatGPT rejected gpt-5.4-astra. Every spawn and continue uses `--provider xai --model grok-4.6 --thinking xhigh`. No silent substitution.
+- **Quality subtraction wave (Adam 2026-09-20):** this VPS plant coordinator is the sole landing/board writer. Sequential subtraction workers; merge + push each ready slice to origin/main when focused tests and typecheck are clean. Prefer delete over extend. Solid partial over half-broken. Adam reviews; no independent review lane unless he asks. Out of scope: GitHub doorbell, unusable-route refusal, living architecture picture, rewriting Alice/API plants.
+- **Wave model (Adam 2026-09-20):** Codex still unavailable. Every spawn and continue uses `--provider xai --model grok-4.6 --thinking xhigh`. No silent substitution.
 - **Ops remediation lock 2026-09-10 (Adam):** two unsuccessful automatic wake attempts then deliberate recovery; park-and-preserve on quota — no silent model substitution. Named-job `limen watch <id>` for takeovers — not `watch --running`.
 - **Finish proof (Adam):** HTTP ≠ bot turn. VPS-first, Johnny-only automatic finish proof is sufficient; an export hold is unobserved evidence, never absence of an actual turn; no Tony coordination.
 - **Review and models (Adam):** Adam performs reviews. Outside this wave override, coordinators use `openai-codex/gpt-6-astra:xhigh` and Pi workers default to `openai-codex/gpt-6-astra:high`. Research pair: `gpt-5.6-sol:xhigh` and `grok-4.6:xhigh`. Quality: `gpt-5.6-sol:xhigh`. Picture: `gpt-5.6-sol`.
@@ -13,17 +13,17 @@
 
 ## NOW
 
-- GitHub doorbell next, solid partial over half-broken. Overlapping starts keep both worktrees landed `e5feac5`; publication window closed `30cff7a`. Remote-seat shop-manual partial landed `d33e334`; reload Pi for the new shop text.
+- Drop the running dirty-file count. Sequential subtraction after that: static coordinator status, unused wake sweep export, tests stop owning prompt prose, one home for handoff policy, stale board/vision prose.
 
 ## NEXT
 
-- GitHub doorbell, solid partial over half-broken. Unusable-route refusal and living architecture picture stay parked.
+- After this plate: GitHub doorbell, solid partial over half-broken. Unusable-route refusal and living architecture picture stay parked.
 
 ## PARKED
 
 - `F081-spawn-refuses-an-unusable-route` (🔴 PLANNED): still waiting for a Pi-supported non-generating route probe. Rechecked installed Pi 0.84.2 on 2026-09-19: `auth check` still proves credentials only; model runtime has stream/complete, no exact-route validation. Failing candidate `b14b5fe` stays locked; no auth/catalog substitution. Hosted continuation file transport already landed.
 - `F050-living-architecture-picture` (🔴 PLANNED): proposal for a background field guide, not a landing slice in this wave.
-- `F014-github-doorbell` (🔴 PLANNED): after a real seat partial; GitHub is ingress, not a second coordinator.
+- `F014-github-doorbell` (🔴 PLANNED): after this subtraction plate; GitHub is ingress, not a second coordinator.
 
 ## DROPPED
 
