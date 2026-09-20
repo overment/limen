@@ -606,7 +606,7 @@ function recordedToolCalls(job: string): number | undefined {
 	return Number.isSafeInteger(count) && count >= 0 ? count : undefined;
 }
 
-export function collectSweep(jobs: string, settled: ReadonlySet<string>): { readonly observe: string[]; readonly running: string[] } {
+function collectSweep(jobs: string, settled: ReadonlySet<string>): { readonly observe: string[]; readonly running: string[] } {
 	const observe: string[] = [];
 	const running: string[] = [];
 	for (const id of readdirSync(jobs).sort()) {
