@@ -6,7 +6,6 @@ export type JobRecord = {
 	readonly job?: Job;
 	readonly pulse?: Pulse;
 	readonly toolCalls?: number;
-	readonly changedFiles?: number;
 	readonly producedNothing?: boolean;
 	readonly lastTool?: string;
 	readonly reason?: string;
@@ -133,7 +132,6 @@ function runningFacts(record: JobRecord, paint: Paint): string[] {
 	else if (pulse === "starting") facts.push(paint("dim", "starting"));
 	else facts.push(pulse === "tool" && record.lastTool ? clip(record.lastTool, 24) : pulse);
 	if (record.toolCalls !== undefined) facts.push(`${record.toolCalls} tools`);
-	if (record.changedFiles !== undefined) facts.push(`${record.changedFiles} files`);
 	const silent = record.silentMs ?? 0;
 	if (silent >= 300_000) facts.push(paint("red", `silent ${formatDuration(silent)}`));
 	else if (silent >= 90_000) facts.push(paint("yellow", `silent ${formatDuration(silent)}`));

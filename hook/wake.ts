@@ -643,7 +643,7 @@ export function deliverySettled(job: string, session: string): boolean {
 }
 export function progressFilename(filename: string | null): boolean {
 	if (!filename) return false;
-	return /^[^/]+\/(activity|changed-files|last-tool)$/.test(filename.replaceAll("\\", "/"));
+	return /^[^/]+\/(activity|last-tool)$/.test(filename.replaceAll("\\", "/"));
 }
 function runningDisplay(
 	jobs: string,

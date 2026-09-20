@@ -170,7 +170,7 @@ test("progress events neither invalidate settled records nor schedule sweeps", a
 	h.job("history", "done", "coordinator", "coordinator");
 	await h.start();
 	h.reads.length = 0;
-	for (const name of ["activity", "changed-files", "last-tool"]) {
+	for (const name of ["activity", "last-tool"]) {
 		assert.equal(progressFilename(`history/${name}`), true);
 		assert.equal(progressFilename(`history\\${name}`), true);
 		h.event(`history/${name}`);
@@ -178,7 +178,7 @@ test("progress events neither invalidate settled records nor schedule sweeps", a
 	assert.equal(h.scheduled.length, 0);
 	await h.sweep();
 	assert.equal(h.reads.filter((path) => path.includes("/history/")).length, 0);
-	for (const name of [null, "activity", "activity/state", "job/state", "job/advisory", "job/notify/subscribers/activity", "job/session/activity"]) {
+	for (const name of [null, "activity", "activity/state", "job/state", "job/advisory", "job/notify/subscribers/activity", "job/session/activity", "history/changed-files"]) {
 		assert.equal(progressFilename(name), false, String(name));
 	}
 	h.event(null);
