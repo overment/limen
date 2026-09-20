@@ -19,14 +19,13 @@
 
 ## Current direction
 
-- Reliable completion is mostly paid for: job files beat the footer and a missed wake, hosted jobs end themselves, and a failed turn is visible on the next cue. What remains is the start — spawn must return the ID in seconds and hand the job to a supervisor that owns it, and the reaper must tell a live owner from a lost one.
-- The remote seat exists. Walkthrough: [docs/vps.md](../docs/vps.md). Next: lid-closed `--detached` job, Moshi rings, then live there. Coordinator stays on the laptop until that prove.
+- Reliable completion is paid for: job files beat the footer and a missed wake, hosted jobs end themselves, a failed turn is visible on the next cue, spawn returns the ID in seconds and hands the job to a supervisor that owns it, and the reaper tells a live owner from a lost one.
+- The remote seat exists. Walkthrough: [docs/vps.md](../docs/vps.md).
 - After the seat is boring: an opt-in GitHub doorbell that spawns on that seat and comments back evidence.
-- The three job kinds below are the next widening. They ride the role seam that already gives workers and reviewers their own preamble and space, so they can interleave with the seat work instead of queuing behind it.
 
-## Jobs we do not run yet
+## Research, quality, and picture
 
-Three shapes to stand beside slice, repair, survey, finish, and review. Each is an ordinary Pi session with its own preamble and its own space. None of them merges, and none of them edits the board. They differ in who starts them: the human asks for research, the loop schedules quality, and the coordinator decides when a picture is worth drawing.
+Three shapes that stand beside slice, repair, survey, finish, and review. Each is an ordinary Pi session with its own preamble and its own space. None of them merges, and none of them edits the board. They differ in who starts them: the human asks for research, the loop schedules quality, and the coordinator decides when a picture is worth drawing.
 
 - **Research.** The human asks for it; the coordinator never opens one on its own, because a fan-out across models is spend nobody authorized. Then a question gets several answers at once: parallel sessions on deliberately different models, each in its own worktree and space, and one judge session that reads them all and writes the input the spec needs. The judge names where the answers diverged rather than averaging them; one opinion is not research. A report carries the verdict, the tradeoff that decides it, and the source that proves it — a named repository at a named revision, or current documentation the session actually read, never recalled API. Reaching the open web and cloning a dependency to read it is the one capability these sessions need and workers do not have. Research produces a ticket, a decision, or a paragraph of this file; it never produces a merge.
 - **Quality.** A phase over a stretch of landed work, not a gate on one merge, judged against this vision and the styleguide: how the code is organized, what is dead and can go, and where two files claim authority over the same decision. It reports and proposes; every deletion still lands as an ordinary reviewed slice. Its bar is subtraction and unification — a rewrite is out of scope, and a feature that no longer serves the intent is a drop candidate, not a refactor.
