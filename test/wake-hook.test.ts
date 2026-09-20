@@ -71,8 +71,13 @@ test("wake ignores history, announces start, and steers once on terminal change"
 	assert.deepEqual(notifications, ["limen: F001 implementation started (new)"]);
 	await writeFile(join(jobs, "new/activity"), "tool\n");
 	await writeFile(join(jobs, "new/last-tool"), "bash\n");
-	await waitUntil(() => new Set(statuses.filter((value) => value?.includes("limen 1 · F001 starting"))).size >= 2);
-	assert.match(statuses.find((value) => value?.includes("limen 1 · F001 starting")) ?? "", /^[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] /);
+	await waitUntil(() => statuses.includes("limen 1 · F001 starting"));
+	await new Promise((resolve) => setTimeout(resolve, 280));
+	assert.deepEqual(
+		[...new Set(statuses.filter((value) => value?.includes("limen 1 · F001 starting")))],
+		["limen 1 · F001 starting"],
+		"the footer must stay static while the status body is unchanged",
+	);
 	await writeFile(join(jobs, "new/state"), "done\n");
 	await waitUntil(() => messages.length === 1);
 	assert.equal(statuses.at(-1), undefined);

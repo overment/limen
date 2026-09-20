@@ -28,7 +28,6 @@ type PiApi = {
 	): void;
 };
 
-const SPINNER = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"] as const;
 const DEFAULT_FALLBACK_GRACE_MS = 5 * 60_000;
 const CLAIM_STALE_MS = 30_000;
 const CACHE_REFRESH_MS = 30_000;
@@ -37,11 +36,9 @@ type HerdrPane = { readonly binary: string; readonly pane: string };
 
 export default function limenWake(pi: PiApi): void {
 	let watcher: FSWatcher | undefined;
-	let statusTimer: NodeJS.Timeout | undefined;
 	let sweepTimer: NodeJS.Timeout | undefined;
 	let changeTimer: NodeJS.Timeout | undefined;
 	let statusBody = "";
-	let frame = 0;
 	let active = false;
 	let muted = false;
 	let session: Context | undefined;
@@ -116,19 +113,14 @@ export default function limenWake(pi: PiApi): void {
 		]);
 	};
 	const stopTimers = () => {
-		if (statusTimer) clearInterval(statusTimer);
-		statusTimer = undefined;
 		if (sweepTimer) clearInterval(sweepTimer);
 		sweepTimer = undefined;
 		if (changeTimer) clearTimeout(changeTimer);
 		changeTimer = undefined;
 	};
 	const dropFooter = (reason: string) => {
-		if (statusTimer) clearInterval(statusTimer);
-		statusTimer = undefined;
 		footerAlive = false;
 		statusBody = "";
-		frame = 0;
 		if (footerNoted || !limenDir) return;
 		footerNoted = true;
 		try {
@@ -150,21 +142,16 @@ export default function limenWake(pi: PiApi): void {
 		session = undefined;
 		stopTimers();
 		statusBody = "";
-		frame = 0;
 		if (reportHerdr) herdrReport("", "");
 	};
 	const clearStatus = (reportHerdr = true) => {
-		if (statusTimer) clearInterval(statusTimer);
-		statusTimer = undefined;
 		statusBody = "";
-		frame = 0;
 		setStatus(undefined);
 		if (reportHerdr) herdrReport("", "");
 	};
 	const drawStatus = () => {
 		if (!active || !footerAlive || muted || !statusBody || !session) return;
-		setStatus(`${SPINNER[frame]} ${statusBody}`);
-		frame = (frame + 1) % SPINNER.length;
+		setStatus(statusBody);
 	};
 	const sessionOwns = (jobs: string) => {
 		if (ownsJobs === undefined) ownsJobs = sessionOwnsJobs(jobs, sessionId);
@@ -195,10 +182,6 @@ export default function limenWake(pi: PiApi): void {
 		statusBody = next.status;
 		herdrReport(next.summary, next.title, next.pulses, next.watched);
 		drawStatus();
-		if (footerAlive && !statusTimer) {
-			statusTimer = setInterval(drawStatus, 120);
-			statusTimer.unref();
-		}
 	};
 	const notifyHerdr = (job: string, id: string, state: string, label: string, branch: string, slot: string) => {
 		if (!claimMarker(job, "herdr", slot)) return;
@@ -515,7 +498,7 @@ export default function limenWake(pi: PiApi): void {
 		sweep();
 	});
 	pi.on("session_shutdown", () => {
-		if (!active && !statusTimer && !sweepTimer) return;
+		if (!active && !sweepTimer) return;
 		watcher?.close();
 		watcher = undefined;
 		for (const pending of pendingDeliveries.values()) {
