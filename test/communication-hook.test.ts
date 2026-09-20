@@ -335,27 +335,20 @@ test("missing communication inherits the package register", async (context) => {
 	const result = start(root, { systemPrompt: "base" });
 	const prompt = result.systemPrompt ?? "";
 	assert.match(prompt, /## Communication \(limen\/templates\/communication\.md\)/);
-	assert.match(prompt, /did not write this code/);
-	assert.match(prompt, /When the previous turn failed, the first line says it failed and what is being redone/);
+	const packaged = (await readFile(new URL("../templates/communication.md", import.meta.url), "utf8")).trim();
+	assert.equal(prompt.includes(packaged), true);
 	assert.match(prompt, /## Human/);
 	assert.match(prompt, /## Agent/);
-	assert.match(prompt, /\*\*An explanation\.\*\* They asked why, or what happened\. Past tense, no new action: no tool call, no next step/);
-	assert.match(prompt, /what works now; what is being built and by whom; what is blocked and on what/);
-	assert.match(prompt, /what you can try now/);
-	assert.match(prompt, /The closing overview is the exception/);
-	assert.match(prompt, /hands control back with work in flight/);
-	assert.match(prompt, /what is finished, what is running and which job has it, what is waiting on the owner/);
-	assert.match(prompt, /When a wave starts, and while it runs, the closing overview is the unprompted last beat/);
-	assert.match(prompt, /A pasted style instruction governs the rest of the conversation/);
-	assert.match(prompt, /A wake for a job already closed is not news: one line, or nothing/);
 	assert.match(result.message?.content ?? "", /Audience for this reply: human/);
 });
 
 test("a coordinator without AGENTS.md inherits the package shop manual on the system prompt", async (context) => {
 	const root = await projectRoot(context);
 	const result = start(root, { systemPrompt: "base" });
-	assert.match(result.systemPrompt ?? "", /## Shop manual \(limen\/templates\/agents\.md\)/);
-	assert.match(result.systemPrompt ?? "", /plain specifications/);
+	const prompt = result.systemPrompt ?? "";
+	assert.match(prompt, /## Shop manual \(limen\/templates\/agents\.md\)/);
+	const packaged = (await readFile(new URL("../templates/agents.md", import.meta.url), "utf8")).trim();
+	assert.equal(prompt.includes(packaged), true);
 	assert.doesNotMatch(result.message?.content ?? "", /Shop manual/);
 });
 

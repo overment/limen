@@ -68,7 +68,7 @@ test("spawn creates isolated branch, canonical record, runs pi, and resumes its 
 	assert.equal(argv.includes("--no-context-files"), false);
 	assert.equal(argv.includes("--no-extensions"), true);
 	assert.match(argv[argv.indexOf("--extension") + 1] ?? "", /hook\/steering\.ts$/);
-	assert.match(argv[argv.indexOf("--append-system-prompt") + 1] ?? "", /You implement the coordinator's instruction/);
+	assert.equal(argv[argv.indexOf("--append-system-prompt") + 1], await readFile(new URL("../templates/worker.md", import.meta.url), "utf8"));
 	assert.equal(await readFile(join(job, "last-tool"), "utf8"), "bash\n");
 	assert.equal(await readFile(join(job, "tool-calls"), "utf8"), "1\n");
 	const log = await readFile(join(job, "log"), "utf8");
@@ -494,10 +494,7 @@ test("spawn --role researcher and --role judge load the packaged preambles", asy
 	const scratch = await scratchRepo();
 	context.after(scratch.cleanup);
 	assert.equal(limen(scratch, "init").status, 0);
-	for (const [role, needle] of [
-		["researcher", /Recalled API is not a source/],
-		["judge", /naming where they diverged/],
-	] as const) {
+	for (const role of ["researcher", "judge"] as const) {
 		const launched = limen(scratch, "spawn", "--role", role, "--detached", "--label", `F070 ${role}`, "named source");
 		assert.equal(launched.status, 0, launched.stderr);
 		const id = onlyJobId(launched.stdout);
@@ -505,7 +502,7 @@ test("spawn --role researcher and --role judge load the packaged preambles", asy
 		assert.equal(await readFile(join(scratch.root, ".limen/jobs", id, "role"), "utf8"), `${role}\n`);
 		const worktree = (await readFile(join(scratch.root, ".limen/jobs", id, "worktree"), "utf8")).trim();
 		const argv = JSON.parse(await readFile(join(worktree, "pi-args.json"), "utf8")) as string[];
-		assert.match(argv[argv.indexOf("--append-system-prompt") + 1] ?? "", needle);
+		assert.equal(argv[argv.indexOf("--append-system-prompt") + 1], await readFile(new URL(`../templates/${role}.md`, import.meta.url), "utf8"));
 	}
 });
 
