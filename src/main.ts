@@ -64,7 +64,6 @@ usage:
   limen init --drop-leftovers
   limen workspace init
   limen spawn "Implement FNNN: <outcome>. Start by writing <slice>. Ticket: spec/features/active/FNNN-slug/ticket.md" [--label L] [--model X] [--branch B] [--role NAME] [--timeout 20m; default 90m] [--task-file F|-] [--prepare CMD]
-  limen spawn --role advisor --engine claude --detached "…"   # a perspective from claude; detached only, never merges
   limen spawn "…" [--label L] [--provider P] [--model X] [--thinking T]  # Pi flags; in Herdr: hosted, else detached
   limen spawn --tab "…"                            # force hosted (requires Herdr; no --timeout)
   limen spawn --detached "…"                       # force background worker + log-tail tab

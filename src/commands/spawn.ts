@@ -50,9 +50,6 @@ export function resolvePreamble(root: string, role: string): string {
 }
 export const HOSTED_NOTE =
 	"Hosted job: weaker guarantees. No 90-minute timeout, no tool-call cap, no F007 process containment. Herdr owns the process tree. Closing the tab ends the worker.\n";
-export function preflightClaude(): void {
-	if (!(process.env.PATH ?? "").split(":").some((dir) => dir && existsSync(`${dir}/claude`))) throw new Error("claude is not on PATH");
-}
 export function preflightPi(model?: string, provider?: string): void {
 	if (!(process.env.PATH ?? "").split(":").some((dir) => dir && existsSync(`${dir}/pi`))) throw new Error("pi is not on PATH");
 	if (process.env.LIMEN_PREFLIGHT !== "auth") return;
@@ -74,16 +71,12 @@ export async function spawnCommand(args: readonly string[], cwd: string): Promis
 	const tab = parsed.detached ? false : parsed.tab || herdr;
 	if (parsed.tab && parsed.detached) throw new Error("--tab and --detached cannot be combined");
 	if (tab && parsed.timeoutMs) throw new Error("hosted jobs have no timeout; omit --timeout or use --detached");
-	if (tab && parsed.engine === "claude") throw new Error("a claude job has no interactive tab; pass --detached");
 	if (tab && !herdr) throw new Error("hosted spawn requires Herdr (HERDR_ENV=1); use --detached for an ordinary job");
 	const loaded = await readSpawnTask(parsed.task, parsed.taskFile, cwd);
 	const options = { ...parsed, tab, task: loaded.text, label: parsed.label ?? (loaded.text.trim().split(/\r?\n/, 1)[0]?.trim().slice(0, 80) || "job") };
 	const engine = options.engine ?? "pi";
-	const model =
-		options.model ?? (engine === "claude" ? undefined : process.env[options.review ? "LIMEN_REVIEWER_MODEL" : "LIMEN_WORKER_MODEL"]?.trim() || "openai-codex/gpt-6-astra:high");
-	if (engine === "claude" && (options.provider || options.thinking)) throw new Error("--provider and --thinking are Pi options; omit them for --engine claude");
-	if (engine === "claude") preflightClaude();
-	else preflightPi(model, options.provider);
+	const model = options.model ?? (process.env[options.review ? "LIMEN_REVIEWER_MODEL" : "LIMEN_WORKER_MODEL"]?.trim() || "openai-codex/gpt-6-astra:high");
+	preflightPi(model, options.provider);
 	const notificationSession = currentNotificationSession();
 	const coordinatorTab = process.env.HERDR_TAB_ID?.trim();
 	const workspace = workspaceRoot(cwd);
@@ -175,7 +168,7 @@ export async function spawnCommand(args: readonly string[], cwd: string): Promis
 		await rm(jobDir, { recursive: true, force: true });
 		throw error;
 	}
-	const versions = capturedVersions(engine).then((text) => writeFile(`${jobDir}/versions`, text, { flag: "wx", flush: true }));
+	const versions = capturedVersions().then((text) => writeFile(`${jobDir}/versions`, text, { flag: "wx", flush: true }));
 	await atomicWrite(`${jobDir}/state`, "running\n");
 	if (options.tab) {
 		await startHosted({
@@ -206,7 +199,6 @@ export async function spawnCommand(args: readonly string[], cwd: string): Promis
 		LIMEN_LABEL: options.label,
 		LIMEN_CONTEXT_ROOT: root,
 	};
-	if (engine !== "pi") environment.LIMEN_ENGINE = engine;
 	environment.LIMEN_PROVIDER = options.provider ?? "";
 	environment.LIMEN_THINKING = options.thinking ?? "";
 	if (model) environment.LIMEN_MODEL = model;
@@ -351,7 +343,7 @@ function parseSpawnArgs(args: readonly string[]): SpawnOptions {
 				if (!/^[a-z][a-z0-9-]*$/.test(role)) throw new Error("--role must be a lowercase name");
 			} else if (value === "--engine") {
 				engine = once(engine, value, optionValue.trim());
-				if (engine !== "pi" && engine !== "claude") throw new Error("--engine must be pi or claude");
+				if (engine !== "pi") throw new Error("--engine must be pi");
 			} else timeoutMs = once(timeoutMs, value, parseDuration(optionValue));
 		} else task.push(value);
 	}
@@ -401,14 +393,13 @@ function probeVersion(command: string): Promise<string> {
 		child.once("error", () => done("")).once("close", (code) => done(code === 0 ? (out.trim().split("\n")[0] ?? "") : ""));
 	});
 }
-export async function capturedVersions(engine = "pi"): Promise<string> {
+export async function capturedVersions(): Promise<string> {
 	const herdr = process.env.LIMEN_HERDR?.trim();
 	const hunk = hunkBinary();
 	const pi = (await probeVersion(process.env.LIMEN_PI || "pi")) || "unavailable";
 	const extra = herdr !== "0" && (await probeVersion(herdr || "herdr"));
 	const hunkVersion = hunk && (await probeVersion(hunk));
-	const claude = engine === "claude" && ((await probeVersion(process.env.LIMEN_CLAUDE || "claude")) || "unavailable");
-	return `pi ${pi}\n${claude ? `claude ${claude}\n` : ""}${extra ? `herdr ${extra}\n` : ""}${hunkVersion ? `hunk ${hunkVersion}\n` : ""}`;
+	return `pi ${pi}\n${extra ? `herdr ${extra}\n` : ""}${hunkVersion ? `hunk ${hunkVersion}\n` : ""}`;
 }
 function workspaceTask(task: string, root: string, repo: string): string {
 	const pointer = task.replace(/\bTicket: (spec\/\S+)/g, (_all, path: string) => `Ticket: ${root}/${path}`);

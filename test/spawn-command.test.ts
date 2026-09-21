@@ -5,7 +5,7 @@ import { access, chmod, mkdir, readdir, readFile, realpath, rm, writeFile } from
 import { syncBuiltinESMExports } from "node:module";
 import { basename, dirname, join } from "node:path";
 import test from "node:test";
-import { defaultFakeClaude, defaultFakePi, git, limen, limenWithEnv, limenWithInput, limenWithSession, onlyJobId, scratchRepo, waitForState, writeFakeClaude } from "./scratch.ts";
+import { defaultFakePi, git, limen, limenWithEnv, limenWithInput, limenWithSession, onlyJobId, scratchRepo, waitForState } from "./scratch.ts";
 
 test("spawn creates isolated branch, canonical record, runs pi, and resumes its worktree", async (context) => {
 	const scratch = await scratchRepo();
@@ -343,21 +343,6 @@ process.exit(0);
 	assert.deepEqual(await readdir(join(scratch.root, ".limen/jobs")).catch(() => []), []);
 });
 
-test("Pi-only flags are refused for Claude before creating a job", async (context) => {
-	const scratch = await scratchRepo();
-	context.after(scratch.cleanup);
-	assert.equal(limen(scratch, "init").status, 0);
-	for (const flags of [
-		["--provider", "openai-codex"],
-		["--thinking", "high"],
-	]) {
-		const launched = limen(scratch, "spawn", "--engine", "claude", "--detached", ...flags, "do work");
-		assert.equal(launched.status, 1);
-		assert.match(launched.stderr, /Pi options/);
-	}
-	assert.deepEqual(await readdir(join(scratch.root, ".limen/jobs")).catch(() => []), []);
-});
-
 test("LIMEN_PREFLIGHT=auth proceeds when check passes", async (context) => {
 	const scratch = await scratchRepo(defaultFakePi.replace('if (args[0] === "auth") process.exit(1);', 'if (args[0] === "auth") process.exit(0);'));
 	context.after(scratch.cleanup);
@@ -538,51 +523,23 @@ console.log(JSON.stringify({ type: "message_end", message: { role: "assistant", 
 	assert.match(await readFile(join(scratch.root, ".limen/jobs", id, "log"), "utf8"), /prepare: touch prepared/);
 });
 
-test("F074: a claude job keeps the ordinary record and files the closing result", async (context) => {
+test("spawn refuses --engine claude and an unknown engine, and has no advisor role", async (context) => {
 	const scratch = await scratchRepo();
 	context.after(scratch.cleanup);
-	await writeFakeClaude(scratch.fakeBin, defaultFakeClaude);
 	assert.equal(limen(scratch, "init").status, 0);
-	const launched = limen(scratch, "spawn", "--role", "advisor", "--engine", "claude", "--detached", "--label", "narrow import form · F074", "should the import be narrow?");
-	assert.equal(launched.status, 0, launched.stderr);
-	const id = onlyJobId(launched.stdout);
-	await waitForState(scratch.root, id, "done");
-	const job = join(scratch.root, ".limen/jobs", id);
-	assert.equal(await readFile(join(job, "engine"), "utf8"), "claude\n");
-	assert.equal(await readFile(join(job, "role"), "utf8"), "advisor\n");
-	assert.equal(await readFile(join(job, "result"), "utf8"), "ship the narrow form; it costs the bulk import\n");
-	assert.equal(await readFile(join(job, "claude-session"), "utf8"), "fake-claude-session\n");
-	assert.equal(await readFile(join(job, "last-tool"), "utf8"), "Bash\n");
-	assert.equal(await readFile(join(job, "tool-calls"), "utf8"), "1\n");
-	assert.match(await readFile(join(job, "versions"), "utf8"), /claude 0\.0\.0-test/);
-	const log = await readFile(join(job, "log"), "utf8");
-	assert.match(log, /worker started \(claude\)/);
-	assert.match(log, /^Bash git status$/m);
-	assert.match(log, /^looked at the worktree$/m);
-	assert.equal(log.split("ship the narrow form; it costs the bulk import").length - 1, 1, "the filed answer reaches the log once");
-	assert.match(log, /done: claude exited 0/);
-	assert.match(limen(scratch, "jobs", id).stdout, /engine claude/);
-	const worktree = (await readFile(join(job, "worktree"), "utf8")).trim();
-	const argv = JSON.parse(await readFile(join(worktree, "claude-args.json"), "utf8")) as string[];
-	assert.equal(argv[argv.indexOf("--output-format") + 1], "stream-json");
-	assert.equal(argv[argv.indexOf("--permission-mode") + 1], "bypassPermissions");
-	assert.match(argv[argv.indexOf("--append-system-prompt") + 1] ?? "", /You answer one question with a perspective/);
-	assert.equal(argv.includes("--session-dir"), false);
-	assert.equal(argv.includes("--model"), false, "the Pi package default must not reach Claude");
-	// The engine is a spawn choice, not a resumable session: continue says so instead of failing on a missing transcript.
-	assert.match(limen(scratch, "continue", id, "say more").stderr, /ran on claude/);
-});
-
-test("F074: a claude job refuses a hosted tab, and an unknown engine is named", async (context) => {
-	const scratch = await scratchRepo();
-	context.after(scratch.cleanup);
-	await writeFakeClaude(scratch.fakeBin, defaultFakeClaude);
-	limen(scratch, "init");
-	assert.match(limen(scratch, "spawn", "--engine", "claude", "--tab", "look").stderr, /no interactive tab; pass --detached/);
-	assert.match(limen(scratch, "spawn", "--engine", "gpt", "look").stderr, /--engine must be pi or claude/);
-	const failed = onlyJobId(limen(scratch, "spawn", "--engine", "claude", "--detached", "--label", "boom", "fail now").stdout);
-	await waitForState(scratch.root, failed, "failed");
-	assert.match(await readFile(join(scratch.root, ".limen/jobs", failed, "stop-reason"), "utf8"), /error: error_during_execution/);
+	for (const args of [
+		["--engine", "claude", "--detached", "do work"],
+		["--engine", "gpt", "look"],
+	]) {
+		const launched = limen(scratch, "spawn", ...args);
+		assert.equal(launched.status, 1);
+		assert.match(launched.stderr, /--engine must be pi/);
+	}
+	const advisor = limen(scratch, "spawn", "--role", "advisor", "--detached", "look");
+	assert.equal(advisor.status, 1);
+	assert.match(advisor.stderr, /no preamble for role advisor/);
+	assert.deepEqual(await readdir(join(scratch.root, ".limen/jobs")).catch(() => []), []);
+	assert.doesNotMatch(git(scratch.root, "worktree", "list"), /limen-worktrees/);
 });
 
 test("spawn refuses a ticket missing from the base commit and starts when it is committed", async (context) => {

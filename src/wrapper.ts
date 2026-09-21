@@ -5,7 +5,7 @@ import { containEscapedDescendants, discoverEscapedDescendants, processAlive, pr
 import { deliverFinishWebhook } from "./finish-webhook.ts";
 import { commitList, headCommit } from "./git.ts";
 import { settleJobTab } from "./herdr.ts";
-import { createClaudeStreamParser, createStreamParser, type StreamEvent } from "./stream.ts";
+import { createStreamParser, type StreamEvent } from "./stream.ts";
 
 const STOP_GRACE_MS = 5_000;
 const HOOK = fileURLToPath(new URL("../hook", import.meta.url));
@@ -86,26 +86,14 @@ export async function runInternalJob(): Promise<void> {
 			await finalizeJob(jobDir, "failed", reason, shutdownDeadline);
 		})();
 	};
-	// A role names a preamble; an engine names a binary. Both agents get the same preamble, the same
-	// worktree, and the same trust the README states — pi takes --approve, claude takes bypassPermissions.
-	const engine = process.env.LIMEN_ENGINE === "claude" ? "claude" : "pi";
-	const contextRoot = process.env.LIMEN_CONTEXT_ROOT ?? "";
 	const args: string[] = [];
-	if (engine === "claude") {
-		args.push("-p", (await readFile(taskFile, "utf8")).trim());
-		args.push("--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions", "--append-system-prompt", preamble);
-		if (contextRoot && contextRoot !== worktree) args.push("--add-dir", contextRoot);
-	} else {
-		args.push("--mode", "json", "--approve", "--no-extensions", "--session-dir", `${jobDir}/session`, "--name", `limen: ${label}`, "--append-system-prompt", preamble);
-		args.push("--extension", `${HOOK}/steering.ts`, "--extension", `${HOOK}/communication.ts`);
-	}
-	if (engine === "pi" && process.env.LIMEN_PROVIDER) args.push("--provider", process.env.LIMEN_PROVIDER);
+	args.push("--mode", "json", "--approve", "--no-extensions", "--session-dir", `${jobDir}/session`, "--name", `limen: ${label}`, "--append-system-prompt", preamble);
+	args.push("--extension", `${HOOK}/steering.ts`, "--extension", `${HOOK}/communication.ts`);
+	if (process.env.LIMEN_PROVIDER) args.push("--provider", process.env.LIMEN_PROVIDER);
 	if (process.env.LIMEN_MODEL) args.push("--model", process.env.LIMEN_MODEL);
-	if (engine === "pi") {
-		if (process.env.LIMEN_THINKING) args.push("--thinking", process.env.LIMEN_THINKING);
-		if (process.env.LIMEN_CONTINUE === "1") args.push("--continue", (await readFile(taskFile, "utf8")).trim());
-		else args.push(`@${taskFile}`);
-	}
+	if (process.env.LIMEN_THINKING) args.push("--thinking", process.env.LIMEN_THINKING);
+	if (process.env.LIMEN_CONTINUE === "1") args.push("--continue", (await readFile(taskFile, "utf8")).trim());
+	else args.push(`@${taskFile}`);
 	const childEnvironment: NodeJS.ProcessEnv = {
 		...process.env,
 		LIMEN_JOB: "1",
@@ -113,11 +101,11 @@ export async function runInternalJob(): Promise<void> {
 		LIMEN_JOB_LABEL: label,
 	};
 	const privateEnvironment =
-		"LIMEN_INTERNAL_RUN LIMEN_JOB_DIR LIMEN_WORKTREE LIMEN_TASK_FILE LIMEN_PREAMBLE LIMEN_TIMEOUT_MS LIMEN_MODEL LIMEN_PROVIDER LIMEN_THINKING LIMEN_LABEL LIMEN_ENGINE LIMEN_CLAUDE PI_SESSION_ID PI_SESSION_FILE PI_PROVIDER PI_MODEL PI_REASONING_LEVEL";
+		"LIMEN_INTERNAL_RUN LIMEN_JOB_DIR LIMEN_WORKTREE LIMEN_TASK_FILE LIMEN_PREAMBLE LIMEN_TIMEOUT_MS LIMEN_MODEL LIMEN_PROVIDER LIMEN_THINKING LIMEN_LABEL PI_SESSION_ID PI_SESSION_FILE PI_PROVIDER PI_MODEL PI_REASONING_LEVEL";
 	for (const name of privateEnvironment.split(" ")) delete childEnvironment[name];
 	// A detached job must not inherit the coordinator's Herdr pane.
 	for (const name of Object.keys(childEnvironment)) if (name.startsWith("HERDR_")) delete childEnvironment[name];
-	const parser = engine === "claude" ? createClaudeStreamParser() : createStreamParser();
+	const parser = createStreamParser();
 	const seen = { activity: "", assistant: "", stop: "" };
 	const failLog = (error: unknown) => appendLimenLog(jobDir, `log write failed: ${error instanceof Error ? error.message : String(error)}`).catch(() => {});
 	const apply = (events: readonly StreamEvent[]) => {
@@ -136,7 +124,7 @@ export async function runInternalJob(): Promise<void> {
 			)
 			.catch(failLog);
 	};
-	const child = spawn(engine === "claude" ? (process.env.LIMEN_CLAUDE ?? "claude") : (process.env.LIMEN_PI ?? "pi"), args, {
+	const child = spawn(process.env.LIMEN_PI ?? "pi", args, {
 		cwd: worktree,
 		stdio: ["ignore", "pipe", "pipe"],
 		env: childEnvironment,
@@ -155,7 +143,7 @@ export async function runInternalJob(): Promise<void> {
 	});
 	await writeHandshake(jobDir);
 	await atomicWrite(`${jobDir}/state`, "running\n");
-	await appendLimenLog(jobDir, engine === "claude" ? "worker started (claude)" : "worker started");
+	await appendLimenLog(jobDir, "worker started");
 	const timeout = setTimeout(() => exhaust(`timeout after ${timeoutMs}ms`), timeoutMs);
 	const result = await outcome;
 	clearTimeout(timeout);
@@ -174,7 +162,7 @@ export async function runInternalJob(): Promise<void> {
 	else if (result.code === 0) {
 		if (seen.assistant) await atomicWrite(`${jobDir}/result`, `${seen.assistant}\n`).catch(() => {});
 		const failedReason = isFailedStopReason(seen.stop) ? seen.stop : "";
-		await finalizeJob(jobDir, failedReason ? "failed" : "done", failedReason || `${engine} exited 0`);
+		await finalizeJob(jobDir, failedReason ? "failed" : "done", failedReason || "pi exited 0");
 	} else await finalizeJob(jobDir, "failed", `worker exited with code ${result.code ?? "unknown"}`);
 }
 export async function failInternalJob(error: unknown): Promise<void> {
@@ -224,8 +212,6 @@ async function recordEvents(jobDir: string, events: readonly StreamEvent[], next
 		} else if (event.kind === "activity") {
 			await atomicWrite(`${jobDir}/activity`, `${event.name}\n`);
 			if (seen.activity !== event.name) await appendFile(`${jobDir}/log`, `${(seen.activity = event.name)}\n`);
-		} else if (event.kind === "session") {
-			await atomicWrite(`${jobDir}/claude-session`, `${event.id}\n`);
 		} else if (event.kind === "assistant") {
 			seen.assistant = event.text;
 			seen.stop = event.stopReason ?? "";

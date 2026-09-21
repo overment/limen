@@ -38,7 +38,7 @@ Full setup, multi-target notes, deliberate retry, and troubleshooting: [docs/fin
 
 ## Trust boundary
 
-A spawned job runs `pi --approve` as you — or `claude -p --permission-mode bypassPermissions` when it runs on the Claude engine. A worktree and process group provide separation, not a security sandbox. A worker can do anything your account can do. Look at the branch before you merge. See [SECURITY.md](SECURITY.md).
+A spawned job runs `pi --approve` as you. A worktree and process group provide separation, not a security sandbox. A worker can do anything your account can do. Look at the branch before you merge. See [SECURITY.md](SECURITY.md).
 
 ## Install
 
@@ -63,7 +63,7 @@ pi --provider openai-codex --model gpt-6-astra --thinking xhigh
 
 `limen init` plants what the project owns (vision, board, feature lanes, styleguide) and a stub that loads package hooks. It never overwrites existing project files. It always deletes leftover `.pi/extensions/limen-*.ts` hook copies so they cannot load beside the stub. `limen init --drop-leftovers` deletes only prompt copies that still match the package.
 
-`pi` in that directory is the coordinator (`LIMEN_COORDINATOR=1`). From here you talk. You do not drive the job CLI. `limen spawn` starts workers, reviewers, and advisors — not a coordinator; the same env var on a spawn shell does not change the job's role. Prefer a Herdr space named for the plant (`limen`, or `alice limen`), not a space named only `workers`. Label the coordinator tab clearly. Worker tabs come from spawn. The inherited shop manual (`templates/agents.md`; a project `AGENTS.md` overlays it) carries the same layout rules.
+`pi` in that directory is the coordinator (`LIMEN_COORDINATOR=1`). From here you talk. You do not drive the job CLI. `limen spawn` starts workers and reviewers — not a coordinator; the same env var on a spawn shell does not change the job's role. Prefer a Herdr space named for the plant (`limen`, or `alice limen`), not a space named only `workers`. Label the coordinator tab clearly. Worker tabs come from spawn. The inherited shop manual (`templates/agents.md`; a project `AGENTS.md` overlays it) carries the same layout rules.
 
 ## How you work
 
@@ -74,8 +74,6 @@ A useful ask names the outcome and the first artifact, not a tour of the repo. T
 `done` means the run ended cleanly: Pi exited 0, or a hosted session ended, without a final `error` or `aborted` stop reason. A provider-errored run records `failed` with that reason. Neither state means the ticket is finished or the branch is safe to merge. The coordinator inspects the record, the diff, and the checks, then either merges, resumes a repair, or asks you.
 
 When the blast radius earns a second pair of eyes, the coordinator starts a fresh reviewer against the candidate. The reviewer reports a verdict; it does not rewrite the branch. You still merge.
-
-When the question is what to build rather than whether the branch is right — interface shape, feature specification, a second read on a decision — the coordinator can spawn an advisor on Claude instead of Pi: `limen spawn --role advisor --engine claude --detached`. It runs like any other detached job, in its own worktree, and its final message is a report the coordinator files. It advises; it never writes code, commits, or merges. A Claude job arrives with whatever MCP servers and skills your own `claude` install has, which is the point of reaching for it. It has no interactive tab and `limen steer` does not reach it.
 
 ## What the coordinator runs
 
@@ -133,16 +131,16 @@ export LIMEN_WORKER_MODEL="openai-codex/gpt-6-astra:high"
 When the worker must receive literal Pi arguments, pass all three through Limen:
 
 ```bash
-limen spawn --tab --engine pi \
+limen spawn --tab \
   --provider openai-codex --model gpt-6-astra --thinking high \
   --label "short worker task" 'Implement the requested slice.'
 ```
 
-`--provider`, `--model`, and `--thinking` reach Pi as separate flag/value pairs in both hosted and detached mode; use `--detached` instead of `--tab` for a background worker. `limen continue` accepts the same three flags. The existing combined `--model openai-codex/gpt-6-astra:high` form remains supported. Explicit `--thinking` takes precedence over a combined selector's thinking suffix in Pi. Provider and thinking flags are Pi-only; a Claude spawn rejects them before creating a job.
+`--provider`, `--model`, and `--thinking` reach Pi as separate flag/value pairs in both hosted and detached mode; use `--detached` instead of `--tab` for a background worker. `limen continue` accepts the same three flags. The existing combined `--model openai-codex/gpt-6-astra:high` form remains supported. Explicit `--thinking` takes precedence over a combined selector's thinking suffix in Pi.
 
 Precedence is `--model`, then `LIMEN_WORKER_MODEL`, then the package default. A requested `--review` uses `LIMEN_REVIEWER_MODEL` instead of `LIMEN_WORKER_MODEL`, with the same package fallback; neither variable starts a review. Adam performs reviews for Alice/Limen work, so do not spawn an independent reviewer unless asked. If requested, its model can be explicit or set with `export LIMEN_REVIEWER_MODEL="openai-codex/gpt-6-astra:high"`.
 
-The `--engine claude` path keeps its own CLI default unless `--model` is supplied. Pi's `PI_PROVIDER`, `PI_MODEL`, and `PI_REASONING_LEVEL` describe the current session; they do not configure a child Pi launch.
+Pi's `PI_PROVIDER`, `PI_MODEL`, and `PI_REASONING_LEVEL` describe the current session; they do not configure a child Pi launch.
 
 ## Adjacent-repository workspaces
 
@@ -182,7 +180,7 @@ The coordinator does this. You only need it if you are looking at a stuck tab yo
 limen init
 limen init --drop-leftovers
 limen workspace init
-limen spawn "instruction" [--label L] [--provider P] [--model M] [--thinking T] [--branch B] [--role NAME] [--engine pi|claude] [--timeout 20m] [--task-file F|-] [--prepare CMD]
+limen spawn "instruction" [--label L] [--provider P] [--model M] [--thinking T] [--branch B] [--role NAME] [--timeout 20m] [--task-file F|-] [--prepare CMD]
 limen spawn --repo R "instruction" [--label L] [--model M]
 limen spawn --review --branch B --label L "instruction"
 limen jobs [--running|--active|--all|--label PREFIX|<id|suffix|label>]

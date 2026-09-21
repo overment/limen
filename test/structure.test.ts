@@ -60,7 +60,6 @@ test("strict TypeScript and templates preserve the capability-judgment line", as
 	assert.doesNotMatch(sourceAndHook.join("\n"), /contentHash|watchdog|schema/);
 	assert.doesNotMatch((await Promise.all((await filesBelow(join(ROOT, "src"))).map((path) => readFile(path, "utf8")))).join("\n"), /registerCommand/);
 	assert.deepEqual((await readdir(join(ROOT, "templates/.history"))).sort(), [
-		"advisor.md",
 		"agents.md",
 		"communication.md",
 		"judge.md",
@@ -70,7 +69,7 @@ test("strict TypeScript and templates preserve the capability-judgment line", as
 		"reviewer.md",
 		"worker.md",
 	]);
-	for (const name of ["advisor.md", "agents.md", "communication.md", "judge.md", "picture.md", "quality.md", "researcher.md", "reviewer.md", "worker.md"]) {
+	for (const name of ["agents.md", "communication.md", "judge.md", "picture.md", "quality.md", "researcher.md", "reviewer.md", "worker.md"]) {
 		const text = await readFile(join(ROOT, "templates", name), "utf8");
 		const history = await readFile(join(ROOT, "templates/.history", name), "utf8");
 		assert.equal(
