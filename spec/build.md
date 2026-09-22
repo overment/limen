@@ -2,7 +2,7 @@
 
 ## TRACK
 
-- **Pi-only jobs (Adam 2026-09-20):** this VPS plant coordinator is the sole landing/board writer. Remove Claude Code as a Limen job engine. Merge + push when focused Pi-path tests and typecheck are clean. Adam reviews; no independent review lane unless he asks. Out of scope: GitHub doorbell, unusable-route refusal, living architecture picture, rewriting Alice/API plants. Do not remove Herdr advisoryCall pane helpers.
+- **Pi/OMP engine spec (Adam 2026-09-21):** this VPS plant coordinator is the sole landing/board writer. Deliver a spike plus engineering spec for interchangeable `pi`/`omp` behind one flag and a tiny profile table — no Claude-style dual harness. Do not land a full engine on main unless the spike is trivial and the spec says implement-now. Adam reviews. Out of scope: doorbell, unusable-route, restoring Claude.
 - **Wave model (Adam 2026-09-20):** Codex still unavailable. Every spawn and continue uses `--provider xai --model grok-4.6 --thinking xhigh`. No silent substitution.
 - **Ops remediation lock 2026-09-10 (Adam):** two unsuccessful automatic wake attempts then deliberate recovery; park-and-preserve on quota — no silent model substitution. Named-job `limen watch <id>` for takeovers — not `watch --running`.
 - **Finish proof (Adam):** HTTP ≠ bot turn. VPS-first, Johnny-only automatic finish proof is sufficient; an export hold is unobserved evidence, never absence of an actual turn; no Tony coordination.
@@ -13,7 +13,7 @@
 
 ## NOW
 
-- Limen runs jobs on Pi only. Claude engine removed `14c99d9`.
+- Pi/OMP interchangeable-engine spec. Spike first; no full engine on main unless the spec says implement-now.
 
 ## NEXT
 
