@@ -17,12 +17,15 @@
 
 ## NEXT
 
-- GitHub doorbell next, solid partial over half-broken; unusable-route refusal and living architecture picture stay parked.
+- GitHub doorbell remains the next product feature, solid partial over half-broken; quality follow-ups are planned, not started.
+- `F728-hosted-engine-liveness` (🔴 PLANNED): keep a hosted OMP process live when Herdr loses its classification; reproduce the fallback gap before changing recovery.
+- `F729-continuation-publication` (🔴 PLANNED): publish continuation records safely against concurrent prune without adding workflow state.
+- `F730-job-guidance-matches-engines` (🔴 PLANNED): make job logs and guidance reflect the selected engine and available evidence.
 
 ## PARKED
 
 - `F081-spawn-refuses-an-unusable-route` (🔴 PLANNED): still waiting for a Pi-supported non-generating route probe. Rechecked installed Pi 0.84.2 on 2026-09-19: `auth check` still proves credentials only; model runtime has stream/complete, no exact-route validation. Failing candidate `b14b5fe` stays locked; no auth/catalog substitution. Hosted continuation file transport already landed.
-- `F050-living-architecture-picture` (🔴 PLANNED): proposal for a background field guide, not a landing slice in this wave.
+- `F050-living-architecture-picture` (🔴 PLANNED): background field-guide proposal remains parked; the stale existing picture is recorded in the latest quality findings, not refreshed by this wave.
 - `F014-github-doorbell` (🔴 PLANNED): after this subtraction plate; GitHub is ingress, not a second coordinator.
 
 ## DROPPED
@@ -33,7 +36,6 @@
 ## PROVEN
 
 - `F727-pi-omp-interchangeable-engine` (🟢 PROVEN): Pi or OMP jobs use one profile table, wrapper, and unchanged parser; continuation preserves the engine. Landed `0f74748`; coordinator checks 72/72, typecheck and Biome clean. Live hosted OMP and live OMP continuation remain unproved.
-
 - `F726-limen-runs-jobs-on-pi-only` (🟢 PROVEN): Limen starts jobs only with Pi. Landed `14c99d9`; native 453/453. `--engine claude` and `--role advisor` fail before any job exists.
 - `F725-stale-intent-prose-matches-landed-reality` (🟢 PROVEN): vision and TRACK no longer treat spawn, reaper, seat, or research/quality/picture as still ahead. Landed `3723740`. Typecheck clean. Wake/Herdr not split: `src/` 4219/4280.
 - `F723-tests-stop-owning-prompt-prose` (🟢 PROVEN): tests no longer inventory unique sentences from shop manual, register, or role preambles. Landed `e030714`. Native 456/456.
