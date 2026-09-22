@@ -1,10 +1,10 @@
 # Pi and OMP share one engine profile
 
-Adam can run Limen jobs on Pi or OMP behind one flag, without a second wrapper or stream parser. The next slice lands that flag; this survey does not.
+Adam can run Limen jobs on Pi or OMP behind one flag, without a second wrapper or stream parser. Implement-now: land the profile table and `--engine omp` on VPS main.
 
 ## Recommendation
 
-Ship a profile table. The JSON event types Limen already parses (`tool_execution_start`/`end`, `message_end`, `agent_start`, `turn_start`, `message_start`, `message_update`) landed with the same field names on pi 0.84.2 and omp 18.2.9; extras (`agent_settled`, `advisor_cost_changed`) are already ignored. Do not add a Claude-style dual harness. Fill argv from a tiny table (binary, Herdr kind, drop `--name`, Pi `--approve` vs OMP `--auto-approve`). Continue must copy the parent engine and refuse a cross-engine resume — session jsonl headers already diverge. Auth stores are separate (the spike had to inject Pi's xAI OAuth into `XAI_OAUTH_TOKEN` for omp). Not implement-now.
+Ship a profile table. The JSON event types Limen already parses (`tool_execution_start`/`end`, `message_end`, `agent_start`, `turn_start`, `message_start`, `message_update`) landed with the same field names on pi 0.84.2 and omp 18.2.9; extras (`agent_settled`, `advisor_cost_changed`) are already ignored. Do not add a Claude-style dual harness. Fill argv from a tiny table (binary, Herdr kind, drop `--name`, Pi `--approve` vs OMP `--auto-approve`). Continue must copy the parent engine and refuse a cross-engine resume — session jsonl headers already diverge. Auth stores are separate (the spike had to inject Pi's xAI OAuth into `XAI_OAUTH_TOKEN` for omp). Adam authorized implementation and landing onto main.
 
 ## Profile
 
@@ -49,7 +49,7 @@ Shared: `src/stream.ts` (parser unchanged). Profile-only: new `src/engine.ts` (t
 
 ## Acceptance
 
-- Next slice: `limen spawn --engine omp` uses one wrapper, one parser, argv from the table.
+- `limen spawn --engine omp` uses one wrapper, one parser, argv from the table.
 - `limen spawn --engine claude` still fails before a job exists.
 - Detached omp argv includes `--mode json --auto-approve --no-extensions --no-title --session-dir --append-system-prompt --extension` and never `--approve` or `--name`.
 - Continue of an omp job launches omp with the copied jsonl; `--engine pi` on an omp parent fails closed.
@@ -57,7 +57,7 @@ Shared: `src/stream.ts` (parser unchanged). Profile-only: new `src/engine.ts` (t
 
 ## Non-goals
 
-Implementing `--engine omp` here. Restoring Claude or a second wrapper/parser. Merging `~/.pi` and `~/.omp` credentials. RPC/ACP, doorbell, unusable-route refusal.
+Restoring Claude or a second wrapper/parser. Merging `~/.pi` and `~/.omp` credentials. RPC/ACP, doorbell, unusable-route refusal.
 
 ## Risks
 

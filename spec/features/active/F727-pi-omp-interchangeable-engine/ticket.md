@@ -2,29 +2,31 @@
 
 ## Outcome
 
-Adam can approve an engineering spec for running Limen jobs on Pi or OMP behind one flag, without a Claude-style dual harness. No engine implementation lands unless the spike is trivial and this spec says implement-now.
+Adam can run Limen jobs on Pi or OMP behind one flag, one wrapper, and one stream parser. Implement-now: land the shared engine profile table and allow `--engine omp` on VPS main; the spike established that no second parser is needed.
 
 ## Scope
 
-- Spike: identical tiny prompts under installed `pi` and `omp` (`-p --mode json` or the documented print/json equivalent). Diff argv, JSON event stream, and session files. Verdict: shared parser OK, adapter needed, or incompatible.
-- Spec: public flag/env (`--engine pi|omp` and/or `LIMEN_ENGINE`), profile table fields, exact argv mapping, stream handling, preflight/auth, continue/resume, docs/tests, non-goals.
-- Change list: Limen files to touch, shared vs profile-only, acceptance, risks (Herdr, sessions, models).
-- Recommendation: one paragraph — ship profile table, need event adapter, or not worth it yet.
-
-Write the notes and spec in this feature folder. Do not merge a full engine onto main.
+- Start in `src/engine.ts` with the profile table and `argvFor` defined by `spec.md`; both detached and hosted launches consume it.
+- Spawn accepts `--engine pi|omp`, falls back to `LIMEN_ENGINE` then Pi, persists the selected engine, and records its binary version.
+- OMP preflight checks PATH only; Pi retains its optional auth check, and unsupported engines fail before creating a job.
+- Continuation copies the parent engine and session, launches the same profile, and refuses a conflicting `--engine`.
+- Document engine selection and separate Pi/OMP auth stores; retain `interpret()` and `src/stream.ts` unchanged.
 
 ## Out of scope
 
-- Implementing `--engine omp` on main unless the spike is trivial and the spec says implement-now.
-- Restoring Claude. GitHub doorbell. Unusable-route refusal.
+- A second wrapper or stream parser, or restoring Claude.
+- Merging `~/.pi` and `~/.omp` credentials or adding OMP auth probes.
+- Live hosted OMP proof unless trivial; GitHub doorbell and unusable-route refusal.
 
 ## Acceptance
 
-- Spike notes name the commands run, the event-type overlap, and a clear parser verdict.
-- Spec lists profile fields and argv mapping a worker could implement without inventing a second wrapper.
-- Recommendation is one of the three options, with the spike as evidence.
-- Typecheck clean; no required runtime change.
+- Spawn tests show OMP is accepted and Claude fails before any job exists.
+- Detached OMP argv uses `--mode json`, `--auto-approve`, and `--no-title`, never Pi's `--approve` or `--name`.
+- Hosted launches omit JSON mode and select Herdr's profile-specific kind.
+- Continuation tests show an OMP parent keeps its engine and copied session, while an explicit Pi override is rejected.
+- Stream tests show unknown extra event types emit no events without a parser change.
+- Focused spawn/wrapper/continue/stream tests and typecheck pass on the committed candidate.
 
 ## Notes
 
-OMP docs: https://omp.sh/docs (cli, rpc, sdk, providers). Repo: can1357/oh-my-pi. Current Limen launch (wrapper): `pi --mode json --approve --no-extensions --session-dir … --name … --append-system-prompt …` plus provider/model/thinking; binary `LIMEN_PI` / `pi`. Stream parser keys: `tool_execution_start`, `tool_execution_end`, `message_end`, `agent_start`, `turn_start`, `message_start`, `message_update`.
+The profile fields and exact argv mapping in `spec.md` are authoritative. `spike.md` records observed compatibility and the remaining live hosted/continuation risks. The coordinator owns the board, landing onto main, and pushing origin/main.

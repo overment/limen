@@ -1,6 +1,6 @@
 # F727 spike
 
-Parser verdict: **shared parser OK**. Ship a profile table. Not implement-now.
+Parser verdict: **shared parser OK**. Ship a profile table. This spike supplied evidence only; the implementation decision lives in `spec.md`.
 
 Binaries: `pi` 0.84.2 (`@earendil-works/pi-coding-agent`), `omp` 18.2.9 (`@oh-my-pi/pi-coding-agent`, installed this job via `curl https://omp.sh/install`). Docs read: omp `docs/cli-reference.md`, `docs/extensions.md`, `docs/session.md`, `docs/approval-mode.md`, `docs/porting-from-pi-mono.md`; pi `docs/json.md`. omp `docs/stream.md` is livestreaming, not JSONL.
 

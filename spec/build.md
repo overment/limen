@@ -2,7 +2,7 @@
 
 ## TRACK
 
-- **Pi/OMP engine spec (Adam 2026-09-21):** this VPS plant coordinator is the sole landing/board writer. Deliver a spike plus engineering spec for interchangeable `pi`/`omp` behind one flag and a tiny profile table — no Claude-style dual harness. Do not land a full engine on main unless the spike is trivial and the spec says implement-now. Adam reviews. Out of scope: doorbell, unusable-route, restoring Claude.
+- **Pi/OMP engines (Adam 2026-09-22):** implement-now; this VPS plant coordinator owns the board and may land the tested profile table onto main and push origin/main. One flag, one wrapper, one unchanged parser; separate auth stores. No independent reviewer; Adam retains review ownership. Out of scope: live hosted OMP proof unless trivial, doorbell, unusable-route, restoring Claude.
 - **Wave model (Adam 2026-09-20):** Codex still unavailable. Every spawn and continue uses `--provider xai --model grok-4.6 --thinking xhigh`. No silent substitution.
 - **Ops remediation lock 2026-09-10 (Adam):** two unsuccessful automatic wake attempts then deliberate recovery; park-and-preserve on quota — no silent model substitution. Named-job `limen watch <id>` for takeovers — not `watch --running`.
 - **Finish proof (Adam):** HTTP ≠ bot turn. VPS-first, Johnny-only automatic finish proof is sufficient; an export hold is unobserved evidence, never absence of an actual turn; no Tony coordination.
@@ -13,7 +13,7 @@
 
 ## NOW
 
-- Pi/OMP engine spec ready for Adam. Shared parser OK; ship a profile table; not implement-now. Spec: `spec/features/active/F727-pi-omp-interchangeable-engine/spec.md`.
+- `F727-pi-omp-interchangeable-engine` (🟠 ACTIVE): land Pi/OMP engine selection through one profile table; focused tests and typecheck earn landing. Spec: `spec/features/active/F727-pi-omp-interchangeable-engine/spec.md`.
 
 ## NEXT
 
