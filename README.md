@@ -38,7 +38,7 @@ Full setup, multi-target notes, deliberate retry, and troubleshooting: [docs/fin
 
 ## Trust boundary
 
-A spawned job runs `pi --approve` as you. A worktree and process group provide separation, not a security sandbox. A worker can do anything your account can do. Look at the branch before you merge. See [SECURITY.md](SECURITY.md).
+A spawned Pi job runs `pi --approve` as you; an OMP job runs `omp --auto-approve`. A worktree and process group provide separation, not a security sandbox. A worker can do anything your account can do. Look at the branch before you merge. See [SECURITY.md](SECURITY.md).
 
 ## Install
 
@@ -142,6 +142,8 @@ Precedence is `--model`, then `LIMEN_WORKER_MODEL`, then the package default. A 
 
 Pi's `PI_PROVIDER`, `PI_MODEL`, and `PI_REASONING_LEVEL` describe the current session; they do not configure a child Pi launch.
 
+`--engine pi|omp` selects the job binary (default `pi`, or `LIMEN_ENGINE` when the flag is omitted). Continue copies the parent engine and refuses a different `--engine`. Pi and OMP keep separate auth stores (`~/.pi`, `~/.omp`); authenticate OMP yourself. One wrapper and one stream parser serve both.
+
 ## Adjacent-repository workspaces
 
 A non-Git parent can hold several independent Git children. You initialize once at the parent (`limen workspace init`) and map the children in `spec/workspace.md`. After that, tell the coordinator which repo the work belongs in. It passes exactly one `--repo` per job. Tickets stay under the parent; branches, worktrees, diffs, and review stay in the selected child.
@@ -180,7 +182,7 @@ The coordinator does this. You only need it if you are looking at a stuck tab yo
 limen init
 limen init --drop-leftovers
 limen workspace init
-limen spawn "instruction" [--label L] [--provider P] [--model M] [--thinking T] [--branch B] [--role NAME] [--timeout 20m] [--task-file F|-] [--prepare CMD]
+limen spawn "instruction" [--label L] [--engine pi|omp] [--provider P] [--model M] [--thinking T] [--branch B] [--role NAME] [--timeout 20m] [--task-file F|-] [--prepare CMD]
 limen spawn --repo R "instruction" [--label L] [--model M]
 limen spawn --review --branch B --label L "instruction"
 limen jobs [--running|--active|--all|--label PREFIX|<id|suffix|label>]

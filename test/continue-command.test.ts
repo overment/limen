@@ -313,6 +313,30 @@ test("continue --detached stays a wrapper even in Herdr", async (context) => {
 	assert.equal(argv.includes("--mode"), true);
 });
 
+test("continue copies the parent engine and refuses a conflicting --engine", async (context) => {
+	const scratch = await scratchRepo(continuingFakePi);
+	context.after(scratch.cleanup);
+	assert.equal(limen(scratch, "init").status, 0);
+	const parent = onlyJobId(limen(scratch, "spawn", "--engine", "omp", "--label", "F727 omp", "first slice").stdout);
+	await waitForState(scratch.root, parent, "done");
+	const launched = limen(scratch, "continue", parent, "now refine the seam");
+	assert.equal(launched.status, 0, launched.stderr);
+	const id = onlyJobId(launched.stdout);
+	await waitForState(scratch.root, id, "done");
+	const job = join(scratch.root, ".limen/jobs", id);
+	assert.equal(await readFile(join(job, "engine"), "utf8"), "omp\n");
+	assert.equal(await readFile(join(job, "versions"), "utf8"), "omp 0.0.0-test\n");
+	const argv = JSON.parse(await readFile(join((await readFile(join(job, "worktree"), "utf8")).trim(), "pi-args.json"), "utf8")) as string[];
+	assert.equal(argv.includes("--auto-approve"), true);
+	assert.equal(argv.includes("--continue"), true);
+	assert.equal(argv.includes("--approve"), false);
+	const before = await readdir(join(scratch.root, ".limen/jobs"));
+	const refused = limen(scratch, "continue", "--engine", "pi", parent, "switch engines");
+	assert.equal(refused.status, 1);
+	assert.match(refused.stderr, /continue --engine pi does not match parent engine omp/);
+	assert.deepEqual(await readdir(join(scratch.root, ".limen/jobs")), before);
+});
+
 test("LIMEN_PREFLIGHT=auth fails continue with no record", async (context) => {
 	const scratch = await scratchRepo(continuingFakePi);
 	context.after(scratch.cleanup);

@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import { appendFile, open, readdir, readFile, rename, rm } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { containEscapedDescendants, discoverEscapedDescendants, processAlive, processInfo, signalProcessGroup } from "./contain.ts";
+import { argvFor, engineBinary, jobProfile } from "./engine.ts";
 import { deliverFinishWebhook } from "./finish-webhook.ts";
 import { commitList, headCommit } from "./git.ts";
 import { settleJobTab } from "./herdr.ts";
@@ -86,14 +87,18 @@ export async function runInternalJob(): Promise<void> {
 			await finalizeJob(jobDir, "failed", reason, shutdownDeadline);
 		})();
 	};
-	const args: string[] = [];
-	args.push("--mode", "json", "--approve", "--no-extensions", "--session-dir", `${jobDir}/session`, "--name", `limen: ${label}`, "--append-system-prompt", preamble);
-	args.push("--extension", `${HOOK}/steering.ts`, "--extension", `${HOOK}/communication.ts`);
-	if (process.env.LIMEN_PROVIDER) args.push("--provider", process.env.LIMEN_PROVIDER);
-	if (process.env.LIMEN_MODEL) args.push("--model", process.env.LIMEN_MODEL);
-	if (process.env.LIMEN_THINKING) args.push("--thinking", process.env.LIMEN_THINKING);
-	if (process.env.LIMEN_CONTINUE === "1") args.push("--continue", (await readFile(taskFile, "utf8")).trim());
-	else args.push(`@${taskFile}`);
+	const profile = await jobProfile(jobDir);
+	const args = argvFor(profile, {
+		jsonMode: true,
+		jobDir,
+		label,
+		preamble,
+		extensions: [`${HOOK}/steering.ts`, `${HOOK}/communication.ts`],
+		...(process.env.LIMEN_PROVIDER ? { provider: process.env.LIMEN_PROVIDER } : {}),
+		...(process.env.LIMEN_MODEL ? { model: process.env.LIMEN_MODEL } : {}),
+		...(process.env.LIMEN_THINKING ? { thinking: process.env.LIMEN_THINKING } : {}),
+		...(process.env.LIMEN_CONTINUE === "1" ? { continueValue: (await readFile(taskFile, "utf8")).trim() } : { taskFile }),
+	});
 	const childEnvironment: NodeJS.ProcessEnv = {
 		...process.env,
 		LIMEN_JOB: "1",
@@ -124,7 +129,7 @@ export async function runInternalJob(): Promise<void> {
 			)
 			.catch(failLog);
 	};
-	const child = spawn(process.env.LIMEN_PI ?? "pi", args, {
+	const child = spawn(engineBinary(profile), args, {
 		cwd: worktree,
 		stdio: ["ignore", "pipe", "pipe"],
 		env: childEnvironment,

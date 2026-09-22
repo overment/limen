@@ -19,6 +19,12 @@ test("json events become a human log and last-tool names", () => {
 	assert.deepEqual(parser.flush(), []);
 });
 
+test("unknown extra event types emit no events", () => {
+	const parser = createStreamParser();
+	assert.deepEqual(parser.push('{"type":"agent_settled"}\n{"type":"advisor_cost_changed"}\n{"type":"turn_end"}\n'), []);
+	assert.deepEqual(parser.flush(), []);
+});
+
 test("assistantStopReason keeps only error and aborted", () => {
 	assert.equal(assistantStopReason({ role: "assistant", stopReason: "error", errorMessage: "usage limit reached" }), "error: usage limit reached");
 	assert.equal(assistantStopReason({ role: "assistant", stopReason: "aborted" }), "aborted");

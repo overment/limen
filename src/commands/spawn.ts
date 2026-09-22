@@ -5,6 +5,7 @@ import { mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promise
 import { basename, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { signalProcessGroup, waitForProcessGroup } from "../contain.ts";
+import { type EngineProfile, engineBinary, preflightEngine, resolveSpawnEngine } from "../engine.ts";
 import { captureFinishAuthor, finishWebhookEnv } from "../finish-webhook.ts";
 import {
 	addBranchWorktree,
@@ -50,14 +51,6 @@ export function resolvePreamble(root: string, role: string): string {
 }
 export const HOSTED_NOTE =
 	"Hosted job: weaker guarantees. No 90-minute timeout, no tool-call cap, no F007 process containment. Herdr owns the process tree. Closing the tab ends the worker.\n";
-export function preflightPi(model?: string, provider?: string): void {
-	if (!(process.env.PATH ?? "").split(":").some((dir) => dir && existsSync(`${dir}/pi`))) throw new Error("pi is not on PATH");
-	if (process.env.LIMEN_PREFLIGHT !== "auth") return;
-	const result = spawnSync(process.env.LIMEN_PI || "pi", ["auth", "check", ...(provider ? ["--provider", provider] : []), ...(model ? ["--model", model] : [])], {
-		encoding: "utf8",
-	});
-	if (result.status !== 0) throw new Error((result.stderr || result.stdout || result.error?.message || "pi auth check failed").trim() || "pi auth check failed");
-}
 type WorktreePlan =
 	| { readonly kind: "detach"; readonly path: string; readonly ref: string }
 	| { readonly kind: "reuse"; readonly path: string }
@@ -74,9 +67,10 @@ export async function spawnCommand(args: readonly string[], cwd: string): Promis
 	if (tab && !herdr) throw new Error("hosted spawn requires Herdr (HERDR_ENV=1); use --detached for an ordinary job");
 	const loaded = await readSpawnTask(parsed.task, parsed.taskFile, cwd);
 	const options = { ...parsed, tab, task: loaded.text, label: parsed.label ?? (loaded.text.trim().split(/\r?\n/, 1)[0]?.trim().slice(0, 80) || "job") };
-	const engine = options.engine ?? "pi";
+	const profile = resolveSpawnEngine(options.engine);
+	const engine = profile.id;
 	const model = options.model ?? (process.env[options.review ? "LIMEN_REVIEWER_MODEL" : "LIMEN_WORKER_MODEL"]?.trim() || "openai-codex/gpt-6-astra:high");
-	preflightPi(model, options.provider);
+	preflightEngine(profile, model, options.provider);
 	const notificationSession = currentNotificationSession();
 	const coordinatorTab = process.env.HERDR_TAB_ID?.trim();
 	const workspace = workspaceRoot(cwd);
@@ -168,7 +162,7 @@ export async function spawnCommand(args: readonly string[], cwd: string): Promis
 		await rm(jobDir, { recursive: true, force: true });
 		throw error;
 	}
-	const versions = capturedVersions().then((text) => writeFile(`${jobDir}/versions`, text, { flag: "wx", flush: true }));
+	const versions = capturedVersions(profile).then((text) => writeFile(`${jobDir}/versions`, text, { flag: "wx", flush: true }));
 	await atomicWrite(`${jobDir}/state`, "running\n");
 	if (options.tab) {
 		await startHosted({
@@ -343,7 +337,6 @@ function parseSpawnArgs(args: readonly string[]): SpawnOptions {
 				if (!/^[a-z][a-z0-9-]*$/.test(role)) throw new Error("--role must be a lowercase name");
 			} else if (value === "--engine") {
 				engine = once(engine, value, optionValue.trim());
-				if (engine !== "pi") throw new Error("--engine must be pi");
 			} else timeoutMs = once(timeoutMs, value, parseDuration(optionValue));
 		} else task.push(value);
 	}
@@ -393,13 +386,13 @@ function probeVersion(command: string): Promise<string> {
 		child.once("error", () => done("")).once("close", (code) => done(code === 0 ? (out.trim().split("\n")[0] ?? "") : ""));
 	});
 }
-export async function capturedVersions(): Promise<string> {
+export async function capturedVersions(profile: EngineProfile): Promise<string> {
 	const herdr = process.env.LIMEN_HERDR?.trim();
 	const hunk = hunkBinary();
-	const pi = (await probeVersion(process.env.LIMEN_PI || "pi")) || "unavailable";
+	const version = (await probeVersion(engineBinary(profile) || profile.binaryDefault)) || "unavailable";
 	const extra = herdr !== "0" && (await probeVersion(herdr || "herdr"));
 	const hunkVersion = hunk && (await probeVersion(hunk));
-	return `pi ${pi}\n${extra ? `herdr ${extra}\n` : ""}${hunkVersion ? `hunk ${hunkVersion}\n` : ""}`;
+	return `${profile.id} ${version}\n${extra ? `herdr ${extra}\n` : ""}${hunkVersion ? `hunk ${hunkVersion}\n` : ""}`;
 }
 function workspaceTask(task: string, root: string, repo: string): string {
 	const pointer = task.replace(/\bTicket: (spec\/\S+)/g, (_all, path: string) => `Ticket: ${root}/${path}`);

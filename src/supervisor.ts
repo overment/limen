@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
+import { argvFor, jobProfile } from "./engine.ts";
 import { cleanWorktree } from "./git.ts";
 import {
 	type HerdrPlace,
@@ -136,26 +137,23 @@ async function startHostedAgent(jobDir: string): Promise<string | undefined> {
 	const place: HerdrPlace = { workspace, tab, pane, mode: "hosted" };
 	const taskFile = requiredEnvironment("LIMEN_TASK_FILE");
 	const continueFile = process.env.LIMEN_CONTINUE_FILE?.trim();
-	const extensions = ["hosted", "steering", "communication"].flatMap((name) => ["--extension", `${PACKAGE_ROOT}/hook/${name}.ts`]);
-	const args = [
-		"--approve",
-		"--no-extensions",
-		"--session-dir",
-		`${jobDir}/session`,
-		"--name",
-		`limen: ${requiredEnvironment("LIMEN_LABEL")}`,
-		"--append-system-prompt",
-		requiredEnvironment("LIMEN_PREAMBLE"),
-		...extensions,
-		...(process.env.LIMEN_PROVIDER ? ["--provider", process.env.LIMEN_PROVIDER] : []),
-		...(process.env.LIMEN_MODEL ? ["--model", process.env.LIMEN_MODEL] : []),
-		...(process.env.LIMEN_THINKING ? ["--thinking", process.env.LIMEN_THINKING] : []),
-		...(continueFile ? ["--continue", `@${continueFile}`] : [`@${taskFile}`]),
-	];
+	const profile = await jobProfile(jobDir);
+	const args = argvFor(profile, {
+		jsonMode: false,
+		jobDir,
+		label: requiredEnvironment("LIMEN_LABEL"),
+		preamble: requiredEnvironment("LIMEN_PREAMBLE"),
+		extensions: ["hosted", "steering", "communication"].map((name) => `${PACKAGE_ROOT}/hook/${name}.ts`),
+		...(process.env.LIMEN_PROVIDER ? { provider: process.env.LIMEN_PROVIDER } : {}),
+		...(process.env.LIMEN_MODEL ? { model: process.env.LIMEN_MODEL } : {}),
+		...(process.env.LIMEN_THINKING ? { thinking: process.env.LIMEN_THINKING } : {}),
+		...(continueFile ? { continueValue: `@${continueFile}` } : { taskFile }),
+	});
 	try {
 		const target = startHostedPi({
 			place,
 			name: requiredEnvironment("LIMEN_AGENT_NAME"),
+			kind: profile.herdrKind,
 			args,
 			timeoutMs: hostedStartMs(),
 			...(coordinatorTab ? { coordinatorTab } : {}),

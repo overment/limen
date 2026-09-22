@@ -50,6 +50,7 @@ export async function openHostedTab(input: {
 export function startHostedPi(input: {
 	readonly place: HerdrPlace;
 	readonly name: string;
+	readonly kind: string;
 	readonly args: readonly string[];
 	readonly timeoutMs?: number;
 	readonly coordinatorTab?: string;
@@ -72,7 +73,11 @@ export function startHostedPi(input: {
 			assertHostedStartActive(input.stopped);
 			input.log?.(`hosted agent start attempt ${attempt}`);
 			try {
-				const started = call(herdr, ["agent", "start", input.name, "--kind", "pi", "--pane", input.place.pane, "--timeout", String(readyMs), "--", ...input.args], readyMs + 250);
+				const started = call(
+					herdr,
+					["agent", "start", input.name, "--kind", input.kind, "--pane", input.place.pane, "--timeout", String(readyMs), "--", ...input.args],
+					readyMs + 250,
+				);
 				return agentTarget(started) || input.place.pane;
 			} catch (error) {
 				failed = error;

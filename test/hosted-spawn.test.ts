@@ -616,6 +616,33 @@ test("hosted spawn and continuation forward literal Pi launch flags", async (con
 	}
 });
 
+test("hosted omp spawn uses Herdr kind omp and omits json mode", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	assert.equal(limen(scratch, "init").status, 0);
+	const herdr = await installHostedFakeHerdr(scratch.root, scratch.fakeBin);
+	const env = { HERDR_ENV: "1", LIMEN_HERDR: herdr.bin, FAKE_HERDR_STATE: herdr.dir };
+	const launched = limenWithEnv(scratch, env, "spawn", "--tab", "--engine", "omp", "first slice");
+	assert.equal(launched.status, 0, launched.stderr);
+	const id = onlyJobId(launched.stdout);
+	await waitForState(scratch.root, id, "done");
+	assert.equal(await readFile(join(scratch.root, ".limen/jobs", id, "engine"), "utf8"), "omp\n");
+	const starts = (await readFile(join(herdr.dir, "argv"), "utf8"))
+		.trim()
+		.split("\n")
+		.map((line) => JSON.parse(line) as string[])
+		.filter((args) => args[0] === "agent" && args[1] === "start");
+	assert.equal(starts.length, 1);
+	const args = starts[0] ?? [];
+	assert.equal(args[args.indexOf("--kind") + 1], "omp");
+	const engineArgs = args.slice(args.indexOf("--") + 1);
+	assert.equal(engineArgs.includes("--mode"), false);
+	assert.equal(engineArgs.includes("--auto-approve"), true);
+	assert.equal(engineArgs.includes("--no-title"), true);
+	assert.equal(engineArgs.includes("--approve"), false);
+	assert.equal(engineArgs.includes("--name"), false);
+});
+
 test("hosted spawn and continuation keep quoted multiline tasks out of shell arguments", async (context) => {
 	const scratch = await scratchRepo();
 	context.after(scratch.cleanup);
@@ -1185,7 +1212,7 @@ if (args[0] === "pane" && args[1] === "process-info") {
 } else process.exit(1);
 `,
 		() => {
-			assert.throws(() => startHostedPi({ place: { workspace: "w1", tab: "w1:t1", pane: "w1:p1", mode: "hosted" }, name: "limen-same", args: ["--approve"] }));
+			assert.throws(() => startHostedPi({ place: { workspace: "w1", tab: "w1:t1", pane: "w1:p1", mode: "hosted" }, name: "limen-same", kind: "pi", args: ["--approve"] }));
 		},
 	);
 });

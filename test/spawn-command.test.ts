@@ -523,23 +523,69 @@ console.log(JSON.stringify({ type: "message_end", message: { role: "assistant", 
 	assert.match(await readFile(join(scratch.root, ".limen/jobs", id, "log"), "utf8"), /prepare: touch prepared/);
 });
 
-test("spawn refuses --engine claude and an unknown engine, and has no advisor role", async (context) => {
+test("spawn accepts --engine omp and LIMEN_ENGINE, and refuses claude before a job exists", async (context) => {
 	const scratch = await scratchRepo();
 	context.after(scratch.cleanup);
 	assert.equal(limen(scratch, "init").status, 0);
+	const launched = limen(scratch, "spawn", "--engine", "omp", "--detached", "--label", "omp job", "do work");
+	assert.equal(launched.status, 0, launched.stderr);
+	const id = onlyJobId(launched.stdout);
+	await waitForState(scratch.root, id, "done");
+	const job = join(scratch.root, ".limen/jobs", id);
+	assert.equal(await readFile(join(job, "engine"), "utf8"), "omp\n");
+	assert.equal(await readFile(join(job, "versions"), "utf8"), "omp 0.0.0-test\n");
+	const worktree = (await readFile(join(job, "worktree"), "utf8")).trim();
+	const argv = JSON.parse(await readFile(join(worktree, "pi-args.json"), "utf8")) as string[];
+	assert.equal(argv[argv.indexOf("--mode") + 1], "json");
+	assert.equal(argv.includes("--auto-approve"), true);
+	assert.equal(argv.includes("--no-title"), true);
+	assert.equal(argv.includes("--approve"), false);
+	assert.equal(argv.includes("--name"), false);
+	const fromEnv = limenWithEnv(scratch, { LIMEN_ENGINE: "omp" }, "spawn", "--detached", "--label", "env omp", "do work");
+	assert.equal(fromEnv.status, 0, fromEnv.stderr);
+	const envId = onlyJobId(fromEnv.stdout);
+	await waitForState(scratch.root, envId, "done");
+	assert.equal(await readFile(join(scratch.root, ".limen/jobs", envId, "engine"), "utf8"), "omp\n");
+	const override = limenWithEnv(scratch, { LIMEN_ENGINE: "omp" }, "spawn", "--engine", "pi", "--detached", "--label", "flag wins", "do work");
+	assert.equal(override.status, 0, override.stderr);
+	const overrideId = onlyJobId(override.stdout);
+	await waitForState(scratch.root, overrideId, "done");
+	assert.equal(await readFile(join(scratch.root, ".limen/jobs", overrideId, "engine"), "utf8"), "pi\n");
 	for (const args of [
 		["--engine", "claude", "--detached", "do work"],
 		["--engine", "gpt", "look"],
 	]) {
-		const launched = limen(scratch, "spawn", ...args);
-		assert.equal(launched.status, 1);
-		assert.match(launched.stderr, /--engine must be pi/);
+		const refused = limen(scratch, "spawn", ...args);
+		assert.equal(refused.status, 1);
+		assert.match(refused.stderr, /--engine must be pi or omp/);
 	}
 	const advisor = limen(scratch, "spawn", "--role", "advisor", "--detached", "look");
 	assert.equal(advisor.status, 1);
 	assert.match(advisor.stderr, /no preamble for role advisor/);
+	const envClaude = limenWithEnv(scratch, { LIMEN_ENGINE: "claude" }, "spawn", "--detached", "look");
+	assert.equal(envClaude.status, 1);
+	assert.match(envClaude.stderr, /--engine must be pi or omp/);
+	assert.equal((await readdir(join(scratch.root, ".limen/jobs"))).length, 3);
+});
+
+test("spawn --engine omp fails before a job exists when omp is missing", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	assert.equal(limen(scratch, "init").status, 0);
+	await rm(join(scratch.fakeBin, "omp"));
+	const launched = limenWithEnv(scratch, { PATH: scratch.fakeBin }, "spawn", "--engine", "omp", "do work");
+	assert.equal(launched.status, 1);
+	assert.match(launched.stderr, /omp is not on PATH/);
 	assert.deepEqual(await readdir(join(scratch.root, ".limen/jobs")).catch(() => []), []);
-	assert.doesNotMatch(git(scratch.root, "worktree", "list"), /limen-worktrees/);
+});
+
+test("LIMEN_PREFLIGHT=auth does not probe omp", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	assert.equal(limen(scratch, "init").status, 0);
+	const launched = limenWithEnv(scratch, { LIMEN_PREFLIGHT: "auth" }, "spawn", "--engine", "omp", "--detached", "do work");
+	assert.equal(launched.status, 0, launched.stderr);
+	await waitForState(scratch.root, onlyJobId(launched.stdout), "done");
 });
 
 test("spawn refuses a ticket missing from the base commit and starts when it is committed", async (context) => {

@@ -97,6 +97,8 @@ function runLimen(
 		"LIMEN_CONTEXT_ROOT",
 		"LIMEN_PACKAGE",
 		"LIMEN_PREFLIGHT",
+		"LIMEN_ENGINE",
+		"LIMEN_OMP",
 		"LIMEN_PREPARE",
 		"LIMEN_PREPARE_MS",
 		"LIMEN_HERDR",
@@ -149,12 +151,15 @@ export function git(cwd: string, ...args: readonly string[]): string {
 }
 
 export async function writeFakePi(fakeBin: string, source: string): Promise<void> {
-	const path = join(fakeBin, "pi");
 	const nl = source.indexOf("\n");
 	const shebang = source.startsWith("#!") && nl !== -1 ? source.slice(0, nl + 1) : "";
 	const body = shebang ? source.slice(shebang.length) : source;
-	await writeFile(path, `${shebang}if (process.argv[2] === "--version") { console.log("0.0.0-test"); process.exit(0); }\n${body}`);
-	await chmod(path, 0o755);
+	const text = `${shebang}if (process.argv[2] === "--version") { console.log("0.0.0-test"); process.exit(0); }\n${body}`;
+	for (const name of ["pi", "omp"] as const) {
+		const path = join(fakeBin, name);
+		await writeFile(path, text);
+		await chmod(path, 0o755);
+	}
 }
 
 export function onlyJobId(stdout: string): string {

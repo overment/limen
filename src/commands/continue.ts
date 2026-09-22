@@ -1,29 +1,19 @@
 import { existsSync } from "node:fs";
 import { copyFile, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { engineProfile, preflightEngine, resolveSpawnEngine } from "../engine.ts";
 import { addBranchWorktree, branchExists, headCommit, repoRoot, workspaceRepository, workspaceRoot } from "../git.ts";
 import { herdrAvailable, openWatchTab } from "../herdr.ts";
 import { resolveJob } from "../lookup.ts";
 import { atomicWrite, finalizeJob, launchWrapper } from "../wrapper.ts";
-import {
-	capturedVersions,
-	currentNotificationSession,
-	HOSTED_NOTE,
-	hostedAgentName,
-	makeJobId,
-	normalizeLabel,
-	preflightPi,
-	resolvePreamble,
-	startHosted,
-	waitForHandshake,
-} from "./spawn.ts";
+import { capturedVersions, currentNotificationSession, HOSTED_NOTE, hostedAgentName, makeJobId, normalizeLabel, resolvePreamble, startHosted, waitForHandshake } from "./spawn.ts";
 
-/** Resume a finished job's own pi session; restore a pruned checkout from its branch. */
+/** Resume a finished job's own engine session; restore a pruned checkout from its branch. */
 export async function continueCommand(args: readonly string[], cwd: string): Promise<void> {
 	let review = false;
 	let tab = false;
 	let detached = false;
 	let label: string | undefined;
-	let model: string | undefined, provider: string | undefined, thinking: string | undefined;
+	let model: string | undefined, provider: string | undefined, thinking: string | undefined, engine: string | undefined;
 	const positional: string[] = [];
 	for (let index = 0; index < args.length; index += 1) {
 		const value = args[index];
@@ -31,13 +21,14 @@ export async function continueCommand(args: readonly string[], cwd: string): Pro
 		if (value === "--review") review = true;
 		else if (value === "--tab") tab = true;
 		else if (value === "--detached") detached = true;
-		else if (value === "--label" || value === "--model" || value === "--provider" || value === "--thinking") {
+		else if (value === "--label" || value === "--model" || value === "--provider" || value === "--thinking" || value === "--engine") {
 			const optionValue = args[index + 1];
 			if (!optionValue) throw new Error(`${value} requires a value`);
 			index += 1;
 			if (value === "--label") label = normalizeLabel(optionValue);
 			else if (value === "--provider") provider = optionValue;
 			else if (value === "--thinking") thinking = optionValue;
+			else if (value === "--engine") engine = optionValue.trim();
 			else model = optionValue;
 		} else if (value.startsWith("--")) throw new Error(`unknown continue option ${value}`);
 		else positional.push(value);
@@ -50,7 +41,6 @@ export async function continueCommand(args: readonly string[], cwd: string): Pro
 	const hosted = detached ? false : tab || herdr;
 	if (tab && !herdr) throw new Error("hosted continue requires Herdr (HERDR_ENV=1); use --detached for an ordinary job");
 	const chosenModel = model ?? (process.env[review ? "LIMEN_REVIEWER_MODEL" : "LIMEN_WORKER_MODEL"]?.trim() || "openai-codex/gpt-6-astra:high");
-	preflightPi(chosenModel, provider);
 
 	const root = workspaceRoot(cwd) ?? repoRoot(cwd);
 	const { id: parentId, jobDir: parentDir } = await resolveJob(cwd, query);
@@ -64,6 +54,13 @@ export async function continueCommand(args: readonly string[], cwd: string): Pro
 	const sessions = (await readdir(`${parentDir}/session`).catch(() => [])).filter((name) => name.endsWith(".jsonl"));
 	if (sessions.length === 0) throw new Error(`parent record ${parentId} has no session transcript to continue`);
 	const inheritedSession = sessions.sort().at(-1);
+	const parentEngine = (await text(`${parentDir}/engine`)) || "pi";
+	if (engine) {
+		const requested = resolveSpawnEngine(engine);
+		if (requested.id !== parentEngine) throw new Error(`continue --engine ${engine} does not match parent engine ${parentEngine}`);
+	}
+	const profile = engineProfile(parentEngine);
+	preflightEngine(profile, chosenModel, provider);
 
 	const finalLabel = label ?? `${(await text(`${parentDir}/label`)) || parentId} · continue`;
 	const id = makeJobId(finalLabel);
@@ -94,6 +91,7 @@ export async function continueCommand(args: readonly string[], cwd: string): Pro
 		writeFile(`${jobDir}/activity`, "think\n", { flag: "wx", flush: true }),
 		writeFile(`${jobDir}/log`, "", { flag: "wx", flush: true }),
 		writeFile(`${jobDir}/role`, `${role}\n`, { flag: "wx", flush: true }),
+		writeFile(`${jobDir}/engine`, `${profile.id}\n`, { flag: "wx", flush: true }),
 		...(repo ? [writeFile(`${jobDir}/repo`, `${repo}\n`, { flag: "wx", flush: true })] : []),
 		...(hosted
 			? [
@@ -116,7 +114,7 @@ export async function continueCommand(args: readonly string[], cwd: string): Pro
 	const finishAuthor = await text(`${parentDir}/finish-webhook-author`);
 	if (finishAuthor) await writeFile(`${jobDir}/finish-webhook-author`, `${finishAuthor}\n`, { flag: "wx", flush: true });
 	await writeFile(`${jobDir}/notify/ready`, "1\n", { flag: "wx", flush: true });
-	const versions = capturedVersions().then((text) => writeFile(`${jobDir}/versions`, text, { flag: "wx", flush: true }));
+	const versions = capturedVersions(profile).then((text) => writeFile(`${jobDir}/versions`, text, { flag: "wx", flush: true }));
 	// The continued run writes into its own transcript, seeded with a copy of the parent's
 	// newest session — the parent record stays frozen history.
 	await mkdir(`${jobDir}/session`, { recursive: true });
