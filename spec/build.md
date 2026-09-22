@@ -13,7 +13,7 @@
 
 ## NOW
 
-- Pi/OMP interchangeable-engine spec. Spike first; no full engine on main unless the spec says implement-now.
+- Pi/OMP engine spec ready for Adam. Shared parser OK; ship a profile table; not implement-now. Spec: `spec/features/active/F727-pi-omp-interchangeable-engine/spec.md`.
 
 ## NEXT
 
