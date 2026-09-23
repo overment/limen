@@ -122,7 +122,7 @@ Adam's standing defaults for Overment limen/Herdr plants (2026-09-23): prefer **
 | Simple / cheap tasks | `xai-oauth` | `grok-4.7` |
 | UI-related work | `pi-claude` | `claude-opus-5-5` |
 
-Pass the engine, provider, model, and chosen reasoning explicitly. `pi-claude` is a provider choice, not a request for a Claude engine. To prefer OMP when `--engine` is omitted, set `export LIMEN_ENGINE=omp` in the coordinator's launch environment.
+Pass the engine, provider, model, and chosen reasoning explicitly. `pi-claude` is a provider choice, not a request for a Claude engine. New jobs default to OMP; use `--engine pi` or `LIMEN_ENGINE=pi` only when Pi is required.
 
 Start a coordinator in an existing Herdr pane at a shell prompt, with the project as its working directory:
 
@@ -145,7 +145,7 @@ In Herdr this is hosted; use `--detached` for a requested background worker. `--
 
 Model precedence remains `--model`, then `LIMEN_WORKER_MODEL` (or `LIMEN_REVIEWER_MODEL` for `--review`), then the built-in fallback. Pass the standing choices explicitly rather than relying on that legacy fallback. Adam performs reviews; do not start an independent reviewer unless asked.
 
-`--engine pi|omp` selects the job binary, overriding `LIMEN_ENGINE`. With neither set, the CLI still falls back to Pi: OMP is the standing launch policy, not a runtime-default change. Pi and OMP keep separate auth stores (`~/.pi`, `~/.omp`); authenticate OMP yourself. One wrapper and one stream parser serve both.
+`--engine pi|omp` selects the job binary, overriding `LIMEN_ENGINE`. With neither set, new jobs use OMP. Old job records without an engine remain Pi for compatibility; continuation keeps the parent's engine. Pi and OMP keep separate auth stores (`~/.pi`, `~/.omp`); authenticate OMP yourself. One wrapper and one stream parser serve both.
 
 ## Adjacent-repository workspaces
 

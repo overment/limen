@@ -55,7 +55,7 @@ export function engineProfile(id: string): EngineProfile {
 	throw new Error(`unknown engine ${id}`);
 }
 export function resolveSpawnEngine(flag?: string): EngineProfile {
-	const raw = (flag ?? process.env.LIMEN_ENGINE)?.trim() || "pi";
+	const raw = (flag ?? process.env.LIMEN_ENGINE)?.trim() || "omp";
 	if (raw === "pi" || raw === "omp") return ENGINES[raw];
 	throw new Error("--engine must be pi or omp");
 }

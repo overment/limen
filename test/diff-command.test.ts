@@ -40,7 +40,7 @@ else fs.appendFileSync(${JSON.stringify(calls)}, process.argv.slice(2).join(" ")
 	const id = onlyJobId(limenWithEnv(scratch, env, "spawn", "--label", "F050 no tty", "make commit").stdout);
 	await waitForState(scratch.root, id, "done");
 	const job = join(scratch.root, ".limen/jobs", id);
-	assert.match(await readFile(join(job, "versions"), "utf8"), /^pi 0\.0\.0-test\nhunk 0\.20\.0-test\n$/);
+	assert.match(await readFile(join(job, "versions"), "utf8"), /^omp 0\.0\.0-test\nhunk 0\.20\.0-test\n$/);
 
 	const shown = limenWithEnv(scratch, env, "diff", id.slice(-8));
 	assert.equal(shown.status, 0, shown.stderr);

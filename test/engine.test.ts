@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
-import { argvFor, ENGINES } from "../src/engine.ts";
+import { argvFor, ENGINES, jobProfile, resolveSpawnEngine } from "../src/engine.ts";
 
 const slots = {
 	jobDir: "/job",
@@ -9,6 +12,29 @@ const slots = {
 	extensions: ["/hook/steering.ts", "/hook/communication.ts"],
 	taskFile: "/job/task.md",
 };
+
+test("new spawns default to omp while explicit engine and environment choices win", (context) => {
+	const previous = process.env.LIMEN_ENGINE;
+	context.after(() => {
+		if (previous === undefined) delete process.env.LIMEN_ENGINE;
+		else process.env.LIMEN_ENGINE = previous;
+	});
+	delete process.env.LIMEN_ENGINE;
+	assert.equal(resolveSpawnEngine().id, "omp");
+	process.env.LIMEN_ENGINE = "   ";
+	assert.equal(resolveSpawnEngine().id, "omp");
+	process.env.LIMEN_ENGINE = "pi";
+	assert.equal(resolveSpawnEngine().id, "pi");
+	assert.equal(resolveSpawnEngine("omp").id, "omp");
+	process.env.LIMEN_ENGINE = "omp";
+	assert.equal(resolveSpawnEngine("pi").id, "pi");
+});
+
+test("old job records without an engine still use pi", async (context) => {
+	const jobDir = await mkdtemp(join(tmpdir(), "limen-old-engine-"));
+	context.after(() => rm(jobDir, { recursive: true, force: true }));
+	assert.equal((await jobProfile(jobDir)).id, "pi");
+});
 
 test("detached pi argv keeps approve and name, never auto-approve or no-title", () => {
 	const argv = argvFor(ENGINES.pi, { ...slots, jsonMode: true });

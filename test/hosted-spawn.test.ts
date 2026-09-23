@@ -529,7 +529,8 @@ test("spawn in Herdr is hosted without --tab; --detached keeps a watch tab", asy
 	const focusSpace = lines.findIndex((line) => line === "workspace focus coord");
 	assert.ok(focusNew >= 0 && start > focusNew && focusSpace > start && focusCoord > focusSpace, calls);
 	assert.equal(await readFile(join(job, "herdr/workspace"), "utf8"), "w1\n");
-	assert.match(calls, /--kind pi/);
+	assert.match(calls, /--kind omp/);
+	assert.equal(await readFile(join(job, "engine"), "utf8"), "omp\n");
 	assert.match(lines[start] ?? "", /--model openai-codex\/gpt-6-astra:high(?: |$)/);
 	assert.doesNotMatch(calls, /pane run .*tail/);
 	await waitForState(scratch.root, id, "done");
@@ -991,7 +992,8 @@ test("spawn --review in Herdr is hosted; --detached keeps a watch tab", async (c
 	assert.equal(await waitForFile(join(hostedJob, "herdr/agent"), /w1:p1/), "w1:p1\n");
 	const hostedCalls = await readFile(herdr.calls, "utf8");
 	assert.match(hostedCalls, /workspace create .*--label repo reviewers/);
-	assert.match(hostedCalls, /--kind pi/);
+	assert.match(hostedCalls, /--kind omp/);
+	assert.equal(await readFile(join(hostedJob, "engine"), "utf8"), "omp\n");
 	assert.doesNotMatch(hostedCalls, /pane run .*tail/);
 	const hostedTree = git(scratch.root, "worktree", "list", "--porcelain")
 		.split("\n\n")

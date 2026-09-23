@@ -3,7 +3,7 @@
 ## TRACK
 
 - **Pi/OMP engines (Adam 2026-09-22):** one flag, one profile table, one wrapper, one unchanged parser; separate auth stores and same-engine continuation. This VPS plant coordinator owns the board and authorized main landings/pushes; Adam retains review ownership, with no independent reviewer. Live hosted OMP proof, doorbell, unusable-route, and restoring Claude were outside the engine slice.
-- **Standing engine (Adam 2026-09-23):** Overment limen/Herdr plants prefer OMP (`--engine omp` or `export LIMEN_ENGINE=omp`); start new Pi jobs only when the task truly needs Pi, and continue existing transcripts on their recorded engine.
+- **Standing engine (Adam 2026-09-23):** new jobs default to OMP at runtime; `--engine` overrides `LIMEN_ENGINE`. Use `--engine pi` or `LIMEN_ENGINE=pi` only when Pi is required; continuation keeps the recorded engine, and old records without one remain Pi.
 - **Standing models (Adam 2026-09-23):** ordinary work and coordination use `openai-codex/gpt-6-sol` on OMP; simple / cheap tasks use `xai-oauth/grok-4.7`; UI-related work uses `pi-claude/claude-opus-5-5`. Pass engine/provider/model/reasoning explicitly; this supersedes the Grok-only wave override.
 - **Ops remediation lock 2026-09-10 (Adam):** two unsuccessful automatic wake attempts then deliberate recovery; park-and-preserve on quota — no silent model substitution. Named-job `limen watch <id>` for takeovers — not `watch --running`.
 - **Finish proof (Adam):** HTTP ≠ bot turn. VPS-first, Johnny-only automatic finish proof is sufficient; an export hold is unobserved evidence, never absence of an actual turn; no Tony coordination.

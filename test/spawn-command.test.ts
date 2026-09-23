@@ -7,7 +7,7 @@ import { basename, dirname, join } from "node:path";
 import test from "node:test";
 import { defaultFakePi, git, limen, limenWithEnv, limenWithInput, limenWithSession, onlyJobId, scratchRepo, waitForState } from "./scratch.ts";
 
-test("spawn creates isolated branch, canonical record, runs pi, and resumes its worktree", async (context) => {
+test("spawn creates isolated branch, canonical record, defaults to omp, and resumes its worktree", async (context) => {
 	const scratch = await scratchRepo();
 	context.after(scratch.cleanup);
 	assert.equal(limen(scratch, "init").status, 0);
@@ -34,8 +34,9 @@ test("spawn creates isolated branch, canonical record, runs pi, and resumes its 
 	assert.equal(await readFile(join(job, "origin-session"), "utf8"), "coordinator-a\n");
 	await access(join(job, "notify/subscribers/coordinator-a"));
 	assert.equal(await readFile(join(job, "notify/ready"), "utf8"), "1\n");
-	assert.equal(await readFile(join(job, "versions"), "utf8"), "pi 0.0.0-test\n");
-	assert.match(limen(scratch, "jobs", id).stdout, /versions:\n    pi 0\.0\.0-test/);
+	assert.equal(await readFile(join(job, "engine"), "utf8"), "omp\n");
+	assert.equal(await readFile(join(job, "versions"), "utf8"), "omp 0.0.0-test\n");
+	assert.match(limen(scratch, "jobs", id).stdout, /versions:\n    omp 0\.0\.0-test/);
 	assert.doesNotMatch(limen(scratch, "jobs", id).stdout, /herdr/);
 	assert.ok(Number.isFinite(Date.parse((await readFile(join(job, "started-at"), "utf8")).trim())));
 	assert.ok(Number.isFinite(Date.parse((await readFile(join(job, "finished-at"), "utf8")).trim())));
@@ -63,6 +64,8 @@ test("spawn creates isolated branch, canonical record, runs pi, and resumes its 
 	assert.deepEqual(childEnvironment, { job: "1", id, label: "F001 implementation", contextRoot: await realpath(scratch.root), herdr: [], pi: [] });
 	const argv = JSON.parse(await readFile(join(worktree, "pi-args.json"), "utf8")) as string[];
 	assert.equal(argv[argv.indexOf("--mode") + 1], "json");
+	assert.equal(argv.includes("--auto-approve"), true);
+	assert.equal(argv.includes("--approve"), false);
 	assert.match(argv[argv.indexOf("--session-dir") + 1] ?? "", /\.limen\/jobs\/[^/]+\/session$/);
 	assert.equal(argv.includes("--no-session"), false);
 	assert.equal(argv.includes("--no-context-files"), false);
@@ -129,6 +132,7 @@ test("review gets fresh detached worktree and reviewer birth text", async (conte
 	await assert.rejects(readFile(join(reviewJob, "hosted")));
 	assert.equal(await readFile(join(reviewJob, "candidate"), "utf8"), `${candidateSha}\n`);
 	assert.equal(await readFile(join(reviewJob, "role"), "utf8"), "reviewer\n");
+	assert.equal(await readFile(join(reviewJob, "engine"), "utf8"), "omp\n");
 	const reviewTask = await readFile(join(reviewJob, "task.md"), "utf8");
 	assert.equal(reviewTask, `inspect candidate\n\nCandidate commit: ${candidateSha}.\n`);
 	await assert.rejects(readFile(join(scratch.root, ".limen/jobs", worker, "candidate")));
@@ -281,15 +285,15 @@ if (args[0] === "workspace" && args[1] === "list") {
 	const job = join(scratch.root, ".limen/jobs", id);
 	assert.equal(await readFile(join(job, "herdr/tab"), "utf8"), "w1:t2\n");
 	assert.equal(await readFile(join(job, "herdr/mode"), "utf8"), "watch\n");
-	assert.equal(await readFile(join(job, "versions"), "utf8"), "pi 0.0.0-test\nherdr 0.0.0-test\n");
-	assert.match(limen(scratch, "jobs", id).stdout, /versions:\n    pi 0\.0\.0-test\n    herdr 0\.0\.0-test/);
+	assert.equal(await readFile(join(job, "versions"), "utf8"), "omp 0.0.0-test\nherdr 0.0.0-test\n");
+	assert.match(limen(scratch, "jobs", id).stdout, /versions:\n    omp 0\.0\.0-test\n    herdr 0\.0\.0-test/);
 });
 
 test("spawn prints failed when the wrapper dies before writing pid", async (context) => {
 	const scratch = await scratchRepo();
 	context.after(scratch.cleanup);
 	assert.equal(limen(scratch, "init").status, 0);
-	const launched = limenWithEnv(scratch, { LIMEN_PI: "" }, "spawn", "--label", "boom", "do work");
+	const launched = limenWithEnv(scratch, { LIMEN_OMP: "" }, "spawn", "--label", "boom", "do work");
 	assert.equal(launched.status, 0, launched.stderr);
 	assert.match(launched.stdout, /failed boom/);
 	assert.doesNotMatch(launched.stdout, /started/);
@@ -297,12 +301,12 @@ test("spawn prints failed when the wrapper dies before writing pid", async (cont
 	assert.equal((await readFile(join(scratch.root, ".limen/jobs", id, "state"), "utf8")).trim(), "failed");
 });
 
-test("spawn without pi on PATH fails before worktree add", async (context) => {
+test("explicit pi spawn without pi on PATH fails before worktree add", async (context) => {
 	const scratch = await scratchRepo();
 	context.after(scratch.cleanup);
 	assert.equal(limen(scratch, "init").status, 0);
 	await rm(join(scratch.fakeBin, "pi"));
-	const launched = limenWithEnv(scratch, { PATH: "/nonexistent" }, "spawn", "do work");
+	const launched = limenWithEnv(scratch, { PATH: "/nonexistent" }, "spawn", "--engine", "pi", "do work");
 	assert.equal(launched.status, 1);
 	assert.match(launched.stderr, /pi is not on PATH/);
 	assert.deepEqual(await readdir(join(scratch.root, ".limen/jobs")).catch(() => []), []);
@@ -317,7 +321,7 @@ process.exit(0);
 `);
 	context.after(scratch.cleanup);
 	assert.equal(limen(scratch, "init").status, 0);
-	const launched = limenWithEnv(scratch, { LIMEN_PREFLIGHT: "auth" }, "spawn", "--model", "ticket-specific", "do work");
+	const launched = limenWithEnv(scratch, { LIMEN_PREFLIGHT: "auth" }, "spawn", "--engine", "pi", "--model", "ticket-specific", "do work");
 	assert.equal(launched.status, 1);
 	assert.match(launched.stderr, /provider rejected token/);
 	assert.deepEqual(await readdir(join(scratch.root, ".limen/jobs")).catch(() => []), []);
@@ -336,7 +340,20 @@ process.exit(0);
 `);
 	context.after(scratch.cleanup);
 	assert.equal(limen(scratch, "init").status, 0);
-	const launched = limenWithEnv(scratch, { LIMEN_PREFLIGHT: "auth" }, "spawn", "--provider", "openai-codex", "--model", "gpt-6-astra", "--thinking", "high", "do work");
+	const launched = limenWithEnv(
+		scratch,
+		{ LIMEN_PREFLIGHT: "auth" },
+		"spawn",
+		"--engine",
+		"pi",
+		"--provider",
+		"openai-codex",
+		"--model",
+		"gpt-6-astra",
+		"--thinking",
+		"high",
+		"do work",
+	);
 	assert.equal(launched.status, 1);
 	assert.match(launched.stderr, /requested provider refused/);
 	assert.deepEqual(JSON.parse(await readFile(join(scratch.root, "auth-args.json"), "utf8")), ["auth", "check", "--provider", "openai-codex", "--model", "gpt-6-astra"]);
@@ -347,7 +364,7 @@ test("LIMEN_PREFLIGHT=auth proceeds when check passes", async (context) => {
 	const scratch = await scratchRepo(defaultFakePi.replace('if (args[0] === "auth") process.exit(1);', 'if (args[0] === "auth") process.exit(0);'));
 	context.after(scratch.cleanup);
 	assert.equal(limen(scratch, "init").status, 0);
-	const launched = limenWithEnv(scratch, { LIMEN_PREFLIGHT: "auth" }, "spawn", "--model", "ticket-specific", "no model default");
+	const launched = limenWithEnv(scratch, { LIMEN_PREFLIGHT: "auth" }, "spawn", "--engine", "pi", "--model", "ticket-specific", "no model default");
 	assert.equal(launched.status, 0, launched.stderr);
 	const id = onlyJobId(launched.stdout);
 	await waitForState(scratch.root, id, "done");
@@ -541,11 +558,13 @@ test("spawn accepts --engine omp and LIMEN_ENGINE, and refuses claude before a j
 	assert.equal(argv.includes("--no-title"), true);
 	assert.equal(argv.includes("--approve"), false);
 	assert.equal(argv.includes("--name"), false);
-	const fromEnv = limenWithEnv(scratch, { LIMEN_ENGINE: "omp" }, "spawn", "--detached", "--label", "env omp", "do work");
-	assert.equal(fromEnv.status, 0, fromEnv.stderr);
-	const envId = onlyJobId(fromEnv.stdout);
-	await waitForState(scratch.root, envId, "done");
-	assert.equal(await readFile(join(scratch.root, ".limen/jobs", envId, "engine"), "utf8"), "omp\n");
+	for (const engine of ["pi", "omp"]) {
+		const fromEnv = limenWithEnv(scratch, { LIMEN_ENGINE: engine }, "spawn", "--detached", "--label", `env ${engine}`, "do work");
+		assert.equal(fromEnv.status, 0, fromEnv.stderr);
+		const envId = onlyJobId(fromEnv.stdout);
+		await waitForState(scratch.root, envId, "done");
+		assert.equal(await readFile(join(scratch.root, ".limen/jobs", envId, "engine"), "utf8"), `${engine}\n`);
+	}
 	const override = limenWithEnv(scratch, { LIMEN_ENGINE: "omp" }, "spawn", "--engine", "pi", "--detached", "--label", "flag wins", "do work");
 	assert.equal(override.status, 0, override.stderr);
 	const overrideId = onlyJobId(override.stdout);
@@ -565,18 +584,21 @@ test("spawn accepts --engine omp and LIMEN_ENGINE, and refuses claude before a j
 	const envClaude = limenWithEnv(scratch, { LIMEN_ENGINE: "claude" }, "spawn", "--detached", "look");
 	assert.equal(envClaude.status, 1);
 	assert.match(envClaude.stderr, /--engine must be pi or omp/);
-	assert.equal((await readdir(join(scratch.root, ".limen/jobs"))).length, 3);
+	assert.equal((await readdir(join(scratch.root, ".limen/jobs"))).length, 4);
 });
 
-test("spawn --engine omp fails before a job exists when omp is missing", async (context) => {
+test("bare and explicit omp spawns fail before a job exists when omp is missing", async (context) => {
 	const scratch = await scratchRepo();
 	context.after(scratch.cleanup);
 	assert.equal(limen(scratch, "init").status, 0);
 	await rm(join(scratch.fakeBin, "omp"));
-	const launched = limenWithEnv(scratch, { PATH: scratch.fakeBin }, "spawn", "--engine", "omp", "do work");
-	assert.equal(launched.status, 1);
-	assert.match(launched.stderr, /omp is not on PATH/);
-	assert.deepEqual(await readdir(join(scratch.root, ".limen/jobs")).catch(() => []), []);
+	for (const flags of [[], ["--engine", "omp"]]) {
+		const launched = limenWithEnv(scratch, { PATH: scratch.fakeBin }, "spawn", ...flags, "do work");
+		assert.equal(launched.status, 1);
+		assert.match(launched.stderr, /omp is not on PATH/);
+		assert.deepEqual(await readdir(join(scratch.root, ".limen/jobs")).catch(() => []), []);
+	}
+	assert.doesNotMatch(git(scratch.root, "worktree", "list"), /limen-worktrees/);
 });
 
 test("LIMEN_PREFLIGHT=auth does not probe omp", async (context) => {

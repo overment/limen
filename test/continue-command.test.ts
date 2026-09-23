@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
-import { chmod, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import test from "node:test";
 import { liveJob } from "../src/reap.ts";
@@ -319,7 +319,7 @@ test("continue copies the parent engine and refuses a conflicting --engine", asy
 	assert.equal(limen(scratch, "init").status, 0);
 	const parent = onlyJobId(limen(scratch, "spawn", "--engine", "omp", "--label", "F727 omp", "first slice").stdout);
 	await waitForState(scratch.root, parent, "done");
-	const launched = limen(scratch, "continue", parent, "now refine the seam");
+	const launched = limenWithEnv(scratch, { LIMEN_ENGINE: "pi" }, "continue", parent, "now refine the seam");
 	assert.equal(launched.status, 0, launched.stderr);
 	const id = onlyJobId(launched.stdout);
 	await waitForState(scratch.root, id, "done");
@@ -337,11 +337,41 @@ test("continue copies the parent engine and refuses a conflicting --engine", asy
 	assert.deepEqual(await readdir(join(scratch.root, ".limen/jobs")), before);
 });
 
+for (const legacy of [false, true]) {
+	test(`continue preserves a Pi parent despite the OMP default (legacy: ${legacy})`, async (context) => {
+		const scratch = await scratchRepo(continuingFakePi);
+		context.after(scratch.cleanup);
+		assert.equal(limen(scratch, "init").status, 0);
+		const parent = onlyJobId(limen(scratch, "spawn", "--engine", "pi", "first slice").stdout);
+		await waitForState(scratch.root, parent, "done");
+		const parentDir = join(scratch.root, ".limen/jobs", parent);
+		if (legacy) await rm(join(parentDir, "engine"));
+		const transcript = '{"type":"session","id":"saved-pi-context"}\n';
+		await writeFile(join(parentDir, "session/zz-parent.jsonl"), transcript);
+		const launched = limenWithEnv(scratch, { LIMEN_ENGINE: "omp" }, "continue", parent, "keep pi context");
+		assert.equal(launched.status, 0, launched.stderr);
+		const id = onlyJobId(launched.stdout);
+		await waitForState(scratch.root, id, "done");
+		const job = join(scratch.root, ".limen/jobs", id);
+		assert.equal(await readFile(join(job, "engine"), "utf8"), "pi\n");
+		assert.equal(await readFile(join(job, "session/zz-parent.jsonl"), "utf8"), transcript);
+		assert.equal(await readFile(join(parentDir, "session/zz-parent.jsonl"), "utf8"), transcript);
+		const argv = JSON.parse(await readFile(join(worktreeFor(scratch.root, parent), "pi-args.json"), "utf8")) as string[];
+		assert.equal(argv.includes("--approve"), true);
+		assert.equal(argv.includes("--auto-approve"), false);
+		const before = await readdir(join(scratch.root, ".limen/jobs"));
+		const refused = limen(scratch, "continue", "--engine", "omp", parent, "switch engines");
+		assert.equal(refused.status, 1);
+		assert.match(refused.stderr, /continue --engine omp does not match parent engine pi/);
+		assert.deepEqual(await readdir(join(scratch.root, ".limen/jobs")), before);
+	});
+}
+
 test("LIMEN_PREFLIGHT=auth fails continue with no record", async (context) => {
 	const scratch = await scratchRepo(continuingFakePi);
 	context.after(scratch.cleanup);
 	assert.equal(limen(scratch, "init").status, 0);
-	const parent = onlyJobId(limen(scratch, "spawn", "--label", "F037 auth", "first slice").stdout);
+	const parent = onlyJobId(limen(scratch, "spawn", "--engine", "pi", "--label", "F037 auth", "first slice").stdout);
 	await waitForState(scratch.root, parent, "done");
 	const before = await readdir(join(scratch.root, ".limen/jobs"));
 	const refused = limenWithEnv(scratch, { LIMEN_PREFLIGHT: "auth" }, "continue", parent, "keep going");

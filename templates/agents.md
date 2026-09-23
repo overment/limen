@@ -66,13 +66,13 @@ Herdr is the visible layout when it is running. Job files under `.limen/jobs/` a
 
 **`--role <name>`** loads that preamble (`templates/<name>.md` or `.agents/limen/<name>.md`) and opens the space `<project> <name>s`. Default is worker. Still pass `--detached` when a later ritual says so — the name does not pick the spawn mode. Those spaces are for jobs. The coordinator tab belongs in the plant's limen space, not in `workers`.
 
-**Engine and models (Adam 2026-09-23).** For Overment limen/Herdr plants, default to OMP: pass `--engine omp` or set `export LIMEN_ENGINE=omp`. Start a new Pi job only when the task truly needs Pi. Record later owner choices in the project board.
+**Engine and models (Adam 2026-09-23).** For Overment limen/Herdr plants, new jobs default to OMP; `--engine omp` or `export LIMEN_ENGINE=omp` makes that choice explicit. Start a new Pi job only when the task truly needs Pi. Record later owner choices in the project board.
 
 - Ordinary work and coordination: `--provider openai-codex --model gpt-6-sol` on OMP.
 - Simple / cheap tasks: `--provider xai-oauth --model grok-4.7`.
 - UI-related work: `--provider pi-claude --model claude-opus-5-5`; the provider name does not select a different engine.
 
-**`--engine pi|omp`** overrides `LIMEN_ENGINE`; with neither set, the CLI still falls back to Pi. The OMP preference is launch policy, not a runtime-default change. Continue copies the parent engine and refuses a different `--engine`, so a Pi transcript still requires Pi. Auth stores remain separate (`~/.pi`, `~/.omp`); authenticate OMP yourself. One wrapper and one stream parser serve both.
+**`--engine pi|omp`** overrides `LIMEN_ENGINE`; with neither set, new jobs use OMP. Select Pi with `--engine pi` or `LIMEN_ENGINE=pi` only when required. Continue copies the parent engine and refuses a different `--engine`; old job records without an engine remain Pi for compatibility. Auth stores remain separate (`~/.pi`, `~/.omp`); authenticate OMP yourself. One wrapper and one stream parser serve both.
 
 **Quality pass.** After ten proven landings since the last findings file under `spec/quality/` — the same window PROVEN keeps — or when the human asks, start one unprompted with `--role quality --detached`, using the project's chosen engine and model (ordinary-work choice above if unspecified). Interleave it with seat work; do not wait. Not after every merge, not on a calendar, never as a condition of landing. The job writes `spec/quality/YYYY-MM.md` (or `YYYY-MM-2.md` if that month already has a file) and does not rewrite the tree. Turn the findings into planned tickets or one small slice; the quality job does not. Not a merge gate.
 
