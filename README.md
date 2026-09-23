@@ -6,13 +6,13 @@
 >
 > This MEGA Drop explains the workflow behind limen, including a live video walkthrough with Pi, Herdr, and Grok Bot. [MEGA.dev](https://mega.dev) shares practical articles, repos, and tools for working with AI.
 
-You talk to one [Pi](https://pi.dev) coordinator. It starts workers and reviewers as real Pi processes in isolated Git worktrees. Each job leaves a branch, task, log, state, and session. You decide what to build and what to merge. The coordinator runs the harness.
+You talk to one coordinator in Herdr. It starts OMP or [Pi](https://pi.dev) workers and reviewers in isolated Git worktrees. Each job leaves a branch, task, log, state, and session. You decide what to build and what to merge. The coordinator runs the harness.
 
 ![A coordinator starts workers and reviewers in isolated worktrees, then merges with ordinary Git](https://raw.githubusercontent.com/overment/limen/main/docs/limen.gif)
 
 > **Experimental.** Commands, prompts, and project files may still change.
 
-Requires macOS or Linux, Node.js 24+, Git, and `pi` on `PATH`. Windows is unsupported. Last known-good: pi 0.84.2, Herdr 0.8.0 — recorded on each job, not a runtime gate.
+Requires macOS or Linux, Node.js 24+, Git, and the selected engine (`omp` or `pi`) on `PATH`. Windows is unsupported. Last known-good: pi 0.84.2, Herdr 0.8.0 — recorded on each job, not a runtime gate.
 
 Jobs can live on an always-on **seat** (a VPS on Tailscale) while your laptop is only a window. See [docs/remote.md](docs/remote.md). The walkthrough we actually ran is [docs/vps.md](docs/vps.md).
 
@@ -58,12 +58,13 @@ Then in each project:
 ```bash
 cd /path/to/your-project
 limen init
-pi --provider openai-codex --model gpt-6-astra --thinking xhigh
+export LIMEN_ENGINE=omp
+LIMEN_COORDINATOR=1 omp --provider openai-codex --model gpt-6-sol --thinking xhigh
 ```
 
 `limen init` plants what the project owns (vision, board, feature lanes, styleguide) and a stub that loads package hooks. It never overwrites existing project files. It always deletes leftover `.pi/extensions/limen-*.ts` hook copies so they cannot load beside the stub. `limen init --drop-leftovers` deletes only prompt copies that still match the package.
 
-`pi` in that directory is the coordinator (`LIMEN_COORDINATOR=1`). From here you talk. You do not drive the job CLI. `limen spawn` starts workers and reviewers — not a coordinator; the same env var on a spawn shell does not change the job's role. Prefer a Herdr space named for the plant (`limen`, or `alice limen`), not a space named only `workers`. Label the coordinator tab clearly. Worker tabs come from spawn. The inherited shop manual (`templates/agents.md`; a project `AGENTS.md` overlays it) carries the same layout rules.
+That interactive session is the coordinator (`LIMEN_COORDINATOR=1`), not a spawned job. From here you talk. You do not drive the job CLI. `limen spawn` starts workers and reviewers — not a coordinator; the same env var on a spawn shell does not change the job's role. Prefer a Herdr space named for the plant (`limen`, or `alice limen`), not a space named only `workers`. Label the coordinator tab clearly. Worker tabs come from spawn. The inherited shop manual (`templates/agents.md`; a project `AGENTS.md` overlays it) carries the same layout rules.
 
 ## How you work
 
@@ -71,7 +72,7 @@ Tell the coordinator the outcome you want. It writes or moves the ticket, keeps 
 
 A useful ask names the outcome and the first artifact, not a tour of the repo. The coordinator turns that into a short spawn plus a `Ticket:` pointer. It does not paste the ticket into the prompt.
 
-`done` means the run ended cleanly: Pi exited 0, or a hosted session ended, without a final `error` or `aborted` stop reason. A provider-errored run records `failed` with that reason. Neither state means the ticket is finished or the branch is safe to merge. The coordinator inspects the record, the diff, and the checks, then either merges, resumes a repair, or asks you.
+`done` means the run ended cleanly: the selected engine exited 0, or a hosted session ended, without a final `error` or `aborted` stop reason. A provider-errored run records `failed` with that reason. Neither state means the ticket is finished or the branch is safe to merge. The coordinator inspects the record, the diff, and the checks, then either merges, resumes a repair, or asks you.
 
 When the blast radius earns a second pair of eyes, the coordinator starts a fresh reviewer against the candidate. The reviewer reports a verdict; it does not rewrite the branch. You still merge.
 
@@ -99,7 +100,7 @@ The last line of `spawn` is the durable job ID. A running job picks up a steer b
 
 Finished jobs keep their files under `.limen/jobs/`. Extra checkouts do not stay: the next spawn drops finished worktrees, and `limen prune` does the same on demand. Resume with `--branch` keeps that checkout. `limen prune --retire` deletes finished job records whose branches are already merged or dropped; `--dry-run` prints the ids and removes nothing. Spawn and sweep never retire records.
 
-To keep a finished Pi job's conversation, run `limen continue <job-id> "Follow-up instruction"`. If its checkout was pruned, Limen restores the recorded path from the surviving local branch and copies the saved session into a new linked job. Only committed branch contents return; pruned uncommitted files are lost. A missing branch or transcript prevents recovery, and a branch checked out elsewhere is not taken over.
+To keep a finished job's conversation, run `limen continue <job-id> "Follow-up instruction"`. If its checkout was pruned, Limen restores the recorded path from the surviving local branch and copies the saved session into a new linked job. Only committed branch contents return; pruned uncommitted files are lost. A missing branch or transcript prevents recovery, and a branch checked out elsewhere is not taken over.
 
 A job is bounded by 90 minutes (`--timeout 20m`) and 900 tool-start events (`LIMEN_MAX_TOOL_CALLS`). A bound records `failed`; it does not finish the ticket. Do not run `limen wait` in the coordinator conversation — it blocks you.
 
@@ -113,36 +114,38 @@ Spawn records that creation `@login` (or an unavailable reason) on the job for f
 
 ## Models
 
-Coordinators use `openai-codex/gpt-6-astra` with `xhigh` thinking. In an existing Herdr pane at a shell prompt, with the project as its working directory, Tony starts a peer with explicit Pi arguments:
+Adam's standing defaults for Overment limen/Herdr plants (2026-09-23): prefer **OMP** for new sessions and jobs; use Pi only when the task truly needs it. Project choices live in `spec/build.md`, not another policy file.
+
+| Work | Provider | Model |
+|---|---|---|
+| Ordinary work, including coordination | `openai-codex` (Codex on OMP) | `gpt-6-sol` |
+| Simple / cheap tasks | `xai-oauth` | `grok-4.7` |
+| UI-related work | `pi-claude` | `claude-opus-5-5` |
+
+Pass the engine, provider, model, and chosen reasoning explicitly. `pi-claude` is a provider choice, not a request for a Claude engine. To prefer OMP when `--engine` is omitted, set `export LIMEN_ENGINE=omp` in the coordinator's launch environment.
+
+Start a coordinator in an existing Herdr pane at a shell prompt, with the project as its working directory:
 
 ```bash
-herdr agent start limen-peer --kind pi --pane <pane-id> -- \
-  --provider openai-codex --model gpt-6-astra --thinking xhigh
+herdr agent start limen-peer --kind omp --pane <pane-id> -- \
+  --provider openai-codex --model gpt-6-sol --thinking xhigh
 ```
 
-Herdr forwards the arguments after `--`; it does not select Limen's model. This repository also tracks `.pi/settings.json` with coordinator defaults for a bare `pi` launch when the project is trusted. Explicit flags work even when project settings are ignored. `limen init` does not change other projects' Pi settings. Adam's global `~/.pi/agent/settings.json` is left untouched; its `grok-4.6` default still applies outside this override.
+Herdr forwards the arguments after `--`; it does not select Limen's model. Do not rely on old Pi project settings or a global model default. This policy does not rewrite either engine's settings or credentials.
 
-Pi workers default to `openai-codex/gpt-6-astra:high` in Limen's spawn path, for both hosted and detached jobs. No export is required. To make the policy explicit, set this in each coordinator's shell environment before starting it:
-
-```bash
-export LIMEN_WORKER_MODEL="openai-codex/gpt-6-astra:high"
-```
-
-When the worker must receive literal Pi arguments, pass all three through Limen:
+For an ordinary worker:
 
 ```bash
-limen spawn --tab \
-  --provider openai-codex --model gpt-6-astra --thinking high \
+limen spawn --engine omp \
+  --provider openai-codex --model gpt-6-sol --thinking high \
   --label "short worker task" 'Implement the requested slice.'
 ```
 
-`--provider`, `--model`, and `--thinking` reach Pi as separate flag/value pairs in both hosted and detached mode; use `--detached` instead of `--tab` for a background worker. `limen continue` accepts the same three flags. The existing combined `--model openai-codex/gpt-6-astra:high` form remains supported. Explicit `--thinking` takes precedence over a combined selector's thinking suffix in Pi.
+In Herdr this is hosted; use `--detached` for a requested background worker. `--provider`, `--model`, and `--thinking` reach the selected engine as separate flag/value pairs in both modes. `limen continue` accepts the same flags, copies the parent engine, and refuses a conflicting `--engine`; continuing a Pi transcript still requires Pi.
 
-Precedence is `--model`, then `LIMEN_WORKER_MODEL`, then the package default. A requested `--review` uses `LIMEN_REVIEWER_MODEL` instead of `LIMEN_WORKER_MODEL`, with the same package fallback; neither variable starts a review. Adam performs reviews for Alice/Limen work, so do not spawn an independent reviewer unless asked. If requested, its model can be explicit or set with `export LIMEN_REVIEWER_MODEL="openai-codex/gpt-6-astra:high"`.
+Model precedence remains `--model`, then `LIMEN_WORKER_MODEL` (or `LIMEN_REVIEWER_MODEL` for `--review`), then the built-in fallback. Pass the standing choices explicitly rather than relying on that legacy fallback. Adam performs reviews; do not start an independent reviewer unless asked.
 
-Pi's `PI_PROVIDER`, `PI_MODEL`, and `PI_REASONING_LEVEL` describe the current session; they do not configure a child Pi launch.
-
-`--engine pi|omp` selects the job binary (default `pi`, or `LIMEN_ENGINE` when the flag is omitted). Continue copies the parent engine and refuses a different `--engine`. Pi and OMP keep separate auth stores (`~/.pi`, `~/.omp`); authenticate OMP yourself. One wrapper and one stream parser serve both.
+`--engine pi|omp` selects the job binary, overriding `LIMEN_ENGINE`. With neither set, the CLI still falls back to Pi: OMP is the standing launch policy, not a runtime-default change. Pi and OMP keep separate auth stores (`~/.pi`, `~/.omp`); authenticate OMP yourself. One wrapper and one stream parser serve both.
 
 ## Adjacent-repository workspaces
 
