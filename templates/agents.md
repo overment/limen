@@ -70,7 +70,7 @@ Herdr is the visible layout when it is running. Job files under `.limen/jobs/` a
 
 - Ordinary work and coordination: `--provider openai-codex --model gpt-6-sol` on OMP.
 - Simple / cheap tasks: `--provider xai-oauth --model grok-4.7`.
-- UI-related work: `--provider pi-claude --model claude-opus-5-5`; the provider name does not select a different engine.
+- UI-related work on OMP: `--provider anthropic --model claude-opus-5-5`.
 
 **`--engine pi|omp`** overrides `LIMEN_ENGINE`; with neither set, new jobs use OMP. Select Pi with `--engine pi` or `LIMEN_ENGINE=pi` only when required. Continue copies the parent engine and refuses a different `--engine`; old job records without an engine remain Pi for compatibility. Auth stores remain separate (`~/.pi`, `~/.omp`); authenticate OMP yourself. One wrapper and one stream parser serve both.
 

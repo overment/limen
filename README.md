@@ -120,9 +120,9 @@ Adam's standing defaults for Overment limen/Herdr plants (2026-09-23): prefer **
 |---|---|---|
 | Ordinary work, including coordination | `openai-codex` (Codex on OMP) | `gpt-6-sol` |
 | Simple / cheap tasks | `xai-oauth` | `grok-4.7` |
-| UI-related work | `pi-claude` | `claude-opus-5-5` |
+| UI-related work | `anthropic` | `claude-opus-5-5` |
 
-Pass the engine, provider, model, and chosen reasoning explicitly. `pi-claude` is a provider choice, not a request for a Claude engine. New jobs default to OMP; use `--engine pi` or `LIMEN_ENGINE=pi` only when Pi is required.
+Pass the engine, provider, model, and chosen reasoning explicitly. `pi-claude` is a Pi provider; on OMP use `anthropic`. New jobs default to OMP; use `--engine pi` or `LIMEN_ENGINE=pi` only when Pi is required.
 
 Start a coordinator in an existing Herdr pane at a shell prompt, with the project as its working directory:
 
