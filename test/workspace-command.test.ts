@@ -10,6 +10,7 @@ test("workspace coordinates explicit child repositories while its specs stay out
 	const initialized = limen(workspace, "workspace", "init");
 	assert.equal(initialized.status, 0, initialized.stderr);
 	assert.match(await readFile(join(workspace.root, "spec/workspace.md"), "utf8"), /never parses/i);
+	assert.equal(await readFile(join(workspace.root, ".omp/extensions/limen.ts"), "utf8"), await readFile(join(workspace.root, ".pi/extensions/limen.ts"), "utf8"));
 	await access(join(workspace.root, ".limen/jobs"));
 	await assert.rejects(access(join(workspace.root, ".gitignore")));
 	const missing = limen(workspace, "spawn", "no target");

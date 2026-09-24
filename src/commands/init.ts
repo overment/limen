@@ -24,7 +24,14 @@ export async function initCommand(args: readonly string[], cwd: string): Promise
 	}
 	if (!isGitRepository(cwd)) throw new Error("init requires a Git repository; run 'git init' first, or use 'limen workspace init' for a non-Git workspace");
 	const root = repoRoot(cwd);
-	for (const legacy of [".control", ".agents/control", ".pi/extensions/control-wake.ts", ".pi/extensions/control-communication.ts"]) {
+	for (const legacy of [
+		".control",
+		".agents/control",
+		".pi/extensions/control-wake.ts",
+		".pi/extensions/control-communication.ts",
+		".omp/extensions/control-wake.ts",
+		".omp/extensions/control-communication.ts",
+	]) {
 		if (await pathExists(`${root}/${legacy}`)) throw new Error(`legacy ${legacy} exists; leftover Control path — rename or remove it by hand`);
 	}
 	await initialize(root, true);
@@ -44,6 +51,7 @@ async function initialize(root: string, repository: boolean): Promise<void> {
 		[`${ROOT}/templates/spec/features/_template/outcome.md`, `${root}/spec/features/_template/outcome.md`],
 		...(["planned", "active", "done", "dropped"] as const).map((lane) => [`${ROOT}/templates/spec/features/${lane}/.gitkeep`, `${root}/spec/features/${lane}/.gitkeep`] as const),
 		[`${ROOT}/templates/limen-extension.ts`, `${root}/.pi/extensions/limen.ts`],
+		[`${ROOT}/templates/limen-extension.ts`, `${root}/.omp/extensions/limen.ts`],
 	] as const;
 	for (const [source, target] of copies) {
 		await mkdir(dirname(target), { recursive: true });

@@ -62,7 +62,7 @@ export LIMEN_ENGINE=omp
 LIMEN_COORDINATOR=1 omp --provider openai-codex --model gpt-6-sol --thinking xhigh
 ```
 
-`limen init` plants what the project owns (vision, board, feature lanes, styleguide) and a stub that loads package hooks. It never overwrites existing project files. It always deletes leftover `.pi/extensions/limen-*.ts` hook copies so they cannot load beside the stub. `limen init --drop-leftovers` deletes only prompt copies that still match the package.
+`limen init` plants what the project owns (vision, board, feature lanes, styleguide) and package-hook stubs in `.pi/extensions/` and `.omp/extensions/`. Herdr OMP coordinators need the `.omp` stub for communication, wake, and steering; rerun `limen init` in existing projects before starting one. Init never overwrites existing project files and deletes leftover `limen-*.ts` hook copies in both extension directories so they cannot load beside the stubs. `limen init --drop-leftovers` deletes only prompt copies that still match the package.
 
 That interactive session is the coordinator (`LIMEN_COORDINATOR=1`), not a spawned job. From here you talk. You do not drive the job CLI. `limen spawn` starts workers and reviewers — not a coordinator; the same env var on a spawn shell does not change the job's role. Prefer a Herdr space named for the plant (`limen`, or `alice limen`), not a space named only `workers`. Label the coordinator tab clearly. Worker tabs come from spawn. The inherited shop manual (`templates/agents.md`; a project `AGENTS.md` overlays it) carries the same layout rules.
 
@@ -160,7 +160,8 @@ The installed `limen` is the default shop manual, role prompts, speech register,
 spec/vision.md                        durable product intent
 spec/build.md                         TRACK / NOW / NEXT / PROVEN
 spec/features/                        planned, active, done, and dropped work
-.pi/extensions/limen.ts               stub: load hooks from the package
+.pi/extensions/limen.ts               Pi stub: load hooks from the package
+.omp/extensions/limen.ts              OMP stub: load the same hooks
 .limen/jobs/<id>/                     runtime evidence
 ```
 
