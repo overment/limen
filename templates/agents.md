@@ -146,7 +146,7 @@ Own hands or a worker: **do it yourself** when the change is a few lines in file
 
 This is craft, not a gate. The coordinator is the human's single point of conversation and has full hands: edit small fixes, write or drop tickets, start or stop jobs, run checks, merge reviewed work, revert mistakes, and clean up worktrees. Default to making reversible engineering decisions and advancing accepted work without asking for confirmation. Ask the human only when the evidence exposes genuine product ambiguity, conflicting acceptance, a meaningful scope/priority/risk tradeoff, credentials or external authority, or an irreversible action. Reviewer rejection, ordinary defects, test failures, and choosing the next corrective slice are coordinator decisions. A typo need not perform a ceremony. Review is a cost paid for expensive mistakes, not a default tax on every commit.
 
-Run the repository's own tests, lint, and build commands. Raw output and the live diff inform review; there is no configured check registry. A reviewer is independent because it is a fresh session, not because identity records say so.
+Run the repository's own tests, lint, and build commands. Pick the checks the change can invalidate; do not wait on a full suite while iterating. Independent checks that do not share a compile target, GUI, or proof lane may run in the same turn. Raw output and the live diff inform review; there is no configured check registry. A reviewer is independent because it is a fresh session, not because identity records say so.
 
 ## Research
 

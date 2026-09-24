@@ -14,11 +14,11 @@
 
 ## NOW
 
-- No active feature; Pi/OMP engine selection is landed.
+- `F014-github-doorbell` (🟠 ACTIVE): opt-in `/limen review` through a seat-scoped GitHub App to the project's persistent Herdr coordinator; hosted jobs only, one-command project connection, no detached fallback. GitHub is ingress, not a second coordinator.
 
 ## NEXT
 
-- GitHub doorbell remains the next product feature, solid partial over half-broken; quality follow-ups are planned, not started.
+- Quality follow-ups remain planned, not started.
 - `F728-hosted-engine-liveness` (🔴 PLANNED): keep a hosted OMP process live when Herdr loses its classification; reproduce the fallback gap before changing recovery.
 - `F729-continuation-publication` (🔴 PLANNED): publish continuation records safely against concurrent prune without adding workflow state.
 - `F730-job-guidance-matches-engines` (🔴 PLANNED): make job logs and guidance reflect the selected engine and available evidence.
@@ -27,7 +27,6 @@
 
 - `F081-spawn-refuses-an-unusable-route` (🔴 PLANNED): still waiting for a Pi-supported non-generating route probe. Rechecked installed Pi 0.84.2 on 2026-09-19: `auth check` still proves credentials only; model runtime has stream/complete, no exact-route validation. Failing candidate `b14b5fe` stays locked; no auth/catalog substitution. Hosted continuation file transport already landed.
 - `F050-living-architecture-picture` (🔴 PLANNED): background field-guide proposal remains parked; the stale existing picture is recorded in the latest quality findings, not refreshed by this wave.
-- `F014-github-doorbell` (🔴 PLANNED): after this subtraction plate; GitHub is ingress, not a second coordinator.
 
 ## DROPPED
 
