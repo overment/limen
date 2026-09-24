@@ -14,7 +14,7 @@
 
 ## NOW
 
-- `F014-github-doorbell` (🟠 ACTIVE): opt-in `/limen review` through a seat-scoped GitHub App to the project's persistent Herdr coordinator; hosted jobs only, one-command project connection, no detached fallback. GitHub is ingress, not a second coordinator.
+- `F014-github-doorbell` (🟠 ACTIVE): App poller, hosted handoff, and Alice operator guide are merged locally; live App, key isolation, PR receipts, and two-seat routing remain to prove before closing or calling the doorbell operational.
 
 ## NEXT
 
