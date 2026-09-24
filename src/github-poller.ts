@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
-import { createSign } from "node:crypto";
-import { readdir, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
+import { createHash, createSign } from "node:crypto";
+import { mkdir, readdir, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { claimPath, type GithubBinding, githubDir, originRepository, readBinding } from "./commands/github.ts";
@@ -58,11 +58,19 @@ async function appJwt(): Promise<string> {
 	return `${header}.${payload}.${signature}`;
 }
 
-async function persist(root: string, claim: GithubClaim): Promise<void> {
+async function mirror(root: string, claim: GithubClaim): Promise<void> {
 	const target = claimPath(root, claim.id);
 	const temp = `${target}.${process.pid}.tmp`;
-	await writeFile(temp, `${JSON.stringify(claim)}\n`, { mode: 0o660, flag: "wx", flush: true });
+	await writeFile(temp, `${JSON.stringify(claim)}\n`, { mode: 0o660, flag: "wx" });
 	await rename(temp, target);
+}
+
+async function persist(root: string, state: string, claim: GithubClaim): Promise<void> {
+	const target = join(state, "claims", `${claim.id}.json`);
+	const temp = `${target}.${process.pid}.tmp`;
+	await writeFile(temp, `${JSON.stringify(claim)}\n`, { mode: 0o600, flag: "wx", flush: true });
+	await rename(temp, target);
+	await mirror(root, claim); // worker-readable handoff, never an input to App posting
 }
 
 async function existingReceipt(repo: string, pr: number, marker: string, token: string): Promise<number | undefined> {
@@ -77,26 +85,37 @@ async function existingReceipt(repo: string, pr: number, marker: string, token: 
 	}
 }
 
-async function reply(root: string, claim: GithubClaim, token: string, kind: "start" | "terminal" | "notice", body: string): Promise<void> {
+async function reply(root: string, state: string, claim: GithubClaim, token: string, kind: "start" | "terminal" | "notice", body: string): Promise<void> {
 	const field = kind === "start" ? "startComment" : kind === "terminal" ? "terminalComment" : "noticeComment";
 	if (claim[field]) return;
 	const marker = `<!-- limen-github ${claim.repo.toLowerCase()} ${claim.id} ${kind} -->`;
 	const prior = await existingReceipt(claim.repo, claim.pr, marker, token);
 	const posted = prior ?? (await api<{ id: number }>(`/repos/${claim.repo}/issues/${claim.pr}/comments`, token, "POST", { body: `${body}\n\n${marker}` })).id;
 	claim[field] = posted;
-	await persist(root, claim);
+	await persist(root, state, claim);
 }
 
-export { reconcile as reconcileGithubClaim };
+// The test seam also reads authority from the private store; a checkout claim is never an input.
+export async function reconcileGithubClaim(root: string, state: string, id: number, token: string): Promise<void> {
+	let claim: GithubClaim;
+	try {
+		claim = JSON.parse(await readFile(join(state, "claims", `${id}.json`), "utf8")) as GithubClaim;
+	} catch (error) {
+		if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
+		throw error;
+	}
+	await reconcile(root, state, claim, token);
+}
 
-async function reconcile(root: string, claim: GithubClaim, token: string): Promise<void> {
+async function reconcile(root: string, state: string, claim: GithubClaim, token: string): Promise<void> {
 	const found = await matchedGithubJob(root, claim);
 	if (!found) {
 		if ((claim.receipt === "handoff attempted; outcome unconfirmed" || claim.receipt === "prompt accepted") && Date.now() - Date.parse(claim.attemptedAt ?? "") > 90_000) {
 			claim.receipt = "pending: no matching job record; inspect coordinator before retry";
-			await persist(root, claim);
+			await persist(root, state, claim);
 			await reply(
 				root,
+				state,
 				claim,
 				token,
 				"notice",
@@ -109,12 +128,13 @@ async function reconcile(root: string, claim: GithubClaim, token: string): Promi
 		claim.job = found.id;
 		claim.branch = found.branch;
 		claim.receipt = found.state;
-		await persist(root, claim);
+		await persist(root, state, claim);
 	}
 	if (!found.started) {
 		if (found.state !== "running")
 			await reply(
 				root,
+				state,
 				claim,
 				token,
 				"notice",
@@ -124,6 +144,7 @@ async function reconcile(root: string, claim: GithubClaim, token: string): Promi
 	}
 	await reply(
 		root,
+		state,
 		claim,
 		token,
 		"start",
@@ -135,6 +156,7 @@ async function reconcile(root: string, claim: GithubClaim, token: string): Promi
 	const evidence = (result ?? "").trim().slice(0, 1600) || (log ?? "").trim().split("\n").slice(-10).join("\n").slice(0, 1600) || "No result or check evidence recorded.";
 	await reply(
 		root,
+		state,
 		claim,
 		token,
 		"terminal",
@@ -144,7 +166,7 @@ async function reconcile(root: string, claim: GithubClaim, token: string): Promi
 
 export { accept as acceptGithubComment };
 
-async function accept(root: string, binding: GithubBinding, comment: Comment, token: string): Promise<void> {
+async function accept(root: string, state: string, binding: GithubBinding, comment: Comment, token: string): Promise<void> {
 	if (comment.body !== "/limen review" || !comment.user || Date.parse(comment.created_at) < Date.parse(binding.connectedAt)) return;
 	if (!Number.isSafeInteger(comment.id) || comment.id < 1) throw new Error("GitHub comment has an invalid ID");
 	const pr = Number(/\/issues\/(\d+)$/.exec(comment.issue_url)?.[1]);
@@ -166,31 +188,34 @@ async function accept(root: string, binding: GithubBinding, comment: Comment, to
 	}
 	if (pull.state !== "open" || pull.number !== pr || pull.base.repo.full_name.toLowerCase() !== binding.repo.toLowerCase()) return;
 	if (!/^[0-9a-f]{40}$/.test(pull.head.sha) || !/^[0-9a-f]{40}$/.test(pull.base.sha) || !/^[\w./-]+$/.test(pull.base.ref)) throw new Error("GitHub returned invalid PR refs");
-	const path = claimPath(root, comment.id);
+	const path = join(state, "claims", `${comment.id}.json`);
 	let claim: GithubClaim;
 	try {
 		claim = JSON.parse(await readFile(path, "utf8")) as GithubClaim;
 	} catch (error) {
+		if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
 		claim = { repo: binding.repo, id: comment.id, pr, actor: comment.user.login, url: comment.html_url, base: pull.base.sha, baseRef: pull.base.ref, head: pull.head.sha };
-		await writeFile(path, `${JSON.stringify(claim)}\n`, { flag: "wx", mode: 0o660, flush: true }); // durable claim before handoff
+		await writeFile(path, `${JSON.stringify(claim)}\n`, { flag: "wx", mode: 0o600, flush: true }); // authoritative claim before handoff
+		await mirror(root, claim);
 	}
 	if (claim.receipt || claim.job) {
-		await reconcile(root, claim, token);
+		await reconcile(root, state, claim, token);
 		return;
 	}
 	// Record an ambiguous attempt before invoking Herdr. Never blindly prompt twice on a retry.
 	claim.attemptedAt = new Date().toISOString();
 	claim.receipt = "handoff attempted; outcome unconfirmed";
-	await persist(root, claim);
+	await persist(root, state, claim);
 	const delivered = spawnSync("sudo", ["-n", "-u", binding.user, "--", process.env.LIMEN_GITHUB_LIMEN_BIN || "limen", "github", "deliver", root, String(claim.id)], {
 		encoding: "utf8",
 		timeout: 20_000,
 	});
 	if (delivered.status !== 0) {
 		claim.receipt = `pending: Herdr delivery failed (${(delivered.stderr || delivered.error?.message || "unavailable").trim().slice(0, 250)})`;
-		await persist(root, claim);
+		await persist(root, state, claim);
 		await reply(
 			root,
+			state,
 			claim,
 			token,
 			"notice",
@@ -199,13 +224,19 @@ async function accept(root: string, binding: GithubBinding, comment: Comment, to
 		return;
 	}
 	claim.receipt = "prompt accepted";
-	await persist(root, claim);
-	await reconcile(root, claim, token);
+	await persist(root, state, claim);
+	await reconcile(root, state, claim, token);
 }
 
-async function project(root: string, jwt: string): Promise<void> {
+async function project(root: string, stateDir: string, jwt: string): Promise<void> {
 	const binding = await readBinding(root);
 	if (!binding || originRepository(root, true).toLowerCase() !== binding.repo.toLowerCase()) return;
+	const state = join(stateDir, createHash("sha256").update(root).digest("hex"));
+	await mkdir(join(state, "claims"), { recursive: true, mode: 0o700 });
+	for (const dir of [state, join(state, "claims")]) {
+		const info = await stat(dir);
+		if (info.uid !== process.getuid?.() || (info.mode & 0o077) !== 0 || !info.isDirectory()) throw new Error(`unsafe poller claim directory ${dir}`);
+	}
 	const lock = join(githubDir(root), "poll.lock");
 	await writeFile(lock, `${process.pid}\n`, { flag: "wx", mode: 0o660 });
 	try {
@@ -220,14 +251,14 @@ async function project(root: string, jwt: string): Promise<void> {
 		)
 			throw new Error("registered coordinator has unsafe Unix privileges; disconnect until its sudo access is removed");
 		const token = await installationToken(binding.repo, jwt); // a token scoped to this installed repository only
-		const claimsDir = join(githubDir(root), "claims");
+		const claimsDir = join(state, "claims");
 		for (const entry of await readdir(claimsDir)) {
 			if (!/^\d+\.json$/.test(entry)) continue;
 			const claim = JSON.parse(await readFile(join(claimsDir, entry), "utf8")) as GithubClaim;
-			if (claim.repo.toLowerCase() === binding.repo.toLowerCase()) await reconcile(root, claim, token);
+			if (claim.repo.toLowerCase() === binding.repo.toLowerCase()) await reconcile(root, state, claim, token);
 		}
 		// Keep a durable cursor, with one second overlap for comments sharing a GitHub timestamp.
-		const cursorPath = join(githubDir(root), "cursor.json");
+		const cursorPath = join(state, "cursor.json");
 		const cursor = await readFile(cursorPath, "utf8").then(
 			(text) => JSON.parse(text) as { id: number; createdAt: string },
 			() => ({ id: 0, createdAt: binding.connectedAt }),
@@ -240,11 +271,11 @@ async function project(root: string, jwt: string): Promise<void> {
 			);
 			for (const comment of comments) {
 				if (comment.id <= cursor.id) continue;
-				await accept(root, binding, comment, token);
+				await accept(root, state, binding, comment, token);
 				cursor.id = comment.id;
 				cursor.createdAt = comment.created_at;
 				const temp = `${cursorPath}.${process.pid}.tmp`;
-				await writeFile(temp, `${JSON.stringify(cursor)}\n`, { flag: "wx", mode: 0o660 });
+				await writeFile(temp, `${JSON.stringify(cursor)}\n`, { flag: "wx", mode: 0o600 });
 				await rename(temp, cursorPath);
 			}
 			if (comments.length < 100) break;
@@ -257,6 +288,12 @@ async function project(root: string, jwt: string): Promise<void> {
 export async function pollGithub(): Promise<void> {
 	const registry = process.env.LIMEN_GITHUB_PROJECTS_FILE;
 	if (!registry || !isAbsolute(registry) || process.getuid?.() === 0) throw new Error("github poll requires an isolated non-root poller and absolute LIMEN_GITHUB_PROJECTS_FILE");
+	const stateDir = process.env.LIMEN_GITHUB_STATE_DIR;
+	if (!stateDir || !isAbsolute(stateDir)) throw new Error("github poll requires absolute LIMEN_GITHUB_STATE_DIR");
+	const stateInfo = await stat(stateDir);
+	if (!stateInfo.isDirectory() || stateInfo.uid !== process.getuid?.() || (stateInfo.mode & 0o077) !== 0)
+		throw new Error("poller state directory must be private and poller-owned");
+	await privatePath(stateDir, [0, process.getuid?.() ?? -1]);
 	const workerUid = Number(process.env.LIMEN_GITHUB_WORKER_UID);
 	if (!Number.isSafeInteger(workerUid) || workerUid <= 0) throw new Error("poller requires LIMEN_GITHUB_WORKER_UID");
 	if (process.getuid?.() === workerUid) throw new Error("poller and hosted workers must have different Unix users");
@@ -268,7 +305,7 @@ export async function pollGithub(): Promise<void> {
 	const projects = [...new Set((await readFile(registry, "utf8")).split("\n").filter(Boolean))];
 	for (const root of projects) {
 		try {
-			if (resolve(root) === root) await project(root, jwt);
+			if (resolve(root) === root) await project(root, stateDir, jwt);
 		} catch (error) {
 			console.error(`${root}: ${error instanceof Error ? error.message : String(error)}`);
 			process.exitCode = 1;
