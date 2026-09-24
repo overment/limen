@@ -1,6 +1,7 @@
 import { closeCommand } from "./commands/close.ts";
 import { continueCommand } from "./commands/continue.ts";
 import { diffCommand } from "./commands/diff.ts";
+import { githubCommand } from "./commands/github.ts";
 import { initCommand, workspaceCommand } from "./commands/init.ts";
 import { jobsCommand } from "./commands/jobs.ts";
 import { landCommand } from "./commands/land.ts";
@@ -21,6 +22,7 @@ type Command = (args: readonly string[], cwd: string) => Promise<void>;
 const COMMANDS = {
 	init: initCommand,
 	workspace: workspaceCommand,
+	github: githubCommand,
 	spawn: spawnCommand,
 	continue: continueCommand,
 	diff: diffCommand,
@@ -42,6 +44,7 @@ const COMMANDS = {
 	| "workspace"
 	| "spawn"
 	| "continue"
+	| "github"
 	| "diff"
 	| "steer"
 	| "stop"
@@ -85,6 +88,8 @@ usage:
   limen ticket-author <ticket-path>                 # creation-commit author, following Git renames
   limen sweep [--install|--uninstall]
   limen linear [on [--team T --project P]|off|status]   # Linear mirror toggle — renames spec/linear.md ↔ .off; --team/--project write a fresh config
+  limen github connect|disconnect|status       # seat-local GitHub App doorbell
+  limen github poll                            # run one polling pass as the isolated App user
 Pass a short coordinator instruction, not $(cat ticket.md). The ticket is a pointer, not the prompt.`;
 export async function main(args: readonly string[], cwd = process.cwd()): Promise<void> {
 	try {

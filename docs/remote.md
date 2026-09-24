@@ -11,11 +11,9 @@ This is operator guidance, not a provisioner. Limen does not install Tailscale o
 | Layer | Role | What it is not |
 |---|---|---|
 | **Seat** | Runs `pi`, `limen`, optional Herdr; holds job files and worktrees | A second clone you `limen spawn` from |
-| **Doorbell** | GitHub mention or label that asks the seat to spawn | The coordinator, a merge gate, or CI |
+| **Doorbell** | An opt-in GitHub App poller, isolated under its own Unix user, routes one exact PR comment to the project's persistent Herdr coordinator | A runner, a merge gate, or CI |
 
-Build the seat until it is boring. Then the doorbell. Auto-picking every PR is unsolicited ownership — keep it opt-in (`limen:triage` or equivalent) and last.
-
-Limen writes files. The seat consumes them. Do not add Tailscale, ntfy, or GitHub to `src/`.
+The App identity is seat-scoped; each project opts in with `limen github connect`. No inbound port or laptop consumer. Never install the private key in a checkout or in an account that runs hosted workers.
 
 ## One disk
 
@@ -39,7 +37,7 @@ Do not: SSHFS the worktrees; run a coordinator on the laptop against a different
 3. **See the product**
    - Usual: preview bound to localhost on the seat, published with `tailscale serve` — open that HTTPS URL. No pull.
    - Local feel (simulator, GPU, your browser profile): `git fetch` the **branch** into a disposable laptop clone and run the app. That clone is a viewer, not a Limen root.
-4. **PR / mention** (once the doorbell exists) — comment on GitHub; the seat spawns; you attach later and see the same job record.
+4. **PR command** (after setup below) — an authorized collaborator comments exactly `/limen review` on an open PR; the seat prompts its registered coordinator, which starts a hosted review. `limen github status` shows the latest delivery; attach to inspect the actual job.
 5. **Travel** — any tailnet device: attach, or just the preview URL.
 
 ## What you pull, and when
@@ -58,7 +56,7 @@ Buy the box, then follow [vps.md](vps.md). Short version:
 1. Ubuntu LTS, 8 GB RAM, ≥150 GB disk, Tailscale, SSH key only. Node 24, Git, `gh`, `pi`, Herdr, `limen` linked from a clone of this repo.
 2. Clone the work **branch** (not only `origin/HEAD`). `limen init` in that checkout. Keys stay on the seat.
 3. Bell: Moshi (`moshi-hook pair --store file`, `service install`, `loginctl enable-linger`). ntfy is fallback — [seat/](seat/README.md).
-4. Persistent Herdr session on the box. Attach with `herdr --remote`. First job: `limen spawn --detached`.
+4. Persistent Herdr session on the box. Attach with `herdr --remote`. For the GitHub doorbell, the registered coordinator must stay available in that session; ordinary seat jobs may still run detached.
 5. `tailscale serve` for previews. `limen prune` on a timer. No unattended reboot.
 
 Do not move the coordinator until a detached job finishes with the lid closed and the phone rings. Do not run a coordinator on the Mac **and** the VPS during migration.
@@ -85,23 +83,50 @@ These change guarantees on a typical VPS seat. They are not a porting list.
 ## Traps (will bite on day one)
 
 - **Wake is not the bell.** Footer, toast, and `sendUserMessage` fire in the coordinator session *on the seat*. You are not looking at it. Moshi (`pair --store file` + linger) is the attention channel; ntfy is fallback. `host setup` is SSH/Mosh onto the box, not the hook. Do not wait for a Limen-owned notifier (`LIMEN_NOTIFY` does not exist).
-- **Hosted-by-default is wrong on a seat.** Inside Herdr, `limen spawn` is hosted (`HERDR_ENV=1`) — no 90-minute timeout, no tool-call cap, no F007. That encodes “you are watching.” On the seat, pass `--detached` unless you are attached and intend to type. `LIMEN_SPAWN` is not a flag yet.
+- **Hosted on a seat remains an explicit choice.** Inside Herdr, `limen spawn` is hosted (`HERDR_ENV=1`). Ordinary unattended jobs may use `--detached`; the GitHub PR doorbell is different: it never falls back to detached when Herdr is unavailable.
 - **`--tab` must start while the new tab is focused.** Herdr 0.8 will not launch an agent in a background pane (`not an available shell`, or a start that never lands). Limen focuses the new tab, starts `pi`, then restores the coordinator. First smoke on a seat is still `--detached`. Hosted tabs need `herdr integration install pi`.
 - **Herdr `done` is unseen idle**, not process exit. On a seat you attach twice a day, so almost every tab reads `done`. Limen must not treat that as terminal (already true as of `c316fce`). A quiet think in a background tab is the same lie — no idle-after-tools timer. Complete on `session-ended` or a vanished agent. Do not “fix” `idle` vs `done` for headless.
 - **A laptop clone is not a Limen root.** Attach; do not `limen spawn` from it. That is a second cabinet.
 - **Checkout the work branch.** `origin/HEAD` plus `limen init` is a blank cabinet. `gh` on the box is HTTPS — do not `git@` unless you added a key. Do not copy `.limen/` to the laptop.
 - **Two coordinators can double-deliver a wake.** A machine suspended mid-claim for over 30 s can produce a rare duplicate wake — at-least-once is the designed failure direction, not a bug to file.
 
-## Doorbell (not built)
+## GitHub doorbell (opt in per project)
 
-Stay outside `src/`. A systemd timer on the seat that `gh api`s mentions/labels, `limen spawn --detached`s, and `gh pr comment`s back is enough. Dedupe on disk (`comment_id` → job id) or a re-poll double-spawns. No GitHub App, no inbound webhook, no public port.
+Provision once **per seat**, as root. On the Alice VPS the worker/coordinator is `overment`; it must have **no sudo, wheel, or admin membership, no NOPASSWD rule, and no cached noninteractive sudo authority**. The old VPS recipe granted `overment ALL=(ALL) NOPASSWD:ALL`: run `rm /etc/sudoers.d/overment && gpasswd -d overment sudo` as root, audit `sudo -l -U overment`, and log out/in before connecting. A worker sharing that account can otherwise sudo-read any App key, regardless of its mode bits. Keep root administration on a separate SSH login/identity not available to hosted workers. `limen github connect` and `github deliver` refuse a privileged account.
 
-- Mention or an explicit label → spawn on the seat.
-- Comment back: job id, branch, checks, log pointer.
-- Human merges. CI stays CI.
-- Unlabeled PRs stay untouched.
+1. Create a GitHub App for this seat, installed **only** on repositories this seat owns. Set repository permissions **Metadata: read, Issues: read and write, Pull requests: read** (and the GitHub collaborator-permission endpoint must return the actor's effective repository role). Disable webhooks; polling needs no inbound port. Record App ID; generate a private key. A second VPS gets its own App and key.
+2. Install an immutable, root-owned Limen release at `/opt/limen` (`git clone` as root, `npm ci` from its lockfile; no symlink to the worker checkout). Create Unix group and service user: `groupadd limen-github`; `useradd --system --home-dir /var/lib/limen-github --create-home --shell /usr/sbin/nologin --gid limen-github limen-github`; `usermod -aG limen-github overment`. Keep `/opt/limen` and every parent root-owned and not group/other writable. Polling refuses worker-owned code or an unsafe parent.
+3. As root: `install -d -o root -g limen-github -m 0750 /etc/limen-github`; put the App PEM there **without first staging it in overment's home**, then `chown limen-github:limen-github /etc/limen-github/app.pem && chmod 0600 /etc/limen-github/app.pem`. Verify as the worker `test ! -r /etc/limen-github/app.pem` and as root `sudo -u limen-github test -r /etc/limen-github/app.pem`; stop if either fails. The worker may traverse this directory but cannot read the key. Do not give the worker the App key or an installation token in its environment, task, log, or worktree.
+4. The poller reads the seat's existing project registry (`/home/overment/.limen/projects`). Grant `limen-github` traverse ACLs on `/home/overment`, each checkout parent, and each project root (`setfacl -m u:limen-github:--x /home/overment /path/to/project`); the registry must be readable. Project `.limen/` must already exist from `limen init`; `connect` gives the shared group access to only `.limen/github/` and read/traverse access to `.limen/`. Verify the poller can traverse the checkout and read the registry. Do not put the key in this group-readable tree.
+5. Permit **only the poller** to invoke the narrow Herdr handoff as the coordinator account. A root-owned sudoers file (mode 0440, validate with `visudo -cf`) contains `limen-github ALL=(overment) NOPASSWD: /opt/limen/bin/limen github deliver *`. This does **not** grant `overment` sudo. Install a root-owned `/etc/limen-github/poller.env` (0600) with `LIMEN_GITHUB_APP_ID=<numeric-id>`, `LIMEN_GITHUB_KEY_FILE=/etc/limen-github/app.pem`, `LIMEN_GITHUB_PROJECTS_FILE=/home/overment/.limen/projects`, `LIMEN_GITHUB_WORKER_UID=<id -u overment>`, `LIMEN_GITHUB_LIMEN_BIN=/opt/limen/bin/limen`. Do not place private key bytes or a token in this file.
+6. Install root-owned `/etc/systemd/system/limen-github.service`:
 
-See `spec/features/planned/F014-github-doorbell/ticket.md`. Promote into Limen only if that script is copied to a third machine and still identical.
+   ```ini
+   [Service]
+   Type=oneshot
+   User=limen-github
+   EnvironmentFile=/etc/limen-github/poller.env
+   ExecStart=/opt/limen/bin/limen github poll
+   ```
+
+   Install `/etc/systemd/system/limen-github.timer`:
+
+   ```ini
+   [Timer]
+   OnBootSec=1min
+   OnUnitInactiveSec=1min
+   Persistent=true
+
+   [Install]
+   WantedBy=timers.target
+   ```
+
+   Ensure Node 24 (`/usr/bin/node`) and Herdr (`/usr/local/bin/herdr`) are available to systemd and sudo's secure PATH. Run `systemctl daemon-reload && systemctl enable --now limen-github.timer`. One service invocation scans all registered projects; systemd serializes its timer. Inspect `journalctl -u limen-github.service` for failures.
+7. In **each project's persistent Herdr coordinator** (with `LIMEN_COORDINATOR=1` and its own `HERDR_PANE_ID`), run `limen github connect` from its initialized Git checkout. This detects `origin`, writes a private, ignored `.limen/github/binding.json` and enables that repository for the already running seat timer. `limen github status` shows binding and last receipt without credentials. A laptop clone has no registration and consumes nothing. For a move: `limen github disconnect` on the old seat **before** `connect` on the new seat; it removes the binding and waits for an in-flight poll. If `.limen/github/poll.lock` persists after a crash, inspect the old poller before clearing it or connecting elsewhere. Never copy `.limen/`.
+
+The poller accepts only a comment whose entire body is `/limen review`, verifies the collaborator's effective write-or-higher role and an open PR in the installed repository, and pins the PR's reported base/head SHA. The structured request goes to `herdr agent prompt <recorded-pane> <text>` as the coordinator user; Herdr acceptance does not count as a job. The coordinator's installed shop manual instructs it to run `limen github review <root> <comment-id>` inside that pane. That command fetches and verifies the real base and PR head, records `GitHub doorbell: repo#comment-id` in the task, and starts a **hosted** review. The poller posts a start receipt only after observing a matching hosted job record with the pinned SHA/base; later it posts the terminal state and recorded evidence. `done` is not approval. No push or merge.
+
+Claims live in `.limen/github/claims/<comment-id>.json` before any prompt. Re-polls reconcile them against `.limen/jobs/` and never blindly re-prompt an ambiguous delivery. A missing coordinator gets one pending notice on the PR; no detached job. Inspect `limen github status`, the claim, `limen jobs --all`, and the coordinator tab before deliberate recovery. If a claim is truly unhanded-off, the operator can submit a **new** `/limen review` comment; do not delete a claim or move a pinned branch while a coordinator might still be acting. A moved PR head/base needs a new command.
 
 ## When you come back
 
@@ -110,7 +135,7 @@ See `spec/features/planned/F014-github-doorbell/ticket.md`. Promote into Limen o
 3. Node 24, Git, `gh`, `pi`, Herdr, `limen` (`npm link` from `~/limen`). Checkout the work branch. `limen init`.
 4. Persistent Herdr session. `herdr --remote alice` (or your `Host` alias). First smoke: `--detached`.
 5. Prove, in order: lid-closed `--detached` job → phone rings → `limen jobs` on attach shows the same id → `tailscale serve` preview opens on the Mac.
-6. Only then live on the seat. Do not write Limen code to “support the VPS.” Optional later, and only after you have typed them twice: `LIMEN_SPAWN=detached`, `LIMEN_NOTIFY=` exec after a wake claim.
+6. Only then live on the seat. The opt-in PR doorbell needs the separate App-user setup above; `LIMEN_SPAWN=detached` and `LIMEN_NOTIFY=` remain unbuilt seat conveniences.
 
 ## Related
 

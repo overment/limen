@@ -32,6 +32,8 @@ type SpawnOptions = {
 	taskFile?: string;
 	label?: string;
 	branch?: string;
+	base?: string;
+	head?: string;
 	repo?: string;
 	model?: string;
 	provider?: string;
@@ -80,6 +82,8 @@ export async function spawnCommand(args: readonly string[], cwd: string): Promis
 	const repository = workspace ? workspaceRepository(root, options.repo ?? "") : root;
 	const task = loaded.raw ? loaded.text : workspace ? workspaceTask(options.task, root, options.repo ?? "") : options.task;
 	const role = options.review ? "reviewer" : (options.role ?? "worker");
+	if (options.base && !/^[0-9a-f]{40}$/.test(options.base)) throw new Error("--base requires a full commit SHA");
+	if (options.head && !/^[0-9a-f]{40}$/.test(options.head)) throw new Error("--head requires a full commit SHA");
 	const preamble = resolvePreamble(root, role);
 	const id = makeJobId(options.label);
 	const jobsRoot = `${root}/.limen/jobs`;
@@ -105,6 +109,7 @@ export async function spawnCommand(args: readonly string[], cwd: string): Promis
 		...(workspace ? { repo: options.repo ?? "" } : {}),
 		...(options.branch ? { requestedBranch: options.branch } : {}),
 	});
+	if (options.head && branchCommit(repository, branch) !== options.head) throw new Error("pinned review head moved before spawn");
 	const baseCommit = plan.kind === "add-new" ? headCommit(repository) : branchCommit(repository, branch);
 	for (const [, ticket] of task.matchAll(/\bTicket: (spec\/\S+)/g))
 		if (ticket && !commitHasFile(repository, baseCommit, ticket)) throw new Error(`ticket ${ticket} is missing from the base commit`);
@@ -126,7 +131,7 @@ export async function spawnCommand(args: readonly string[], cwd: string): Promis
 		worktree = executeWorktree(repository, plan);
 		await pruneFinishedWorktrees(root, [worktree]).catch(() => {});
 		const candidate = options.review ? branchCommit(repository, branch) : undefined;
-		const base = headCommit(worktree);
+		const base = options.base ?? headCommit(worktree);
 		await mkdir(`${jobDir}/notify/subscribers`, { recursive: true });
 		const taskBody = loaded.raw ? loaded.bytes : candidate ? `${task.trim()}\n\nCandidate commit: ${candidate}.\n` : `${task.trim()}\n`;
 		await Promise.all([
@@ -304,7 +309,7 @@ function executeWorktree(root: string, plan: WorktreePlan): string {
 }
 function parseSpawnArgs(args: readonly string[]): SpawnOptions {
 	let branch: string | undefined, repo: string | undefined, label: string | undefined, model: string | undefined;
-	let provider: string | undefined, thinking: string | undefined;
+	let provider: string | undefined, thinking: string | undefined, base: string | undefined, head: string | undefined;
 	let timeoutMs: number | undefined, taskFile: string | undefined, prepare: string | undefined, role: string | undefined, engine: string | undefined;
 	let review = false,
 		tab = false,
@@ -319,7 +324,9 @@ function parseSpawnArgs(args: readonly string[]): SpawnOptions {
 		else if (!positional && value === "--tab") tab = true;
 		else if (!positional && value === "--detached") detached = true;
 		else if (!positional && value.startsWith("--")) {
-			if (!["--branch", "--repo", "--label", "--model", "--provider", "--thinking", "--timeout", "--task-file", "--prepare", "--role", "--engine"].includes(value))
+			if (
+				!["--branch", "--repo", "--label", "--model", "--provider", "--thinking", "--timeout", "--task-file", "--prepare", "--role", "--engine", "--base", "--head"].includes(value)
+			)
 				throw new Error(`unknown spawn option ${value}`);
 			const optionValue = args[index + 1];
 			if (!optionValue) throw new Error(`${value} requires a value`);
@@ -327,6 +334,8 @@ function parseSpawnArgs(args: readonly string[]): SpawnOptions {
 			if (value === "--branch") branch = once(branch, value, optionValue);
 			else if (value === "--repo") repo = once(repo, value, optionValue);
 			else if (value === "--label") label = once(label, value, normalizeLabel(optionValue));
+			else if (value === "--base") base = once(base, value, optionValue);
+			else if (value === "--head") head = once(head, value, optionValue);
 			else if (value === "--model") model = once(model, value, optionValue);
 			else if (value === "--provider") provider = once(provider, value, optionValue);
 			else if (value === "--thinking") thinking = once(thinking, value, optionValue);
@@ -341,6 +350,7 @@ function parseSpawnArgs(args: readonly string[]): SpawnOptions {
 		} else task.push(value);
 	}
 	if (review && role) throw new Error("--role and --review cannot be combined");
+	if ((base || head) && !review) throw new Error("--base and --head require --review");
 	if (taskFile && task.length) throw new Error("spawn accepts a positional task or --task-file, not both");
 	if (!taskFile && (task.length === 0 || !task.join(" ").trim())) throw new Error("spawn requires task text");
 	const out: SpawnOptions = { task: task.join(" "), review, tab, detached, ...(role ? { role } : {}), ...(engine ? { engine } : {}) };
@@ -348,6 +358,8 @@ function parseSpawnArgs(args: readonly string[]): SpawnOptions {
 	if (taskFile) out.taskFile = taskFile;
 	if (prepare) out.prepare = prepare;
 	if (branch) out.branch = branch;
+	if (base) out.base = base;
+	if (head) out.head = head;
 	if (repo) out.repo = repo;
 	if (model) out.model = model;
 	if (provider) out.provider = provider;

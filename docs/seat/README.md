@@ -15,7 +15,7 @@ Units next to this file: `bell.sh`, `limen-bell.{service,timer}`, `limen-prune.{
 1. `tailscale up`. Confirm you can `ssh you@that-name` from the Mac.
 2. Node 24, Git, `gh`, `pi` on `PATH`. Install Herdr the same way you did on the Mac.
 3. Clone limen, `npm install && npm link`. Clone **one** project. `limen init` there.
-4. Keys live only here: model provider, `gh auth login`, deploy tokens. Same identity as the Mac, not a second one.
+4. Model provider, `gh auth login`, and deploy tokens stay on the seat. The **GitHub App key** for the optional PR doorbell is different: it belongs only to the separate `limen-github` Unix user, never to the worker/coordinator account.
 5. Disable automatic reboot under live jobs (`Unattended-Upgrade::Automatic-Reboot "false";`). Patch when you choose.
 6. Start a persistent Herdr session (or `herdr server` under systemd) so attach works with the lid closed.
 7. `herdr integration install pi` if hosted tabs are wanted later. First jobs: `limen spawn --detached`. `LIMEN_SPAWN` is not a flag yet.
@@ -59,8 +59,12 @@ If 1 fails, do not move the coordinator. If 1–3 work, the laptop is a window f
 
 `limen stop` on Linux cannot use Darwin process identity. Treat it as best-effort. Job files are truth.
 
+## GitHub doorbell
+
+The opt-in GitHub App doorbell is documented in [docs/remote.md](../remote.md): separate Unix poller identity, private App key, and one `limen github connect` per project. Do not use an old `gh` mention timer or detached spawn for PR review.
+
 ## Not yet
 
-GitHub mention → spawn (F014, operator `gh` timer — not a GitHub App). `LIMEN_SPAWN` / `LIMEN_NOTIFY`. Hosted-by-default on a seat. Linux process-identity parity.
+`LIMEN_SPAWN` / `LIMEN_NOTIFY` and Linux process-identity parity remain separate work.
 
 Pickup narrative and traps: [docs/remote.md](../remote.md).
