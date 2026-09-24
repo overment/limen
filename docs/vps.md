@@ -41,9 +41,6 @@ As **root** on the box:
 
 ```bash
 adduser --disabled-password --gecos "" overment
-usermod -aG sudo overment
-echo 'overment ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/overment
-chmod 440 /etc/sudoers.d/overment
 
 mkdir -p /home/overment/.ssh
 cp /root/.ssh/authorized_keys /home/overment/.ssh/authorized_keys
@@ -62,19 +59,19 @@ On the laptop, change `User root` → `User overment`. Keep a **second** termina
 
 ```bash
 ssh alice
-whoami          # overment
-sudo -n true
+id -nG          # no sudo, wheel, or admin group
+sudo -n -l      # MUST NOT grant noninteractive sudo; use separate root SSH for administration
 ```
 
 `ssh alice` still landing as `root` means the config was not saved. Root break-glass: `ssh -i ~/.ssh/alice root@PUBLIC_IP`.
 
 ## 2 · Tailscale
 
-On the box as the non-root user:
+On the box as **root** through the separate administrative SSH login (not from a hosted `overment` shell):
 
 ```bash
 curl -fsSL https://tailscale.com/install.sh | sh
-sudo tailscale up
+tailscale up
 ```
 
 Open the printed URL on the laptop, approve the node, name it to match the hostname.
@@ -106,11 +103,17 @@ Skip ntfy if Moshi already reaches the phone. Herdr toasts on the box stay on th
 
 The Mac `moshi-hook` binary is Darwin. Do **not** `scp` it. GitHub raw install.sh may 429 — use the CDN:
 
+On the box, download as `overment`; install the binary in a separate **root** shell:
+
 ```bash
-cd /tmp
-curl -fL -o moshi.tgz https://cdn.getmoshi.app/hook/v0.2.73/moshi-hook_Linux_x86_64.tar.gz
-sudo tar -xzf moshi.tgz -C /usr/local/bin moshi-hook
-sudo ln -sfn /usr/local/bin/moshi-hook /usr/local/bin/moshi
+curl -fL -o /tmp/moshi.tgz https://cdn.getmoshi.app/hook/v0.2.73/moshi-hook_Linux_x86_64.tar.gz
+```
+
+As root:
+
+```bash
+tar -xzf /tmp/moshi.tgz -C /usr/local/bin moshi-hook
+ln -sfn /usr/local/bin/moshi-hook /usr/local/bin/moshi
 moshi-hook version
 ```
 
@@ -125,9 +128,9 @@ Two Moshi verbs, do not confuse them:
 
 `host setup`: pick **MagicDNS**, not a `10.x` VPC address (the phone cannot route there). It requires `mosh`:
 
+As root install `mosh` (`apt-get update && apt-get install -y mosh`); then as `overment`:
+
 ```bash
-sudo apt-get update
-sudo apt-get install -y mosh
 moshi-hook host setup
 ```
 

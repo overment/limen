@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { chmod, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
@@ -1163,7 +1163,8 @@ console.log(JSON.stringify({ type: "message_end", message: { role: "assistant", 
 	assert.doesNotThrow(() => process.kill(pid, 0));
 	await assert.rejects(readFile(join(herdr.dir, "prompt-read")), "caller must be gone before Herdr reads the continuation");
 	const prompt = JSON.parse(await waitForFile(join(herdr.dir, "prompt-read"), /refine the seam/)) as { file: string; text: string };
-	assert.deepEqual(prompt, { file: join(job, "continue"), text: "now refine the seam\n" });
+	assert.equal(prompt.text, "now refine the seam\n");
+	assert.equal(await realpath(prompt.file), await realpath(join(job, "continue")));
 	const shellBusyPid = await readFile(join(herdr.dir, "shell-busy"), "utf8");
 	context.diagnostic(`continue caller printed ID and was killed in ${returnedMs}ms; supervisor ${pid} then passed the durable continuation to Herdr`);
 	const calls = await waitForFile(herdr.calls, /agent start /);
