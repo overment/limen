@@ -113,6 +113,8 @@ function removeAbandonedLock(lock: string, reclaimer: string): boolean {
 	}
 }
 function run(command: string, args: readonly string[]): Promise<boolean> {
-	return new Promise((done) => execFile(command, args, { timeout: 2_000 }, (error) => done(!error)));
+	const requested = Number(process.env.LIMEN_SEAT_NOTIFY_TIMEOUT_MS);
+	const timeout = Number.isFinite(requested) && requested > 0 ? requested : 2_000;
+	return new Promise((done) => execFile(command, args, { timeout }, (error) => done(!error)));
 }
 const xml = (value: string) => value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
