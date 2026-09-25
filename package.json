@@ -11,6 +11,9 @@
 		"src",
 		"hook",
 		"templates",
+		"docs/seat",
+		"docs/remote.md",
+		"docs/vps.md",
 		"README.md",
 		"LICENSE"
 	],
