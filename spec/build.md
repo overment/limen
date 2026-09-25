@@ -15,6 +15,7 @@
 ## NOW
 
 - `F014-github-doorbell` (🟠 ACTIVE): App poller, hosted handoff, and Alice operator guide are merged locally; live App, key isolation, PR receipts, and two-seat routing remain to prove before closing or calling the doorbell operational.
+- `F731-seat-bell-once` (🟠 ACTIVE): Stop the seat sweep replaying the same finished or stalled job forever; old markers and concurrent sweeps must not ring again.
 
 ## NEXT
 
