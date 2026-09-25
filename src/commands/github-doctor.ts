@@ -251,14 +251,13 @@ export async function githubDoctor(root: string, seat: Seat = seatDefaults()): P
 		const limen = await info(join(project, ".limen"));
 		const github = await info(join(project, ".limen/github"));
 		const bindingFile = await info(bindingPath(project));
-		let traverse = !!registryPath?.isDirectory();
-		for (let parent = project; parent !== dirname(parent); parent = dirname(parent)) traverse &&= aclAllows(parent, seat.poller, "x", pollerUid, gid);
-		traverse &&= aclAllows(join(project, ".limen"), seat.poller, "x", pollerUid, gid);
 		if (project !== root && !bindingFile) {
-			report(traverse && !!limen?.isDirectory(), `${label} registry traverse`, "grant poller traverse ACL to this registered checkout and .limen");
 			console.log(`SKIP ${label} has no GitHub binding`);
 			continue;
 		}
+		let traverse = !!registryPath?.isDirectory();
+		for (let parent = project; parent !== dirname(parent); parent = dirname(parent)) traverse &&= aclAllows(parent, seat.poller, "x", pollerUid, gid);
+		traverse &&= aclAllows(join(project, ".limen"), seat.poller, "x", pollerUid, gid);
 		traverse &&= aclAllows(join(project, ".limen/github"), seat.poller, "x", pollerUid, gid) && aclAllows(bindingPath(project), seat.poller, "r", pollerUid, gid);
 		report(
 			!!traverse &&

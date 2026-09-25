@@ -88,7 +88,8 @@ test("multiple registered projects each diagnose their own binding and warm idle
 		);
 	}
 	const registry = join(seat, "projects");
-	await writeFile(registry, `${first.root}\n${second.root}\n`);
+	const inactive = join(seat, "old-project");
+	await writeFile(registry, `${first.root}\n${second.root}\n${inactive}\n`);
 	const messages: string[] = [];
 	const original = console.log;
 	console.log = (message: string) => messages.push(message);
@@ -111,6 +112,8 @@ test("multiple registered projects each diagnose their own binding and warm idle
 	}
 	for (const project of [first, second]) assert.ok(messages.includes(`OK project ${project.root} live registered Herdr agent`));
 	assert.equal(messages.filter((line) => line.includes("live registered Herdr agent")).length, 2);
+	assert.ok(messages.includes(`SKIP project ${inactive} has no GitHub binding`));
+	assert.ok(!messages.some((line) => line.startsWith(`FIX project ${inactive}`)));
 	await writeFile(herdr, '#!/bin/sh\necho \'{"agent":{"pane_id":"w1K:p2","agent_status":"done","interactive_ready":false}}\'\n');
 	messages.length = 0;
 	console.log = (message: string) => messages.push(message);
