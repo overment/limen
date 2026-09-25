@@ -7,6 +7,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { repoRoot } from "../git.ts";
 import { pollGithub } from "../github-poller.ts";
 import { type GithubClaim, matchedGithubJob, startGithubJob } from "../github-review.ts";
+import { githubDoctor } from "./github-doctor.ts";
 
 export type GithubBinding = { repo: string; coordinator: string; user: string; connectedAt: string };
 export const githubDir = (root: string) => join(root, ".limen/github");
@@ -64,10 +65,15 @@ export async function githubCommand(args: readonly string[], cwd: string): Promi
 		await pollGithub();
 		return;
 	}
+	if (mode === "doctor") {
+		if (rest.length) throw new Error("github doctor takes no arguments");
+		await githubDoctor(repoRoot(cwd));
+		return;
+	}
 	if (mode === "ensure") {
-		if (rest.length !== 1) throw new Error("github ensure requires <registered-root>");
-		const root = repoRoot(rest[0] as string);
-		if (root !== rest[0]) throw new Error("GitHub ensure requires the exact registered repository root");
+		if (rest.length > 1) throw new Error("github ensure takes an optional <registered-root>");
+		const root = repoRoot(rest[0] ?? cwd);
+		if (rest.length && root !== rest[0]) throw new Error("GitHub ensure requires the exact registered repository root");
 		assertUnprivileged();
 		const binding = await ensureGithubCoordinator(root);
 		console.log(`live coordinator ${binding.coordinator} for ${binding.repo}`);
@@ -148,7 +154,7 @@ Read the registered project's spec/build.md for standing model policy. Decide wh
 		}
 		return;
 	}
-	if (rest.length || !["connect", "disconnect", "status"].includes(mode ?? "")) throw new Error("github takes connect, disconnect, status, or poll");
+	if (rest.length || !["connect", "disconnect", "status"].includes(mode ?? "")) throw new Error("github takes connect, disconnect, status, doctor, ensure, or poll");
 	const root = repoRoot(cwd);
 	if (mode === "status") {
 		const binding = await readBinding(root);

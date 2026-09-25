@@ -144,7 +144,7 @@ async function reconcile(root: string, state: string, claim: GithubClaim, token:
 			claim,
 			token,
 			"terminal",
-			`Limen's registered coordinator answered PR #${claim.pr} without starting a job:\n\n${claim.answer ?? "No answer recorded."}\n\nNo review approval or merge occurred.`,
+			`A seat-recorded answer for PR #${claim.pr} without starting a job (shared worker/coordinator account; answer text is not independently authenticated):\n\n${claim.answer ?? "No answer recorded."}\n\nNo review approval or merge occurred.`,
 		);
 		return;
 	}
@@ -181,7 +181,7 @@ async function reconcile(root: string, state: string, claim: GithubClaim, token:
 					claim,
 					token,
 					"terminal",
-					`Limen's registered coordinator answered PR #${claim.pr} without starting a job:\n\n${claim.answer}\n\nNo review approval or merge occurred.`,
+					`A seat-recorded answer for PR #${claim.pr} without starting a job (shared worker/coordinator account; answer text is not independently authenticated):\n\n${claim.answer}\n\nNo review approval or merge occurred.`,
 				);
 				return;
 			}

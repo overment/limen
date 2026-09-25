@@ -135,7 +135,7 @@ systemctl enable --now limen-github.timer
 limen github doctor && limen github status
 ```
 
-The setup requires the worker to have no sudo/admin grant; remove the old `overment` sudo rule first. It does not start the poller. A stopped timer is the expected doctor finding until the operator deliberately enables it; all other findings must pass first. Keep the CLI and `/opt/limen` at the same landed commit when upgrading. To add a second seat project: run `limen init` in that checkout (registry entry), rerun root setup for its traverse ACL, then run `limen github connect` and `limen github doctor` in its own persistent coordinator. One timer polls the registry; do not make a second key or unit.
+The setup requires the worker to have no sudo/admin grant; remove the old `overment` sudo rule first. It does not start the poller. A stopped timer is the expected doctor finding until the operator deliberately enables it; all other findings must pass first. Keep the CLI and `/opt/limen` at the same landed commit when upgrading. To add another repository on this seat: run `limen init` in that checkout (registry entry), rerun root setup for its traverse ACL, then `cd` there **in the same warm coordinator pane** and run `limen github connect` and `limen github doctor`. Both bindings may name the same pane; no second key, unit, or coordinator tab is needed. Reopen/reload that coordinator after a package upgrade so its guidance matches the new command contract.
 
 1. Create a GitHub App for this seat, installed **only** on repositories this seat owns. Set repository permissions **Metadata: read, Issues: read and write, Pull requests: read** (and the GitHub collaborator-permission endpoint must return the actor's effective repository role). Disable webhooks; polling needs no inbound port. Record App ID; generate a private key. A second VPS gets its own App and key.
 2. Install an immutable, root-owned Limen release at `/opt/limen` (`git clone` as root; the runtime has no npm dependencies, so the poller does not run `npm ci` or need npm in its PATH). Create Unix group and service user: `groupadd limen-github`; `useradd --system --home-dir /var/lib/limen-github --create-home --shell /usr/sbin/nologin --gid limen-github limen-github`; `usermod -aG limen-github overment`. Keep `/opt/limen` and every parent root-owned and not group/other writable. Polling refuses worker-owned code or an unsafe parent.
@@ -151,24 +151,25 @@ The setup requires the worker to have no sudo/admin grant; remove the old `overm
 # Mac window: leave this connected to the existing seat coordinator; do not run limen in a Mac clone.
 herdr --remote alice
 # Mac GitHub CLI, as a write-authorized collaborator on an open PR:
-gh pr comment <pr-number> --repo iceener/alice --body '@limen'
-# If the installed front door still accepts only the exact legacy command, use:
-gh pr comment <pr-number> --repo iceener/alice --body '/limen review'
+gh pr comment <pr-number> --repo iceener/alice --body '@limen Please review this PR; do not edit the app.'
+# `/limen` also wakes the coordinator; free text after either token is optional.
 
 # Alice VPS, in /home/overment/alice:
 limen github doctor
 limen github status
-limen github ensure              # only with the matching mention-front-door release installed
+limen github ensure              # warm interactive agent, including Herdr's done/idle state
 limen jobs --all
 # Root operator, only if diagnosing the service:
 journalctl -u limen-github.service -n 50 --no-pager
 ```
 
-`@limen` and `github ensure` require the companion mention front door; this slice does not implement them. Until that release is installed on both `/opt/limen` and the coordinator, the exact `/limen review` body is the working trial and `github ensure` must not be run. An agent with `agent_status: done` and `interactive_ready: true` is warm idle, not gone.
+`@limen` or `/limen` in a PR conversation comment reaches the registered coordinator; `@limenology` and issue-only comments do not. The App checks the author's effective write-or-higher role and the installed repository. A warm Herdr agent with `agent_status: done` and `interactive_ready: true` is live; a bare shell is not. The PR title, body, discussion, triggering text, real base/head and links are supplied as bounded, explicitly untrusted context. One coordinator may be registered by several projects on this seat.
 
-The poller accepts only a comment whose entire body is `/limen review`, verifies the collaborator's effective write-or-higher role and an open PR in the installed repository, and pins the PR's reported base/head SHA. The structured request goes to `herdr agent prompt <recorded-pane> <text>` as the coordinator user; Herdr acceptance does not count as a job. The coordinator's installed shop manual instructs it to run `limen github review <root> <comment-id> --engine omp --provider openai-codex --model gpt-6-sol --thinking xhigh` inside that pane, choosing all four flags explicitly from the current board policy if it changes. That command fetches and verifies the real base and PR head, records `GitHub doorbell: repo#comment-id` in the task, and starts a **hosted** review. The poller posts a start receipt only after observing a matching hosted job record with the pinned SHA/base; later it posts the terminal state, available evidence and an inspection command. `done` does not mean approval.
+The coordinator chooses a hosted review (`limen github review <root> <comment-id>` with explicit board model flags), a different hosted task (`limen github work … --task <instruction>`), or an explicit no-job answer (`limen github resolve …`). Review fetches and verifies the pinned PR head and real base; work uses a separate branch from the registered project, not a claim of having reviewed the PR. The poller posts a start reply only after observing a matching hosted job and a terminal reply after actual completion; prompt acceptance alone is never success. `done` does not mean approval.
 
-Accepted claims and the cursor live under `/var/lib/limen-github/state/<sha256-of-absolute-project-root>/`, private to the poller. `.limen/github/claims/<comment-id>.json` is a worker-readable handoff/status copy, never posting authority. Re-polls reconcile only private claims against `.limen/jobs/` and never blindly re-prompt an ambiguous delivery. A missing coordinator gets one pending notice on the PR; no detached job. Inspect `limen github status`, the claim copy, `limen jobs --all`, and the coordinator tab before deliberate recovery. If a claim is truly unhanded-off, the operator can submit a **new** `/limen review` comment; do not delete private state or move a pinned branch while a coordinator might still be acting. A moved PR head/base needs a new command.
+No-job answer text is written under the coordinator's Unix identity, which hosted workers share. The poller's private nonce prevents a forged checkout claim from creating a new App request, but it does not authenticate that answer against a compromised worker account; the PR reply labels this limit and is never an approval.
+
+Accepted claims and cursors live under `/var/lib/limen-github/state/<sha256-of-absolute-project-root>/`, private to the poller. `.limen/github/claims/<comment-id>.json` is a worker-readable status copy without the no-job nonce, never posting authority. A missing or rejected bare-shell coordinator gets one pending notice and a safe retry after it becomes live; an ambiguous accepted prompt is not automatically replayed. Inspect `limen github status`, `limen github doctor`, `limen jobs --all`, and the coordinator tab before deliberate recovery. If the handoff is truly unresolved, submit a new mention rather than deleting private state; a moved PR head/base needs a new review request. No detached fallback, automatic approval, or merge.
 
 ## When you come back
 
