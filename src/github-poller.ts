@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { createHash, createSign } from "node:crypto";
+import { createHash, createSign, randomBytes } from "node:crypto";
 import { mkdir, readdir, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -8,7 +8,35 @@ import { type GithubClaim, matchedGithubJob } from "./github-review.ts";
 
 const API = "https://api.github.com";
 type Comment = { id: number; body: string | null; created_at: string; html_url: string; issue_url: string; user: { login: string } | null };
-type Pull = { number: number; state: string; html_url: string; base: { sha: string; ref: string; repo: { full_name: string } }; head: { sha: string } };
+type Pull = {
+	number: number;
+	state: string;
+	html_url: string;
+	title?: string;
+	body?: string | null;
+	base: { sha: string; ref: string; repo: { full_name: string } };
+	head: { sha: string };
+};
+
+function mentionsLimen(body: string): boolean {
+	let fence: string | undefined;
+	for (const line of body.replace(/<!--[\s\S]*?(?:-->|$)/g, "").split("\n")) {
+		const marker = /^\s*(`{3,}|~{3,})/.exec(line)?.[1];
+		if (marker) {
+			if (!fence) fence = marker;
+			else if (marker[0] === fence[0] && marker.length >= fence.length) fence = undefined;
+			continue;
+		}
+		if (fence || /^\s*>/.test(line) || /^( {4}|\t)/.test(line)) continue;
+		const plain = line.replace(/`+[^`]*`+/g, "");
+		if (/(^|\s)(?:@limen|\/limen)(?=$|[\s.,!?;:])/i.test(plain)) return true;
+	}
+	return false;
+}
+
+function boundedContext(text: string, limit: number, label: string, link: string): string {
+	return text.length > limit ? `${text.slice(0, limit)}\n[${label} truncated; see ${link}]` : text;
+}
 
 async function api<T>(path: string, token: string, method = "GET", body?: object): Promise<T> {
 	const response = await fetch(`${API}${path}`, {
@@ -61,7 +89,7 @@ async function appJwt(): Promise<string> {
 async function mirror(root: string, claim: GithubClaim): Promise<void> {
 	const target = claimPath(root, claim.id);
 	const temp = `${target}.${process.pid}.tmp`;
-	await writeFile(temp, `${JSON.stringify(claim)}\n`, { mode: 0o660, flag: "wx" });
+	await writeFile(temp, `${JSON.stringify({ ...claim, outcomeNonce: undefined })}\n`, { mode: 0o660, flag: "wx" });
 	await rename(temp, target);
 }
 
@@ -109,8 +137,61 @@ export async function reconcileGithubClaim(root: string, state: string, id: numb
 
 async function reconcile(root: string, state: string, claim: GithubClaim, token: string): Promise<void> {
 	const found = await matchedGithubJob(root, claim);
+	if (claim.receipt === "resolved") {
+		await reply(
+			root,
+			state,
+			claim,
+			token,
+			"terminal",
+			`Limen's registered coordinator answered PR #${claim.pr} without starting a job:\n\n${claim.answer ?? "No answer recorded."}\n\nNo review approval or merge occurred.`,
+		);
+		return;
+	}
 	if (!found) {
-		if ((claim.receipt === "handoff attempted; outcome unconfirmed" || claim.receipt === "prompt accepted") && Date.now() - Date.parse(claim.attemptedAt ?? "") > 90_000) {
+		if (
+			claim.receipt === "prompt accepted" ||
+			claim.receipt?.startsWith("handoff attempted; outcome unconfirmed") ||
+			claim.receipt?.startsWith("pending: no matching job record")
+		) {
+			const binding = await readBinding(root);
+			const outcome = await readFile(join(githubDir(root), "outcomes", `${claim.id}.json`), "utf8")
+				.then((text) => JSON.parse(text) as { repo: string; id: number; coordinator: string; nonce: string; answer: string })
+				.catch(() => undefined);
+			if (
+				binding &&
+				claim.outcomeNonce &&
+				outcome?.nonce === claim.outcomeNonce &&
+				typeof outcome.repo === "string" &&
+				outcome.repo.toLowerCase() === claim.repo.toLowerCase() &&
+				binding.repo.toLowerCase() === claim.repo.toLowerCase() &&
+				originRepository(root, true).toLowerCase() === claim.repo.toLowerCase() &&
+				outcome.id === claim.id &&
+				outcome.coordinator === binding.coordinator &&
+				typeof outcome.answer === "string" &&
+				outcome.answer.trim() &&
+				outcome.answer.length <= 1600
+			) {
+				claim.answer = outcome.answer.trim();
+				claim.receipt = "resolved";
+				await persist(root, state, claim);
+				await reply(
+					root,
+					state,
+					claim,
+					token,
+					"terminal",
+					`Limen's registered coordinator answered PR #${claim.pr} without starting a job:\n\n${claim.answer}\n\nNo review approval or merge occurred.`,
+				);
+				return;
+			}
+		}
+		if (claim.receipt?.startsWith("pending: coordinator unavailable") && Date.now() - Date.parse(claim.attemptedAt ?? "") > 30_000) {
+			const binding = await readBinding(root);
+			if (binding && binding.repo.toLowerCase() === claim.repo.toLowerCase() && originRepository(root, true).toLowerCase() === claim.repo.toLowerCase())
+				await handoff(root, state, binding, claim, token);
+		}
+		if ((claim.receipt?.startsWith("handoff attempted; outcome unconfirmed") || claim.receipt === "prompt accepted") && Date.now() - Date.parse(claim.attemptedAt ?? "") > 90_000) {
 			claim.receipt = "pending: no matching job record; inspect coordinator before retry";
 			await persist(root, state, claim);
 			await reply(
@@ -119,7 +200,7 @@ async function reconcile(root: string, state: string, claim: GithubClaim, token:
 				claim,
 				token,
 				"notice",
-				`Limen review request for PR #${claim.pr} is pending: handoff to the Herdr coordinator is unconfirmed and no hosted job has been observed. Inspect this seat's .limen/github/claims/${claim.id}.json; no detached fallback was started.`,
+				`Limen request for PR #${claim.pr} is pending: handoff to the Herdr coordinator is unconfirmed and no hosted job has been observed. Inspect this seat's .limen/github/claims/${claim.id}.json; no detached fallback was started.`,
 			);
 		}
 		return;
@@ -148,7 +229,7 @@ async function reconcile(root: string, state: string, claim: GithubClaim, token:
 		claim,
 		token,
 		"start",
-		`Limen started a hosted review of PR #${claim.pr} at pinned head \`${claim.head}\` against base \`${claim.base}\`. Job: \`${found.id}\`; branch: \`${found.branch}\`. On its owning seat: \`limen jobs ${found.id}\`. This is not an approval.`,
+		`Limen started a hosted ${found.review ? "review" : "task"} for PR #${claim.pr}${found.review ? ` at pinned head \`${claim.head}\` against base \`${claim.base}\`` : " from the registered repository"}. Job: \`${found.id}\`; branch: \`${found.branch}\`. On its owning seat: \`limen jobs ${found.id}\`. This is not an approval.`,
 	);
 	if (!found.state || found.state === "running") return;
 	const dir = join(root, ".limen/jobs", found.id);
@@ -160,14 +241,14 @@ async function reconcile(root: string, state: string, claim: GithubClaim, token:
 		claim,
 		token,
 		"terminal",
-		`Limen hosted review job \`${found.id}\` ended with state **${found.state}**. This is job termination, not review approval or a merge.\n\nRecorded evidence/result:\n\n\`\`\`text\n${evidence.replaceAll("```", "''' ")}\n\`\`\`\n\nInspect on the owning seat: \`limen jobs ${found.id}\`.`,
+		`Limen hosted ${found.review ? "review" : "task"} job \`${found.id}\` ended with state **${found.state}**. This is job termination, not review approval or a merge.\n\nRecorded evidence/result:\n\n\`\`\`text\n${evidence.replaceAll("```", "''' ")}\n\`\`\`\n\nInspect on the owning seat: \`limen jobs ${found.id}\`.`,
 	);
 }
 
 export { accept as acceptGithubComment };
 
 async function accept(root: string, state: string, binding: GithubBinding, comment: Comment, token: string): Promise<void> {
-	if (comment.body !== "/limen review" || !comment.user || Date.parse(comment.created_at) < Date.parse(binding.connectedAt)) return;
+	if (!comment.body || !mentionsLimen(comment.body) || !comment.user || Date.parse(comment.created_at) < Date.parse(binding.connectedAt)) return;
 	if (!Number.isSafeInteger(comment.id) || comment.id < 1) throw new Error("GitHub comment has an invalid ID");
 	const pr = Number(/\/issues\/(\d+)$/.exec(comment.issue_url)?.[1]);
 	if (!Number.isSafeInteger(pr) || pr < 1) return;
@@ -194,7 +275,48 @@ async function accept(root: string, state: string, binding: GithubBinding, comme
 		claim = JSON.parse(await readFile(path, "utf8")) as GithubClaim;
 	} catch (error) {
 		if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-		claim = { repo: binding.repo, id: comment.id, pr, actor: comment.user.login, url: comment.html_url, base: pull.base.sha, baseRef: pull.base.ref, head: pull.head.sha };
+		const discussion: string[] = [];
+		for (const endpoint of [`/repos/${binding.repo}/issues/${pr}/comments`, `/repos/${binding.repo}/pulls/${pr}/comments`, `/repos/${binding.repo}/pulls/${pr}/reviews`]) {
+			let entries: Array<{ id: number; body: string | null; user: { login: string } | null }>;
+			try {
+				entries = await api<typeof entries>(`${endpoint}?per_page=100`, token);
+			} catch (error) {
+				if (!endpoint.includes("/issues/") && /HTTP (403|404)/.test(String(error))) {
+					discussion.push(`[${endpoint.split("/").at(-1)} unavailable via App; see https://github.com/${binding.repo}/pull/${pr}]`);
+					continue;
+				}
+				throw error;
+			}
+			let used = 0;
+			for (const entry of entries) {
+				if (endpoint.includes("/issues/") && entry.id === comment.id) continue;
+				const body = entry.body ?? "";
+				const line = `${entry.user?.login ?? "unknown"}: ${body.slice(0, 1200)}${body.length > 1200 ? " [comment excerpt truncated]" : ""}`;
+				if (used + line.length > 3500) {
+					discussion.push(`[Further ${endpoint.split("/").at(-1)} omitted; see https://github.com/${binding.repo}/pull/${pr}]`);
+					break;
+				}
+				discussion.push(line);
+				used += line.length;
+			}
+			if (entries.length === 100) discussion.push(`[More ${endpoint.split("/").at(-1)} may exist; first 100 fetched at https://github.com/${binding.repo}/pull/${pr}]`);
+		}
+		const excerpt = discussion.join("\n");
+		claim = {
+			repo: binding.repo,
+			id: comment.id,
+			pr,
+			actor: comment.user.login,
+			url: comment.html_url,
+			base: pull.base.sha,
+			baseRef: pull.base.ref,
+			head: pull.head.sha,
+			title: boundedContext(pull.title ?? "", 500, "PR title", `https://github.com/${binding.repo}/pull/${pr}`),
+			body: boundedContext(pull.body ?? "", 6000, "PR body", `https://github.com/${binding.repo}/pull/${pr}`),
+			discussion: excerpt.length > 12000 ? `${excerpt.slice(0, 12000)}\n[Discussion truncated; see https://github.com/${binding.repo}/pull/${pr}]` : excerpt,
+			outcomeNonce: randomBytes(24).toString("hex"),
+			command: boundedContext(comment.body, 4000, "Triggering comment", comment.html_url),
+		};
 		await writeFile(path, `${JSON.stringify(claim)}\n`, { flag: "wx", mode: 0o600, flush: true }); // authoritative claim before handoff
 		await mirror(root, claim);
 	}
@@ -202,16 +324,38 @@ async function accept(root: string, state: string, binding: GithubBinding, comme
 		await reconcile(root, state, claim, token);
 		return;
 	}
-	// Record an ambiguous attempt before invoking Herdr. Never blindly prompt twice on a retry.
+	await handoff(root, state, binding, claim, token);
+}
+
+async function handoff(root: string, state: string, binding: GithubBinding, claim: GithubClaim, token: string): Promise<void> {
+	claim.outcomeNonce ??= randomBytes(24).toString("hex");
 	claim.attemptedAt = new Date().toISOString();
+	claim.receipt = "pending: coordinator unavailable";
+	await persist(root, state, claim);
+	const command = process.env.LIMEN_GITHUB_LIMEN_BIN || "/opt/limen/bin/limen";
+	const ensure = spawnSync("sudo", ["-n", "-u", binding.user, "--", command, "github", "ensure", root], { encoding: "utf8", timeout: 20_000 });
+	if (ensure.status !== 0) {
+		await reply(
+			root,
+			state,
+			claim,
+			token,
+			"notice",
+			`Limen could not reach the registered Herdr coordinator for PR #${claim.pr}. The request remains pending on its owning seat (.limen/github/claims/${claim.id}.json). No detached job was started.`,
+		);
+		return;
+	}
+	// Record an ambiguous attempt before invoking Herdr. Never blindly prompt twice after this point.
 	claim.receipt = "handoff attempted; outcome unconfirmed";
 	await persist(root, state, claim);
-	const delivered = spawnSync("sudo", ["-n", "-u", binding.user, "--", process.env.LIMEN_GITHUB_LIMEN_BIN || "limen", "github", "deliver", root, String(claim.id)], {
+	const delivered = spawnSync("sudo", ["-n", "-u", binding.user, "--", command, "github", "deliver", root, String(claim.id), claim.outcomeNonce], {
 		encoding: "utf8",
 		timeout: 20_000,
 	});
 	if (delivered.status !== 0) {
-		claim.receipt = `pending: Herdr delivery failed (${(delivered.stderr || delivered.error?.message || "unavailable").trim().slice(0, 250)})`;
+		claim.receipt = /(?:bare.shell|not an available shell|agent_not_found|target_not_found)/i.test(delivered.stderr ?? "")
+			? "pending: coordinator unavailable (Herdr refused prompt before acceptance)"
+			: `handoff attempted; outcome unconfirmed (${(delivered.stderr || delivered.error?.message || "unavailable").trim().slice(0, 250)})`;
 		await persist(root, state, claim);
 		await reply(
 			root,
@@ -219,7 +363,7 @@ async function accept(root: string, state: string, binding: GithubBinding, comme
 			claim,
 			token,
 			"notice",
-			`Limen could not reach the registered Herdr coordinator for PR #${pr}. The request remains pending on its owning seat (.limen/github/claims/${claim.id}.json). No detached job was started.`,
+			`Limen could not confirm delivery to the Herdr coordinator for PR #${claim.pr}. The request remains pending for inspection on its owning seat (.limen/github/claims/${claim.id}.json). No detached job was started.`,
 		);
 		return;
 	}

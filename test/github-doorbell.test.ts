@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
-import { chmod, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { claimPath, type GithubBinding } from "../src/commands/github.ts";
+import { claimPath, ensureGithubCoordinator, type GithubBinding, githubCommand } from "../src/commands/github.ts";
 import { acceptGithubComment, reconcileGithubClaim } from "../src/github-poller.ts";
-import { type GithubClaim, githubMarker, reviewGithubClaim } from "../src/github-review.ts";
+import { type GithubClaim, githubMarker, startGithubJob } from "../src/github-review.ts";
 import { git, limen, onlyJobId, scratchRepo, waitForState } from "./scratch.ts";
 
 const base = "a".repeat(40);
@@ -41,9 +41,23 @@ test("only an exact write-authorized PR comment claims a request; unavailable co
 		const url = String(input);
 		requests.push(`${init?.method ?? "GET"} ${url}`);
 		if (url.includes("/permission")) return Response.json({ permission });
-		if (url.endsWith("/pulls/4")) return Response.json({ number: 4, state: "open", base: { sha: base, ref: "release", repo: { full_name: binding.repo } }, head: { sha: head } });
+		if (url.endsWith("/pulls/4"))
+			return Response.json({
+				number: 4,
+				state: "open",
+				title: "Fix widget",
+				body: "Description",
+				base: { sha: base, ref: "release", repo: { full_name: binding.repo } },
+				head: { sha: head },
+			});
 		if (url.endsWith("/pulls/5")) return new Response("{}", { status: 404 });
-		if (url.includes("/comments?")) return Response.json([]);
+		if (url.includes("/issues/4/comments?"))
+			return Response.json([
+				{ id: 4, body: "@limen please review this", user: { login: "alice" } },
+				{ id: 9, body: "Earlier context", user: { login: "bob" } },
+			]);
+		if (url.includes("/pulls/4/comments?")) return Response.json([{ id: 10, body: "Inline finding", user: { login: "carol" } }]);
+		if (url.includes("/pulls/4/reviews?")) return Response.json([{ id: 11, body: "Review summary", user: { login: "dave" } }]);
 		if (init?.method === "POST") return Response.json({ id: 500 });
 		throw new Error(`unexpected GitHub call ${url}`);
 	};
@@ -55,21 +69,290 @@ test("only an exact write-authorized PR comment claims a request; unavailable co
 		process.env.PATH = originalPath;
 	});
 
-	await acceptGithubComment(scratch.root, state, binding, command(1, "/limen review please"), "test-token");
-	await acceptGithubComment(scratch.root, state, binding, command(2), "test-token");
-	await acceptGithubComment(scratch.root, state, binding, command(3, "/limen review", 5), "test-token");
+	await acceptGithubComment(scratch.root, state, binding, command(1, "@limenology"), "test-token");
+	await acceptGithubComment(scratch.root, state, binding, command(2, "/limenish"), "test-token");
+	await acceptGithubComment(scratch.root, state, binding, command(3, "@limen please review this", 5), "test-token");
+	await acceptGithubComment(scratch.root, state, binding, command(6, "> @limen review"), "test-token");
+	await acceptGithubComment(scratch.root, state, binding, command(7, "```text\n/limen\n```"), "test-token");
+	await acceptGithubComment(scratch.root, state, binding, command(8, "`@limen`"), "test-token");
+	await acceptGithubComment(scratch.root, state, binding, command(10, "<!-- @limen -->"), "test-token");
+	await acceptGithubComment(scratch.root, state, binding, command(11, "    /limen review"), "test-token");
 	assert.deepEqual(await readdir(join(scratch.root, ".limen/github/claims")), []);
 	permission = "write";
-	await acceptGithubComment(scratch.root, state, binding, command(4), "test-token");
-	await acceptGithubComment(scratch.root, state, binding, command(4), "test-token");
+	await acceptGithubComment(scratch.root, state, binding, command(4, "@limen please review this"), "test-token");
+	await acceptGithubComment(scratch.root, state, binding, command(4, "@limen please review this"), "test-token");
 	assert.deepEqual(await readdir(join(scratch.root, ".limen/github/claims")), ["4.json"]);
 	const claim = JSON.parse(await readFile(claimPath(scratch.root, 4), "utf8")) as GithubClaim;
 	assert.equal(claim.base, base);
 	assert.equal(claim.head, head);
-	assert.match(claim.receipt ?? "", /pending: Herdr delivery failed/);
+	assert.match(claim.receipt ?? "", /pending: coordinator unavailable/);
 	assert.equal(claim.noticeComment, 500);
+	assert.equal(claim.title, "Fix widget");
+	assert.equal(claim.command, "@limen please review this");
+	assert.match(claim.discussion ?? "", /bob: Earlier context.*carol: Inline finding.*dave: Review summary/s);
+	assert.doesNotMatch(claim.discussion ?? "", /alice: @limen/);
+	assert.doesNotMatch(await readFile(claimPath(scratch.root, 4), "utf8"), /outcomeNonce/);
 	assert.equal(requests.filter((call) => call.includes("POST") && call.includes("/comments")).length, 1);
 	assert.deepEqual(await readdir(join(scratch.root, ".limen/jobs")), []);
+});
+
+test("pending availability failure retries once after live ensure without duplicate notice", async (context) => {
+	const scratch = await scratchRepo();
+	const state = await pollerState(context);
+	context.after(scratch.cleanup);
+	assert.equal(limen(scratch, "init").status, 0);
+	await mkdir(join(scratch.root, ".limen/github/claims"), { recursive: true });
+	await writeFile(join(scratch.root, ".limen/github/binding.json"), JSON.stringify(binding));
+	git(scratch.root, "remote", "add", "origin", "https://github.com/acme/widget.git");
+	const claim: GithubClaim = {
+		repo: binding.repo,
+		id: 81,
+		pr: 4,
+		actor: "alice",
+		url: command(81).html_url,
+		base,
+		baseRef: "release",
+		head,
+		receipt: "pending: coordinator unavailable",
+		attemptedAt: new Date(Date.now() - 31_000).toISOString(),
+		noticeComment: 500,
+	};
+	await writeFile(join(state, "claims/81.json"), JSON.stringify(claim));
+	const calls = join(state, "sudo-calls");
+	await writeFile(join(scratch.fakeBin, "sudo"), `#!/bin/sh\nprintf '%s\\n' "$7" >> ${JSON.stringify(calls)}\nexit 0\n`);
+	await chmod(join(scratch.fakeBin, "sudo"), 0o755);
+	const path = process.env.PATH;
+	process.env.PATH = `${scratch.fakeBin}:${path}`;
+	context.after(() => {
+		process.env.PATH = path;
+	});
+	const previousFetch = globalThis.fetch;
+	let posts = 0;
+	globalThis.fetch = async () => {
+		posts++;
+		return Response.json([]);
+	};
+	context.after(() => {
+		globalThis.fetch = previousFetch;
+	});
+	await reconcileGithubClaim(scratch.root, state, 81, "test-token");
+	await reconcileGithubClaim(scratch.root, state, 81, "test-token");
+	assert.equal(await readFile(calls, "utf8"), "ensure\ndeliver\n");
+	assert.equal(posts, 0);
+	assert.equal((JSON.parse(await readFile(join(state, "claims/81.json"), "utf8")) as GithubClaim).receipt, "prompt accepted");
+});
+test("a rejected bare-shell prompt retries after recovery without duplicate notice", async (context) => {
+	const scratch = await scratchRepo();
+	const state = await pollerState(context);
+	context.after(scratch.cleanup);
+	assert.equal(limen(scratch, "init").status, 0);
+	git(scratch.root, "remote", "add", "origin", "https://github.com/acme/widget.git");
+	await mkdir(join(scratch.root, ".limen/github/claims"), { recursive: true });
+	await writeFile(join(scratch.root, ".limen/github/binding.json"), JSON.stringify(binding));
+	const claim: GithubClaim = {
+		repo: binding.repo,
+		id: 82,
+		pr: 4,
+		actor: "alice",
+		url: command(82).html_url,
+		base,
+		baseRef: "release",
+		head,
+		receipt: "pending: coordinator unavailable",
+		attemptedAt: new Date(Date.now() - 31_000).toISOString(),
+	};
+	await writeFile(join(state, "claims/82.json"), JSON.stringify(claim));
+	const calls = join(state, "calls");
+	const sudo = join(scratch.fakeBin, "sudo");
+	await writeFile(sudo, `#!/bin/sh\nprintf '%s\\n' "$7" >> ${JSON.stringify(calls)}\nif [ "$7" = deliver ]; then echo 'target is not an available shell' >&2; exit 1; fi\n`);
+	await chmod(sudo, 0o755);
+	const previousPath = process.env.PATH;
+	process.env.PATH = `${scratch.fakeBin}:${previousPath}`;
+	context.after(() => {
+		process.env.PATH = previousPath;
+	});
+	const previousFetch = globalThis.fetch;
+	const posts: string[] = [];
+	globalThis.fetch = async (input, init) => {
+		if (init?.method === "POST") {
+			posts.push(String(input));
+			return Response.json({ id: 800 });
+		}
+		return Response.json([]);
+	};
+	context.after(() => {
+		globalThis.fetch = previousFetch;
+	});
+	await reconcileGithubClaim(scratch.root, state, 82, "test-token");
+	let stored = JSON.parse(await readFile(join(state, "claims/82.json"), "utf8")) as GithubClaim;
+	assert.match(stored.receipt ?? "", /pending: coordinator unavailable/);
+	stored.attemptedAt = new Date(Date.now() - 31_000).toISOString();
+	await writeFile(join(state, "claims/82.json"), JSON.stringify(stored));
+	await writeFile(sudo, `#!/bin/sh\nprintf '%s\\n' "$7" >> ${JSON.stringify(calls)}\n`);
+	await reconcileGithubClaim(scratch.root, state, 82, "test-token");
+	await reconcileGithubClaim(scratch.root, state, 82, "test-token");
+	assert.equal(await readFile(calls, "utf8"), "ensure\ndeliver\nensure\ndeliver\n");
+	assert.equal(posts.length, 1);
+	stored = JSON.parse(await readFile(join(state, "claims/82.json"), "utf8")) as GithubClaim;
+	assert.equal(stored.receipt, "prompt accepted");
+});
+
+test("one idle coordinator accepts two repository-specific requests and rejects a noninteractive pane", async (context) => {
+	const first = await scratchRepo();
+	const second = await scratchRepo();
+	context.after(first.cleanup);
+	context.after(second.cleanup);
+	const roots = await Promise.all([first.root, second.root].map((root) => realpath(root)));
+	for (const [index, root] of roots.entries()) {
+		assert.equal(limen(index === 0 ? first : second, "init").status, 0);
+		git(root, "remote", "add", "origin", `https://github.com/acme/${index === 0 ? "widget" : "gadget"}.git`);
+		await mkdir(join(root, ".limen/github/claims"), { recursive: true });
+		const repo = index === 0 ? "acme/widget" : "acme/gadget";
+		await writeFile(join(root, ".limen/github/binding.json"), JSON.stringify({ ...binding, repo }));
+		await writeFile(
+			claimPath(root, 91),
+			JSON.stringify({
+				...binding,
+				repo,
+				id: 91,
+				pr: 4,
+				actor: "alice",
+				url: `https://github.com/${repo}/pull/4#issuecomment-91`,
+				base,
+				baseRef: "release",
+				head,
+				title: `Title ${repo}`,
+				body: "PR body",
+				discussion: "bob: existing discussion",
+				command: "@limen inspect this",
+			}),
+		);
+	}
+	const prompts = join(first.fakeBin, "prompts");
+	const herdr = join(first.fakeBin, "herdr");
+	await writeFile(
+		herdr,
+		`#!/bin/sh\nif [ "$2" = get ]; then printf '%s\\n' '{"agent":{"agent_status":"done","interactive_ready":true}}'; else printf '%s\\n' "$4" >> ${JSON.stringify(prompts)}; fi\n`,
+	);
+	await writeFile(join(first.fakeBin, "id"), "#!/bin/sh\necho staff\n");
+	await writeFile(join(first.fakeBin, "sudo"), "#!/bin/sh\nexit 1\n");
+	for (const name of ["herdr", "id", "sudo"]) await chmod(join(first.fakeBin, name), 0o755);
+	const previousPath = process.env.PATH;
+	const previousHerdr = process.env.LIMEN_HERDR;
+	process.env.PATH = `${first.fakeBin}:${previousPath}`;
+	process.env.LIMEN_HERDR = herdr;
+	context.after(() => {
+		process.env.PATH = previousPath;
+		if (previousHerdr === undefined) delete process.env.LIMEN_HERDR;
+		else process.env.LIMEN_HERDR = previousHerdr;
+	});
+	for (const root of roots) await githubCommand(["deliver", root, "91", "f".repeat(48)], root);
+	const delivered = await readFile(prompts, "utf8");
+	for (const root of roots) assert.match(delivered, new RegExp(root.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+	assert.match(delivered, /Title acme\/widget/);
+	assert.match(delivered, /Title acme\/gadget/);
+	assert.match(delivered, /bob: existing discussion/);
+	assert.match(delivered, /\/opt\/limen\/bin\/limen github review/);
+	const priorCoordinator = process.env.LIMEN_COORDINATOR;
+	const priorPane = process.env.HERDR_PANE_ID;
+	const priorHerdrEnv = process.env.HERDR_ENV;
+	process.env.LIMEN_COORDINATOR = "1";
+	process.env.HERDR_PANE_ID = binding.coordinator;
+	process.env.HERDR_ENV = "1";
+	context.after(() => {
+		if (priorCoordinator === undefined) delete process.env.LIMEN_COORDINATOR;
+		else process.env.LIMEN_COORDINATOR = priorCoordinator;
+		if (priorPane === undefined) delete process.env.HERDR_PANE_ID;
+		else process.env.HERDR_PANE_ID = priorPane;
+		if (priorHerdrEnv === undefined) delete process.env.HERDR_ENV;
+		else process.env.HERDR_ENV = priorHerdrEnv;
+	});
+	await githubCommand(["resolve", roots[0] as string, "91", "f".repeat(48), "No job is appropriate."], roots[0] as string);
+	assert.match(await readFile(join(roots[0] as string, ".limen/github/outcomes/91.json"), "utf8"), /No job is appropriate/);
+	await assert.rejects(
+		startGithubJob(roots[0] as string, JSON.parse(await readFile(claimPath(roots[0] as string, 91), "utf8")) as GithubClaim, {
+			engine: "omp",
+			provider: "openai-codex",
+			model: "gpt-6-sol",
+			thinking: "xhigh",
+		}),
+		/already entered a handoff/,
+	);
+	await writeFile(herdr, '#!/bin/sh\nprintf \'%s\\n\' \'{"agent":{"agent_status":"done","interactive_ready":false}}\'\n');
+	await assert.rejects(ensureGithubCoordinator(roots[0] as string), /not interactive/);
+});
+
+test("a generic hosted worker and a nonce-backed no-job answer reconcile without a review claim", async (context) => {
+	const scratch = await scratchRepo();
+	const state = await pollerState(context);
+	context.after(scratch.cleanup);
+	assert.equal(limen(scratch, "init").status, 0);
+	git(scratch.root, "remote", "add", "origin", "https://github.com/acme/widget.git");
+	await mkdir(join(scratch.root, ".limen/github/claims"), { recursive: true });
+	await writeFile(join(scratch.root, ".limen/github/binding.json"), JSON.stringify(binding));
+	const nonce = "e".repeat(48);
+	const noJob: GithubClaim = {
+		repo: binding.repo,
+		id: 62,
+		pr: 4,
+		actor: "alice",
+		url: command(62).html_url,
+		base,
+		baseRef: "release",
+		head,
+		receipt: "prompt accepted",
+		outcomeNonce: nonce,
+	};
+	const work: GithubClaim = { ...noJob, id: 63, url: command(63).html_url };
+	delete work.outcomeNonce;
+	await writeFile(join(state, "claims/62.json"), JSON.stringify(noJob));
+	await writeFile(join(state, "claims/63.json"), JSON.stringify(work));
+	await mkdir(join(scratch.root, ".limen/github/outcomes"));
+	const outcome = join(scratch.root, ".limen/github/outcomes/62.json");
+	await writeFile(outcome, JSON.stringify({ repo: binding.repo, id: 62, coordinator: binding.coordinator, nonce: "f".repeat(48), answer: "No job needed." }));
+	const posted: string[] = [];
+	const originalFetch = globalThis.fetch;
+	globalThis.fetch = async (_input, init) => {
+		if (init?.method === "POST") {
+			posted.push(JSON.parse(String(init.body)).body as string);
+			return Response.json({ id: 900 + posted.length });
+		}
+		return Response.json([]);
+	};
+	context.after(() => {
+		globalThis.fetch = originalFetch;
+	});
+	await reconcileGithubClaim(scratch.root, state, 62, "test-token");
+	assert.equal(posted.length, 0, "a forged checkout outcome cannot use the App receipt");
+	await writeFile(join(state, "claims/62.json"), JSON.stringify({ ...noJob, receipt: "pending: no matching job record; inspect coordinator before retry" }));
+	await writeFile(outcome, JSON.stringify({ repo: binding.repo, id: 62, coordinator: binding.coordinator, nonce, answer: "No job needed." }));
+	await reconcileGithubClaim(scratch.root, state, 62, "test-token");
+	await reconcileGithubClaim(scratch.root, state, 62, "test-token");
+	assert.equal(posted.length, 1);
+	assert.match(posted[0] ?? "", /without starting a job.*No job needed/s);
+	assert.doesNotMatch(await readFile(claimPath(scratch.root, 62), "utf8"), /outcomeNonce/);
+	const dir = join(scratch.root, ".limen/jobs/ordinary-worker");
+	await mkdir(join(dir, "herdr"), { recursive: true });
+	await Promise.all(
+		Object.entries({
+			"task.md": `${githubMarker(work)}\nCoordinator task: inspect build failures\n`,
+			hosted: "Herdr hosted\n",
+			base: `${git(scratch.root, "rev-parse", "HEAD")}\n`,
+			branch: "limen/github-pr-4-63\n",
+			role: "worker\n",
+			state: "running\n",
+			"herdr/agent": "coord:worker\n",
+		}).map(([name, text]) => writeFile(join(dir, name), text)),
+	);
+	await reconcileGithubClaim(scratch.root, state, 63, "test-token");
+	await writeFile(join(dir, "state"), "done\n");
+	await writeFile(join(dir, "result"), "Build failure identified.\n");
+	await reconcileGithubClaim(scratch.root, state, 63, "test-token");
+	await reconcileGithubClaim(scratch.root, state, 63, "test-token");
+	assert.equal(posted.length, 3);
+	assert.match(posted[1] ?? "", /hosted task.*ordinary-worker/);
+	assert.doesNotMatch(posted[1] ?? "", /pinned head/);
+	assert.match(posted[2] ?? "", /hosted task job.*Build failure identified/s);
 });
 
 test("a forged checkout claim and hosted-looking job cannot earn an App receipt", async (context) => {
@@ -275,8 +558,10 @@ test("coordinator review refuses a changed PR head and never falls back to detac
 	});
 	const request: GithubClaim = { repo: binding.repo, id: 90, pr: 4, actor: "alice", url: command(90).html_url, base: originalBase, baseRef: "main", head };
 	const options = { engine: "omp", provider: "openai-codex", model: "gpt-6-sol", thinking: "xhigh" };
-	await assert.rejects(reviewGithubClaim(scratch.root, request, options), /PR head moved/);
+	await assert.rejects(startGithubJob(scratch.root, request, options), /PR head moved/);
 	assert.deepEqual(await readdir(join(scratch.root, ".limen/jobs")), []);
-	await assert.rejects(reviewGithubClaim(scratch.root, { ...request, id: 91, head: actualHead }, options), /hosted spawn requires Herdr/);
+	await assert.rejects(startGithubJob(scratch.root, { ...request, id: 91, head: actualHead }, options), /hosted spawn requires Herdr/);
 	assert.deepEqual(await readdir(join(scratch.root, ".limen/jobs")), [], "never start a detached review");
+	await assert.rejects(startGithubJob(scratch.root, { ...request, id: 92 }, options, "Inspect the build failure"), /hosted spawn requires Herdr/);
+	assert.deepEqual(await readdir(join(scratch.root, ".limen/jobs")), [], "never start a detached worker");
 });
