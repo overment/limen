@@ -237,7 +237,7 @@ export async function githubDoctor(root: string, seat: Seat = seatDefaults()): P
 	for (let parent = dirname(seat.registry); parent !== dirname(parent); parent = dirname(parent)) registryAccess &&= aclAllows(parent, seat.poller, "x", pollerUid, gid);
 	report(registryAccess, "readable seat project registry", `create ${seat.registry} with limen init; grant poller read/traverse ACL`);
 	const projects = registry?.split("\n").filter(Boolean) ?? [];
-	report(projects.includes(root), "project registered on this seat", "run limen workspace init/register for this checkout and grant poller traverse ACLs on each parent");
+	report(projects.includes(root), "project registered on this seat", "run limen init in this checkout, then grant the poller traverse ACLs on its parents");
 	const seen = new Set<string>();
 	for (const project of [root, ...projects]) {
 		if (seen.has(project)) continue;
