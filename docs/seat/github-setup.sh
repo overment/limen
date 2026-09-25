@@ -99,7 +99,7 @@ install -o root -g root -m 0600 /dev/null /etc/limen-github/poller.env
   printf 'LIMEN_GITHUB_LIMEN_BIN=/opt/limen/bin/limen\n'
 } > /etc/limen-github/poller.env
 install -o root -g root -m 0440 /dev/null /etc/sudoers.d/limen-github
-printf 'Defaults:limen-github secure_path="/usr/bin:/usr/local/bin"\nlimen-github ALL=(%s) NOPASSWD: /opt/limen/bin/limen github deliver *\n' "$WORKER" > /etc/sudoers.d/limen-github
+printf 'Defaults:limen-github secure_path="/usr/bin:/usr/local/bin"\nlimen-github ALL=(%s) NOPASSWD: /opt/limen/bin/limen github ensure *\nlimen-github ALL=(%s) NOPASSWD: /opt/limen/bin/limen github deliver *\n' "$WORKER" "$WORKER" > /etc/sudoers.d/limen-github
 chmod 0440 /etc/sudoers.d/limen-github
 visudo -cf /etc/sudoers.d/limen-github
 setfacl -m "u:$WORKER:--x" /etc/sudoers.d
