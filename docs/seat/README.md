@@ -61,7 +61,9 @@ If 1 fails, do not move the coordinator. If 1–3 work, the laptop is a window f
 
 ## GitHub doorbell
 
-The opt-in GitHub App doorbell is documented in [docs/remote.md](../remote.md): separate Unix poller identity, private App key, and one `limen github connect` per project. Do not use an old `gh` mention timer or detached spawn for PR review.
+Use the checked-in [GitHub seat setup](github-setup.sh) and [remote operator trial](../remote.md#github-doorbell-opt-in-per-project). Run the installer and adjacent units only from a root-owned checkout of the pinned release, never from the worker checkout. It installs a root-owned release and `/usr/local/bin/limen` symlink, root-owned Node 24 and Herdr binaries, a private poller key/state, narrow sudo handoff, registry ACLs, and a stopped timer. In a fresh noninteractive SSH shell, `command -v limen` must resolve to that symlink. Do not put the App PEM in a checkout or worker home. Do not run `github poll` until all doctor findings except the stopped timer are repaired, enable the timer, then rerun doctor. A second registered repository uses the same seat App/timer and its own `github connect` in its persistent coordinator.
+
+The historical Alice draft under `tmp/` is not a deployment source. Use a root-owned Node 24 binary source, not a symlink to `~overment/.nvm`; a worker-owned Node or Herdr binary is unsafe even at mode 0755. A poller can execute worker-owned code and expose its key.
 
 ## Not yet
 

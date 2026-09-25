@@ -1,0 +1,11 @@
+[Unit]
+Description=Poll GitHub App comments for registered Limen projects
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=limen-github
+Environment=PATH=/usr/bin:/usr/local/bin
+EnvironmentFile=/etc/limen-github/poller.env
+ExecStart=/usr/bin/node /opt/limen/bin/limen github poll

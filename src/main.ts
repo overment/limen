@@ -88,7 +88,7 @@ usage:
   limen ticket-author <ticket-path>                 # creation-commit author, following Git renames
   limen sweep [--install|--uninstall]
   limen linear [on [--team T --project P]|off|status]   # Linear mirror toggle — renames spec/linear.md ↔ .off; --team/--project write a fresh config
-  limen github connect|disconnect|status       # seat-local GitHub App doorbell
+  limen github connect|disconnect|status|doctor  # diagnose seat safety and each registered project
   limen github poll                            # run one polling pass as the isolated App user
 Pass a short coordinator instruction, not $(cat ticket.md). The ticket is a pointer, not the prompt.`;
 export async function main(args: readonly string[], cwd = process.cwd()): Promise<void> {
