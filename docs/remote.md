@@ -96,35 +96,62 @@ On the Alice VPS (SSH alias `alice`), **Alice** is the project checkout at `/hom
 
 Provision once **per seat**, as root. On the Alice VPS the worker/coordinator is `overment`; it must have **no sudo, wheel, or admin membership, no NOPASSWD rule, and no cached noninteractive sudo authority**. The old VPS recipe granted `overment ALL=(ALL) NOPASSWD:ALL`: run `rm /etc/sudoers.d/overment && gpasswd -d overment sudo` as root, audit `sudo -l -U overment`, and log out/in before connecting. A worker sharing that account can otherwise sudo-read any App key, regardless of its mode bits. Keep root administration on a separate SSH login/identity not available to hosted workers. `limen github connect` and `github deliver` refuse a privileged account.
 
+The checked-in [root setup](seat/github-setup.sh) is the repeatable alternative to manually transcribing steps 2–6 below. On Alice, stop the existing timer before repairing any worker-owned binary; mode 0755 does not make worker-owned interpreter or Herdr code safe. `/usr/local/bin` and `/usr/local/bin/node` have been corrected to root ownership, but Herdr must be checked and repaired too. Install Node 24 from a trusted system package into a root-owned source path and obtain a root-owned Herdr binary from a trusted install first. **Never** link the poller interpreter to `~overment/.nvm`, run `limen github poll` as a proof, or enable the timer until both binaries and their parents are root-owned and not group/other writable.
+
+```bash
+# On the seat, root shell; never execute setup or units from a worker-writable checkout.
+systemctl stop limen-github.timer limen-github.service
+LIMEN_REV=<landed-40-hex-commit>
+git clone https://github.com/overment/limen.git /root/limen-deploy # first run only
+git -C /root/limen-deploy fetch origin "$LIMEN_REV"
+git -C /root/limen-deploy checkout --detach "$LIMEN_REV"
+# Trusted Node/Herdr sources and this installer now live only under root-owned directories.
+WORKER=overment APP_ID=<numeric-app-id> PEM_SOURCE=/root/app.pem \
+  LIMEN_REPO=https://github.com/overment/limen.git LIMEN_REV="$LIMEN_REV" \
+  NODE_SOURCE=/root/install/node HERDR_SOURCE=/root/install/herdr \
+  /root/limen-deploy/docs/seat/github-setup.sh
+# From the Mac, verify a fresh noninteractive SSH shell finds the installed CLI:
+ssh alice 'cd /home/overment/alice && command -v limen && limen github doctor'
+# In a new login for overment, inside Alice's persistent Herdr coordinator:
+cd /home/overment/alice
+limen github connect             # if not already bound to this live pane
+limen github doctor              # inspect all registered repositories; no PEM bytes
+# As root only after every FIX line except the expected stopped timer has been repaired:
+systemctl enable --now limen-github.timer
+# In the coordinator again:
+limen github doctor && limen github status
+```
+
+The setup requires the worker to have no sudo/admin grant; remove the old `overment` sudo rule first. It does not start the poller. A stopped timer is the expected doctor finding until the operator deliberately enables it; all other findings must pass first. Keep the CLI and `/opt/limen` at the same landed commit when upgrading. To add a second seat project: run `limen init` in that checkout (registry entry), rerun root setup for its traverse ACL, then run `limen github connect` and `limen github doctor` in its own persistent coordinator. One timer polls the registry; do not make a second key or unit.
+
 1. Create a GitHub App for this seat, installed **only** on repositories this seat owns. Set repository permissions **Metadata: read, Issues: read and write, Pull requests: read** (and the GitHub collaborator-permission endpoint must return the actor's effective repository role). Disable webhooks; polling needs no inbound port. Record App ID; generate a private key. A second VPS gets its own App and key.
 2. Install an immutable, root-owned Limen release at `/opt/limen` (`git clone` as root, `npm ci` from its lockfile; no symlink to the worker checkout). Create Unix group and service user: `groupadd limen-github`; `useradd --system --home-dir /var/lib/limen-github --create-home --shell /usr/sbin/nologin --gid limen-github limen-github`; `usermod -aG limen-github overment`. Keep `/opt/limen` and every parent root-owned and not group/other writable. Polling refuses worker-owned code or an unsafe parent.
 3. As root: `install -d -o root -g limen-github -m 0750 /etc/limen-github`; put the App PEM there **without first staging it in overment's home**, then `chown limen-github:limen-github /etc/limen-github/app.pem && chmod 0600 /etc/limen-github/app.pem`. Verify as the worker `test ! -r /etc/limen-github/app.pem` and as root `sudo -u limen-github test -r /etc/limen-github/app.pem`; stop if either fails. The worker may traverse this directory but cannot read the key. Do not give the worker the App key or an installation token in its environment, task, log, or worktree.
 4. The poller reads the seat's existing project registry (`/home/overment/.limen/projects`). Grant `limen-github` traverse ACLs on `/home/overment`, each checkout parent, and each project root (`setfacl -m u:limen-github:--x /home/overment /path/to/project`); the registry must be readable. Project `.limen/` must already exist from `limen init`; `connect` gives the shared group access to only `.limen/github/` and read/traverse access to `.limen/`. Provision the authoritative state separately: `install -d -o limen-github -g limen-github -m 0700 /var/lib/limen-github/state`. Its parents must not be worker-writable. The poller refuses any other owner or group/other access; workers cannot read or write accepted claims or cursors. Do not put the key in the group-readable checkout.
 5. Permit **only the poller** to invoke the narrow Herdr handoff as the coordinator account. A root-owned sudoers file (mode 0440, validate with `visudo -cf`) contains `limen-github ALL=(overment) NOPASSWD: /opt/limen/bin/limen github deliver *`. This does **not** grant `overment` sudo. Install a root-owned `/etc/limen-github/poller.env` (0600) with `LIMEN_GITHUB_APP_ID=<numeric-id>`, `LIMEN_GITHUB_KEY_FILE=/etc/limen-github/app.pem`, `LIMEN_GITHUB_PROJECTS_FILE=/home/overment/.limen/projects`, `LIMEN_GITHUB_STATE_DIR=/var/lib/limen-github/state`, `LIMEN_GITHUB_WORKER_UID=<id -u overment>`, `LIMEN_GITHUB_LIMEN_BIN=/opt/limen/bin/limen`. Do not place private key bytes or a token in this file.
-6. Install root-owned `/etc/systemd/system/limen-github.service`:
-
-   ```ini
-   [Service]
-   Type=oneshot
-   User=limen-github
-   EnvironmentFile=/etc/limen-github/poller.env
-   ExecStart=/opt/limen/bin/limen github poll
-   ```
-
-   Install `/etc/systemd/system/limen-github.timer`:
-
-   ```ini
-   [Timer]
-   OnBootSec=1min
-   OnUnitInactiveSec=1min
-   Persistent=true
-
-   [Install]
-   WantedBy=timers.target
-   ```
-
-   Install the `acl` package for `setfacl` and a **root-owned** Node 24 binary in systemd/sudo's secure PATH (`/usr/bin/node` or `/usr/local/bin/node`); do not symlink to the worker-owned `~overment/.nvm` binary. Alice currently has Node only under that NVM home and no `setfacl`, so provision both before enabling the timer. Ensure Herdr (`/usr/local/bin/herdr`) is also in the secure PATH. Run `systemctl daemon-reload && systemctl enable --now limen-github.timer`. One service invocation scans all registered projects; systemd serializes its timer. Inspect `journalctl -u limen-github.service` for failures.
+6. Install the checked-in [service](seat/limen-github.service) and [timer](seat/limen-github.timer) as root-owned files under `/etc/systemd/system/`. The service invokes `/usr/bin/node` explicitly, with a safe PATH for the narrow Herdr handoff. Install `acl` for `setfacl`; install root-owned Node 24 at `/usr/bin/node` and `/usr/local/bin/node`, and root-owned Herdr at `/usr/local/bin/herdr`. Expose the root-owned `/opt/limen/bin/limen` through a root-owned `/usr/local/bin/limen` symlink for fresh SSH shells. Run `systemctl daemon-reload`, but do not enable the timer until all doctor findings other than the stopped timer are repaired. One service invocation scans all registered projects; systemd serializes its timer. Inspect `journalctl -u limen-github.service` for failures.
 7. In **each project's persistent Herdr coordinator** (with `LIMEN_COORDINATOR=1` and its own `HERDR_PANE_ID`), run `limen github connect` from its initialized Git checkout. This detects `origin`, writes a private, ignored `.limen/github/binding.json` and enables that repository for the already running seat timer. `limen github status` shows the binding and an explicitly unverified local handoff copy without credentials; authoritative receipts belong to the poller. A laptop clone has no registration and consumes nothing. For a move: `limen github disconnect` on the old seat **before** `connect` on the new seat; it removes the binding and waits for an in-flight poll. If `.limen/github/poll.lock` persists after a crash, inspect the old poller before clearing it or connecting elsewhere. Never copy `.limen/`.
+
+**Live trial, after doctor passes on the seat:**
+
+```bash
+# Mac window: leave this connected to the existing seat coordinator; do not run limen in a Mac clone.
+herdr --remote alice
+# Mac GitHub CLI, as a write-authorized collaborator on an open PR:
+gh pr comment <pr-number> --repo iceener/alice --body '@limen'
+# If the installed front door still accepts only the exact legacy command, use:
+gh pr comment <pr-number> --repo iceener/alice --body '/limen review'
+
+# Alice VPS, in /home/overment/alice:
+limen github doctor
+limen github status
+limen github ensure              # only with the matching mention-front-door release installed
+limen jobs --all
+# Root operator, only if diagnosing the service:
+journalctl -u limen-github.service -n 50 --no-pager
+```
+
+`@limen` and `github ensure` require the companion mention front door; this slice does not implement them. Until that release is installed on both `/opt/limen` and the coordinator, the exact `/limen review` body is the working trial and `github ensure` must not be run. An agent with `agent_status: done` and `interactive_ready: true` is warm idle, not gone.
 
 The poller accepts only a comment whose entire body is `/limen review`, verifies the collaborator's effective write-or-higher role and an open PR in the installed repository, and pins the PR's reported base/head SHA. The structured request goes to `herdr agent prompt <recorded-pane> <text>` as the coordinator user; Herdr acceptance does not count as a job. The coordinator's installed shop manual instructs it to run `limen github review <root> <comment-id> --engine omp --provider openai-codex --model gpt-6-sol --thinking xhigh` inside that pane, choosing all four flags explicitly from the current board policy if it changes. That command fetches and verifies the real base and PR head, records `GitHub doorbell: repo#comment-id` in the task, and starts a **hosted** review. The poller posts a start receipt only after observing a matching hosted job record with the pinned SHA/base; later it posts the terminal state, available evidence and an inspection command. `done` does not mean approval.
 
