@@ -232,7 +232,7 @@ test("one idle coordinator accepts two repository-specific requests and rejects 
 	const herdr = join(first.fakeBin, "herdr");
 	await writeFile(
 		herdr,
-		`#!/bin/sh\nif [ "$2" = get ]; then printf '%s\\n' '{"agent":{"agent_status":"done","interactive_ready":true}}'; else printf '%s\\n' "$4" >> ${JSON.stringify(prompts)}; fi\n`,
+		`#!/bin/sh\nif [ "$2" = get ]; then printf '%s\\n' '{"id":"cli:agent:get","result":{"agent":{"pane_id":"coord:p1","agent_status":"done","interactive_ready":true}}}'; else printf '%s\\n' "$4" >> ${JSON.stringify(prompts)}; fi\n`,
 	);
 	await writeFile(join(first.fakeBin, "id"), "#!/bin/sh\necho staff\n");
 	await writeFile(join(first.fakeBin, "sudo"), "#!/bin/sh\nexit 1\n");
@@ -278,7 +278,7 @@ test("one idle coordinator accepts two repository-specific requests and rejects 
 		}),
 		/already entered a handoff/,
 	);
-	await writeFile(herdr, '#!/bin/sh\nprintf \'%s\\n\' \'{"agent":{"agent_status":"done","interactive_ready":false}}\'\n');
+	await writeFile(herdr, '#!/bin/sh\nprintf \'%s\\n\' \'{"id":"cli:agent:get","result":{"agent":{"pane_id":"coord:p1","agent_status":"done","interactive_ready":false}}}\'\n');
 	await assert.rejects(ensureGithubCoordinator(roots[0] as string), /not interactive/);
 });
 

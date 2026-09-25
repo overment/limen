@@ -71,7 +71,7 @@ test("multiple registered projects each diagnose their own binding and warm idle
 	const bin = join(seat, "bin");
 	await mkdir(bin);
 	const herdr = join(bin, "herdr");
-	await writeFile(herdr, '#!/bin/sh\necho \'{"agent":{"pane_id":"w1K:p2","agent_status":"done","interactive_ready":true}}\'\n');
+	await writeFile(herdr, '#!/bin/sh\necho \'{"id":"cli:agent:get","result":{"agent":{"pane_id":"w1K:p2","agent_status":"done","interactive_ready":true}}}\'\n');
 	await chmod(herdr, 0o755);
 	const oldHerdr = process.env.LIMEN_HERDR;
 	process.env.LIMEN_HERDR = herdr;
@@ -114,7 +114,7 @@ test("multiple registered projects each diagnose their own binding and warm idle
 	assert.equal(messages.filter((line) => line.includes("live registered Herdr agent")).length, 2);
 	assert.ok(messages.includes(`SKIP project ${inactive} has no GitHub binding`));
 	assert.ok(!messages.some((line) => line.startsWith(`FIX project ${inactive}`)));
-	await writeFile(herdr, '#!/bin/sh\necho \'{"agent":{"pane_id":"w1K:p2","agent_status":"done","interactive_ready":false}}\'\n');
+	await writeFile(herdr, '#!/bin/sh\necho \'{"id":"cli:agent:get","result":{"agent":{"pane_id":"w1K:p2","agent_status":"done","interactive_ready":false}}}\'\n');
 	messages.length = 0;
 	console.log = (message: string) => messages.push(message);
 	try {

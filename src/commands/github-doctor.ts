@@ -191,9 +191,9 @@ export async function githubDoctor(root: string, seat: Seat = seatDefaults()): P
 		"install docs/seat/github-setup.sh sudo policy as root and validate with visudo -cf /etc/sudoers.d/limen-github",
 	);
 	if (releaseSafe) {
-		const installed = command("git", ["-C", seat.release, "rev-parse", "HEAD"]);
+		const installed = command("git", ["-c", `safe.directory=${seat.release}`, "-C", seat.release, "rev-parse", "HEAD"]);
 		const cliRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
-		const cli = command("git", ["-C", cliRoot, "rev-parse", "HEAD"]);
+		const cli = command("git", ["-c", `safe.directory=${cliRoot}`, "-C", cliRoot, "rev-parse", "HEAD"]);
 		report(
 			!!installed && !!cli && installed === cli,
 			"poller and CLI revision match",
@@ -288,15 +288,18 @@ export async function githubDoctor(root: string, seat: Seat = seatDefaults()): P
 		let live = false;
 		try {
 			const response = JSON.parse(agent ?? "null") as {
+				result?: { agent?: { agent_status?: string; interactive_ready?: boolean; pane_id?: string } };
 				agent?: { agent_status?: string; interactive_ready?: boolean; pane_id?: string };
 				agent_status?: string;
 				interactive_ready?: boolean;
 				pane_id?: string;
 			};
-			const status = response.agent?.agent_status ?? response.agent_status;
-			const ready = response.agent?.interactive_ready ?? response.interactive_ready;
-			const pane = response.agent?.pane_id ?? response.pane_id ?? binding?.coordinator;
-			live = pane === binding?.coordinator && (status === "idle" || status === "working" || status === "blocked" || (status === "done" && ready === true));
+			const liveAgent = response.result?.agent ?? response.agent ?? response;
+			const status = liveAgent.agent_status;
+			live =
+				liveAgent.pane_id === binding?.coordinator &&
+				(status === "idle" || status === "working" || status === "blocked" || status === "done") &&
+				liveAgent.interactive_ready === true;
 		} catch {
 			/* unavailable Herdr is a repair, not a reason to dump its response */
 		}

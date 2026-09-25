@@ -102,6 +102,7 @@ install -o root -g root -m 0440 /dev/null /etc/sudoers.d/limen-github
 printf 'Defaults:limen-github secure_path="/usr/bin:/usr/local/bin"\nlimen-github ALL=(%s) NOPASSWD: /opt/limen/bin/limen github deliver *\n' "$WORKER" > /etc/sudoers.d/limen-github
 chmod 0440 /etc/sudoers.d/limen-github
 visudo -cf /etc/sudoers.d/limen-github
+setfacl -m "u:$WORKER:--x" /etc/sudoers.d
 install -o root -g root -m 0644 "$(dirname "$0")/limen-github.service" /etc/systemd/system/limen-github.service
 install -o root -g root -m 0644 "$(dirname "$0")/limen-github.timer" /etc/systemd/system/limen-github.timer
 systemctl daemon-reload

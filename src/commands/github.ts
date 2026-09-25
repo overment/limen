@@ -46,14 +46,18 @@ export async function ensureGithubCoordinator(root: string): Promise<GithubBindi
 	if (!binding || originRepository(root).toLowerCase() !== binding.repo.toLowerCase()) throw new Error("GitHub registration is disconnected or no longer matches origin");
 	const agent = spawnSync(process.env.LIMEN_HERDR || "herdr", ["agent", "get", binding.coordinator], { encoding: "utf8", timeout: 15000 });
 	if (agent.status !== 0) throw new Error(`registered Herdr coordinator unavailable: ${(agent.stderr || agent.error?.message || "agent get failed").trim()}`);
-	let row: { agent?: { agent_status?: string; interactive_ready?: boolean }; agent_status?: string; interactive_ready?: boolean };
+	let row: {
+		result?: { agent?: { pane_id?: string; agent_status?: string; interactive_ready?: boolean } };
+		agent?: { pane_id?: string; agent_status?: string; interactive_ready?: boolean };
+	};
 	try {
 		row = JSON.parse(agent.stdout);
 	} catch {
 		throw new Error("registered Herdr coordinator returned invalid agent status");
 	}
-	const status = row.agent?.agent_status ?? row.agent_status;
-	if (!["idle", "working", "blocked", "done"].includes(status ?? "") || (row.agent?.interactive_ready ?? row.interactive_ready) !== true)
+	const live = row.result?.agent ?? row.agent;
+	const status = live?.agent_status;
+	if (live?.pane_id !== binding.coordinator || !["idle", "working", "blocked", "done"].includes(status ?? "") || live?.interactive_ready !== true)
 		throw new Error(`registered Herdr coordinator is not interactive (status: ${status ?? "unknown"})`);
 	return binding; // Herdr done is an idle, interactive agent, not a dead pane.
 }
