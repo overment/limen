@@ -19,6 +19,7 @@
 - `F734-stalled-children-fail` (🟠 ACTIVE): A silent CPU-idle child must stop claiming RUNNING with retained failure evidence; prove OMP/Pi hosted and detached before landing.
 - `F735-finish-waits-for-owner` (🟠 ACTIVE): A finished branch is waiting on the landing owner, never a Ready-to-stack signal; webhook and subscribed wake agree.
 - `F736-plant-status-plate` (🟠 ACTIVE): One job-record-backed plant plate shows running workers across spaces, working coordinators and branches awaiting land.
+- `F737-worker-skills-visible` (🟠 ACTIVE): OMP workers see native and legacy plant skills across fresh, continued, hosted, detached and review jobs without hand links.
 
 ## NEXT
 
