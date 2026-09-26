@@ -1,20 +1,22 @@
 import { existsSync } from "node:fs";
-import { readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
+import { containEscapedDescendants } from "./contain.ts";
 import { argvFor, jobProfile } from "./engine.ts";
 import { cleanWorktree } from "./git.ts";
 import {
 	type HerdrPlace,
 	type HostedAgentStatus,
 	hostedAgentStatus,
+	hostedEngineOwned,
 	hostedTerminalReason,
 	locateHostedAgent,
-	reportHostedStall,
 	restoreHostedPane,
 	startHostedPi,
 	stopHostedAgent,
 } from "./herdr.ts";
 import { prepareRecoveredOwner } from "./recovery.ts";
+import { observeToolStall, ownedToolDescendants, signalOwnedProcess, toolStallMs, type ToolStallWatch } from "./stalled-tool.ts";
 import { assistantStopReason, assistantText } from "./stream.ts";
 import { appendLimenLog, atomicWrite, finalizeJob, isFailedStopReason, recordCommits, requestedTerminal, textFile, writeHandshake } from "./wrapper.ts";
 
@@ -52,7 +54,7 @@ export async function runHostedSupervisor(): Promise<void> {
 	await rm(`${jobDir}/born`, { force: true });
 	await writeHandshake(jobDir);
 	await release?.();
-	await appendLimenLog(jobDir, "hosted supervisor started (weaker guarantees: no timeout, no tool-call cap, no process containment)");
+	await appendLimenLog(jobDir, "hosted supervisor started (no outer timeout or tool-call cap; confirmed idle tool children are contained)");
 	let target = process.env.LIMEN_HOSTED_TARGET?.trim() ?? "";
 	if (!recovering && process.env.LIMEN_HOSTED_START === "1") {
 		try {
@@ -71,6 +73,9 @@ export async function runHostedSupervisor(): Promise<void> {
 	let unknownStreak = 0;
 	let unknownAliveNoted = false;
 	const idle: HostedIdleWatch = { leftWorkingAt: undefined, armed: true };
+	const toolWatch: ToolStallWatch = { tool: "", born: "", started: 0 };
+	let ownershipWarning = false;
+	const engine = (await jobProfile(jobDir)).id;
 	while (!interrupted) {
 		if ((await textFile(`${jobDir}/state`)) !== "running") return;
 		const status = hostedAgentStatus(target);
@@ -105,6 +110,60 @@ export async function runHostedSupervisor(): Promise<void> {
 			}
 		}
 		let reason: string | undefined = sessionEnded ? hostedTerminalReason(status, true) : missingStreak >= 3 ? hostedTerminalReason(status, false) : undefined;
+		const activity = await textFile(`${jobDir}/activity`);
+		if (activity === "tool") {
+			const pid = Number(await textFile(`${jobDir}/engine-pid`));
+			const tool = `${await textFile(`${jobDir}/tool-calls`)}:${(await textFile(`${jobDir}/tool-detail`)) || (await textFile(`${jobDir}/last-tool`))}`;
+			const sessionFile = (await readdir(`${jobDir}/session`).catch(() => [] as string[])).filter((name) => name.endsWith(".jsonl")).sort().at(-1);
+			const [logProgress, sessionProgress] = await Promise.all([
+				stat(`${jobDir}/log`).then((row) => row.size, () => 0),
+				sessionFile ? stat(`${jobDir}/session/${sessionFile}`).then((row) => row.size, () => 0) : 0,
+			]);
+			const owned = hostedEngineOwned(target, pid, engine, jobDir);
+			if (!owned) {
+				toolWatch.previous = undefined;
+				toolWatch.started = Date.now();
+			}
+			let observation = owned ? await observeToolStall(toolWatch, pid, `${tool}:${logProgress}:${sessionProgress}`) : "uncertain";
+			if (observation === "stalled") {
+				const descendants = hostedEngineOwned(target, pid, engine, jobDir) ? await ownedToolDescendants(pid, toolWatch.born) : undefined;
+				const [activityNow, countNow, logNow, sessionNow] = await Promise.all([
+					textFile(`${jobDir}/activity`),
+					textFile(`${jobDir}/tool-calls`),
+					stat(`${jobDir}/log`).then((row) => row.size, () => 0),
+					sessionFile ? stat(`${jobDir}/session/${sessionFile}`).then((row) => row.size, () => 0) : 0,
+				]);
+				const sameTool = activityNow === "tool" && countNow === tool.slice(0, tool.indexOf(":")) && logNow === logProgress && sessionNow === sessionProgress;
+				if (!descendants?.length) observation = "uncertain";
+				else if (!sameTool) observation = undefined;
+				else if (!hostedEngineOwned(target, pid, engine, jobDir)) observation = "uncertain";
+				else observation = await observeToolStall(toolWatch, pid, `${tool}:${logProgress}:${sessionProgress}`);
+				if (observation === "stalled" && descendants && (await signalOwnedProcess(pid, toolWatch.born, "SIGTERM"))) {
+					if (ownershipWarning) await rm(`${jobDir}/advisory`, { force: true });
+					const name = tool.slice(1 + tool.indexOf(":"));
+					await appendLimenLog(jobDir, `stalled tool ${name}: CPU-idle child for ${Math.round(toolStallMs() / 1000)}s; stopping owned engine ${pid}`);
+					await containEscapedDescendants(jobDir, descendants, "after hosted tool stall");
+					await signalOwnedProcess(pid, toolWatch.born, "SIGKILL");
+					await writeHostedResult(jobDir);
+					await atomicWrite(`${jobDir}/stop-reason`, `error: stalled tool ${name}\n`);
+					await finalizeJob(jobDir, "failed", `stalled tool ${name}: CPU-idle child for ${Math.round(toolStallMs() / 1000)}s`);
+					return;
+				}
+			}
+			if ((observation === "uncertain" || observation === "stalled") && !ownershipWarning) {
+				ownershipWarning = true;
+				await atomicWrite(`${jobDir}/advisory`, "tool stall observation uncertain: engine or child ownership requires attention\n");
+				await appendLimenLog(jobDir, "tool stall observation uncertain: engine or child ownership requires attention");
+			} else if (observation !== "uncertain" && observation !== "stalled" && ownershipWarning) {
+				ownershipWarning = false;
+				await clearHostedAdvisory(jobDir);
+			}
+		} else {
+			toolWatch.tool = "";
+			toolWatch.previous = undefined;
+			if (ownershipWarning) await clearHostedAdvisory(jobDir);
+			ownershipWarning = false;
+		}
 		if (!reason) reason = await noteHostedIdle(jobDir, status, idle);
 		if (reason) {
 			const requested = await textFile(`${jobDir}/stop-requested`);

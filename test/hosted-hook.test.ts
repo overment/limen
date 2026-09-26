@@ -142,7 +142,11 @@ test("hosted finish writes the handoff and shuts down; a text-only turn records 
 	handlers.get("turn_end")?.({});
 	assert.equal(await readFile(join(job, "last-turn-tools"), "utf8"), "0\n");
 	handlers.get("turn_start")?.({});
-	handlers.get("tool_execution_start")?.({ toolName: "bash" });
+	handlers.get("tool_execution_start")?.({ toolName: "bash", args: { command: "cargo test" } });
+	assert.equal(await readFile(join(job, "activity"), "utf8"), "tool\n");
+	assert.equal(await readFile(join(job, "tool-detail"), "utf8"), "cargo test\n");
+	handlers.get("tool_execution_end")?.({});
+	assert.equal(await readFile(join(job, "activity"), "utf8"), "think\n");
 	handlers.get("turn_end")?.({});
 	assert.equal(await readFile(join(job, "last-turn-tools"), "utf8"), "1\n");
 	assert.ok(tool);

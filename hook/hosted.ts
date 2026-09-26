@@ -4,7 +4,8 @@ import { join } from "node:path";
 
 type PiApi = {
 	on(event: "session_start" | "session_shutdown" | "agent_settled", handler: (event: unknown, context: unknown) => void): void;
-	on(event: "tool_execution_start", handler: (event: { readonly toolName?: string }, context: unknown) => void): void;
+	on(event: "tool_execution_start", handler: (event: { readonly toolName?: string; readonly args?: { readonly command?: string } }, context: unknown) => void): void;
+	on(event: "tool_execution_end", handler: (event: unknown, context: unknown) => void): void;
 	on(event: "turn_start" | "turn_end", handler: (event: unknown, context: unknown) => void): void;
 	registerTool?(tool: {
 		readonly name: string;
@@ -100,6 +101,7 @@ export default function limenHosted(pi: PiApi): void {
 	});
 	pi.on("session_start", () => {
 		mkdirSync(join(jobDir, "session"), { recursive: true });
+		write("engine-pid", String(process.pid));
 		write("activity", "think");
 		log(`[limen ${new Date().toISOString()}] hosted reporter attached`);
 		const binary = process.env.LIMEN_HERDR?.trim() || "herdr";
@@ -124,8 +126,12 @@ export default function limenHosted(pi: PiApi): void {
 		turnTools += 1;
 		write("activity", "tool");
 		write("last-tool", name);
+		write("tool-detail", event.args?.command?.trim().replace(/\s+/g, " ").slice(0, 80) || name);
 		write("tool-calls", String(tools));
 		log(name);
+	});
+	pi.on("tool_execution_end", () => {
+		write("activity", "think");
 	});
 	pi.on("turn_end", () => {
 		// A turn end is not job completion — hosted jobs are multi-turn.

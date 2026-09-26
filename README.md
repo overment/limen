@@ -102,7 +102,7 @@ Finished jobs keep their files under `.limen/jobs/`. Extra checkouts do not stay
 
 To keep a finished job's conversation, run `limen continue <job-id> "Follow-up instruction"`. If its checkout was pruned, Limen restores the recorded path from the surviving local branch and copies the saved session into a new linked job. Only committed branch contents return; pruned uncommitted files are lost. A missing branch or transcript prevents recovery, and a branch checked out elsewhere is not taken over.
 
-A job is bounded by 90 minutes (`--timeout 20m`) and 900 tool-start events (`LIMEN_MAX_TOOL_CALLS`). A bound records `failed`; it does not finish the ticket. Do not run `limen wait` in the coordinator conversation — it blocks you.
+A detached job is bounded by 90 minutes (`--timeout 20m`) and 900 tool-start events (`LIMEN_MAX_TOOL_CALLS`). Hosted jobs have neither outer bound. Both modes fail a pending tool only when an owned child stays silent and its process tree makes no cumulative CPU progress for three minutes (`LIMEN_TOOL_STALL_MS` overrides the confirmation window). An uncertain engine identity or process snapshot records an advisory rather than stopping an unrelated process; the failed job retains its worktree and transcript. A bound records `failed`; it does not finish the ticket. Do not run `limen wait` in the coordinator conversation — it blocks you.
 
 ## Ticket authorship
 

@@ -239,18 +239,13 @@ test("sleeping descendant discovery delays timeout only through its short bound"
 	assert.match(await readFile(join(scratch.root, `.limen/jobs/${id}/cleanup`), "utf8"), /escaped descendant discovery failed during exhaustion/);
 });
 
-test("proc_pidinfo distinguishes present and confirmed absent PIDs", async () => {
+test("process identity distinguishes present and confirmed absent PIDs", async () => {
 	const deadline = Date.now() + 10_000;
 	const current = await processInfo(process.pid, deadline);
-	if (process.platform !== "darwin") {
-		assert.equal(current.kind, "unavailable");
-		assert.equal((await processInfo(999_999_999, deadline)).kind, "unavailable");
-		return;
-	}
 	assert.equal(current.kind, "present");
 	if (current.kind !== "present") assert.fail("current process identity must be available");
 	assert.equal(current.process.pid, process.pid);
-	assert.match(current.process.born, /^\d+\.\d{6}$/);
+	assert.match(current.process.born, process.platform === "linux" ? /^\d+$/ : /^\d+\.\d{6}$/);
 	assert.deepEqual(await processInfo(999_999_999, deadline), { kind: "absent" });
 });
 test("a changed birth identity is never signaled", async (context) => {
