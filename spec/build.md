@@ -16,6 +16,9 @@
 
 - `F014-github-doorbell` (🟠 ACTIVE): Alice's isolated App key, warm coordinator, live PR mention, hosted review, and one start/finish receipt are proven; second-seat ownership/routing remains to prove before closing.
 - `F731-seat-bell-once` (🟠 ACTIVE): Stop the seat sweep replaying the same finished or stalled job forever; old markers and concurrent sweeps must not ring again.
+- `F734-stalled-children-fail` (🟠 ACTIVE): A silent CPU-idle child must stop claiming RUNNING with retained failure evidence; prove OMP/Pi hosted and detached before landing.
+- `F735-finish-waits-for-owner` (🟠 ACTIVE): A finished branch is waiting on the landing owner, never a Ready-to-stack signal; webhook and subscribed wake agree.
+- `F736-plant-status-plate` (🟠 ACTIVE): One job-record-backed plant plate shows running workers across spaces, working coordinators and branches awaiting land.
 
 ## NEXT
 
