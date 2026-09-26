@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { appendFile, open, readdir, readFile, rename, rm } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { containEscapedDescendants, discoverEscapedDescendants, processAlive, processInfo, signalProcessGroup } from "./contain.ts";
-import { argvFor, engineBinary, jobProfile } from "./engine.ts";
+import { argvFor, engineBinary, jobProfile, prepareSkillConfig } from "./engine.ts";
 import { deliverFinishWebhook } from "./finish-webhook.ts";
 import { commitList, headCommit } from "./git.ts";
 import { settleJobTab } from "./herdr.ts";
@@ -88,9 +88,11 @@ export async function runInternalJob(): Promise<void> {
 		})();
 	};
 	const profile = await jobProfile(jobDir);
+	const skillConfig = profile.id === "omp" ? await prepareSkillConfig(worktree, jobDir) : undefined;
 	const args = argvFor(profile, {
 		jsonMode: true,
 		jobDir,
+		...(skillConfig ? { skillConfig } : {}),
 		label,
 		preamble,
 		extensions: [`${HOOK}/steering.ts`, `${HOOK}/communication.ts`],

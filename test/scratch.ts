@@ -154,7 +154,9 @@ export async function writeFakePi(fakeBin: string, source: string): Promise<void
 	const nl = source.indexOf("\n");
 	const shebang = source.startsWith("#!") && nl !== -1 ? source.slice(0, nl + 1) : "";
 	const body = shebang ? source.slice(shebang.length) : source;
-	const text = `${shebang}if (process.argv[2] === "--version") { console.log("0.0.0-test"); process.exit(0); }\n${body}`;
+	const text = `${shebang}if (process.argv[2] === "--version") { console.log("0.0.0-test"); process.exit(0); }
+if (process.argv[2] === "config" && process.argv[3] === "get") { console.log(JSON.stringify({ value: [] })); process.exit(0); }
+${body}`;
 	for (const name of ["pi", "omp"] as const) {
 		const path = join(fakeBin, name);
 		await writeFile(path, text);
