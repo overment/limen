@@ -135,7 +135,8 @@ function send(target, index) {
       method: 'POST', redirect: 'manual', signal: controller.signal,
       headers: { Authorization: target.auth, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        job: args[0], status: args[1], branch: args[2],
+        job: args[0], status: args[1] === 'done' ? 'waiting' : args[1], branch: args[2],
+        ...(args[1] === 'done' ? { jobState: 'done' } : {}),
         ...(event ? { finishEvent: event } : {}),
         handoff: args[1] === 'done'
           ? 'Waiting on landing owner; merge not ready'

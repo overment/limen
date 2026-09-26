@@ -8,10 +8,12 @@ A pane can be ready for your next message while its Limen jobs are still
 workers in another Herdr workspace), unmerged finished branches with commits
 waiting on the owner, and agent tabs whose working directory is the plant or
 one of its repositories. Job activity and advisories use the same records as
-`limen jobs`. A missing Herdr agent list says coordinator status is unknown;
-a missing repository leaves landing status unconfirmed. A `done` Herdr tab
-does not prove a merge. The plate does not judge review acceptance or choose
-the next lane.
+`limen jobs`. If global Herdr agent discovery fails, the plate checks recent
+recorded origin tabs directly and labels them incomplete: a visible tab is not
+proof of its coordinator role, and other tabs may be missing. If neither query
+works, coordinator status is unknown. A missing repository leaves landing
+status unconfirmed. A `done` Herdr tab does not prove a merge. The plate does
+not judge review acceptance or choose the next lane.
 
 ## Pane readiness is not job completion
 

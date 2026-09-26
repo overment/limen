@@ -122,12 +122,15 @@ export async function processInfo(pid: number, deadline = Date.now() + PROCESS_Q
 			const stat = await readFile(`/proc/${pid}/stat`, "utf8");
 			const close = stat.lastIndexOf(") ");
 			if (close < 0) return { kind: "unavailable" };
-			const fields = stat.slice(close + 2).trim().split(/\s+/);
+			const fields = stat
+				.slice(close + 2)
+				.trim()
+				.split(/\s+/);
 			const ppid = Number(fields[1]);
 			const pgid = Number(fields[2]);
 			const born = fields[19];
 			if (fields[0] === "Z") return { kind: "absent" };
-			if (!Number.isSafeInteger(ppid) || !Number.isSafeInteger(pgid) || !/^\d+$/.test(born)) return { kind: "unavailable" };
+			if (!Number.isSafeInteger(ppid) || !Number.isSafeInteger(pgid) || !born || !/^\d+$/.test(born)) return { kind: "unavailable" };
 			return { kind: "present", process: { pid, ppid, pgid, born, command: stat.slice(stat.indexOf("(") + 1, close) } };
 		} catch (error) {
 			return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT" ? { kind: "absent" } : { kind: "unavailable" };

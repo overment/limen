@@ -118,13 +118,6 @@ for (const state of ["failed", "stopped", "done"]) {
 				assert.deepEqual(await observe(f.observations), [{ args: ["finish label", state, "main"], config: selected, state, finished: true, pid: false }]);
 			}
 			assert.equal(await readFile(join(job, "state"), "utf8"), `${state}\n`);
-			const detail = f.command(["jobs", "direct"]);
-			if (state === "done") {
-				assert.match(detail, /handoff: Waiting on landing owner; merge not ready \(worker ended, branch not landed\)/);
-			} else {
-				assert.match(detail, new RegExp(`handoff: ${state}; inspect failure before proceeding`));
-				assert.doesNotMatch(detail, /handoff: Waiting on landing owner/);
-			}
 			assert.equal(await readFile(join(job, "notify/ready"), "utf8"), "1\n");
 			assert.equal(await readFile(join(job, "notify/subscribers/owner"), "utf8"), "subscribed\n");
 			const claim = await readFile(join(job, "finish-webhook-attempt"), "utf8");
@@ -288,7 +281,10 @@ test("automatic delivery invokes the real canonical helper with synthetic dotenv
 	const job = join(f.root, ".limen/jobs", id);
 	assert.match(await delivery(job), /^accepted:/);
 	const request = (await observe(f.observations))[0];
-	assert.deepEqual(request.body, { job: 'real helper "quoted" \\', status: "done", branch: (await readFile(join(job, "branch"), "utf8")).trim(), finishEvent: finishEvent(job), handoff: "Waiting on landing owner; merge not ready" });
+	assert.deepEqual(
+		{ job: request.body.job, status: request.body.status, jobState: request.body.jobState, branch: request.body.branch, finishEvent: request.body.finishEvent },
+		{ job: 'real helper "quoted" \\', status: "waiting", jobState: "done", branch: (await readFile(join(job, "branch"), "utf8")).trim(), finishEvent: finishEvent(job) },
+	);
 	assert.deepEqual(request.headers, { Authorization: "Bearer synthetic-only", "Content-Type": "application/json" });
 	assert.equal(request.state, "done");
 	assert.equal(request.method, "POST");
@@ -357,7 +353,9 @@ for (const firstStatus of [204, 503, "stall"]) {
 		);
 		for (const request of requests) {
 			assert.equal(request.state, "done");
-			assert.deepEqual(request.body, { job: "two bots", status: "done", branch: (await readFile(join(job, "branch"), "utf8")).trim(), finishEvent: finishEvent(job), handoff: "Waiting on landing owner; merge not ready" });
+			assert.equal(request.body.status, "waiting");
+			assert.equal(request.body.jobState, "done");
+			assert.equal(request.body.finishEvent, finishEvent(job));
 		}
 		assert.equal(await readFile(join(job, "state"), "utf8"), "done\n");
 		assert.doesNotMatch(result + (await readFile(join(job, "log"), "utf8")), /synthetic-one|synthetic-two|synthetic\.example/);

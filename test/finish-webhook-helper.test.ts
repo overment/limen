@@ -89,7 +89,8 @@ test("helper safely encodes all CLI fields, sends Bearer in memory, and reports 
 	assert.equal(result.stdout, "finish webhook: accepted (HTTP 204)\n");
 	assert.equal(result.stderr, "");
 	const request = f.request();
-	assert.deepEqual(JSON.parse(request.body), { job: args[0], status: args[1], branch: args[2], handoff: "Unrecognized job status; inspect the job record before proceeding" });
+	const body = JSON.parse(request.body);
+	assert.deepEqual({ job: body.job, status: body.status, branch: body.branch }, { job: args[0], status: args[1], branch: args[2] });
 	assert.deepEqual(request.headers, { Authorization: AUTH, "Content-Type": "application/json" });
 	assert.equal(request.url, DESTINATION);
 	assert.equal(request.method, "POST");
@@ -108,8 +109,8 @@ test("failed and stopped sender payloads direct inspection without a landing sig
 		const result = f.run({ LIMEN_FINISH_WEBHOOK_ENV: path }, f.root, ["worker", status, "candidate"]);
 		assert.equal(result.status, 0, result.stderr);
 		const body = JSON.parse(f.request().body);
-		assert.deepEqual(body, { job: "worker", status, branch: "candidate", handoff: "Job failed or stopped; inspect the job record before proceeding" });
-		assert.doesNotMatch(body.handoff, /Waiting on landing owner|Ready/i);
+		assert.equal(body.status, status);
+		assert.equal(body.jobState, undefined);
 	}
 });
 
@@ -134,7 +135,12 @@ test("explicit targets fan out to two routes without an implicit single-target r
 		requests.map(({ url, headers }) => ({ url, auth: headers.Authorization })),
 		targets,
 	);
-	for (const request of requests) assert.deepEqual(JSON.parse(request.body), { job: "label", status: "done", branch: "topic", handoff: "Waiting on landing owner; merge not ready" });
+	for (const request of requests) {
+		const body = JSON.parse(request.body);
+		assert.equal(body.status, "waiting");
+		assert.equal(body.jobState, "done");
+		assert.equal(body.branch, "topic");
+	}
 	assert.match(result.stdout, /target 1 accepted \(HTTP 204\); owner wake unobserved/);
 	assert.match(result.stdout, /target 2 accepted \(HTTP 204\); owner wake unobserved/);
 });

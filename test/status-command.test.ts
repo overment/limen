@@ -118,3 +118,37 @@ test("missing Git repository stays unconfirmed, not clear", async (context) => {
 	assert.match(result.stdout, /Unconfirmed jobs:[\s\S]*lost repo.*Git unknown/);
 	assert.match(result.stdout, /Waiting on owner \(0\):/);
 });
+
+test("recorded origin stays visible when global Herdr agent discovery times out", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	assert.equal(limen(scratch, "init").status, 0);
+	await job(scratch.root, "worker", {
+		state: "running",
+		label: "active worker",
+		branch: "limen/worker",
+		pid: "1",
+		activity: "tool",
+		"started-at": new Date().toISOString(),
+		"origin-tab": "w9:t1",
+		"herdr/tab": "w9:t2",
+	});
+	const herdr = join(scratch.fakeBin, "herdr");
+	await writeFile(
+		herdr,
+		`#!/usr/bin/env node
+if (process.argv[2] === "agent") process.exit(1);
+console.log(JSON.stringify({ result: { tabs: [
+  { tab_id: "w9:t1", agent_status: "working" },
+  { tab_id: "w9:t2", agent_status: "working" }
+] } }));
+`,
+	);
+	await chmod(herdr, 0o755);
+	const status = limenWithEnv(scratch, { LIMEN_HERDR: herdr }, "status");
+	assert.equal(status.status, 0, status.stderr);
+	assert.match(status.stdout, /Running \(1\):[\s\S]*active worker/);
+	assert.match(status.stdout, /Coordinator tabs:[\s\S]*w9:t1 · working/);
+	assert.doesNotMatch(status.stdout, /w9:t2 · working/);
+	assert.match(status.stdout, /origin tabs only/);
+});

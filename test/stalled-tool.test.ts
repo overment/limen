@@ -57,7 +57,9 @@ setInterval(() => {}, 1000);`,
 		context.after(async () => {
 			const current = await processInfo(worker.pid!);
 			if (current.kind === "present" && current.process.born === birth && current.process.pgid === worker.pid) {
-				try { process.kill(-worker.pid!, "SIGKILL"); } catch {}
+				try {
+					process.kill(-worker.pid!, "SIGKILL");
+				} catch {}
 			}
 			if (childPid && childBorn) await signalOwnedProcess(childPid, childBorn, "SIGKILL");
 			await rm(dir, { recursive: true, force: true });
@@ -78,11 +80,15 @@ console.log(JSON.stringify({ result: info }));
 `;
 		await writeFile(herdr, herdrSource("/foreign/job/session"));
 		await chmod(herdr, 0o755);
-		const supervisor = spawn(process.execPath, ["--input-type=module", "-e", `await import(${JSON.stringify(join(root, "src/supervisor.ts"))}).then(m => m.runHostedSupervisor())`], {
-			cwd: root,
-			env: { ...process.env, LIMEN_JOB_DIR: job, LIMEN_HOSTED_TARGET: "test:p1", LIMEN_HERDR: herdr, LIMEN_TOOL_STALL_MS: "1200", LIMEN_HOSTED_START: "" },
-			stdio: "ignore",
-		});
+		const supervisor = spawn(
+			process.execPath,
+			["--input-type=module", "-e", `await import(${JSON.stringify(join(root, "src/supervisor.ts"))}).then(m => m.runHostedSupervisor())`],
+			{
+				cwd: root,
+				env: { ...process.env, LIMEN_JOB_DIR: job, LIMEN_HOSTED_TARGET: "test:p1", LIMEN_HERDR: herdr, LIMEN_TOOL_STALL_MS: "1200", LIMEN_HOSTED_START: "" },
+				stdio: "ignore",
+			},
+		);
 		const supervisorBirth = await until(async () => {
 			if (!supervisor.pid) return;
 			const info = await processInfo(supervisor.pid);
@@ -91,15 +97,15 @@ console.log(JSON.stringify({ result: info }));
 		context.after(async () => {
 			if (supervisor.pid) await signalOwnedProcess(supervisor.pid, supervisorBirth, "SIGKILL");
 		});
-		await until(async () => (await content(join(job, "advisory")))?.includes("ownership requires attention") ? true : undefined);
+		await until(async () => ((await content(join(job, "advisory")))?.includes("ownership requires attention") ? true : undefined));
 		assert.equal(await content(join(job, "state")), "running\n", "unknown pane ownership cannot fail the job");
 		assert.equal((await processInfo(childPid)).kind, "present", "unknown pane ownership cannot kill the child");
 		await writeFile(herdr, herdrSource(join(job, "session")));
-		await until(async () => (await content(join(job, "state"))) === "failed\n" ? true : undefined, 25_000);
+		await until(async () => ((await content(join(job, "state"))) === "failed\n" ? true : undefined), 25_000);
 		assert.match((await content(join(job, "log"))) ?? "", /stalled tool cargo test: CPU-idle child/);
 		assert.match((await content(join(job, "stop-reason"))) ?? "", /error: stalled tool cargo test/);
-		await until(async () => (await processInfo(childPid)).kind === "absent" ? true : undefined);
-		assert.equal((await content(join(job, "state"))), "failed\n");
+		await until(async () => ((await processInfo(childPid)).kind === "absent" ? true : undefined));
+		assert.equal(await content(join(job, "state")), "failed\n");
 		assert.equal(await content(join(job, "advisory")), undefined, "resolved ownership warning must not remain after failure");
 	});
 
@@ -109,12 +115,15 @@ console.log(JSON.stringify({ result: info }));
 		await mkdir(job);
 		await writeFile(join(job, "engine"), `${engine}\n`);
 		const fakeEngine = join(dir, "engine.cjs");
-		await writeFile(fakeEngine, `#!/usr/bin/env node
+		await writeFile(
+			fakeEngine,
+			`#!/usr/bin/env node
 const { spawn } = require('node:child_process'); const { writeFileSync } = require('node:fs');
 const child = spawn('sleep', ['60']); writeFileSync(${JSON.stringify(join(dir, "child"))}, String(child.pid));
 process.stdout.write(JSON.stringify({ type: 'tool_execution_start', toolName: 'bash', args: { command: 'cargo test' } }) + '\\n');
 setInterval(() => {}, 1000);
-`);
+`,
+		);
 		await chmod(fakeEngine, 0o755);
 		const task = join(dir, "task");
 		await writeFile(task, "test tool\n");
@@ -146,7 +155,9 @@ setInterval(() => {}, 1000);
 		context.after(async () => {
 			const current = await processInfo(runner.pid!);
 			if (current.kind === "present" && current.process.born === birth && current.process.pgid === runner.pid) {
-				try { process.kill(-runner.pid!, "SIGKILL"); } catch {}
+				try {
+					process.kill(-runner.pid!, "SIGKILL");
+				} catch {}
 			}
 			if (childPid && childBorn) await signalOwnedProcess(childPid, childBorn, "SIGKILL");
 			await rm(dir, { recursive: true, force: true });
@@ -154,10 +165,10 @@ setInterval(() => {}, 1000);
 		childPid = await until(async () => Number(await content(join(dir, "child"))) || undefined);
 		const childIdentity = await processInfo(childPid);
 		if (childIdentity.kind === "present") childBorn = childIdentity.process.born;
-		await until(async () => (await content(join(job, "state"))) === "failed\n" ? true : undefined);
+		await until(async () => ((await content(join(job, "state"))) === "failed\n" ? true : undefined));
 		assert.match((await content(join(job, "log"))) ?? "", /stalled tool bash cargo test: CPU-idle child/);
-		await until(async () => (await processInfo(childPid)).kind === "absent" ? true : undefined);
-		assert.equal((await content(join(job, "state"))), "failed\n");
+		await until(async () => ((await processInfo(childPid)).kind === "absent" ? true : undefined));
+		assert.equal(await content(join(job, "state")), "failed\n");
 	});
 }
 
@@ -186,7 +197,9 @@ while (true) { Math.sqrt(Math.random()); }`,
 	context.after(async () => {
 		const current = await processInfo(child.pid!);
 		if (current.kind === "present" && current.process.born === birth && current.process.pgid === child.pid) {
-			try { process.kill(-child.pid!, "SIGKILL"); } catch {}
+			try {
+				process.kill(-child.pid!, "SIGKILL");
+			} catch {}
 		}
 		if (childPid && childBorn) await signalOwnedProcess(childPid, childBorn, "SIGKILL");
 		await rm(dir, { recursive: true, force: true });
@@ -198,7 +211,7 @@ while (true) { Math.sqrt(Math.random()); }`,
 	assert.equal(await observeToolStall(watch, child.pid, "", 0, 100), undefined);
 	assert.equal(await observeToolStall(watch, child.pid, "1:bash cargo test", 0, 100), undefined);
 	const cpuBefore = execFileSync("ps", ["-p", String(child.pid), "-o", "time="], { encoding: "utf8" }).trim();
-	await until(async () => execFileSync("ps", ["-p", String(child.pid), "-o", "time="], { encoding: "utf8" }).trim() !== cpuBefore ? true : undefined);
+	await until(async () => (execFileSync("ps", ["-p", String(child.pid), "-o", "time="], { encoding: "utf8" }).trim() !== cpuBefore ? true : undefined));
 	assert.equal(await observeToolStall(watch, child.pid, "1:bash cargo test", 10_000, 100), undefined);
 });
 
@@ -206,11 +219,14 @@ test("an observed child that exits without ending its tool becomes a confirmed s
 	const dir = await mkdtemp(join(tmpdir(), "limen-stall-dead-child-"));
 	const engine = spawn(
 		process.execPath,
-		["-e", `const { spawn } = require('node:child_process');
+		[
+			"-e",
+			`const { spawn } = require('node:child_process');
 const { writeFileSync } = require('node:fs');
 const child = spawn('sleep', ['60']);
 writeFileSync(${JSON.stringify(join(dir, "child"))}, String(child.pid));
-setInterval(() => {}, 1000);`],
+setInterval(() => {}, 1000);`,
+		],
 		{ detached: true, stdio: "ignore" },
 	);
 	assert.ok(engine.pid);
@@ -223,7 +239,9 @@ setInterval(() => {}, 1000);`],
 	context.after(async () => {
 		const current = await processInfo(engine.pid!);
 		if (current.kind === "present" && current.process.born === identity.born && current.process.pgid === engine.pid)
-			try { process.kill(-engine.pid!, "SIGKILL"); } catch {}
+			try {
+				process.kill(-engine.pid!, "SIGKILL");
+			} catch {}
 		await rm(dir, { recursive: true, force: true });
 	});
 	childPid = await until(async () => Number(await content(join(dir, "child"))) || undefined);
@@ -231,7 +249,7 @@ setInterval(() => {}, 1000);`],
 	assert.equal(await observeToolStall(watch, engine.pid, "1:bash cargo test", 0, 1_000), undefined);
 	assert.equal(watch.hadChild, true);
 	process.kill(childPid, "SIGTERM");
-	await until(async () => (await processInfo(childPid)).kind === "absent" ? true : undefined);
+	await until(async () => ((await processInfo(childPid)).kind === "absent" ? true : undefined));
 	assert.equal(await observeToolStall(watch, engine.pid, "1:bash cargo test", 1_000, 1_000), undefined);
 	assert.equal(await observeToolStall(watch, engine.pid, "1:bash cargo test", 3_000, 1_000), "stalled");
 });
@@ -240,8 +258,11 @@ test("hosted ownership refuses another pane engine and another session", async (
 	const dir = await mkdtemp(join(tmpdir(), "limen-stall-ownership-"));
 	context.after(() => rm(dir, { recursive: true, force: true }));
 	const bin = join(dir, "herdr");
-	await writeFile(bin, `#!/usr/bin/env node
-console.log(JSON.stringify({ result: { process_info: { foreground_processes: [{ pid: 345, name: 'omp', argv: ['omp', '--session-dir', '/other/job/session'] }] } } }));`);
+	await writeFile(
+		bin,
+		`#!/usr/bin/env node
+console.log(JSON.stringify({ result: { process_info: { foreground_processes: [{ pid: 345, name: 'omp', argv: ['omp', '--session-dir', '/other/job/session'] }] } } }));`,
+	);
 	await chmod(bin, 0o755);
 	const old = process.env.LIMEN_HERDR;
 	process.env.LIMEN_HERDR = bin;

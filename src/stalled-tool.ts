@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { processInfo, type JobProcess } from "./contain.ts";
+import { type JobProcess, processInfo } from "./contain.ts";
 
 const DEFAULT_TOOL_STALL_MS = 3 * 60_000;
 const PROCESS_SAMPLE_MS = 2_000;
@@ -13,11 +13,11 @@ type Sample = { children: Row[]; cpu: number };
 function cpuSeconds(value: string): number {
 	const parts = value.split(":");
 	if (parts.length < 2 || parts.length > 3) return Number.NaN;
-	const first = parts[0].split("-");
+	const first = (parts[0] ?? "").split("-");
 	if (first.length > 2) return Number.NaN;
 	const numbers = [...first, ...parts.slice(1)].map(Number);
 	if (numbers.some((n) => !Number.isFinite(n) || n < 0)) return Number.NaN;
-	const days = first.length === 2 ? numbers.shift() ?? 0 : 0;
+	const days = first.length === 2 ? (numbers.shift() ?? 0) : 0;
 	return days * 86400 + numbers.reduce((total, n) => total * 60 + n, 0);
 }
 function processRows(): Promise<Row[]> {
@@ -27,7 +27,7 @@ function processRows(): Promise<Row[]> {
 		const rows: Row[] = [];
 		for (const line of stdout.split("\n")) {
 			const match = /^\s*(\d+)\s+(\d+)\s+(\S+)\s+(\S+)\s*$/.exec(line);
-			if (!match || Number(match[1]) === scanner.pid) continue;
+			if (!match?.[1] || !match[2] || !match[3] || !match[4] || Number(match[1]) === scanner.pid) continue;
 			const cpu = cpuSeconds(match[3]);
 			if (!Number.isFinite(cpu)) return reject(new Error("unreadable process CPU time"));
 			rows.push({ pid: Number(match[1]), ppid: Number(match[2]), cpu, state: match[4] });
@@ -66,7 +66,7 @@ async function sampleTree(pid: number, born: string): Promise<Sample | undefined
 	return { children, cpu: root.cpu + children.reduce((total, row) => total + row.cpu, 0) };
 }
 
-export type ToolStallWatch = { tool: string; born: string; started: number; hadChild?: boolean; lastSampleAt?: number; previous?: Sample };
+export type ToolStallWatch = { tool: string; born: string; started: number; hadChild?: boolean; lastSampleAt?: number; previous?: Sample | undefined };
 /** A pending tool needs an observed child and unchanged cumulative CPU time; a vanished child stays evidence after its exit. */
 export async function observeToolStall(watch: ToolStallWatch, pid: number, tool: string, now = Date.now(), windowMs = toolStallMs()): Promise<"stalled" | "uncertain" | undefined> {
 	if (!tool) {
@@ -117,10 +117,12 @@ export async function observeToolStall(watch: ToolStallWatch, pid: number, tool:
 export async function ownedToolDescendants(pid: number, born: string): Promise<JobProcess[] | undefined> {
 	const sample = await sampleTree(pid, born).catch(() => undefined);
 	if (!sample) return;
-	const captured = await Promise.all(sample.children.map(async (row) => {
-		const result = await processInfo(row.pid);
-		return result.kind === "present" && result.process.ppid === row.ppid ? result.process : undefined;
-	}));
+	const captured = await Promise.all(
+		sample.children.map(async (row) => {
+			const result = await processInfo(row.pid);
+			return result.kind === "present" && result.process.ppid === row.ppid ? result.process : undefined;
+		}),
+	);
 	if (captured.some((child) => !child)) return;
 	return captured as JobProcess[];
 }

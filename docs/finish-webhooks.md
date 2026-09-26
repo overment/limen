@@ -1,16 +1,18 @@
 # Finish webhooks
 
-`bin/tony-finish-ping.sh <label> <status> <branch>` sends a JSON POST containing
-`job`, `status`, `branch`, and `handoff` to each explicitly configured destination.
-Automatic sends also include the stable `finishEvent`. A `done` status means the
-worker ended: `handoff` says `Waiting on landing owner; merge not ready`, not
-that review passed or a new release lane can start. Failed and stopped jobs
-instead direct inspection of the job record. Recipients can keep reading the
-original `job`/`status`/`branch` fields unchanged. The helper name is retained
-for compatibility; recipients need not be Tony. It requires Node.js 24+ and
-Git, on macOS or Linux. It uses Node's HTTP client, not curl; credentials never
-enter child-process arguments. HTTP acceptance does **not** prove any bot woke
-or read the handoff.
+`bin/tony-finish-ping.sh <label> <job-state> <branch>` sends a JSON POST to
+each explicitly configured destination. A `done` job emits `status: "waiting"`,
+`jobState: "done"`, and `handoff: "Waiting on landing owner; merge not ready"`.
+The durable job state remains `done`; the webhook status deliberately cannot be
+mistaken for landing approval by a recipient that ignores new fields. Existing
+receivers that only accept `status: "done"` must handle `waiting` as a handoff,
+not as an error or a new-spawn signal. Failed and stopped jobs retain their
+status and direct inspection of the job record. Automatic sends include stable
+`finishEvent`; all sends include `job`, `status`, `branch`, and `handoff`.
+The helper name is retained for compatibility; recipients need not be Tony.
+It requires Node.js 24+ and Git, on macOS or Linux. It uses Node's HTTP client,
+not curl; credentials never enter child-process arguments. HTTP acceptance
+does **not** prove any bot woke or read the handoff.
 
 ## Migration: bot-agnostic configuration keys
 
@@ -91,11 +93,12 @@ For a manual helper invocation, selection is fail-closed, in this order:
 
 Both hosted supervisors and detached wrappers invoke the package's canonical
 `bin/tony-finish-ping.sh` after writing durable terminal state. The job's label,
-`done`/`failed`/`stopped` state and branch are passed unchanged as three arguments.
-Sender failure never changes the job outcome or coordinator wake subscriptions.
-The job detail view repeats the state-derived handoff beside the finish receipt,
-including when webhook delivery is unconfigured or skipped. This note does not
-change transport receipts, routing, or the job's `done`/`failed`/`stopped` state.
+`done`/`failed`/`stopped` state and branch are passed unchanged as three arguments;
+only the outgoing `done` payload uses `status: "waiting"`. Sender failure never
+changes the job outcome or coordinator wake subscriptions. The job detail view
+repeats the state-derived handoff beside the finish receipt, including when
+webhook delivery is unconfigured or skipped. This note does not change transport
+receipts, routing, or the job's `done`/`failed`/`stopped` state.
 The automatic caller prepends the directory of Limen's running Node executable
 to the helper's `PATH`, so a noninteractive environment missing that directory
 can still launch the sender. Manual launchers still need Node.js 24+ on `PATH`.
@@ -529,8 +532,9 @@ Legacy `finish-webhook-bot-turn` and local source-selection flags remain ignored
 
 ## VPS-first Johnny-only receiver-owned proof (outstanding)
 
-Automatic payloads retain `job` (the label), `status`, and `branch`, and add
-`finishEvent`: `limen-finish-` plus the lowercase SHA-256 of the job directory's
+Automatic payloads retain `job` (the label) and `branch`, map a completed job
+to `status: "waiting"` plus `jobState: "done"`, and add `finishEvent`:
+`limen-finish-` plus the lowercase SHA-256 of the job directory's
 basename (the job ID). This identity is stable across paths and seats; it is not
 an authentication token or a receiver idempotency guarantee. All configured targets get
 the same identity. Continuations have new job IDs and therefore new events.

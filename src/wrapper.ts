@@ -1,12 +1,12 @@
 import { spawn } from "node:child_process";
 import { appendFile, open, readdir, readFile, rename, rm } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { containEscapedDescendants, discoverEscapedDescendants, processAlive, processInfo, signalProcessGroup, type JobProcess } from "./contain.ts";
+import { containEscapedDescendants, discoverEscapedDescendants, type JobProcess, processAlive, processInfo, signalProcessGroup } from "./contain.ts";
 import { argvFor, engineBinary, jobProfile } from "./engine.ts";
 import { deliverFinishWebhook } from "./finish-webhook.ts";
 import { commitList, headCommit } from "./git.ts";
 import { settleJobTab } from "./herdr.ts";
-import { observeToolStall, ownedToolDescendants, toolStallMs, type ToolStallWatch } from "./stalled-tool.ts";
+import { observeToolStall, ownedToolDescendants, type ToolStallWatch, toolStallMs } from "./stalled-tool.ts";
 import { createStreamParser, type StreamEvent } from "./stream.ts";
 
 const STOP_GRACE_MS = 5_000;

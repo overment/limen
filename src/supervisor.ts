@@ -11,12 +11,13 @@ import {
 	hostedEngineOwned,
 	hostedTerminalReason,
 	locateHostedAgent,
+	reportHostedStall,
 	restoreHostedPane,
 	startHostedPi,
 	stopHostedAgent,
 } from "./herdr.ts";
 import { prepareRecoveredOwner } from "./recovery.ts";
-import { observeToolStall, ownedToolDescendants, signalOwnedProcess, toolStallMs, type ToolStallWatch } from "./stalled-tool.ts";
+import { observeToolStall, ownedToolDescendants, signalOwnedProcess, type ToolStallWatch, toolStallMs } from "./stalled-tool.ts";
 import { assistantStopReason, assistantText } from "./stream.ts";
 import { appendLimenLog, atomicWrite, finalizeJob, isFailedStopReason, recordCommits, requestedTerminal, textFile, writeHandshake } from "./wrapper.ts";
 
@@ -115,10 +116,21 @@ export async function runHostedSupervisor(): Promise<void> {
 			toolWatch.lastSampleAt = Date.now();
 			const pid = Number(await textFile(`${jobDir}/engine-pid`));
 			const tool = `${await textFile(`${jobDir}/tool-calls`)}:${(await textFile(`${jobDir}/tool-detail`)) || (await textFile(`${jobDir}/last-tool`))}`;
-			const sessionFile = (await readdir(`${jobDir}/session`).catch(() => [] as string[])).filter((name) => name.endsWith(".jsonl")).sort().at(-1);
+			const sessionFile = (await readdir(`${jobDir}/session`).catch(() => [] as string[]))
+				.filter((name) => name.endsWith(".jsonl"))
+				.sort()
+				.at(-1);
 			const [logProgress, sessionProgress] = await Promise.all([
-				stat(`${jobDir}/log`).then((row) => row.size, () => 0),
-				sessionFile ? stat(`${jobDir}/session/${sessionFile}`).then((row) => row.size, () => 0) : 0,
+				stat(`${jobDir}/log`).then(
+					(row) => row.size,
+					() => 0,
+				),
+				sessionFile
+					? stat(`${jobDir}/session/${sessionFile}`).then(
+							(row) => row.size,
+							() => 0,
+						)
+					: 0,
 			]);
 			const owned = hostedEngineOwned(target, pid, engine, jobDir);
 			if (!owned) {
@@ -131,8 +143,16 @@ export async function runHostedSupervisor(): Promise<void> {
 				const [activityNow, countNow, logNow, sessionNow] = await Promise.all([
 					textFile(`${jobDir}/activity`),
 					textFile(`${jobDir}/tool-calls`),
-					stat(`${jobDir}/log`).then((row) => row.size, () => 0),
-					sessionFile ? stat(`${jobDir}/session/${sessionFile}`).then((row) => row.size, () => 0) : 0,
+					stat(`${jobDir}/log`).then(
+						(row) => row.size,
+						() => 0,
+					),
+					sessionFile
+						? stat(`${jobDir}/session/${sessionFile}`).then(
+								(row) => row.size,
+								() => 0,
+							)
+						: 0,
 				]);
 				const sameTool = activityNow === "tool" && countNow === tool.slice(0, tool.indexOf(":")) && logNow === logProgress && sessionNow === sessionProgress;
 				if (!descendants) observation = "uncertain";
