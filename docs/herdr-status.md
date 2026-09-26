@@ -4,6 +4,15 @@ A pane can be ready for your next message while its Limen jobs are still
 `RUNNING`. Herdr describes the conversation; `limen jobs` and the files in
 `.limen/jobs/<id>/` describe the job. Neither tells you that a candidate landed.
 
+`limen status` is the plant plate: it lists all RUNNING job records (including
+workers in another Herdr workspace), unmerged finished branches with commits
+waiting on the owner, and agent tabs whose working directory is the plant or
+one of its repositories. Job activity and advisories use the same records as
+`limen jobs`. A missing Herdr agent list says coordinator status is unknown;
+a missing repository leaves landing status unconfirmed. A `done` Herdr tab
+does not prove a merge. The plate does not judge review acceptance or choose
+the next lane.
+
 ## Pane readiness is not job completion
 
 | Herdr state | What it means |
