@@ -134,7 +134,15 @@ function send(target, index) {
     fetch(target.url, {
       method: 'POST', redirect: 'manual', signal: controller.signal,
       headers: { Authorization: target.auth, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ job: args[0], status: args[1], branch: args[2], ...(event ? { finishEvent: event } : {}) }),
+      body: JSON.stringify({
+        job: args[0], status: args[1], branch: args[2],
+        ...(event ? { finishEvent: event } : {}),
+        handoff: args[1] === 'done'
+          ? 'Waiting on landing owner; merge not ready'
+          : ['failed', 'stopped'].includes(args[1])
+            ? 'Job failed or stopped; inspect the job record before proceeding'
+            : 'Unrecognized job status; inspect the job record before proceeding',
+      }),
     }).then(response => {
       const accepted = response.status >= 200 && response.status < 300;
       finish(accepted, accepted ? `accepted (HTTP ${response.status})` : `HTTP ${response.status} rejected`, `${Math.floor(response.status / 100)}xx`);

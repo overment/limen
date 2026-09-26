@@ -44,6 +44,9 @@ export function parseFinishReceipt(line: string): FinishReceipt | undefined {
 export async function inspectFinishWebhook(jobDir: string): Promise<string> {
 	const configured = Boolean(await textFile(`${jobDir}/finish-webhook-env`));
 	const lines = [`configured: ${configured ? "yes (selection recorded; validity not checked)" : "no"}`, `event: ${finishEvent(jobDir)}`];
+	const state = await textFile(`${jobDir}/state`);
+	if (state === "done") lines.push("handoff: Waiting on landing owner; merge not ready (worker ended, branch not landed)");
+	else if (state === "failed" || state === "stopped") lines.push(`handoff: ${state}; inspect failure before proceeding`);
 	const [first, second, third] = (await textFile(`${jobDir}/finish-webhook-author`)).split("\n");
 	const commit = second && /^[0-9a-f]{40}$|^[0-9a-f]{64}$/.test(second) ? second : third && /^[0-9a-f]{40}$|^[0-9a-f]{64}$/.test(third) ? third : "";
 	if (first && /^@[a-z\d](?:[a-z\d-]{0,37}[a-z\d])?$/.test(first)) lines.push(`author: ${first}${commit ? ` · commit ${commit}` : ""}`);

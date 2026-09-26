@@ -84,9 +84,10 @@ test("wake ignores history, announces start, and steers once on terminal change"
 	// Idle coordinators get a normal user message (visible turn), not a buried steer.
 	assert.equal(messages[0]?.deliverAs, undefined);
 	assert.match(messages[0]?.content ?? "", /Limen job "F001 implementation" is done \(new\)/);
-	assert.match(messages[0]?.content ?? "", /take the next safe step/);
+	assert.match(messages[0]?.content ?? "", /Waiting on landing owner; merge not ready/);
+	assert.match(messages[0]?.content ?? "", /Do not start the next release lane from this completion alone/);
 	assert.match(messages[0]?.content ?? "", /ask only when genuine product ambiguity/);
-	assert.ok(notifications.some((value) => value.includes("is done (new)")));
+	assert.ok(notifications.some((value) => value.includes("waiting on landing owner; merge not ready (new)")));
 	await writeFile(join(jobs, "new/state"), "failed\n");
 	await new Promise((resolve) => setTimeout(resolve, 100));
 	assert.equal(messages.length, 1, "a corrected terminal state must not send another wake");
@@ -138,6 +139,8 @@ test("a completion wake carries bounded commits and the worker's final message",
 	assert.match(wake, /result line 15\n…/);
 	assert.doesNotMatch(wake, /result line 16/);
 	assert.match(wake, /Inspect the job record/, "the pointer sentence stays");
+	assert.match(wake, /Waiting on landing owner; merge not ready/);
+	assert.match(wake, /Review and land acceptable work at the verified commit/);
 	const labelAt = wake.indexOf("F017 handoff");
 	const stateAt = wake.indexOf("is done (handoff)");
 	const commitsAt = wake.indexOf("Commits:");
@@ -152,6 +155,8 @@ test("a completion wake carries bounded commits and the worker's final message",
 	await writeFile(join(jobs, "bare/state"), "stopped\n");
 	await waitUntil(() => messages.length === 2);
 	assert.doesNotMatch(messages[1] ?? "", /Commits:|Final message:|Stop reason:|never delivered/);
+	assert.match(messages[1] ?? "", /job failed or stopped; inspect the failure/i);
+	assert.doesNotMatch(messages[1] ?? "", /Waiting on landing owner/);
 });
 
 test("a completion wake says when a terminal job produced nothing", async (context) => {
@@ -542,7 +547,7 @@ test("subscriptions scope wakes and one idle coordinator receives fallback", asy
 	await waitUntil(() => messagesA.length + messagesB.length === 4);
 	const fallback = [...messagesA, ...messagesB].find((message) => message.includes("subscribed coordinator is busy"));
 	assert.ok(fallback, "one idle coordinator that owns jobs must receive the fallback handoff");
-	assert.match(fallback ?? "", /Do not spawn, stop, or steer on this wake unless the human asks/);
+	assert.match(fallback ?? "", /Do not spawn, stop, steer, or land on behalf of another coordinator unless the human asks/);
 
 	handlersA.get("session_shutdown")?.({}, sessionA);
 	handlersB.get("session_shutdown")?.({}, sessionB);
@@ -707,7 +712,7 @@ test("herdr pane naming follows running jobs and each terminal state notifies on
 	await waitUntilAsync(async () => (await readCalls(calls)).some((call) => call.includes("--clear-token")));
 	const done = (await readCalls(calls)).filter((call) => call[0] === "notification");
 	assert.equal(done.length, 1, "one notification per terminal state");
-	assert.deepEqual(done[0], ["notification", "show", "limen: F001 implementation is done", "--body", "job new · branch candidate", "--sound", "done"]);
+	assert.deepEqual(done[0], ["notification", "show", "limen: F001 implementation waiting on landing owner", "--body", "job new · branch candidate · merge not ready", "--sound", "done"]);
 	const clear = (await readCalls(calls)).find((call) => call.includes("--clear-token"));
 	assert.ok(clear, "clear-token call expected");
 	assert.deepEqual(clear.slice(0, 5), ["pane", "report-metadata", "w1:p1", "--source", "limen"]);
@@ -1039,6 +1044,8 @@ console.log(JSON.stringify({result}));
 	const wake = messages.find((message) => message.includes("is failed (gone)")) ?? "";
 	assert.match(wake, /Stop reason: error: usage limit reached/);
 	assert.match(wake, /Final message:\nworker final/);
+	assert.match(wake, /The job failed or stopped; inspect the failure/);
+	assert.match(wake, /do not treat this failure as a new-spawn or release signal/);
 	assert.equal(messages.filter((message) => message.includes("is failed (gone)")).length, 1);
 	await new Promise((resolve) => setTimeout(resolve, 200));
 	assert.equal(messages.filter((message) => message.includes("is failed (gone)")).length, 1, "a reaped job must wake once");

@@ -185,7 +185,7 @@ export default function limenWake(pi: PiApi): void {
 	};
 	const notifyHerdr = (job: string, id: string, state: string, label: string, branch: string, slot: string) => {
 		if (!claimMarker(job, "herdr", slot)) return;
-		herdrCall(["notification", "show", `limen: ${label} is ${state}`, "--body", `job ${id} · branch ${branch}`, "--sound", state === "done" ? "done" : "request"]);
+		herdrCall(["notification", "show", state === "done" ? `limen: ${label} waiting on landing owner` : `limen: ${label} is ${state}`, "--body", state === "done" ? `job ${id} · branch ${branch} · merge not ready` : `job ${id} · branch ${branch}`, "--sound", state === "done" ? "done" : "request"]);
 	};
 	const injectWake = (message: string): Promise<void> => {
 		// First idle inject in a sweep is a real turn; later injects, and any inject while busy, are followUp.
@@ -253,7 +253,7 @@ export default function limenWake(pi: PiApi): void {
 			() => {
 				// Toast always — steers alone are easy to miss on a busy coordinator, and workers' steer inbox is not this session.
 				try {
-					session?.ui.notify(`limen: ${label} is ${state} (${id})`, "info");
+					session?.ui.notify(state === "done" ? `limen: ${label} waiting on landing owner; merge not ready (${id})` : `limen: ${label} is ${state}; inspect failure (${id})`, "info");
 				} catch {
 					dropFooter("ui.notify failed");
 				}
@@ -563,12 +563,17 @@ function completionWake(job: string, label: string, state: string, id: string, b
 		: `Limen job ${JSON.stringify(label)} is ${state} (${id}) on branch ${branch}${location}.`;
 	const empty = jobProducedNothing(job);
 	const facts = empty ? "It produced nothing (0 tool calls, no commits)." : "";
+	const handoff = state === "done"
+		? "Waiting on landing owner; merge not ready. Done means the worker ended, not that review passed, the branch landed, or another release lane is ready."
+		: "The job failed or stopped; inspect the failure before deciding whether to resume work.";
 	const instruction = fallback
-		? "The subscribed coordinator is busy. Do not spawn, stop, or steer on this wake unless the human asks."
+		? "The subscribed coordinator is busy. Do not spawn, stop, steer, or land on behalf of another coordinator unless the human asks."
 		: empty
 			? "Inspect the job record and log/session to understand why, then resume focused work if the ticket remains open. Keep the user informed; ask only when genuine product ambiguity, a scope or risk tradeoff, or an irreversible action needs a human decision."
-			: "Inspect the job record, branch diff and commits, log/session, and relevant checks. Use the accepted ticket intent to take the next safe step: merge acceptable reviewed work, or resume focused fixes and re-review. Keep the user informed; ask only when genuine product ambiguity, a scope or risk tradeoff, or an irreversible action needs a human decision.";
-	return joinWake(lead, handoffExcerpt(job), facts, instruction);
+			: state === "done"
+				? "Inspect the job record, branch diff and commits, log/session, and relevant checks. Review and land acceptable work at the verified commit, or resume focused fixes and re-review. Do not start the next release lane from this completion alone. Keep the user informed; ask only when genuine product ambiguity, a scope or risk tradeoff, or an irreversible action needs a human decision."
+				: "Inspect the job record, failure and log/session. Resume focused fixes and re-review if appropriate; do not treat this failure as a new-spawn or release signal. Keep the user informed; ask only when genuine product ambiguity, a scope or risk tradeoff, or an irreversible action needs a human decision.";
+	return joinWake(lead, handoffExcerpt(job), [facts, handoff].filter(Boolean).join("\n\n"), instruction);
 }
 function advisoryWake(job: string, label: string, id: string, branch: string, repo: string, advisory: string, fallback: boolean): string {
 	const location = repo ? ` in repository ${repo}` : "";
