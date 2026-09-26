@@ -88,6 +88,36 @@ test("spawn creates isolated branch, canonical record, defaults to omp, and resu
 	assert.equal(await readFile(join(worktree, "uncommitted.txt"), "utf8"), "keep me\n");
 });
 
+test("OMP jobs build legacy skills from the selected branch without changing its files", async (context) => {
+	const scratch = await scratchRepo();
+	context.after(scratch.cleanup);
+	assert.equal(limen(scratch, "init").status, 0);
+	await mkdir(join(scratch.root, ".pi/skills"), { recursive: true });
+	await mkdir(join(scratch.root, ".agents/skills/shared"), { recursive: true });
+	await writeFile(join(scratch.root, ".pi/skills/old.md"), "# Old\n");
+	await writeFile(join(scratch.root, ".pi/skills/shared.md"), "# Shadow\n");
+	await writeFile(join(scratch.root, ".agents/skills/shared/SKILL.md"), "# Native\n");
+	git(scratch.root, "add", ".");
+	git(scratch.root, "commit", "-m", "project skills");
+	const first = limen(scratch, "spawn", "--detached", "--engine", "omp", "inspect skills");
+	assert.equal(first.status, 0, first.stderr);
+	const id = onlyJobId(first.stdout);
+	await waitForState(scratch.root, id, "done");
+	const job = join(scratch.root, ".limen/jobs", id);
+	const worktree = (await readFile(join(job, "worktree"), "utf8")).trim();
+	const argv = JSON.parse(await readFile(join(worktree, "pi-args.json"), "utf8")) as string[];
+	assert.equal(await realpath(argv[argv.indexOf("--config") + 1] ?? ""), await realpath(join(job, "skills-config.yml")));
+	assert.deepEqual(await readdir(join(job, "skills")), ["old"]);
+	assert.equal(await readFile(join(job, "skills/old/SKILL.md"), "utf8"), "# Old\n");
+	assert.equal(git(worktree, "status", "--porcelain", "--", ".pi", ".agents"), "", "the skill view must stay outside the worktree");
+	await writeFile(join(worktree, ".pi/skills/added.md"), "# Added\n");
+	const resumed = limen(scratch, "spawn", "--detached", "--branch", `limen/${id}`, "inspect again");
+	assert.equal(resumed.status, 0, resumed.stderr);
+	const resumedId = onlyJobId(resumed.stdout);
+	await waitForState(scratch.root, resumedId, "done");
+	assert.deepEqual(await readdir(join(scratch.root, ".limen/jobs", resumedId, "skills")), ["added", "old"]);
+});
+
 test("failure is durable and detailed jobs render facts", async (context) => {
 	const scratch = await scratchRepo();
 	context.after(scratch.cleanup);

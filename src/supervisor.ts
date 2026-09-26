@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { containEscapedDescendants } from "./contain.ts";
-import { argvFor, jobProfile } from "./engine.ts";
+import { argvFor, jobProfile, prepareSkillConfig } from "./engine.ts";
 import { cleanWorktree } from "./git.ts";
 import {
 	type HerdrPlace,
@@ -219,9 +219,12 @@ async function startHostedAgent(jobDir: string): Promise<string | undefined> {
 	const taskFile = requiredEnvironment("LIMEN_TASK_FILE");
 	const continueFile = process.env.LIMEN_CONTINUE_FILE?.trim();
 	const profile = await jobProfile(jobDir);
+	const worktree = requiredEnvironment("LIMEN_WORKTREE");
+	const skillConfig = profile.id === "omp" ? await prepareSkillConfig(worktree, jobDir) : undefined;
 	const args = argvFor(profile, {
 		jsonMode: false,
 		jobDir,
+		...(skillConfig ? { skillConfig } : {}),
 		label: requiredEnvironment("LIMEN_LABEL"),
 		preamble: requiredEnvironment("LIMEN_PREAMBLE"),
 		extensions: ["hosted", "steering", "communication"].map((name) => `${PACKAGE_ROOT}/hook/${name}.ts`),

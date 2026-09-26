@@ -66,6 +66,8 @@ LIMEN_COORDINATOR=1 omp --provider openai-codex --model gpt-6-sol --thinking xhi
 
 That interactive session is the coordinator (`LIMEN_COORDINATOR=1`), not a spawned job. From here you talk. You do not drive the job CLI. `limen spawn` starts workers and reviewers — not a coordinator; the same env var on a spawn shell does not change the job's role. Prefer a Herdr space named for the plant (`limen`, or `alice limen`), not a space named only `workers`. Label the coordinator tab clearly. Worker tabs come from spawn. The inherited shop manual (`templates/agents.md`; a project `AGENTS.md` overlays it) carries the same layout rules.
 
+Project skills belong in `.agents/skills/<name>/SKILL.md` for portable discovery. OMP also discovers native `.omp/skills/<name>/SKILL.md` files; Pi discovers its own `.pi/skills/<name>/SKILL.md` and older flat `.pi/skills/<name>.md` files. On OMP jobs, limen builds a per-job view of legacy Pi skills outside the worktree and passes it as a skill directory; native `.agents/skills` and `.omp/skills` names win over legacy duplicates. This applies to workers, reviewers, and continuations in either launch mode, including jobs targeting a repository beside a non-Git coordinator workspace. New or changed legacy skills are picked up at the next launch; the plant needs no hand-maintained links. Pi's discovery is unchanged.
+
 ## How you work
 
 Tell the coordinator the outcome you want. It writes or moves the ticket, keeps `spec/build.md` aligned, commits the ticket so the worker can see it, and starts a job. Stay in that conversation. A wake arrives when a job finishes. Ask only when something looks wrong, or when the coordinator asks you — product ambiguity, a real tradeoff, credentials, or a merge.

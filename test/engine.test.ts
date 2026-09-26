@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { argvFor, ENGINES, jobProfile, resolveSpawnEngine } from "../src/engine.ts";
+import { argvFor, ENGINES, jobProfile, prepareSkillConfig, resolveSpawnEngine } from "../src/engine.ts";
 
 const slots = {
 	jobDir: "/job",
@@ -81,4 +81,46 @@ test("hosted launches omit json mode and keep the profile flags", () => {
 	assert.equal(omp.includes("--approve"), false);
 	assert.equal(omp.includes("--name"), false);
 	assert.equal(pi[pi.indexOf("--extension") + 1], "/hook/hosted.ts");
+});
+
+test("OMP launch view exposes legacy skills without shadowing native or changing Pi", async (context) => {
+	const root = await mkdtemp(join(tmpdir(), "limen-skills-"));
+	context.after(() => rm(root, { recursive: true, force: true }));
+	const project = join(root, "project");
+	const job = join(root, "job");
+	const fake = join(root, "omp");
+	const previous = process.env.LIMEN_OMP;
+	context.after(() => {
+		if (previous === undefined) delete process.env.LIMEN_OMP;
+		else process.env.LIMEN_OMP = previous;
+	});
+	await writeFile(fake, '#!/usr/bin/env node\nconsole.log(JSON.stringify({ value: ["/tmp/retained-skills"] }));\n');
+	await chmod(fake, 0o755);
+	process.env.LIMEN_OMP = fake;
+	await mkdir(join(project, ".pi/skills/folder"), { recursive: true });
+	await mkdir(join(project, ".agents/skills/native"), { recursive: true });
+	await mkdir(join(project, ".omp/skills/omp-native"), { recursive: true });
+	await mkdir(job);
+	await writeFile(join(project, ".pi/skills/flat.md"), "# Flat\n");
+	await writeFile(join(project, ".pi/skills/native.md"), "# Legacy duplicate\n");
+	await writeFile(join(project, ".pi/skills/omp-native.md"), "# Legacy OMP duplicate\n");
+	await writeFile(join(project, ".pi/skills/folder/SKILL.md"), "# Folder\n");
+	await writeFile(join(project, ".pi/skills/folder/guide.md"), "# Guide\n");
+	await writeFile(join(project, ".agents/skills/native/SKILL.md"), "# Native\n");
+	await writeFile(join(project, ".omp/skills/omp-native/SKILL.md"), "# OMP native\n");
+	await symlink(join(project, ".pi/skills/flat.md"), join(project, ".pi/skills/linked.md"));
+	const config = await prepareSkillConfig(project, job);
+	assert.equal(config, join(job, "skills-config.yml"));
+	assert.deepEqual(await readdir(join(job, "skills")), ["flat", "folder", "linked"]);
+	assert.equal(await readFile(join(job, "skills/flat/SKILL.md"), "utf8"), "# Flat\n");
+	assert.equal(await readFile(join(job, "skills/folder/guide.md"), "utf8"), "# Guide\n");
+	assert.match(await readFile(config!, "utf8"), /customDirectories:\n    - "\/tmp\/retained-skills"\n/);
+	const omp = argvFor(ENGINES.omp, { ...slots, jobDir: job, skillConfig: config, jsonMode: false });
+	assert.equal(omp[omp.indexOf("--config") + 1], config);
+	assert.equal(argvFor(ENGINES.pi, { ...slots, skillConfig: config, jsonMode: false }).includes("--config"), false);
+	await rm(join(project, ".pi/skills/flat.md"));
+	await writeFile(join(project, ".pi/skills/new.md"), "# New\n");
+	await prepareSkillConfig(project, job);
+	assert.deepEqual(await readdir(join(job, "skills")), ["folder", "new"]);
+	assert.equal(await readFile(join(project, ".agents/skills/native/SKILL.md"), "utf8"), "# Native\n");
 });
