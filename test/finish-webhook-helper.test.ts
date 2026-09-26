@@ -89,7 +89,7 @@ test("helper safely encodes all CLI fields, sends Bearer in memory, and reports 
 	assert.equal(result.stdout, "finish webhook: accepted (HTTP 204)\n");
 	assert.equal(result.stderr, "");
 	const request = f.request();
-	assert.deepEqual(JSON.parse(request.body), { job: args[0], status: args[1], branch: args[2] });
+	assert.deepEqual(JSON.parse(request.body), { job: args[0], status: args[1], branch: args[2], handoff: "Unrecognized job status; inspect the job record before proceeding" });
 	assert.deepEqual(request.headers, { Authorization: AUTH, "Content-Type": "application/json" });
 	assert.equal(request.url, DESTINATION);
 	assert.equal(request.method, "POST");
@@ -98,6 +98,19 @@ test("helper safely encodes all CLI fields, sends Bearer in memory, and reports 
 	assert.deepEqual(request.argv.slice(2), args);
 	assert.ok(!request.argv.join(" ").includes(AUTH));
 	assert.equal(readFileSync(`${f.capture}.timeout`, "utf8"), "10000");
+});
+
+test("failed and stopped sender payloads direct inspection without a landing signal", async (t) => {
+	const f = await fixture();
+	t.after(f.cleanup);
+	const path = await f.config(join(f.root, "failure.env"));
+	for (const status of ["failed", "stopped"]) {
+		const result = f.run({ LIMEN_FINISH_WEBHOOK_ENV: path }, f.root, ["worker", status, "candidate"]);
+		assert.equal(result.status, 0, result.stderr);
+		const body = JSON.parse(f.request().body);
+		assert.deepEqual(body, { job: "worker", status, branch: "candidate", handoff: "Job failed or stopped; inspect the job record before proceeding" });
+		assert.doesNotMatch(body.handoff, /Waiting on landing owner|Ready/i);
+	}
 });
 
 test("explicit targets fan out to two routes without an implicit single-target recipient", async (t) => {
@@ -121,7 +134,7 @@ test("explicit targets fan out to two routes without an implicit single-target r
 		requests.map(({ url, headers }) => ({ url, auth: headers.Authorization })),
 		targets,
 	);
-	for (const request of requests) assert.deepEqual(JSON.parse(request.body), { job: "label", status: "done", branch: "topic" });
+	for (const request of requests) assert.deepEqual(JSON.parse(request.body), { job: "label", status: "done", branch: "topic", handoff: "Waiting on landing owner; merge not ready" });
 	assert.match(result.stdout, /target 1 accepted \(HTTP 204\); owner wake unobserved/);
 	assert.match(result.stdout, /target 2 accepted \(HTTP 204\); owner wake unobserved/);
 });

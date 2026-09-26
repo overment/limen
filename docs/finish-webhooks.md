@@ -1,11 +1,16 @@
 # Finish webhooks
 
 `bin/tony-finish-ping.sh <label> <status> <branch>` sends a JSON POST containing
-`job`, `status` and `branch` to each explicitly configured destination. Its name
-is retained for compatibility; recipients need not be Tony. It requires Node.js
-24+ and Git, on macOS or Linux. It uses Node's HTTP client, not curl; credentials
-never enter child-process arguments. HTTP acceptance does **not** prove any bot
-woke or read the handoff.
+`job`, `status`, `branch`, and `handoff` to each explicitly configured destination.
+Automatic sends also include the stable `finishEvent`. A `done` status means the
+worker ended: `handoff` says `Waiting on landing owner; merge not ready`, not
+that review passed or a new release lane can start. Failed and stopped jobs
+instead direct inspection of the job record. Recipients can keep reading the
+original `job`/`status`/`branch` fields unchanged. The helper name is retained
+for compatibility; recipients need not be Tony. It requires Node.js 24+ and
+Git, on macOS or Linux. It uses Node's HTTP client, not curl; credentials never
+enter child-process arguments. HTTP acceptance does **not** prove any bot woke
+or read the handoff.
 
 ## Migration: bot-agnostic configuration keys
 
@@ -88,6 +93,9 @@ Both hosted supervisors and detached wrappers invoke the package's canonical
 `bin/tony-finish-ping.sh` after writing durable terminal state. The job's label,
 `done`/`failed`/`stopped` state and branch are passed unchanged as three arguments.
 Sender failure never changes the job outcome or coordinator wake subscriptions.
+The job detail view repeats the state-derived handoff beside the finish receipt,
+including when webhook delivery is unconfigured or skipped. This note does not
+change transport receipts, routing, or the job's `done`/`failed`/`stopped` state.
 The automatic caller prepends the directory of Limen's running Node executable
 to the helper's `PATH`, so a noninteractive environment missing that directory
 can still launch the sender. Manual launchers still need Node.js 24+ on `PATH`.
