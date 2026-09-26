@@ -43,29 +43,36 @@ async function sampleTree(pid: number, born: string): Promise<Sample | undefined
 	const rows = await processRows();
 	const root = rows.find((row) => row.pid === pid && !row.state.startsWith("Z"));
 	if (!root) return;
-	const seen = new Set([pid]);
+	const byParent = new Map<number, Row[]>();
+	for (const row of rows) {
+		if (row.state.startsWith("Z")) continue;
+		const siblings = byParent.get(row.ppid);
+		if (siblings) siblings.push(row);
+		else byParent.set(row.ppid, [row]);
+	}
 	const children: Row[] = [];
-	for (let index = 0; index < rows.length; index++) {
-		let added = false;
-		for (const row of rows) {
-			if (seen.has(row.pid) || !seen.has(row.ppid) || row.state.startsWith("Z")) continue;
+	const seen = new Set([pid]);
+	for (let index = 0; index <= children.length; index += 1) {
+		const parent = index === 0 ? pid : children[index - 1]?.pid;
+		if (parent === undefined) continue;
+		for (const row of byParent.get(parent) ?? []) {
+			if (seen.has(row.pid)) continue;
 			seen.add(row.pid);
 			children.push(row);
-			added = true;
 		}
-		if (!added) break;
 	}
 	const after = await processInfo(pid);
 	if (after.kind !== "present" || after.process.born !== born) return;
 	return { children, cpu: root.cpu + children.reduce((total, row) => total + row.cpu, 0) };
 }
 
-export type ToolStallWatch = { tool: string; born: string; started: number; previous?: Sample };
-/** Only a continuously present, CPU-idle child makes a pending tool a confirmed stall. */
+export type ToolStallWatch = { tool: string; born: string; started: number; hadChild?: boolean; lastSampleAt?: number; previous?: Sample };
+/** A pending tool needs an observed child and unchanged cumulative CPU time; a vanished child stays evidence after its exit. */
 export async function observeToolStall(watch: ToolStallWatch, pid: number, tool: string, now = Date.now(), windowMs = toolStallMs()): Promise<"stalled" | "uncertain" | undefined> {
 	if (!tool) {
 		watch.tool = "";
 		watch.previous = undefined;
+		watch.hadChild = false;
 		return;
 	}
 	const identity = await processInfo(pid);
@@ -79,6 +86,7 @@ export async function observeToolStall(watch: ToolStallWatch, pid: number, tool:
 		watch.born = identity.process.born;
 		watch.started = now;
 		watch.previous = undefined;
+		watch.hadChild = false;
 	}
 	let current: Sample | undefined;
 	try {
@@ -95,9 +103,10 @@ export async function observeToolStall(watch: ToolStallWatch, pid: number, tool:
 	}
 	const previous = watch.previous;
 	watch.previous = current;
+	if (current.children.length > 0) watch.hadChild = true;
 	const stableChildren =
 		previous &&
-		current.children.length > 0 &&
+		watch.hadChild &&
 		current.children.length === previous.children.length &&
 		current.children.every((row) => previous.children.some((prior) => prior.pid === row.pid && prior.ppid === row.ppid && row.cpu === prior.cpu));
 	if (!previous || !stableChildren || current.cpu !== previous.cpu) watch.started = now;

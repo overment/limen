@@ -111,7 +111,8 @@ export async function runHostedSupervisor(): Promise<void> {
 		}
 		let reason: string | undefined = sessionEnded ? hostedTerminalReason(status, true) : missingStreak >= 3 ? hostedTerminalReason(status, false) : undefined;
 		const activity = await textFile(`${jobDir}/activity`);
-		if (activity === "tool") {
+		if (activity === "tool" && Date.now() - (toolWatch.lastSampleAt ?? 0) >= 3_000) {
+			toolWatch.lastSampleAt = Date.now();
 			const pid = Number(await textFile(`${jobDir}/engine-pid`));
 			const tool = `${await textFile(`${jobDir}/tool-calls`)}:${(await textFile(`${jobDir}/tool-detail`)) || (await textFile(`${jobDir}/last-tool`))}`;
 			const sessionFile = (await readdir(`${jobDir}/session`).catch(() => [] as string[])).filter((name) => name.endsWith(".jsonl")).sort().at(-1);
@@ -134,19 +135,20 @@ export async function runHostedSupervisor(): Promise<void> {
 					sessionFile ? stat(`${jobDir}/session/${sessionFile}`).then((row) => row.size, () => 0) : 0,
 				]);
 				const sameTool = activityNow === "tool" && countNow === tool.slice(0, tool.indexOf(":")) && logNow === logProgress && sessionNow === sessionProgress;
-				if (!descendants?.length) observation = "uncertain";
+				if (!descendants) observation = "uncertain";
 				else if (!sameTool) observation = undefined;
 				else if (!hostedEngineOwned(target, pid, engine, jobDir)) observation = "uncertain";
 				else observation = await observeToolStall(toolWatch, pid, `${tool}:${logProgress}:${sessionProgress}`);
 				if (observation === "stalled" && descendants && (await signalOwnedProcess(pid, toolWatch.born, "SIGTERM"))) {
 					if (ownershipWarning) await rm(`${jobDir}/advisory`, { force: true });
 					const name = tool.slice(1 + tool.indexOf(":"));
-					await appendLimenLog(jobDir, `stalled tool ${name}: CPU-idle child for ${Math.round(toolStallMs() / 1000)}s; stopping owned engine ${pid}`);
+					const childState = toolWatch.previous?.children.length ? "CPU-idle child" : "child exited";
+					await appendLimenLog(jobDir, `stalled tool ${name}: ${childState} for ${Math.round(toolStallMs() / 1000)}s; stopping owned engine ${pid}`);
 					await containEscapedDescendants(jobDir, descendants, "after hosted tool stall");
 					await signalOwnedProcess(pid, toolWatch.born, "SIGKILL");
 					await writeHostedResult(jobDir);
 					await atomicWrite(`${jobDir}/stop-reason`, `error: stalled tool ${name}\n`);
-					await finalizeJob(jobDir, "failed", `stalled tool ${name}: CPU-idle child for ${Math.round(toolStallMs() / 1000)}s`);
+					await finalizeJob(jobDir, "failed", `stalled tool ${name}: ${childState} for ${Math.round(toolStallMs() / 1000)}s`);
 					return;
 				}
 			}
@@ -158,7 +160,7 @@ export async function runHostedSupervisor(): Promise<void> {
 				ownershipWarning = false;
 				await clearHostedAdvisory(jobDir);
 			}
-		} else {
+		} else if (activity !== "tool") {
 			toolWatch.tool = "";
 			toolWatch.previous = undefined;
 			if (ownershipWarning) await clearHostedAdvisory(jobDir);

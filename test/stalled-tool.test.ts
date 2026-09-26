@@ -202,6 +202,40 @@ while (true) { Math.sqrt(Math.random()); }`,
 	assert.equal(await observeToolStall(watch, child.pid, "1:bash cargo test", 10_000, 100), undefined);
 });
 
+test("an observed child that exits without ending its tool becomes a confirmed stall", async (context) => {
+	const dir = await mkdtemp(join(tmpdir(), "limen-stall-dead-child-"));
+	const engine = spawn(
+		process.execPath,
+		["-e", `const { spawn } = require('node:child_process');
+const { writeFileSync } = require('node:fs');
+const child = spawn('sleep', ['60']);
+writeFileSync(${JSON.stringify(join(dir, "child"))}, String(child.pid));
+setInterval(() => {}, 1000);`],
+		{ detached: true, stdio: "ignore" },
+	);
+	assert.ok(engine.pid);
+	engine.unref();
+	const identity = await until(async () => {
+		const info = await processInfo(engine.pid!);
+		return info.kind === "present" ? info.process : undefined;
+	});
+	let childPid = 0;
+	context.after(async () => {
+		const current = await processInfo(engine.pid!);
+		if (current.kind === "present" && current.process.born === identity.born && current.process.pgid === engine.pid)
+			try { process.kill(-engine.pid!, "SIGKILL"); } catch {}
+		await rm(dir, { recursive: true, force: true });
+	});
+	childPid = await until(async () => Number(await content(join(dir, "child"))) || undefined);
+	const watch: ToolStallWatch = { tool: "", born: "", started: 0 };
+	assert.equal(await observeToolStall(watch, engine.pid, "1:bash cargo test", 0, 1_000), undefined);
+	assert.equal(watch.hadChild, true);
+	process.kill(childPid, "SIGTERM");
+	await until(async () => (await processInfo(childPid)).kind === "absent" ? true : undefined);
+	assert.equal(await observeToolStall(watch, engine.pid, "1:bash cargo test", 1_000, 1_000), undefined);
+	assert.equal(await observeToolStall(watch, engine.pid, "1:bash cargo test", 3_000, 1_000), "stalled");
+});
+
 test("hosted ownership refuses another pane engine and another session", async (context) => {
 	const dir = await mkdtemp(join(tmpdir(), "limen-stall-ownership-"));
 	context.after(() => rm(dir, { recursive: true, force: true }));

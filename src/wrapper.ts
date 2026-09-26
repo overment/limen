@@ -210,7 +210,7 @@ export async function runInternalJob(): Promise<void> {
 					ownershipWarning = false;
 					await rm(`${jobDir}/advisory`, { force: true });
 				}
-				exhaust(`stalled tool ${seen.tool}: CPU-idle child for ${Math.round(toolStallMs() / 1000)}s`, descendants);
+				exhaust(`stalled tool ${seen.tool}: ${stallWatch.previous?.children.length ? "CPU-idle child" : "child exited"} for ${Math.round(toolStallMs() / 1000)}s`, descendants);
 			} else if (result === "uncertain") await warnUncertain("CPU or process identity unavailable");
 			else if (ownershipWarning) {
 				ownershipWarning = false;
@@ -221,7 +221,7 @@ export async function runInternalJob(): Promise<void> {
 			.finally(() => {
 				observing = false;
 			});
-	}, 1_000);
+	}, 3_000);
 	const timeout = setTimeout(() => exhaust(`timeout after ${timeoutMs}ms`), timeoutMs);
 	const result = await outcome;
 	clearTimeout(timeout);
