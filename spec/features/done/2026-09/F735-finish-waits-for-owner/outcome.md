@@ -1,0 +1,3 @@
+# Outcome
+
+A finished worker now tells subscribed coordinators and opt-in webhook consumers that its branch awaits the landing owner; it does not announce readiness for another lane. The webhook sends `status: "waiting"` with `jobState: "done"` so a receiver ignoring new fields cannot misread completion as approval; durable job state and finish receipts are unchanged. Merged as `83f8cd1` with fail-closed payload correction `fd267a5`; intercepted real-sender delivery and wake tests passed. Existing receivers that require `status: "done"` must accept the new waiting handoff; no external bot turn was observed.
