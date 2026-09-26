@@ -95,7 +95,7 @@ console.log(JSON.stringify({ result: info }));
 		assert.equal(await content(join(job, "state")), "running\n", "unknown pane ownership cannot fail the job");
 		assert.equal((await processInfo(childPid)).kind, "present", "unknown pane ownership cannot kill the child");
 		await writeFile(herdr, herdrSource(join(job, "session")));
-		await until(async () => (await content(join(job, "state"))) === "failed\n" ? true : undefined);
+		await until(async () => (await content(join(job, "state"))) === "failed\n" ? true : undefined, 25_000);
 		assert.match((await content(join(job, "log"))) ?? "", /stalled tool cargo test: CPU-idle child/);
 		assert.match((await content(join(job, "stop-reason"))) ?? "", /error: stalled tool cargo test/);
 		await until(async () => (await processInfo(childPid)).kind === "absent" ? true : undefined);

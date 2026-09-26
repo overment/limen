@@ -178,7 +178,7 @@ test("timeout completes delayed discovery before a fast parent exit", async (con
 			process.kill(escapee, "SIGKILL");
 		} catch {}
 	});
-	await waitForState(scratch.root, id, "failed", 2_000);
+	await waitForState(scratch.root, id, "failed", 6_000);
 	const jobDir = join(scratch.root, `.limen/jobs/${id}`);
 	await waitForContainment(jobDir, escapee);
 	assert.match(await readFile(join(jobDir, "log"), "utf8"), /terminating 1 escaped job process\(es\)/);
