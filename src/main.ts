@@ -9,6 +9,7 @@ import { linearCommand } from "./commands/linear.ts";
 import { openCommand } from "./commands/open.ts";
 import { pruneCommand } from "./commands/prune.ts";
 import { spawnCommand } from "./commands/spawn.ts";
+import { statusCommand } from "./commands/status.ts";
 import { steerCommand } from "./commands/steer.ts";
 import { stopCommand } from "./commands/stop.ts";
 import { sweepCommand } from "./commands/sweep.ts";
@@ -31,6 +32,7 @@ const COMMANDS = {
 	wait: waitCommand,
 	land: landCommand,
 	jobs: jobsCommand,
+	status: statusCommand,
 	prune: pruneCommand,
 	watch: watchCommand,
 	unwatch: unwatchCommand,
@@ -51,6 +53,7 @@ const COMMANDS = {
 	| "wait"
 	| "land"
 	| "jobs"
+	| "status"
 	| "prune"
 	| "watch"
 	| "unwatch"
@@ -80,6 +83,7 @@ usage:
   limen land <id|suffix|label> [--onto BRANCH] [--yes]  # merge a done job onto the current branch
   limen stop <id|suffix|label> [reason]
   limen jobs [--running|--active|--all|--label PREFIX|<id|suffix|label>]
+  limen status                                  # plant plate: running jobs, unmerged branches, coordinator tabs
   limen prune [--retire [--dry-run]]           # retire finished job records whose branches are merged or gone
   limen watch <id|suffix|label> | --running
   limen unwatch <id|suffix|label> | --all

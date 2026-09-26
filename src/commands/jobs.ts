@@ -101,7 +101,7 @@ async function orderedJobs(ids: readonly string[], jobsRoot: string): Promise<Re
 	const order = await Promise.all(ids.map(async (id) => [id, await text(`${jobsRoot}/${id}/state`), (await text(`${jobsRoot}/${id}/started-at`)) || id] as const));
 	return order.sort((a, b) => Number(b[1] === "running") - Number(a[1] === "running") || b[2].localeCompare(a[2]));
 }
-async function renderJobDirectory(root: string, jobsRoot: string, id: string, detailed: boolean, human = false): Promise<{ compact: string; record: JobRecord }> {
+export async function renderJobDirectory(root: string, jobsRoot: string, id: string, detailed: boolean, human = false): Promise<{ compact: string; record: JobRecord }> {
 	const jobDir = `${jobsRoot}/${id}`;
 	const [
 		state = "",
