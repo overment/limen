@@ -16,7 +16,6 @@
 
 - `F014-github-doorbell` (🟠 ACTIVE): Alice's isolated App key, warm coordinator, live PR mention, hosted review, and one start/finish receipt are proven; second-seat ownership/routing remains to prove before closing.
 - `F731-seat-bell-once` (🟠 ACTIVE): Stop the seat sweep replaying the same finished or stalled job forever; old markers and concurrent sweeps must not ring again.
-- `F737-worker-skills-visible` (🟠 ACTIVE): OMP workers see native and legacy plant skills across fresh, continued, hosted, detached and review jobs without hand links.
 
 ## NEXT
 
@@ -37,6 +36,7 @@
 
 ## PROVEN
 
+- `F737-worker-skills-visible` (🟢 PROVEN): OMP workers discover portable and legacy plant skills without hand links; native skills win collisions. Landed `f40ac5b`; live hosted/detached/continue OMP and focused checks passed.
 - `F736-plant-status-plate` (🟢 PROVEN): Job records, Git and Herdr show running work, unmerged branches and working coordinators across spaces; uncertain evidence stays explicit. Landed `e1a9d2f` / `fd267a5`; status 4/4 and live plate observed.
 - `F735-finish-waits-for-owner` (🟢 PROVEN): Finished workers hand off to the landing owner; webhook `status: waiting` cannot be mistaken for Ready by a recipient ignoring new fields. Landed `83f8cd1` / `fd267a5`; intercepted sender and wake passed; external receiver turn unobserved.
 - `F734-stalled-children-fail` (🟢 PROVEN): Verified idle or vanished tool children fail hosted/detached OMP/Pi jobs; uncertain identity raises an advisory. Landed `59cfb4e` / `fd267a5`; synthetic real-process liveness 7/7, live provider hang unproved.
@@ -46,6 +46,5 @@
 - `F726-limen-runs-jobs-on-pi-only` (🟢 PROVEN): Limen starts jobs only with Pi. Landed `14c99d9`; native 453/453. `--engine claude` and `--role advisor` fail before any job exists.
 - `F725-stale-intent-prose-matches-landed-reality` (🟢 PROVEN): vision and TRACK no longer treat spawn, reaper, seat, or research/quality/picture as still ahead. Landed `3723740`. Typecheck clean. Wake/Herdr not split: `src/` 4219/4280.
 - `F723-tests-stop-owning-prompt-prose` (🟢 PROVEN): tests no longer inventory unique sentences from shop manual, register, or role preambles. Landed `e030714`. Native 456/456.
-- `F722-wake-sweep-export-is-private` (🟢 PROVEN): wake sweep collector is file-private. Landed `482715d`. Focused wake 64/64; typecheck clean.
-- 2026-09: 67 folded landings. Coordinator status became static (F721, `ab70649`), running jobs stopped counting changed files (F720, `327fc2e`), and overlapping starts retained both worktrees (F719, `e5feac5` / `30cff7a`). Earlier work added owner-routed finish wakes, explicit seat recovery, job retention, native checks, engine defaults, and evidence-backed role handoffs. Details and outcomes: spec/features/done/2026-09/
+- 2026-09: 68 folded landings. Wake sweep collection became private (F722, `482715d`), coordinator status became static (F721, `ab70649`), running jobs stopped counting changed files (F720, `327fc2e`), and overlapping starts retained both worktrees (F719, `e5feac5` / `30cff7a`). Earlier work added owner-routed finish wakes, explicit seat recovery, job retention, native checks, engine defaults, and evidence-backed role handoffs. Details and outcomes: spec/features/done/2026-09/
 - 2026-08: 44 landed. Hosted jobs run in a named tab; wakes retry; the process tree is contained. spec/features/done/2026-08/
