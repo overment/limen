@@ -91,7 +91,11 @@ export async function prepareSkillConfig(worktree: string, jobDir: string): Prom
 		const flat = info.isFile() && entry.endsWith(".md");
 		const name = flat ? basename(entry, ".md") : entry;
 		if (!name || (!flat && (!info.isDirectory() || !(await stat(join(source, "SKILL.md")).catch(() => undefined))?.isFile()))) continue;
-		if ((await stat(join(worktree, ".agents/skills", name, "SKILL.md")).catch(() => undefined))?.isFile()) continue;
+		if (
+			(await stat(join(worktree, ".agents/skills", name, "SKILL.md")).catch(() => undefined))?.isFile() ||
+			(await stat(join(worktree, ".omp/skills", name, "SKILL.md")).catch(() => undefined))?.isFile()
+		)
+			continue;
 		// A directory skill carries its supporting files and takes priority over a flat duplicate.
 		if (skills.some((skill) => skill.name === name && !skill.flat)) continue;
 		const index = skills.findIndex((skill) => skill.name === name);

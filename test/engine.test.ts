@@ -99,12 +99,15 @@ test("OMP launch view exposes legacy skills without shadowing native or changing
 	process.env.LIMEN_OMP = fake;
 	await mkdir(join(project, ".pi/skills/folder"), { recursive: true });
 	await mkdir(join(project, ".agents/skills/native"), { recursive: true });
+	await mkdir(join(project, ".omp/skills/omp-native"), { recursive: true });
 	await mkdir(job);
 	await writeFile(join(project, ".pi/skills/flat.md"), "# Flat\n");
 	await writeFile(join(project, ".pi/skills/native.md"), "# Legacy duplicate\n");
+	await writeFile(join(project, ".pi/skills/omp-native.md"), "# Legacy OMP duplicate\n");
 	await writeFile(join(project, ".pi/skills/folder/SKILL.md"), "# Folder\n");
 	await writeFile(join(project, ".pi/skills/folder/guide.md"), "# Guide\n");
 	await writeFile(join(project, ".agents/skills/native/SKILL.md"), "# Native\n");
+	await writeFile(join(project, ".omp/skills/omp-native/SKILL.md"), "# OMP native\n");
 	await symlink(join(project, ".pi/skills/flat.md"), join(project, ".pi/skills/linked.md"));
 	const config = await prepareSkillConfig(project, job);
 	assert.equal(config, join(job, "skills-config.yml"));
