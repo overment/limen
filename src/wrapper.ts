@@ -1,11 +1,12 @@
 import { spawn } from "node:child_process";
 import { appendFile, open, readdir, readFile, rename, rm } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { containEscapedDescendants, discoverEscapedDescendants, processAlive, processInfo, signalProcessGroup } from "./contain.ts";
+import { containEscapedDescendants, discoverEscapedDescendants, processAlive, processInfo, signalProcessGroup, type JobProcess } from "./contain.ts";
 import { argvFor, engineBinary, jobProfile } from "./engine.ts";
 import { deliverFinishWebhook } from "./finish-webhook.ts";
 import { commitList, headCommit } from "./git.ts";
 import { settleJobTab } from "./herdr.ts";
+import { observeToolStall, ownedToolDescendants, toolStallMs, type ToolStallWatch } from "./stalled-tool.ts";
 import { createStreamParser, type StreamEvent } from "./stream.ts";
 
 const STOP_GRACE_MS = 5_000;
@@ -61,6 +62,7 @@ export async function runInternalJob(): Promise<void> {
 	const label = process.env.LIMEN_LABEL || jobId;
 	const timeoutMs = process.env.LIMEN_TIMEOUT_MS ? Number(process.env.LIMEN_TIMEOUT_MS) : DEFAULT_TIMEOUT_MS;
 	const preamble = await readFile(preambleFile, "utf8");
+	let confirmedToolStall = false;
 	let stopRequested = false;
 	let shutdownDeadline: number | undefined;
 	let exhausted: string | undefined;
@@ -69,21 +71,26 @@ export async function runInternalJob(): Promise<void> {
 	let pending = Promise.resolve();
 	process.on("SIGTERM", () => {
 		stopRequested = true;
-		shutdownDeadline ??= Date.now() + STOP_GRACE_MS - 500;
+		if (!confirmedToolStall) shutdownDeadline ??= Date.now() + STOP_GRACE_MS - 500;
 	});
 	let exhaustionTermination = Promise.resolve();
-	const exhaust = (reason: string) => {
+	const exhaust = (reason: string, captured?: readonly JobProcess[]) => {
 		if (exhausted || stopRequested) return;
+		confirmedToolStall = Boolean(captured);
 		exhausted = reason;
 		exhaustionTermination = (async () => {
-			// Complete the bounded ownership snapshot while the parent chain is intact, then signal.
-			const escaped = await discoverEscapedDescendants(jobDir, process.pid, "during exhaustion");
+			// Capture before TERM while ancestry still proves ownership. A confirmed tool stall
+			// includes in-group descendants, not only children that escaped the wrapper group.
+			const descendants = captured ?? (await discoverEscapedDescendants(jobDir, process.pid, "during exhaustion"));
 			await appendLimenLog(jobDir, `${reason}; sending TERM`).catch(() => {});
-			shutdownDeadline = Date.now() + STOP_GRACE_MS - 500;
+			if (!captured) shutdownDeadline = Date.now() + STOP_GRACE_MS - 500;
 			signalProcessGroup(process.pid, "SIGTERM");
-			graceTimer = setTimeout(() => signalProcessGroup(process.pid, "SIGKILL"), STOP_GRACE_MS);
-			graceTimer.unref();
-			void containEscapedDescendants(jobDir, escaped, "after exhaustion").catch(() => {});
+			if (captured) await containEscapedDescendants(jobDir, descendants, "after stalled tool");
+			else {
+				graceTimer = setTimeout(() => signalProcessGroup(process.pid, "SIGKILL"), STOP_GRACE_MS);
+				graceTimer.unref();
+				void containEscapedDescendants(jobDir, descendants, "after exhaustion").catch(() => {});
+			}
 			await finalizeJob(jobDir, "failed", reason, shutdownDeadline);
 		})();
 	};
@@ -111,7 +118,7 @@ export async function runInternalJob(): Promise<void> {
 	// A detached job must not inherit the coordinator's Herdr pane.
 	for (const name of Object.keys(childEnvironment)) if (name.startsWith("HERDR_")) delete childEnvironment[name];
 	const parser = createStreamParser();
-	const seen = { activity: "", assistant: "", stop: "" };
+	const seen = { activity: "", assistant: "", stop: "", tool: "", progress: 0 };
 	const failLog = (error: unknown) => appendLimenLog(jobDir, `log write failed: ${error instanceof Error ? error.message : String(error)}`).catch(() => {});
 	const apply = (events: readonly StreamEvent[]) => {
 		pending = pending
@@ -136,6 +143,7 @@ export async function runInternalJob(): Promise<void> {
 	});
 	child.stdout?.on("data", (chunk: Buffer | string) => apply(parser.push(chunk.toString())));
 	child.stderr?.on("data", (chunk: Buffer | string) => {
+		seen.progress += 1;
 		pending = pending.then(() => appendFile(`${jobDir}/log`, chunk.toString())).catch(failLog);
 	});
 	const outcome = new Promise<{
@@ -149,9 +157,75 @@ export async function runInternalJob(): Promise<void> {
 	await writeHandshake(jobDir);
 	await atomicWrite(`${jobDir}/state`, "running\n");
 	await appendLimenLog(jobDir, "worker started");
+	const enginePid = child.pid;
+	const stallWatch: ToolStallWatch = { tool: "", born: "", started: 0 };
+	let observing = false;
+	let ownershipWarning = false;
+	const warnUncertain = async (detail: string) => {
+		if (ownershipWarning) return;
+		ownershipWarning = true;
+		const line = `tool stall observation uncertain: ${detail}`;
+		await atomicWrite(`${jobDir}/advisory`, `${line}\n`);
+		await appendLimenLog(jobDir, line);
+	};
+	const stallTimer = setInterval(() => {
+		if (observing || exhausted || stopRequested || !enginePid) return;
+		if (seen.activity !== "tool") {
+			if (ownershipWarning) {
+				ownershipWarning = false;
+				void rm(`${jobDir}/advisory`, { force: true });
+			}
+			return;
+		}
+		observing = true;
+		void (async () => {
+			const identity = await processInfo(enginePid);
+			if (identity.kind !== "present" || identity.process.ppid !== process.pid || identity.process.pgid !== process.pid) {
+				stallWatch.previous = undefined;
+				stallWatch.started = Date.now();
+				await warnUncertain("detached engine ownership unavailable");
+				return;
+			}
+			const result = await observeToolStall(stallWatch, enginePid, `${tools}:${seen.tool}:${seen.progress}`);
+			if (result === "stalled") {
+				const [owner, engine] = await Promise.all([processInfo(process.pid), processInfo(enginePid)]);
+				if (
+					owner.kind !== "present" ||
+					owner.process.pgid !== process.pid ||
+					engine.kind !== "present" ||
+					engine.process.born !== stallWatch.born ||
+					engine.process.ppid !== process.pid ||
+					engine.process.pgid !== process.pid
+				) {
+					await warnUncertain("process group ownership changed");
+					return;
+				}
+				const descendants = await ownedToolDescendants(process.pid, owner.process.born);
+				if (!descendants || !descendants.some((member) => member.pid === enginePid) || descendants.length < 2) {
+					await warnUncertain("child ownership changed before termination");
+					return;
+				}
+				if (seen.activity !== "tool" || (await observeToolStall(stallWatch, enginePid, `${tools}:${seen.tool}:${seen.progress}`)) !== "stalled") return;
+				if (ownershipWarning) {
+					ownershipWarning = false;
+					await rm(`${jobDir}/advisory`, { force: true });
+				}
+				exhaust(`stalled tool ${seen.tool}: ${stallWatch.previous?.children.length ? "CPU-idle child" : "child exited"} for ${Math.round(toolStallMs() / 1000)}s`, descendants);
+			} else if (result === "uncertain") await warnUncertain("CPU or process identity unavailable");
+			else if (ownershipWarning) {
+				ownershipWarning = false;
+				await rm(`${jobDir}/advisory`, { force: true });
+			}
+		})()
+			.catch(failLog)
+			.finally(() => {
+				observing = false;
+			});
+	}, 3_000);
 	const timeout = setTimeout(() => exhaust(`timeout after ${timeoutMs}ms`), timeoutMs);
 	const result = await outcome;
 	clearTimeout(timeout);
+	clearInterval(stallTimer);
 	if (graceTimer) clearTimeout(graceTimer);
 	apply(parser.flush());
 	await pending;
@@ -206,10 +280,16 @@ export async function recordCommits(jobDir: string): Promise<void> {
 	if (commits !== undefined) await atomicWrite(`${jobDir}/commits`, commits ? `${commits}\n` : "");
 	await atomicWrite(`${jobDir}/tip`, `${headCommit(worktree)}\n`);
 }
-async function recordEvents(jobDir: string, events: readonly StreamEvent[], nextCount: () => number, seen: { activity: string; assistant: string; stop: string }): Promise<void> {
+async function recordEvents(
+	jobDir: string,
+	events: readonly StreamEvent[],
+	nextCount: () => number,
+	seen: { activity: string; assistant: string; stop: string; tool: string; progress: number },
+): Promise<void> {
 	for (const event of events) {
 		if (event.kind === "tool") {
 			seen.activity = "tool";
+			seen.tool = event.detail ? `${event.name} ${event.detail}` : event.name;
 			await atomicWrite(`${jobDir}/last-tool`, `${event.name}\n`);
 			await atomicWrite(`${jobDir}/activity`, "tool\n");
 			await atomicWrite(`${jobDir}/tool-calls`, `${nextCount()}\n`);
@@ -221,7 +301,10 @@ async function recordEvents(jobDir: string, events: readonly StreamEvent[], next
 			seen.assistant = event.text;
 			seen.stop = event.stopReason ?? "";
 			if (event.text) await appendFile(`${jobDir}/log`, `${event.text}\n`);
-		} else await appendFile(`${jobDir}/log`, `${event.line}\n`);
+		} else {
+			seen.progress += 1;
+			await appendFile(`${jobDir}/log`, `${event.line}\n`);
+		}
 	}
 }
 export async function textFile(path: string): Promise<string> {

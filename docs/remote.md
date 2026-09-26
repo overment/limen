@@ -72,13 +72,9 @@ These are operational facts that keep a seat alive. They are not Limen features.
 - Two jobs on one repo still share whatever database you pointed them at. Files isolate; schema may not.
 - Herdr/`tmux` is the layer that survives a GUI dying. A browser IDE is a viewer.
 
-## Linux gaps
+## Linux process ownership
 
-These change guarantees on a typical VPS seat. They are not a porting list.
-
-- Process containment (F007) is macOS-shaped: Darwin process identity. `package.json` lists `linux`; the claim is “runs,” not containment parity.
-- Hosted tabs (`--tab`, or spawn inside Herdr) already dropped it on every OS. Herdr owns that tree. Recorded on the job as `hosted`.
-- On Linux, `limen stop` is best-effort and may write an `unavailable` cleanup note. Job files stay truth. Do not port a second identity stack unless stop-on-Linux actually hurts.
+Detached process containment uses `/proc/<pid>/stat` start ticks on Linux and `proc_pidinfo` birth timestamps on macOS. A restricted or unreadable process table leaves an advisory rather than proof of an owned child. Hosted tabs remain Herdr-owned; only a pending tool with a verified pane engine, session directory and CPU-idle descendant is stopped. Other hosted turns have no outer deadline.
 
 ## Traps (will bite on day one)
 

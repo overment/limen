@@ -240,6 +240,29 @@ function noteHostedFault(target: string, code: string): HostedAgentStatus {
 	return lastHostedStatus.get(target) ?? "unknown";
 }
 
+/** The hook PID must be the foreground engine for this pane and this job's session. */
+export function hostedEngineOwned(target: string, pid: number, engine: "pi" | "omp", jobDir: string): boolean {
+	const herdr = herdrBinary();
+	if (!herdr || !Number.isSafeInteger(pid) || pid <= 0) return false;
+	try {
+		const info = asRecord(asRecord(call(herdr, ["pane", "process-info", "--pane", target], 2_000)).process_info);
+		const foreground = info.foreground_processes;
+		if (!Array.isArray(foreground)) return false;
+		return foreground.some((value) => {
+			const row = asRecord(value);
+			const argv = row.argv;
+			return (
+				row.pid === pid &&
+				(row.name === engine || row.name === "node") &&
+				Array.isArray(argv) &&
+				argv.some((arg, index) => arg === "--session-dir" && argv[index + 1] === `${jobDir}/session`)
+			);
+		});
+	} catch {
+		return false;
+	}
+}
+
 export function stopHostedAgent(target: string): void {
 	const herdr = herdrBinary();
 	if (!herdr) return;
