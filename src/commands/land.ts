@@ -18,6 +18,7 @@ import {
 	mergePaths,
 	workspaceRepository,
 } from "../project/git.ts";
+import { parseFlags } from "./flags.ts";
 
 export async function landCommand(args: readonly string[], cwd: string): Promise<void> {
 	if (process.env.LIMEN_GROUP_ID) {
@@ -290,38 +291,22 @@ function parseLandArgs(args: readonly string[]): {
 	readonly yes: boolean;
 	readonly onto?: string;
 } {
-	let query: string | undefined;
-	let yes = false;
-	let onto: string | undefined;
-	for (let index = 0; index < args.length; index += 1) {
-		const value = args[index];
-		if (!value) {
-			continue;
-		}
-		if (value === "--yes") {
-			yes = true;
-		} else if (value === "--onto") {
-			const next = args[index + 1];
-			if (!next || next.startsWith("--")) {
-				throw new Error("--onto requires a branch");
-			}
-			if (onto !== undefined) {
-				throw new Error("--onto may be supplied only once");
-			}
-			onto = next;
-			index += 1;
-		} else if (value.startsWith("--")) {
-			throw new Error(`unknown land option ${value}`);
-		} else if (query) {
-			throw new Error("land requires exactly one job id");
-		} else {
-			query = value;
-		}
-	}
+	const { values, positionals } = parseFlags(args, { yes: { type: "boolean" }, onto: { type: "string" } } as const, {
+		unknown: (word) => `unknown land option ${word}`,
+		missing: () => "--onto requires a branch",
+		repeated: (flag) => (flag === "--onto" ? "--onto may be supplied only once" : undefined),
+		endOfFlags: false,
+	});
+	// An empty word, such as an unset shell variable, was never a job id.
+	const [query, ...extra] = positionals.filter((word) => word !== "");
 	if (!query) {
 		throw new Error("land requires a job id");
 	}
-	return onto !== undefined ? { query, yes, onto } : { query, yes };
+	if (extra.length > 0) {
+		throw new Error("land requires exactly one job id");
+	}
+	const yes = values.yes ?? false;
+	return values.onto !== undefined ? { query, yes, onto: values.onto } : { query, yes };
 }
 
 async function confirm(question: string): Promise<boolean> {
