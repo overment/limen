@@ -20,13 +20,41 @@ import {
 } from "../project/git.ts";
 import { parseFlags } from "./flags.ts";
 
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: split pending: land command
 export async function landCommand(args: readonly string[], cwd: string): Promise<void> {
 	if (process.env.LIMEN_GROUP_ID) {
 		throw new Error("group members cannot land; the owner-facing lead owns landing");
 	}
 	const parsed = parseLandArgs(args);
-	const { id, jobDir } = await resolveJob(cwd, parsed.query, "control");
+	const { id, branch, base, repo, label } = await readDoneJob(cwd, parsed.query);
+	const root = limenRoot(cwd);
+	const repository = repo ? workspaceRepository(root, repo) : root;
+	const target = landTarget(repository, parsed.onto, branch);
+	const dirty = checkCheckoutBeside(repository, target, { id, branch, base });
+	await checkLandGates(repository, root, branch, id);
+	if (!parsed.yes && !(await confirm(`Land ${label || id} onto ${target}? [y/N] `))) {
+		throw new Error("land cancelled");
+	}
+	let output: string;
+	try {
+		output = mergeBranch(repository, branch);
+	} catch (error) {
+		// A half-done merge beside another session's files would turn its next commit into this merge.
+		if (dirty.length) {
+			abortMerge(repository);
+		}
+		throw error;
+	}
+	if (output) {
+		console.log(output);
+	}
+	console.log(`landed ${id} onto ${target}`);
+}
+/** The job's recorded branch, base, repo and label; only a done job with a branch and a base lands. */
+async function readDoneJob(
+	cwd: string,
+	query: string,
+): Promise<{ id: string; branch: string; base: string; repo: string; label: string }> {
+	const { id, jobDir } = await resolveJob(cwd, query, "control");
 	const [state, branch, base, repo, label] = await Promise.all([
 		text(`${jobDir}/state`),
 		text(`${jobDir}/branch`),
@@ -40,28 +68,40 @@ export async function landCommand(args: readonly string[], cwd: string): Promise
 	if (!branch || !base) {
 		throw new Error(`job ${id} has no recorded ${branch ? "base" : "branch"}`);
 	}
-	const root = limenRoot(cwd);
-	const repository = repo ? workspaceRepository(root, repo) : root;
+	return { id, branch, base, repo, label };
+}
+/** Land merges onto the checked-out branch, never onto the job's own branch. */
+function landTarget(repository: string, onto: string | undefined, branch: string): string {
 	const current = currentBranch(repository);
-	const target = parsed.onto ?? current;
+	const target = onto ?? current;
 	if (target !== current) {
 		throw new Error(`land merges onto the current branch (${current}); checkout ${target} first`);
 	}
 	if (target === branch) {
 		throw new Error(`already on job branch ${branch}`);
 	}
-	// Another session may be editing this checkout. Land merges beside its files and never touches them.
+	return target;
+}
+/**
+ * Another session may be editing this checkout. Land merges beside its files and never touches them: no staged
+ * change, no uncommitted file the merge would change. Returns the uncommitted paths.
+ */
+function checkCheckoutBeside(
+	repository: string,
+	target: string,
+	job: { readonly id: string; readonly branch: string; readonly base: string },
+): readonly string[] {
 	const dirty = dirtyPaths(repository);
 	if (dirty.staged.length) {
 		throw new Error(
 			`target ${target} has staged changes, and a merge would refuse or sweep them in: ${dirty.staged.join(", ")}; commit or unstage them first`,
 		);
 	}
-	const commits = commitList(repository, base, branch);
+	const commits = commitList(repository, job.base, job.branch);
 	if (!commits) {
-		throw new Error(`job ${id} has no commits to land`);
+		throw new Error(`job ${job.id} has no commits to land`);
 	}
-	const merged = dirty.paths.length ? mergePaths(repository, branch) : new Set<string>();
+	const merged = dirty.paths.length ? mergePaths(repository, job.branch) : new Set<string>();
 	const overlap = dirty.paths.filter((path) => merged.has(path));
 	if (overlap.length) {
 		throw new Error(
@@ -73,6 +113,10 @@ export async function landCommand(args: readonly string[], cwd: string): Promise
 			`land: ${dirty.paths.length} uncommitted file${dirty.paths.length === 1 ? "" : "s"} in ${repository} stay untouched; none is in this merge`,
 		);
 	}
+	return dirty.paths;
+}
+/** The strict ticket check and the test/ line cap; either one refuses the land. */
+async function checkLandGates(repository: string, root: string, branch: string, id: string): Promise<void> {
 	const gate = await landTicketCheck(repository, root, branch, "HEAD", id);
 	if (!gate.ok) {
 		throw new Error(`land refused: ${branch} has tickets that fail the strict check\n${gate.lines.join("\n")}`);
@@ -87,23 +131,6 @@ export async function landCommand(args: readonly string[], cwd: string): Promise
 	if (cap?.refuse) {
 		throw new Error(`land refused: ${cap.refuse}`);
 	}
-	if (!parsed.yes && !(await confirm(`Land ${label || id} onto ${target}? [y/N] `))) {
-		throw new Error("land cancelled");
-	}
-	let output: string;
-	try {
-		output = mergeBranch(repository, branch);
-	} catch (error) {
-		// A half-done merge beside another session's files would turn its next commit into this merge.
-		if (dirty.paths.length) {
-			abortMerge(repository);
-		}
-		throw error;
-	}
-	if (output) {
-		console.log(output);
-	}
-	console.log(`landed ${id} onto ${target}`);
 }
 
 /** The cap on `test/` lines that `spec/vision.md` names, or undefined when it names none. */
