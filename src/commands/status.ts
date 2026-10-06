@@ -5,7 +5,7 @@ import { relative, resolve } from "node:path";
 import { herdrBinary } from "../integrations/herdr.ts";
 import { type GroupIdentity, jobMembership } from "../job/group-cabinet.ts";
 import { isTerminal } from "../job/job.ts";
-import { noteKind } from "../job/view.ts";
+import { type JobRecord, noteKind } from "../job/view.ts";
 import { limenRoot, unlandedBranches, workspaceRepository, workspaceRoot } from "../project/git.ts";
 import { confirmDeadJobs } from "../runtime/reap.ts";
 import { RECENT_MS, renderJobDirectory, shownState } from "./jobs.ts";
@@ -34,195 +34,291 @@ type Finished = {
 	readonly repo: string;
 };
 
+type JobFiles = {
+	readonly state: string;
+	readonly label: string;
+	readonly branch: string;
+	readonly repo: string;
+	readonly pane: string;
+	readonly tab: string;
+	readonly worktree: string;
+	readonly origin: string;
+	readonly started: string;
+	readonly ended: string;
+};
+
+/** What one pass over the job directories found, before Git says which branches are unlanded. */
+type Scan = {
+	readonly root: string;
+	readonly jobsRoot: string;
+	readonly all: boolean;
+	readonly now: number;
+	readonly running: string[];
+	readonly runningBranches: Set<string>;
+	readonly uncertain: string[];
+	readonly workerPanes: Set<string>;
+	readonly worktrees: Set<string>;
+	readonly originTabs: Set<string>;
+	readonly finished: Map<string, Finished>;
+	readonly groups: Map<string, { readonly feature: string; readonly branches: Set<string> }>;
+	older: number;
+	lastOrigin: string;
+};
+
 export async function statusCommand(args: readonly string[], cwd: string): Promise<void> {
+	const all = parseStatusArgs(args);
+	const root = existsSync(`${resolve(cwd)}/.limen/jobs`) ? resolve(cwd) : limenRoot(cwd);
+	const jobsRoot = `${root}/.limen/jobs`;
+	await confirmDeadJobs(jobsRoot);
+	const ids = await jobIds(jobsRoot);
+	const scan: Scan = {
+		root,
+		jobsRoot,
+		all,
+		now: Date.now(),
+		running: [],
+		runningBranches: new Set(),
+		uncertain: [],
+		workerPanes: new Set(),
+		worktrees: new Set(),
+		originTabs: new Set(),
+		finished: new Map(),
+		groups: new Map(),
+		older: 0,
+		lastOrigin: "",
+	};
+	for (const id of ids) {
+		await scanJob(scan, id);
+	}
+	if (!scan.originTabs.size && scan.lastOrigin) {
+		scan.originTabs.add(scan.lastOrigin);
+	}
+	const ready = [...scan.groups].map(
+		([id, group]) =>
+			`  group ${group.feature}: ${group.branches.size} member branches; the lead decides (limen group status ${id})`,
+	);
+	const decide: string[] = [];
+	sortUnlandedBranches(scan, ready, decide);
+	const coordinators = coordinatorLines(
+		root,
+		workspaceRoot(root) !== undefined,
+		scan.workerPanes,
+		scan.worktrees,
+		scan.originTabs,
+	);
+	console.log(
+		[
+			`Plant ${root}`,
+			`Running (${scan.running.length}):`,
+			...(scan.running.length ? scan.running : ["  none"]),
+			`Candidates to inspect (${ready.length}):`,
+			...(ready.length ? ready : ["  none"]),
+			`Needs a decision (${decide.length}):`,
+			...(decide.length ? decide : ["  none"]),
+			...(scan.uncertain.length ? ["Unconfirmed jobs:", ...scan.uncertain] : []),
+			...(all ? [] : [`Older: ${scan.older} record${scan.older === 1 ? "" : "s"} (limen status --all)`]),
+			"Coordinator tabs:",
+			...coordinators,
+		].join("\n"),
+	);
+}
+
+/** True for `--all`. Status takes no other argument. */
+function parseStatusArgs(args: readonly string[]): boolean {
 	const all = args[0] === "--all";
 	if (args.length > (all ? 1 : 0)) {
 		throw new Error("status accepts no arguments or --all");
 	}
-	const root = existsSync(`${resolve(cwd)}/.limen/jobs`) ? resolve(cwd) : limenRoot(cwd);
-	const jobsRoot = `${root}/.limen/jobs`;
-	await confirmDeadJobs(jobsRoot);
+	return all;
+}
+
+async function jobIds(jobsRoot: string): Promise<string[]> {
 	const entries = await readdir(jobsRoot, { withFileTypes: true }).catch((error: unknown) => {
 		if (typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT") {
 			return [];
 		}
 		throw error;
 	});
-	const ids = entries
+	return entries
 		.filter((entry) => entry.isDirectory())
 		.map((entry) => entry.name)
 		.sort();
-	const now = Date.now();
-	const running: string[] = [];
-	const runningBranches = new Set<string>();
-	const uncertain: string[] = [];
-	const workerPanes = new Set<string>();
-	const worktrees = new Set<string>();
-	const originTabs = new Set<string>();
-	const finished = new Map<string, Finished>();
-	const groups = new Map<string, { readonly feature: string; readonly branches: Set<string> }>();
-	let older = 0;
-	let lastOrigin = "";
-	for (const id of ids) {
-		const dir = `${jobsRoot}/${id}`;
-		const [state = "", label = "", branch = "", repo = "", pane, tab, worktree, origin, started = "", ended = ""] =
-			await Promise.all(
-				[
-					"state",
-					"label",
-					"branch",
-					"repo",
-					"herdr/agent",
-					"herdr/tab",
-					"worktree",
-					"origin-tab",
-					"started-at",
-					"finished-at",
-				].map((name) => (name === "state" ? shownState(dir) : text(`${dir}/${name}`))),
-			);
-		if (pane) {
-			workerPanes.add(pane);
-		}
-		if (tab) {
-			workerPanes.add(tab);
-		}
-		if (worktree) {
-			worktrees.add(worktree);
-		}
-		if (origin && state === "running") {
-			originTabs.add(origin);
-		}
-		if (origin) {
-			lastOrigin = origin;
-		}
-		if (state === "running") {
-			if (branch) {
-				runningBranches.add(`${repo}:${branch}`);
-			}
-			const { record } = await renderJobDirectory(root, jobsRoot, id, "row");
-			const minutes = Date.parse(started) ? `${Math.max(0, Math.floor((now - Date.parse(started)) / 60_000))}m` : "";
-			const note = record.advisory ?? "";
-			const kind = note && noteKind(note);
-			const attention = record.invalid
-				? `invalid: ${record.invalid}`
-				: [
-						record.pulse === "dead" ? "dead" : (record.pulse ?? "unknown activity"),
-						record.silentMs !== undefined && record.silentMs >= 90_000
-							? `silent ${Math.floor(record.silentMs / 60_000)}m`
-							: "",
-						note.startsWith(kind) ? note : `${kind}: ${note}`,
-					]
-						.filter(Boolean)
-						.join(" · ");
-			running.push(
-				[
-					`  ${record.job?.label ?? (label || id)} (${id})`,
-					tab,
-					minutes,
-					attention,
-					record.lastTool ?? "",
-					repo ? `repo ${repo}` : "",
-				]
-					.filter(Boolean)
-					.join(" · "),
-			);
-			continue;
-		}
-		let group: GroupIdentity | undefined;
-		if (isTerminal(state)) {
-			try {
-				group = await jobMembership(dir);
-				if (
-					group &&
-					(group.run.root !== root ||
-						typeof group.run.feature !== "string" ||
-						!group.run.feature.trim() ||
-						typeof group.run.closed !== "boolean")
-				) {
-					group = undefined;
-				}
-			} catch {
-				// Unreadable membership must not hide a recoverable branch.
-				group = undefined;
-			}
-			if (group?.run.closed) {
-				continue;
-			}
-		}
-		const finishedAt =
-			Date.parse(ended) ||
-			(await stat(state ? `${dir}/state` : dir).then(
-				(value) => value.mtimeMs,
-				() => 0,
-			));
-		if (!all && now - finishedAt > RECENT_MS) {
-			older++;
-			continue;
-		}
-		if (!isTerminal(state)) {
-			uncertain.push(`  ${label || id} (${id}) · unknown state ${state || "missing"}`);
-			continue;
-		}
-		if (group) {
-			if (branch) {
-				const candidate = groups.get(group.run.id) ?? { feature: group.run.feature, branches: new Set<string>() };
-				candidate.branches.add(`${repo}:${branch}`);
-				groups.set(group.run.id, candidate);
-			}
-			continue;
-		}
-		if (branch) {
-			finished.set(`${repo}:${branch}`, { id, label: label || id, state, branch, repo });
-		}
-	}
-	if (!originTabs.size && lastOrigin) {
-		originTabs.add(lastOrigin);
-	}
-	const ready = [...groups].map(
-		([id, group]) =>
-			`  group ${group.feature}: ${group.branches.size} member branches; the lead decides (limen group status ${id})`,
+}
+
+async function readJobFiles(dir: string): Promise<JobFiles> {
+	const [
+		state = "",
+		label = "",
+		branch = "",
+		repo = "",
+		pane = "",
+		tab = "",
+		worktree = "",
+		origin = "",
+		started = "",
+		ended = "",
+	] = await Promise.all(
+		[
+			"state",
+			"label",
+			"branch",
+			"repo",
+			"herdr/agent",
+			"herdr/tab",
+			"worktree",
+			"origin-tab",
+			"started-at",
+			"finished-at",
+		].map((name) => (name === "state" ? shownState(dir) : text(`${dir}/${name}`))),
 	);
-	const decide: string[] = [];
+	return { state, label, branch, repo, pane, tab, worktree, origin, started, ended };
+}
+
+/** Sorts one job into running, older, unconfirmed, a group's branches, or a finished branch. */
+async function scanJob(scan: Scan, id: string): Promise<void> {
+	const dir = `${scan.jobsRoot}/${id}`;
+	const job = await readJobFiles(dir);
+	noteJobPanes(scan, job);
+	if (job.state === "running") {
+		if (job.branch) {
+			scan.runningBranches.add(`${job.repo}:${job.branch}`);
+		}
+		scan.running.push(await runningJobLine(scan, id, job));
+		return;
+	}
+	const group = isTerminal(job.state) ? await openGroupMembership(dir, scan.root) : undefined;
+	if (group?.run.closed) {
+		return;
+	}
+	const finishedAt =
+		Date.parse(job.ended) ||
+		(await stat(job.state ? `${dir}/state` : dir).then(
+			(value) => value.mtimeMs,
+			() => 0,
+		));
+	if (!scan.all && scan.now - finishedAt > RECENT_MS) {
+		scan.older += 1;
+		return;
+	}
+	if (!isTerminal(job.state)) {
+		scan.uncertain.push(`  ${job.label || id} (${id}) · unknown state ${job.state || "missing"}`);
+		return;
+	}
+	if (group) {
+		if (job.branch) {
+			const candidate = scan.groups.get(group.run.id) ?? { feature: group.run.feature, branches: new Set<string>() };
+			candidate.branches.add(`${job.repo}:${job.branch}`);
+			scan.groups.set(group.run.id, candidate);
+		}
+		return;
+	}
+	if (job.branch) {
+		scan.finished.set(`${job.repo}:${job.branch}`, {
+			id,
+			label: job.label || id,
+			state: job.state,
+			branch: job.branch,
+			repo: job.repo,
+		});
+	}
+}
+
+/** Panes, tabs and worktrees that belong to workers, so the coordinator list can leave them out. */
+function noteJobPanes(scan: Scan, job: JobFiles): void {
+	if (job.pane) {
+		scan.workerPanes.add(job.pane);
+	}
+	if (job.tab) {
+		scan.workerPanes.add(job.tab);
+	}
+	if (job.worktree) {
+		scan.worktrees.add(job.worktree);
+	}
+	if (job.origin && job.state === "running") {
+		scan.originTabs.add(job.origin);
+	}
+	if (job.origin) {
+		scan.lastOrigin = job.origin;
+	}
+}
+
+async function runningJobLine(scan: Scan, id: string, job: JobFiles): Promise<string> {
+	const { record } = await renderJobDirectory(scan.root, scan.jobsRoot, id, "row");
+	const started = Date.parse(job.started);
+	const minutes = started ? `${Math.max(0, Math.floor((scan.now - started) / 60_000))}m` : "";
+	return [
+		`  ${record.job?.label ?? (job.label || id)} (${id})`,
+		job.tab,
+		minutes,
+		runningAttention(record),
+		record.lastTool ?? "",
+		job.repo ? `repo ${job.repo}` : "",
+	]
+		.filter(Boolean)
+		.join(" · ");
+}
+
+/** Pulse, silence and advisory of a running job, or why its record is invalid. */
+function runningAttention(record: JobRecord): string {
+	if (record.invalid) {
+		return `invalid: ${record.invalid}`;
+	}
+	const note = record.advisory ?? "";
+	const kind = note && noteKind(note);
+	const silent =
+		record.silentMs !== undefined && record.silentMs >= 90_000 ? `silent ${Math.floor(record.silentMs / 60_000)}m` : "";
+	return [
+		record.pulse === "dead" ? "dead" : (record.pulse ?? "unknown activity"),
+		silent,
+		note.startsWith(kind) ? note : `${kind}: ${note}`,
+	]
+		.filter(Boolean)
+		.join(" · ");
+}
+
+/** The group a finished job belongs to, if its run is readable and in this plant. */
+async function openGroupMembership(dir: string, root: string): Promise<GroupIdentity | undefined> {
+	try {
+		const group = await jobMembership(dir);
+		if (
+			group &&
+			(group.run.root !== root ||
+				typeof group.run.feature !== "string" ||
+				!group.run.feature.trim() ||
+				typeof group.run.closed !== "boolean")
+		) {
+			return undefined;
+		}
+		return group;
+	} catch {
+		// Unreadable membership must not hide a recoverable branch.
+		return undefined;
+	}
+}
+
+/** Asks Git which finished branches are unlanded: a done job is a candidate, any other state needs a decision. */
+function sortUnlandedBranches(scan: Scan, ready: string[], decide: string[]): void {
 	const byRepo = Map.groupBy(
-		[...finished].filter(([key]) => !runningBranches.has(key)).map(([, job]) => job),
+		[...scan.finished].filter(([key]) => !scan.runningBranches.has(key)).map(([, job]) => job),
 		(job) => job.repo,
 	);
 	for (const [repo, jobs] of byRepo) {
 		let unlanded: ReadonlySet<string>;
 		try {
 			unlanded = unlandedBranches(
-				repo ? workspaceRepository(root, repo) : root,
+				repo ? workspaceRepository(scan.root, repo) : scan.root,
 				jobs.map((job) => job.branch),
 			);
 		} catch (error) {
 			const reason = error instanceof Error ? error.message : String(error);
-			uncertain.push(...jobs.map((job) => `  ${job.label} (${job.id}) · Git unknown: ${reason}`));
+			scan.uncertain.push(...jobs.map((job) => `  ${job.label} (${job.id}) · Git unknown: ${reason}`));
 			continue;
 		}
-		for (const job of jobs) {
-			if (!unlanded.has(job.branch)) {
-				continue;
-			}
+		for (const job of jobs.filter((each) => unlanded.has(each.branch))) {
 			const line = `  ${job.label} (${job.id}) · ${job.state === "done" ? "" : `${job.state} · `}${job.branch}${repo ? ` · repo ${repo}` : ""}`;
 			(job.state === "done" ? ready : decide).push(line);
 		}
 	}
-	const coordinators = coordinatorLines(root, workspaceRoot(root) !== undefined, workerPanes, worktrees, originTabs);
-	console.log(
-		[
-			`Plant ${root}`,
-			`Running (${running.length}):`,
-			...(running.length ? running : ["  none"]),
-			`Candidates to inspect (${ready.length}):`,
-			...(ready.length ? ready : ["  none"]),
-			`Needs a decision (${decide.length}):`,
-			...(decide.length ? decide : ["  none"]),
-			...(uncertain.length ? ["Unconfirmed jobs:", ...uncertain] : []),
-			...(all ? [] : [`Older: ${older} record${older === 1 ? "" : "s"} (limen status --all)`]),
-			"Coordinator tabs:",
-			...coordinators,
-		].join("\n"),
-	);
 }
 
 function coordinatorLines(
