@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { readPicture } from "../picture/picture-build.ts";
 import { ID_PATTERN } from "../picture/picture-model.ts";
 import { currentBranch, limenRoot, repoRoot } from "../project/git.ts";
+import { parseFlags } from "./flags.ts";
 import { landTicketCheck } from "./land.ts";
 
 const HELP =
@@ -66,27 +67,21 @@ export async function ticketCommand(args: readonly string[], cwd: string): Promi
 	if (mode !== "new" || !title || title.startsWith("--") || /[\r\n]/.test(title) || !title.trim()) {
 		throw new Error(HELP);
 	}
-	let lane: "planned" | "active" = "planned";
-	let touches: string[] = [];
-	const seen = new Set<string>();
-	for (let i = 0; i < options.length; i += 2) {
-		const flag = options[i];
-		const value = options[i + 1];
-		if (!flag || !value || seen.has(flag)) {
-			throw new Error(HELP);
-		}
-		seen.add(flag);
-		if (flag === "--lane" && (value === "planned" || value === "active")) {
-			lane = value;
-		} else if (flag === "--touches") {
-			const ids = value.split(",");
-			if (!ids.every((id) => PLACE_ID.test(id)) || new Set(ids).size !== ids.length) {
-				throw new Error(HELP);
-			}
-			touches = ids;
-		} else {
-			throw new Error(HELP);
-		}
+	const help = () => HELP;
+	const { values } = parseFlags(options, { lane: { type: "string" }, touches: { type: "string" } } as const, {
+		unknown: help,
+		missing: help,
+		repeated: help,
+		positionals: false,
+		endOfFlags: false,
+	});
+	if (values.lane !== undefined && values.lane !== "planned" && values.lane !== "active") {
+		throw new Error(HELP);
+	}
+	const lane = values.lane ?? "planned";
+	const touches = values.touches?.split(",") ?? [];
+	if (!touches.every((id) => PLACE_ID.test(id)) || new Set(touches).size !== touches.length) {
+		throw new Error(HELP);
 	}
 	const slug = title
 		.toLowerCase()
