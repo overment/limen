@@ -111,7 +111,6 @@ On `main` at `76a2f6d`: 48 functions over the complexity limit and 22 over the l
 | `picture/viewer/viewer.js` `adapt` | 43 | 211 | — |
 | `src/integrations/github-poller.ts` `reconcile` | 43 | 114 | — |
 | `src/integrations/finish-receipt.ts` `inspectFinishWebhook` | 40 | — | — |
-| `src/commands/continue.ts` `parseContinueArgs` | 39 | — | Team 4 |
 | `src/picture/frontmatter.ts` `parseFrontmatter` | 39 | — | — |
 | `picture/viewer/layers.js` `renderWork` | 38 | — | — |
 | `hook/wake.ts` `observe` | 37 | — | — |
