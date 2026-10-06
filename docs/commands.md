@@ -27,7 +27,7 @@ limen continue <id|suffix|label> "follow-up instruction" [--review] [--label L] 
 
 Both hosted and detached Pi jobs retain `--no-extensions` and all required Limen hooks. Herdr state reporting remains hosted-only. The selected list is published with the job in `extensions.json`; startup checks that its targets still exist. A missing legacy record means no extras. A malformed record or unavailable target is an error.
 
-`continue` inherits the parent's list when no `--extension` is given. Supplied flags replace the whole list, even if an old path is unavailable; the parent record stays unchanged. Repeat the chosen `--provider`, `--model` and `--thinking` flags: continuation does not inherit those choices. A fresh `spawn`, including `spawn --branch`, has no user extras unless selected. There is no clear-list flag.
+For ordinary jobs, `continue` inherits the parent's list when no `--extension` is given. Supplied flags replace the whole list, even if an old path is unavailable; the parent record stays unchanged. Repeat the chosen `--provider`, `--model` and `--thinking` flags: continuation does not inherit those choices. An ordinary fresh `spawn`, including `spawn --branch`, has no user extras unless selected. Group members instead inherit the fixed recorded team list; they cannot replace it. There is no clear-list flag.
 
 Only paths are retained, not extension source or dependency versions. Later edits or upgrades at those paths affect later launches. See [extension trust and model routes](setup.md#personal-model-routes-and-pi-extensions) before selecting third-party code.
 
@@ -104,14 +104,14 @@ limen picture tick --engine E --provider P --model M --thinking T [--dir D] [--b
 Start a team group, and show the status of, publish, wait for, stop, or close it.
 
 ```text
-limen group start FEATURE --teams N --workers-per-team N --timeout D --worker-timeout D --engine E --provider P --model M --thinking T --worker-thinking T [--team-model team-N=provider/model] [--detached|--tab] [--new-run]
+limen group start FEATURE --teams N --workers-per-team N --timeout D --worker-timeout D --engine E --provider P --model M --thinking T --worker-thinking T [--team-model team-N=provider/model] [--extension PATH ...] [--team-extension team-N=PATH ...] [--detached|--tab] [--new-run]
 limen group status [GROUP-ID] [--json]
 limen group publish [GROUP-ID] [--team team-N] "finding"
 limen group wait [GROUP-ID] [--timeout D]
 limen group stop|close [GROUP-ID]
 ```
 
-Members get their group from their recorded membership. The group lead gives the group ID. Repeat `--team-model` to give more than one team its own model. See [Groups](groups.md).
+Members get their group from their recorded membership. The group lead gives the group ID. Repeat `--team-model` to give more than one team its own model. For Pi, repeat `--extension PATH` for common extensions and `--team-extension team-N=PATH` for team-only additions. Common paths precede team paths; the recorded effective lists are inherited by members, reviews and worker continuations. Engine/provider/model/reasoning flags still need explicit values. See [Groups](groups.md).
 
 ### GitHub comments
 

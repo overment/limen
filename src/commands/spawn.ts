@@ -114,7 +114,10 @@ async function spawnJob(args: readonly string[], cwd: string, group?: { run: Gro
 	const profile = resolveSpawnEngine(options.engine);
 	const engine = profile.id;
 	const model = options.model ?? defaultModel(options.review);
-	const extensions = await normalizeWorkerExtensions(options.extensions, cwd, engine);
+	const recorded = group?.run.teamExtensions?.[group.team];
+	const extensions = await normalizeWorkerExtensions(recorded ?? options.extensions, cwd, engine);
+	if (recorded && options.extensions.length && JSON.stringify(await normalizeWorkerExtensions(options.extensions, cwd, engine)) !== JSON.stringify(extensions))
+		throw new Error("group launches require the recorded team extensions; omit --extension to inherit them");
 	preflightEngine(profile, model, options.provider);
 	const notificationSession = currentNotificationSession();
 	const coordinatorTab = process.env.HERDR_TAB_ID?.trim();
@@ -526,7 +529,7 @@ export function normalizeLabel(value: string): string {
 // The shell in a member's tab may put another installed Limen first on PATH; name the package that runs this group.
 function memberRoute(run: GroupRun, team: string): string {
 	const route = teamRoute(run, team);
-	return `Limen command (use this path for every limen command): ${resolve(PACKAGE_ROOT, "bin/limen")}\nTeam worker launch settings (pass exactly): --engine ${run.engine} --provider ${route.provider} --model ${route.model} --thinking ${run.workerThinking}`;
+	return `Limen command (use this path for every limen command): ${resolve(PACKAGE_ROOT, "bin/limen")}\nTeam worker launch settings (pass exactly): --engine ${run.engine} --provider ${route.provider} --model ${route.model} --thinking ${run.workerThinking}${run.teamExtensions ? "\nTeam extensions are inherited automatically. Omit --extension; keep the model flags above explicit." : ""}`;
 }
 export function currentNotificationSession(): string | undefined {
 	const value = process.env.PI_SESSION_ID?.trim();

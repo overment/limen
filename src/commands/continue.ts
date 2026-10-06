@@ -94,7 +94,18 @@ async function continueJob(args: readonly string[], cwd: string, locked = false)
 		if (requested.id !== parentEngine) throw new Error(`continue --engine ${engine} does not match parent engine ${parentEngine}`);
 	}
 	const profile = engineProfile(parentEngine);
-	const extensions = selected.length ? await normalizeWorkerExtensions(selected, cwd, profile.id) : await readWorkerExtensions(parentDir, profile.id);
+	const recorded = membership?.run.teamExtensions?.[membership.member?.team ?? ""];
+	const extensions = recorded
+		? await normalizeWorkerExtensions(recorded, cwd, profile.id)
+		: selected.length
+			? await normalizeWorkerExtensions(selected, cwd, profile.id)
+			: await readWorkerExtensions(parentDir, profile.id);
+	if (recorded) {
+		if (JSON.stringify(await readWorkerExtensions(parentDir, profile.id)) !== JSON.stringify(extensions))
+			throw new Error("group continuation parent does not match the recorded team extensions");
+		if (selected.length && JSON.stringify(await normalizeWorkerExtensions(selected, cwd, profile.id)) !== JSON.stringify(extensions))
+			throw new Error("group continuation requires the recorded team extensions; omit --extension to inherit them");
+	}
 	preflightEngine(profile, chosenModel, provider);
 
 	// Private planning: carry the parent's canonical ticket and check every pointer before a record exists.

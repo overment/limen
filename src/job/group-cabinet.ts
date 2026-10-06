@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
+import { dirname, isAbsolute } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { hostedAgentStatus } from "../integrations/herdr.ts";
 import { limenRoot } from "../project/git.ts";
@@ -32,6 +32,7 @@ export type GroupRun = {
 	mode: "auto" | "detached" | "tab";
 	members: GroupMember[];
 	teamModels?: Record<string, { provider: string; model: string }>;
+	teamExtensions?: Record<string, string[]>;
 };
 export type GroupIdentity = { run: GroupRun; member?: GroupMember; recipient: string };
 export const groupPath = (run: Pick<GroupRun, "root" | "id">): string => `${run.root}/.limen/groups/${run.id}`;
@@ -45,7 +46,21 @@ export async function readRun(root: string, id: string): Promise<GroupRun> {
 		if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
 		throw new Error(`no group record for ${id}; run limen group start FEATURE with the group settings`);
 	}
-	return JSON.parse(record) as GroupRun;
+	const run = JSON.parse(record) as GroupRun;
+	if ("teamExtensions" in run) {
+		const selections = run.teamExtensions;
+		if (
+			!selections ||
+			typeof selections !== "object" ||
+			Array.isArray(selections) ||
+			Object.keys(selections).length !== run.teams.length ||
+			!run.teams.every(
+				(team) => Object.hasOwn(selections, team) && Array.isArray(selections[team]) && selections[team]?.every((path) => typeof path === "string" && isAbsolute(path)),
+			)
+		)
+			throw new Error(`invalid teamExtensions in group ${id}: expected complete team lists of absolute local paths`);
+	}
+	return run;
 }
 export async function saveJson(path: string, value: unknown): Promise<void> {
 	const temporary = `${path}.${randomUUID()}.tmp`;
