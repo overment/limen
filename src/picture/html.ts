@@ -61,6 +61,7 @@ export function assembleHtml(model: PictureModel, viewer: Viewer, tip?: string):
 			.map((js) => `<script>\n${js.replace(/<\/script/gi, "<\\/script")}\n</script>`)
 			.join("\n"),
 	};
-	// Inserted text is never rescanned, and replacement strings keep literal '$'.
-	return viewer.template.replace(/<!-- ARCHMAP:(?:CSS|JS|DATA) -->/g, (marker) => parts[marker]!);
+	// Inserted text is never rescanned, and replacement strings keep literal '$'. The pattern matches only the three
+	// markers, each a key of `parts`.
+	return viewer.template.replace(/<!-- ARCHMAP:(?:CSS|JS|DATA) -->/g, (marker) => parts[marker] ?? marker);
 }

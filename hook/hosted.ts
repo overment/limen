@@ -148,8 +148,8 @@ export default function limenHosted(pi: PiApi): void {
 		}
 		const registered =
 			hostedForegroundPid(pane, process.pid) === "present" && (await registerHostedBinding(jobDir, pane, context));
-		if (registered) {
-			const binding = readHostedBinding(jobDir)!;
+		const binding = registered ? readHostedBinding(jobDir) : undefined;
+		if (binding) {
 			write("engine-pid", String(binding.pid));
 			write("engine-session", JSON.stringify({ pid: binding.pid, born: binding.born, sessionId: binding.sessionId }));
 		} else if (readHostedBinding(jobDir)?.pid === process.pid) {

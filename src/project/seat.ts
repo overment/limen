@@ -95,19 +95,33 @@ function withRegistryLock<T>(action: () => T): T {
 			Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10);
 		}
 	}
+	let value: T;
 	try {
-		return action();
-	} finally {
-		const released = `${lock}.released.${reclaimer}`;
+		value = action();
+	} catch (error) {
+		// The action's error is the one the caller needs. A failed release must not replace it; the lock owner is
+		// this process, so the next caller reclaims the lock once this process exits.
 		try {
-			fs.renameSync(lock, released);
-		} catch (error) {
-			if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
-				throw error;
-			}
+			releaseRegistryLock(lock, reclaimer);
+		} catch {
+			// The action's error follows.
 		}
-		fs.rmSync(released, { recursive: true, force: true, maxRetries: 10, retryDelay: 10 });
+		throw error;
 	}
+	// A lock that stays in place blocks every later caller, so a failed release fails this call.
+	releaseRegistryLock(lock, reclaimer);
+	return value;
+}
+function releaseRegistryLock(lock: string, reclaimer: string): void {
+	const released = `${lock}.released.${reclaimer}`;
+	try {
+		fs.renameSync(lock, released);
+	} catch (error) {
+		if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+			throw error;
+		}
+	}
+	fs.rmSync(released, { recursive: true, force: true, maxRetries: 10, retryDelay: 10 });
 }
 function removeAbandonedLock(lock: string, reclaimer: string): boolean {
 	let claim = "";

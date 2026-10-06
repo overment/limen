@@ -38,16 +38,10 @@ export function parseFrontmatter(text: string): Frontmatter {
 		.replace(/^\uFEFF/, "")
 		.replace(/\r\n?/g, "\n");
 	const all = src.split("\n");
-	if (all[0]!.trimEnd() !== "---") {
+	if (all[0]?.trimEnd() !== "---") {
 		return fail(src, 'file does not start with a "---" frontmatter fence');
 	}
-	let close = -1;
-	for (let i = 1; i < all.length; i++) {
-		if (all[i]!.trimEnd() === "---") {
-			close = i;
-			break;
-		}
-	}
+	const close = all.findIndex((line, i) => i > 0 && line.trimEnd() === "---");
 	if (close < 0) {
 		return fail(src, 'the "---" frontmatter fence is not closed');
 	}
@@ -62,8 +56,7 @@ export function parseFrontmatter(text: string): Frontmatter {
 	const lines: LineMap = Object.create(null) as LineMap;
 
 	let i = 0;
-	while (i < fm.length) {
-		const raw = fm[i]!;
+	for (let raw = fm[i]; raw !== undefined; raw = fm[i]) {
 		if (isCommentOrEmpty(raw)) {
 			i++;
 			continue;
@@ -79,14 +72,12 @@ export function parseFrontmatter(text: string): Frontmatter {
 			i++;
 			continue;
 		}
-		const m = KEY.exec(raw.trimEnd());
-		if (!m) {
+		const [, key, rest = ""] = KEY.exec(raw.trimEnd()) ?? [];
+		if (key === undefined) {
 			error(i, 'expected "key: value"');
 			i++;
 			continue;
 		}
-		const key = m[1]!;
-		const rest = m[2] ?? "";
 		const duplicate = data.has(key);
 		if (duplicate) {
 			error(i, `duplicate key "${key}"; the first value is kept`);
@@ -94,18 +85,17 @@ export function parseFrontmatter(text: string): Frontmatter {
 
 		if (isCommentOrEmpty(rest)) {
 			let j = i + 1;
-			const block: number[] = [];
-			while (j < fm.length) {
-				const r = fm[j]!;
+			const block: [number, string][] = [];
+			for (let r = fm[j]; r !== undefined; r = fm[j]) {
 				if (!isCommentOrEmpty(r)) {
 					if (leading(r).length === 0 && !/^-(?: |$)/.test(r.trimEnd())) {
 						break;
 					}
-					block.push(j);
+					block.push([j, r]);
 				}
 				j++;
 			}
-			const value = parseBlock(fm, block, key, duplicate ? {} : lines, error, lineOf);
+			const value = parseBlock(block, key, duplicate ? {} : lines, error, lineOf);
 			if (!duplicate) {
 				data.set(key, value);
 				lines[key] = lineOf(i);
@@ -139,22 +129,21 @@ function fail(src: string, message: string): Frontmatter {
 }
 
 function parseBlock(
-	fm: string[],
-	block: number[],
+	block: [number, string][],
 	key: string,
 	lines: LineMap,
 	error: ReportError,
 	lineOf: (index: number) => number,
 ): unknown {
-	if (block.length === 0) {
+	const [first] = block;
+	if (first === undefined) {
 		return null;
 	}
-	const itemIndent = leading(fm[block[0]!]!).length;
+	const itemIndent = leading(first[1]).length;
 	const items: unknown[] = [];
 	let cur: OpenItem | null = null;
 
-	for (const k of block) {
-		const raw = fm[k]!;
+	for (const [k, raw] of block) {
 		const ind = leading(raw);
 		if (ind.includes("\t")) {
 			error(k, "use spaces, not tabs, for indentation");
@@ -170,14 +159,14 @@ function parseBlock(
 				error(k, "empty list item");
 				continue;
 			}
-			const km = KEY.exec(content);
-			if (km) {
+			const [, sub, rest = ""] = KEY.exec(content) ?? [];
+			if (sub !== undefined) {
 				const col = itemIndent + line.slice(itemIndent + 1).search(/\S/) + 1;
 				const map = new Map<string, unknown>();
 				items.push(map);
 				lines[`${key}.${idx}`] = lineOf(k);
 				cur = { map, col, idx };
-				setEntry(cur, km, k, key, lines, error, lineOf);
+				setEntry(cur, sub, rest, k, key, lines, error, lineOf);
 				continue;
 			}
 			const r = parseScalar(content);
@@ -190,11 +179,11 @@ function parseBlock(
 			continue;
 		}
 		if (cur && !im && ind.length === cur.col) {
-			const km = KEY.exec(line.slice(cur.col));
-			if (!km) {
+			const [, sub, rest = ""] = KEY.exec(line.slice(cur.col)) ?? [];
+			if (sub === undefined) {
 				error(k, 'expected "key: value" inside the list item');
 			} else {
-				setEntry(cur, km, k, key, lines, error, lineOf);
+				setEntry(cur, sub, rest, k, key, lines, error, lineOf);
 			}
 			continue;
 		}
@@ -212,15 +201,14 @@ function parseBlock(
 
 function setEntry(
 	cur: OpenItem,
-	km: RegExpExecArray,
+	sub: string,
+	rest: string,
 	k: number,
 	key: string,
 	lines: LineMap,
 	error: ReportError,
 	lineOf: (index: number) => number,
 ): void {
-	const sub = km[1]!;
-	const rest = km[2] ?? "";
 	if (cur.map.has(sub)) {
 		error(k, `duplicate key "${sub}" in list item; the first value is kept`);
 		return;
@@ -237,10 +225,10 @@ function setEntry(
 /** @returns {{ ok: true, value: unknown } | { ok: false, message: string }} */
 export function parseScalar(src: string): ScalarResult {
 	const s = src.trim();
-	if (s === "" || s[0] === "#") {
+	const c = s[0];
+	if (c === undefined || c === "#") {
 		return { ok: true, value: null };
 	}
-	const c = s[0]!;
 	if (c === '"' || c === "'") {
 		const r = readQuoted(s, 0);
 		if (!r.ok) {
@@ -293,8 +281,7 @@ function readQuoted(s: string, start: number): QuotedResult {
 	const q = s[start];
 	let out = "";
 	let i = start + 1;
-	while (i < s.length) {
-		const c = s[i]!;
+	for (let c = s[i]; c !== undefined; c = s[i]) {
 		if (q === "'") {
 			if (c === "'") {
 				if (s[i + 1] === "'") {
@@ -312,18 +299,20 @@ function readQuoted(s: string, start: number): QuotedResult {
 			return { ok: true, value: out, end: i + 1 };
 		}
 		if (c === "\\") {
-			const e = s[i + 1];
+			const e = s.slice(i + 1, i + 2);
 			if (e === "u" && /^[0-9a-fA-F]{4}$/.test(s.slice(i + 2, i + 6))) {
 				out += String.fromCharCode(Number.parseInt(s.slice(i + 2, i + 6), 16));
 				i += 6;
 				continue;
 			}
-			if (e !== undefined && Object.hasOwn(ESCAPES, e)) {
-				out += ESCAPES[e]!;
+			// `e` is one character, so it never names an Object.prototype member.
+			const escaped = ESCAPES[e];
+			if (escaped !== undefined) {
+				out += escaped;
 				i += 2;
 				continue;
 			}
-			return bad(`unknown escape "\\${e ?? ""}" in a double-quoted string`);
+			return bad(`unknown escape "\\${e}" in a double-quoted string`);
 		}
 		out += c;
 		i++;
@@ -399,7 +388,7 @@ function isCommentOrEmpty(s: string): boolean {
 }
 
 function leading(line: string): string {
-	return /^[ \t]*/.exec(line)![0];
+	return line.slice(0, line.search(/[^ \t]|$/));
 }
 
 function bad(message: string): { ok: false; message: string } {

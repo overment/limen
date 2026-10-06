@@ -241,16 +241,17 @@ export function buildModel({
 	const plant = plants[0] ?? null;
 	if (!plant) {
 		diag("error", "plant.missing", 'no file has "kind: plant"; the project has no root node');
-	}
-	for (const extra of plants.slice(1)) {
-		diag(
-			"error",
-			"plant.multiple",
-			`a second plant; "${plant!.id}" (${plant!.source}) is the project root; this file is ignored`,
-			extra.source,
-			extra.id,
-			extra.lines.kind ?? null,
-		);
+	} else {
+		for (const extra of plants.slice(1)) {
+			diag(
+				"error",
+				"plant.multiple",
+				`a second plant; "${plant.id}" (${plant.source}) is the project root; this file is ignored`,
+				extra.source,
+				extra.id,
+				extra.lines.kind ?? null,
+			);
+		}
 	}
 
 	const projectId = plant ? plant.project : (records.find((r) => r.project)?.project ?? "");
@@ -352,13 +353,15 @@ export function buildModel({
 	};
 	for (const item of work) {
 		let scope = "";
-		if (item.touches.length === 1) {
-			scope = nodeTitles.get(item.touches[0]!) ?? plant?.title ?? "";
+		const [first] = item.touches;
+		if (first !== undefined && item.touches.length === 1) {
+			scope = nodeTitles.get(first) ?? plant?.title ?? "";
 		} else if (item.touches.length > 1) {
 			const modules = new Set(item.touches.map((id) => topModule.get(id) ?? id));
+			const [module] = modules;
 			scope =
-				modules.size === 1
-					? (nodeTitles.get(modules.values().next().value!) ?? "")
+				module !== undefined && modules.size === 1
+					? (nodeTitles.get(module) ?? "")
 					: `${item.touches.length} places in ${modules.size} modules`;
 		}
 		if (item.opened) {
@@ -652,15 +655,13 @@ function readRecord(file: PictureFile, diag: Report, byId: Map<string, RecordNod
 /** Strips a trailing `owner: <x>` line (alone on its line) from the body. */
 function splitOwner(markdown: string): { markdown: string; owner: string | null } {
 	const lines = markdown.replace(/\r\n?/g, "\n").split("\n");
-	let last = lines.length - 1;
-	while (last >= 0 && lines[last]!.trim() === "") {
-		last--;
-	}
-	const m = last >= 0 ? OWNER_LINE.exec(lines[last]!.trim()) : null;
-	if (!m) {
+	const last = lines.findLastIndex((line) => line.trim() !== "");
+	const line = lines[last];
+	const owner = line === undefined ? undefined : OWNER_LINE.exec(line.trim())?.[1];
+	if (owner === undefined) {
 		return { markdown, owner: null };
 	}
-	return { markdown: lines.slice(0, last).join("\n"), owner: m[1]! };
+	return { markdown: lines.slice(0, last).join("\n"), owner };
 }
 
 /** First sentence of the first paragraph or list item, as plain text, at most SUMMARY_MAX chars. */
@@ -670,8 +671,7 @@ function firstSentence(markdown: string): string {
 		return "";
 	}
 	const plain = inlineText(block.text).replace(/\s+/g, " ").trim();
-	const m = /^(.+?[.!?])(?:\s|$)/.exec(plain);
-	const sentence = m ? m[1]! : plain;
+	const sentence = /^(.+?[.!?])(?:\s|$)/.exec(plain)?.[1] ?? plain;
 	if (sentence.length <= SUMMARY_MAX) {
 		return sentence;
 	}
@@ -745,9 +745,8 @@ function resolveOverlayList(
 }
 
 function resolveParents(nodes: Map<string, RecordNode>, plantIds: Set<string>, diag: Report): void {
-	const ids = [...nodes.keys()].sort(cmp);
-	for (const id of ids) {
-		const n = nodes.get(id)!;
+	const sorted = [...nodes.values()].sort((a, b) => cmp(a.id, b.id));
+	for (const n of sorted) {
 		if (n.parent === null) {
 			continue;
 		}
@@ -759,7 +758,7 @@ function resolveParents(nodes: Map<string, RecordNode>, plantIds: Set<string>, d
 				"node.unknown-parent",
 				`parent "${n.parent}" is not a node; shown as a top-level block`,
 				n.source,
-				id,
+				n.id,
 				n.lines.parent ?? null,
 			);
 			n.parent = null;
@@ -767,52 +766,55 @@ function resolveParents(nodes: Map<string, RecordNode>, plantIds: Set<string>, d
 	}
 	// Break every parent cycle at its smallest id so the result does not depend on file order.
 	const settled = new Set<string>();
-	for (const start of ids) {
-		const path: string[] = [];
+	for (const start of sorted) {
+		const path: RecordNode[] = [];
 		const onPath = new Map<string, number>();
-		let cur: string | null = start;
-		while (cur !== null && !settled.has(cur) && !onPath.has(cur)) {
-			onPath.set(cur, path.length);
+		let cur: RecordNode | undefined = start;
+		while (cur && !settled.has(cur.id) && !onPath.has(cur.id)) {
+			onPath.set(cur.id, path.length);
 			path.push(cur);
-			cur = nodes.get(cur)!.parent;
+			cur = cur.parent === null ? undefined : nodes.get(cur.parent);
 		}
-		if (cur !== null && onPath.has(cur)) {
-			const cycle = path.slice(onPath.get(cur)!);
-			const cut = [...cycle].sort(cmp)[0]!;
-			const k = cycle.indexOf(cut);
-			const loop = [...cycle.slice(k), ...cycle.slice(0, k), cut].join(" -> ");
-			const n = nodes.get(cut)!;
-			n.parent = null;
+		const from = cur === undefined ? undefined : onPath.get(cur.id);
+		if (from !== undefined) {
+			const members = path.slice(from);
+			const cut = members.reduce((min, n) => (cmp(n.id, min.id) < 0 ? n : min));
+			const cycle = members.map((n) => n.id);
+			const k = cycle.indexOf(cut.id);
+			const loop = [...cycle.slice(k), ...cycle.slice(0, k), cut.id].join(" -> ");
+			cut.parent = null;
 			diag(
 				"error",
 				"node.parent-cycle",
-				`parent chain forms a cycle (${loop}); "${cut}" is shown as a top-level block`,
-				n.source,
-				cut,
-				n.lines.parent ?? null,
+				`parent chain forms a cycle (${loop}); "${cut.id}" is shown as a top-level block`,
+				cut.source,
+				cut.id,
+				cut.lines.parent ?? null,
 			);
 		}
 		for (const p of path) {
-			settled.add(p);
+			settled.add(p.id);
 		}
 	}
 }
 
 function orderNodes(nodes: Map<string, RecordNode>): RecordNode[] {
 	const roots: RecordNode[] = [];
-	const kids = new Map<string, RecordNode[]>([...nodes.keys()].map((id) => [id, []]));
+	const kids = new Map<string, RecordNode[]>();
 	for (const n of nodes.values()) {
 		if (n.parent === null) {
 			roots.push(n);
 		} else {
-			kids.get(n.parent)!.push(n);
+			const siblings = kids.get(n.parent) ?? [];
+			siblings.push(n);
+			kids.set(n.parent, siblings);
 		}
 	}
 	const ordered: RecordNode[] = [];
 	const visit = (list: RecordNode[], depth: number): void => {
 		list.sort(siblingCmp);
 		for (const n of list) {
-			const children = kids.get(n.id)!.sort(siblingCmp);
+			const children = (kids.get(n.id) ?? []).sort(siblingCmp);
 			n.depth = depth;
 			n.children = children.map((c) => c.id);
 			ordered.push(n);
@@ -874,9 +876,10 @@ function buildEdges(
 			continue;
 		}
 		const dangling = (["from", "to"] as const).filter((k) => !nodes.has(edge[k]));
-		if (dangling.length) {
+		const [missing] = dangling;
+		if (missing !== undefined) {
 			const what = dangling.map((k) => `${k} "${edge[k]}"`).join(" and ");
-			diag("error", "edge.dangling", `${what} is not a node; edge dropped`, edge.source, edge.id, at(dangling[0]!));
+			diag("error", "edge.dangling", `${what} is not a node; edge dropped`, edge.source, edge.id, at(missing));
 			continue;
 		}
 		if (edge.from === edge.to) {
