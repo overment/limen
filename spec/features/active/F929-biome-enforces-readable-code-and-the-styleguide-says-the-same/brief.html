@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Limen code quality: Biome rules and library picks</title>
+<title>Limen code quality: status and original brief</title>
 <style>
 :root { color-scheme: light dark; --bg:#fbfaf7; --fg:#1d1d1f; --muted:#6b6b70; --line:#e3e1db; --card:#ffffff; --ok:#1f7a3a; --okbg:#e3f3e8; --wait:#8a5a00; --waitbg:#fcefd4; --no:#9b1c1c; --nobg:#fbe3e3; --code:#f2f0ea; }
 @media (prefers-color-scheme: dark) { :root { --bg:#141416; --fg:#ececef; --muted:#a0a0a8; --line:#2c2c31; --card:#1c1c20; --ok:#7bd88f; --okbg:#173322; --wait:#f0c060; --waitbg:#3a2c10; --no:#ff8a8a; --nobg:#3a1717; --code:#24242a; } }
@@ -37,8 +37,25 @@ li { margin: 3px 0; }
 </head>
 <body>
 <main>
-<h1>Limen code quality: what Biome checks now, and what waits on you</h1>
+<h1>Limen code quality: status and original brief</h1>
 <p class="sub">Feature F929 · checks ran at <code>421ed26</code> (this work merged with main <code>8bacea1</code>) · 6 October 2026 · Biome 2.5.8 · measurements at <code>19b0175</code>, reformat numbers after merging main <code>8bacea1</code></p>
+
+<div class="card" style="border-left:4px solid var(--ok)">
+<h3 style="margin-top:0"><span class="chip ok">Ready</span> Status after your picks · updated 6 October 2026, 20:29</h3>
+<p>You picked all four steps at 18:31. Four teams implemented them; each piece landed on <code>main</code> when its checks passed. <code>npm run check</code> now enforces the formatting, complexity and recommended rules. Command flags use Node's parser. Runtime dependencies are still empty: no Effect, XState or Zod. The sections below this card are the brief you picked from.</p>
+<table><thead><tr><th>Pick</th><th>What is on main</th><th>Numbers</th></tr></thead><tbody>
+<tr><td>1 · Reformat</td><td>Biome formats at 120 columns and requires braces on every <code>if</code>, <code>for</code> and <code>else</code> body, for the whole tree.</td><td>104 files, mechanical. Every changed script parses to the same program apart from braces, parentheses and trailing commas (102 of 102). 206 lines in <code>src</code> stay wider: long strings, which the formatter does not split.</td></tr>
+<tr><td>2 · Complexity limit</td><td>Cognitive complexity at most 25 and at most 70 lines per function, both errors. Each function still over a limit carries its own suppression with a reason. A new function over the limit fails.</td><td>Exempt functions: 53 at the start, <b id="exempt">33</b> now (41 local suppression comments). Split commands include spawn, continue, GitHub, status, jobs, group, land, prune and sweep.</td></tr>
+<tr><td>3 · Recommended preset</td><td>On, and <code>npm run check</code> fails on any warning too.</td><td>88 diagnostics fixed in code, none silenced. One real bug fixed: the seat registry lock threw from <code>finally</code> and hid the real error. Two exceptions, each with its reason: <code>"use strict"</code> in the viewer scripts, and one control-character regex that exists to reject unsafe links.</td></tr>
+<tr><td>4 · parseArgs</td><td>One shared flag module (<code>src/commands/flags.ts</code>) on Node's <code>parseArgs</code>. <code>spawn</code>, <code>continue</code>, <code>group start</code>, <code>keeper</code>, <code>land</code>, <code>picture</code>, <code>ticket new</code> and <code>linear</code> use it.</td><td>Messages unchanged for every single-error input. New: <code>--flag=value</code> works. Kept on purpose, reasons in <code>notes.md</code>: <code>steer</code> (free text), <code>sweep</code>, <code>init</code>, the <code>--help</code> scan, <code>ticket check</code>, <code>status</code>, <code>jobs</code>, and GitHub comment flags.</td></tr>
+</tbody></table>
+<h3>Later choices; neither blocks this landing</h3>
+<ul>
+<li><b>Remaining exempt functions:</b> 33 functions are listed in <code>notes.md</code>. Split them when those files next change, or ticket a separate clean-up.</li>
+<li><b>Load-sensitive tests:</b> under heavy machine load, the group close test and one finish-wake test sometimes time out on <code>main</code> too. Both passed on isolated reruns. A separate test-stability ticket can address them.</li>
+</ul>
+<p class="small">Code landing: <code id="tip">6d294d2</code>. Final integrated check: tsc, Biome, <code>npm test</code> 68/68, ticket check and strict picture build. The group is closed. Lead notes: <code>spec/features/active/F929-…/group/lead-notes.md</code>.</p>
+</div>
 
 <div class="card">
 <h3 style="margin-top:0">The answer</h3>
