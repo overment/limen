@@ -118,17 +118,44 @@ function aclAllows(path: string, poller: string, permission: "r" | "x", uid: num
 	return !!rights("other::")?.includes(permission);
 }
 
+type Report = (ok: boolean, label: string, fix: string) => void;
+/** What every later check needs: the seat, the report line writer, and the poller and worker identities. */
+type Doctor = {
+	readonly root: string;
+	readonly seat: Seat;
+	readonly report: Report;
+	readonly pollerUid: number;
+	readonly gid: number;
+	readonly worker: string;
+};
 // This inspects metadata and access only. Never read or print the App key, poller env, or sudo output.
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: split pending: github doctor checks
-// biome-ignore lint/complexity/noExcessiveLinesPerFunction: same split as the line above
 export async function githubDoctor(root: string, seat: Seat = seatDefaults()): Promise<void> {
 	let failures = 0;
-	const report = (ok: boolean, label: string, fix: string) => {
+	const report: Report = (ok, label, fix) => {
 		console.log(`${ok ? "OK" : "FIX"} ${label}${ok ? "" : ` — ${fix}`}`);
 		if (!ok) {
 			failures++;
 		}
 	};
+	const doctor: Doctor = { root, seat, report, ...checkSeatIdentities(seat, report) };
+	const releaseSafe = await checkRootInstall(doctor);
+	await checkPollerService(doctor, releaseSafe);
+	await checkPollerSecrets(doctor);
+	const projects = await checkSeatRegistry(doctor);
+	const seen = new Set<string>();
+	for (const project of [root, ...projects]) {
+		if (seen.has(project)) {
+			continue;
+		}
+		seen.add(project);
+		await checkProject(doctor, project);
+	}
+	if (failures) {
+		throw new Error(`github doctor: ${failures} prerequisite${failures === 1 ? "" : "s"} need repair`);
+	}
+}
+/** The worker has no sudo, the poller is its own user, and the worker is in the limen-github group. */
+function checkSeatIdentities(seat: Seat, report: Report): { pollerUid: number; gid: number; worker: string } {
 	const pollerId = command("id", ["-u", seat.poller]);
 	const pollerUid = pollerId && /^\d+$/.test(pollerId) ? Number(pollerId) : -1;
 	const workerUid = process.getuid?.() ?? -1;
@@ -152,7 +179,10 @@ export async function githubDoctor(root: string, seat: Seat = seatDefaults()): P
 		"worker in limen-github group",
 		`add ${worker} to limen-github as root; log in again`,
 	);
-
+	return { pollerUid, gid, worker };
+}
+/** The release, the CLI link, Node and Herdr are root-owned. Returns whether the release is safe. */
+async function checkRootInstall({ seat, report }: Doctor): Promise<boolean> {
 	const release = await info(seat.release);
 	const releaseSafe =
 		release?.isDirectory() &&
@@ -195,6 +225,10 @@ export async function githubDoctor(root: string, seat: Seat = seatDefaults()): P
 		"root-owned Herdr handoff binary",
 		`install a root-owned Herdr binary at ${seat.herdr}, with root-owned non-writable parents; stop the timer until repaired`,
 	);
+	return !!releaseSafe;
+}
+/** The poller service runs the root-owned interpreter, the sudo policy is narrow, and poller and CLI share a revision. */
+async function checkPollerService({ seat, report }: Doctor, releaseSafe: boolean): Promise<void> {
 	const service = seat.service ? await info(seat.service) : undefined;
 	const unit = seat.service && (await readFile(seat.service, "utf8").catch(() => ""));
 	if (seat.alternateNode) {
@@ -237,7 +271,9 @@ export async function githubDoctor(root: string, seat: Seat = seatDefaults()): P
 			"deploy the same landed Git revision to /opt/limen and the coordinator CLI; restart the timer",
 		);
 	}
-
+}
+/** The App key and the poller state are poller-only, and the timer runs. */
+async function checkPollerSecrets({ seat, report, pollerUid, gid }: Doctor): Promise<void> {
 	const key = await info(seat.key);
 	const keyLink = await lstat(seat.key).catch(() => undefined);
 	const keySafe =
@@ -273,7 +309,9 @@ export async function githubDoctor(root: string, seat: Seat = seatDefaults()): P
 		"enabled active GitHub timer",
 		"systemctl daemon-reload && systemctl enable --now limen-github.timer; inspect journalctl -u limen-github.service",
 	);
-
+}
+/** The poller can read the seat's project registry, and this project is in it. Returns the registered projects. */
+async function checkSeatRegistry({ root, seat, report, pollerUid, gid }: Doctor): Promise<string[]> {
 	const registry = await readFile(seat.registry, "utf8").catch(() => undefined);
 	let registryAccess =
 		registry !== undefined && pollerUid > 0 && aclAllows(seat.registry, seat.poller, "r", pollerUid, gid);
@@ -291,83 +329,91 @@ export async function githubDoctor(root: string, seat: Seat = seatDefaults()): P
 		"project registered on this seat",
 		"run limen init in this checkout, then grant the poller traverse ACLs on its parents",
 	);
-	const seen = new Set<string>();
-	for (const project of [root, ...projects]) {
-		if (seen.has(project)) {
-			continue;
-		}
-		seen.add(project);
-		if (!isAbsolute(project) || resolve(project) !== project) {
-			report(
-				false,
-				`project registry path ${JSON.stringify(project)}`,
-				"replace with an absolute normalized project root",
-			);
-			continue;
-		}
-		const label = `project ${project}`;
-		const registryPath = await info(project);
-		const limen = await info(join(project, ".limen"));
-		const github = await info(join(project, ".limen/github"));
-		const bindingFile = await info(bindingPath(project));
-		if (project !== root && !bindingFile) {
-			console.log(`SKIP ${label} has no GitHub binding`);
-			continue;
-		}
-		let traverse = !!registryPath?.isDirectory();
-		for (let parent = project; parent !== dirname(parent); parent = dirname(parent)) {
-			traverse &&= aclAllows(parent, seat.poller, "x", pollerUid, gid);
-		}
-		traverse &&= aclAllows(join(project, ".limen"), seat.poller, "x", pollerUid, gid);
-		traverse &&=
-			aclAllows(join(project, ".limen/github"), seat.poller, "x", pollerUid, gid) &&
-			aclAllows(bindingPath(project), seat.poller, "r", pollerUid, gid);
-		report(
-			!!traverse &&
-				!!limen?.isDirectory() &&
-				!!github?.isDirectory() &&
-				!!bindingFile?.isFile() &&
-				gid > 0 &&
-				limen.gid === gid &&
-				github.gid === gid &&
-				bindingFile.gid === gid &&
-				(bindingFile.mode & 0o007) === 0,
-			`${label} registry ACL and binding access`,
-			"run limen init then limen github connect in its coordinator; grant poller traverse ACL to checkout parents and group access to .limen/github",
+	return projects;
+}
+async function checkProject(doctor: Doctor, project: string): Promise<void> {
+	if (!isAbsolute(project) || resolve(project) !== project) {
+		doctor.report(
+			false,
+			`project registry path ${JSON.stringify(project)}`,
+			"replace with an absolute normalized project root",
 		);
-		const binding = await readBinding(project);
-		let origin: string | undefined;
-		try {
-			origin = originRepository(project);
-		} catch {
-			/* an absent/invalid origin is reported below */
-		}
-		report(
-			!!binding?.coordinator &&
-				!!binding.user &&
-				!!origin &&
-				binding.repo.toLowerCase() === origin.toLowerCase() &&
-				binding.user === worker,
-			`${label} coordinator binding`,
-			"from its persistent Herdr coordinator run limen github connect (or disconnect before changing origin)",
-		);
-		const herdr = herdrBinary();
-		const agent = binding?.coordinator && herdr && command(herdr, ["agent", "get", binding.coordinator]);
-		let live = false;
-		try {
-			type Row = { agent_status?: string; interactive_ready?: boolean; pane_id?: string };
-			const response = JSON.parse(agent ?? "null") as { result?: { agent?: Row }; agent?: Row } & Row;
-			live = liveCoordinator(response.result?.agent ?? response.agent ?? response, binding?.coordinator ?? "");
-		} catch {
-			/* unavailable Herdr is a repair, not a reason to dump its response */
-		}
-		report(
-			live,
-			`${label} live registered Herdr agent`,
-			"attach/start its persistent Herdr coordinator and reconnect if its pane identity changed; done is warm idle unless Herdr reports interactive_ready false",
-		);
+		return;
 	}
-	if (failures) {
-		throw new Error(`github doctor: ${failures} prerequisite${failures === 1 ? "" : "s"} need repair`);
+	const label = `project ${project}`;
+	if (!(await checkProjectAccess(doctor, project, label))) {
+		return;
 	}
+	await checkProjectCoordinator(doctor, project, label);
+}
+/** Poller traverse and group access to the project's binding; false when another project has no binding. */
+async function checkProjectAccess(
+	{ root, seat, report, pollerUid, gid }: Doctor,
+	project: string,
+	label: string,
+): Promise<boolean> {
+	const registryPath = await info(project);
+	const limen = await info(join(project, ".limen"));
+	const github = await info(join(project, ".limen/github"));
+	const bindingFile = await info(bindingPath(project));
+	if (project !== root && !bindingFile) {
+		console.log(`SKIP ${label} has no GitHub binding`);
+		return false;
+	}
+	let traverse = !!registryPath?.isDirectory();
+	for (let parent = project; parent !== dirname(parent); parent = dirname(parent)) {
+		traverse &&= aclAllows(parent, seat.poller, "x", pollerUid, gid);
+	}
+	traverse &&= aclAllows(join(project, ".limen"), seat.poller, "x", pollerUid, gid);
+	traverse &&=
+		aclAllows(join(project, ".limen/github"), seat.poller, "x", pollerUid, gid) &&
+		aclAllows(bindingPath(project), seat.poller, "r", pollerUid, gid);
+	report(
+		!!traverse &&
+			!!limen?.isDirectory() &&
+			!!github?.isDirectory() &&
+			!!bindingFile?.isFile() &&
+			gid > 0 &&
+			limen.gid === gid &&
+			github.gid === gid &&
+			bindingFile.gid === gid &&
+			(bindingFile.mode & 0o007) === 0,
+		`${label} registry ACL and binding access`,
+		"run limen init then limen github connect in its coordinator; grant poller traverse ACL to checkout parents and group access to .limen/github",
+	);
+	return true;
+}
+/** The project's binding names this worker and its origin, and its coordinator is a live Herdr agent. */
+async function checkProjectCoordinator({ report, worker }: Doctor, project: string, label: string): Promise<void> {
+	const binding = await readBinding(project);
+	let origin: string | undefined;
+	try {
+		origin = originRepository(project);
+	} catch {
+		/* an absent/invalid origin is reported below */
+	}
+	report(
+		!!binding?.coordinator &&
+			!!binding.user &&
+			!!origin &&
+			binding.repo.toLowerCase() === origin.toLowerCase() &&
+			binding.user === worker,
+		`${label} coordinator binding`,
+		"from its persistent Herdr coordinator run limen github connect (or disconnect before changing origin)",
+	);
+	const herdr = herdrBinary();
+	const agent = binding?.coordinator && herdr && command(herdr, ["agent", "get", binding.coordinator]);
+	let live = false;
+	try {
+		type Row = { agent_status?: string; interactive_ready?: boolean; pane_id?: string };
+		const response = JSON.parse(agent ?? "null") as { result?: { agent?: Row }; agent?: Row } & Row;
+		live = liveCoordinator(response.result?.agent ?? response.agent ?? response, binding?.coordinator ?? "");
+	} catch {
+		/* unavailable Herdr is a repair, not a reason to dump its response */
+	}
+	report(
+		live,
+		`${label} live registered Herdr agent`,
+		"attach/start its persistent Herdr coordinator and reconnect if its pane identity changed; done is warm idle unless Herdr reports interactive_ready false",
+	);
 }

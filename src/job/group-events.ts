@@ -168,14 +168,18 @@ async function queueEvent(run: GroupRun, event: GroupEvent): Promise<void> {
 	}
 }
 
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: split pending: group event filter
-async function eligibleEvents(identity: GroupIdentity, now: number) {
+/** The recipient and every member it continues, through recorded parents. */
+function recipientAncestry(identity: GroupIdentity): Set<string> {
 	const ancestry = new Set<string>([identity.recipient]);
 	let parent = identity.member?.parent;
 	while (parent && !ancestry.has(parent)) {
 		ancestry.add(parent);
 		parent = identity.run.members.find((member) => member.id === parent)?.parent;
 	}
+	return ancestry;
+}
+async function eligibleEvents(identity: GroupIdentity, now: number) {
+	const ancestry = recipientAncestry(identity);
 	const eligible = [];
 	for (const event of await groupEvents(identity.run)) {
 		if (ancestry.has(event.author) || (event.target && identity.member && event.target !== identity.member.team)) {
@@ -191,19 +195,24 @@ async function eligibleEvents(identity: GroupIdentity, now: number) {
 		) {
 			continue;
 		}
-		// Continuation inherits only proven processing, never its predecessor's failed attempts.
-		let inherited = false;
-		for (const ancestor of ancestry) {
-			if (ancestor !== identity.recipient && (await receipt(identity.run, ancestor, event.id)).state === "processed") {
-				inherited = true;
-				break;
-			}
-		}
-		if (!inherited) {
+		if (!(await processedByAncestor(identity, ancestry, event.id))) {
 			eligible.push({ event, recorded });
 		}
 	}
 	return eligible;
+}
+/** Continuation inherits only proven processing, never its predecessor's failed attempts. */
+async function processedByAncestor(
+	identity: GroupIdentity,
+	ancestry: ReadonlySet<string>,
+	eventId: string,
+): Promise<boolean> {
+	for (const ancestor of ancestry) {
+		if (ancestor !== identity.recipient && (await receipt(identity.run, ancestor, eventId)).state === "processed") {
+			return true;
+		}
+	}
+	return false;
 }
 export async function acceptBatch(
 	identity: GroupIdentity,
