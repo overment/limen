@@ -23,6 +23,7 @@ import { cleanWorktree, commitHasFile, headCommit, repoRoot } from "../project/g
 import { planningSource, privatePlanningFile } from "../project/planning.ts";
 import { preflightEngine, resolveSpawnEngine } from "../runtime/engine.ts";
 import { normalizeWorkerExtensions } from "../runtime/worker-extensions.ts";
+import { parseFlags } from "./flags.ts";
 import { spawnCommand } from "./spawn.ts";
 import { stopCommand } from "./stop.ts";
 
@@ -37,86 +38,111 @@ type GroupStartOptions = {
 	readonly newRun: boolean;
 	readonly mode: GroupRun["mode"];
 };
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: split pending: flag loop moves to parseArgs
+const VALUE_FLAGS = [
+	"teams",
+	"workers-per-team",
+	"timeout",
+	"worker-timeout",
+	"engine",
+	"provider",
+	"model",
+	"thinking",
+	"worker-thinking",
+] as const;
+const GROUP_SETTINGS = "run limen group start FEATURE with the settings in docs/groups.md";
+const INVALID_START = `invalid or repeated group start argument; ${GROUP_SETTINGS}`;
+const INVALID_TEAM_MODEL =
+	"invalid --team-model; run limen group start FEATURE --team-model team-N=provider/model with the other group settings";
+const BOTH_MODES =
+	"choose either hosted tabs or detached jobs, not both; run limen group start FEATURE with one of --tab or --detached";
+
 function parseGroupStartArgs(args: readonly string[]): GroupStartOptions {
-	const flags = new Map<string, string>();
-	const teamModels: Record<string, { provider: string; model: string }> = {};
-	const extensions: string[] = [];
-	const teamSelections: Record<string, string[]> = {};
-	let newRun = false,
-		mode: GroupRun["mode"] = "auto";
-	for (let index = 1; index < args.length; index++) {
-		const flag = args[index];
-		if (flag === "--extension" || flag === "--team-extension") {
-			const value = args[++index];
-			if (!value || value.startsWith("--")) {
-				throw new Error(`${flag} requires a value`);
-			}
-			if (flag === "--extension") {
-				extensions.push(value);
-			} else {
-				const selection = /^(team-[1-9]\d*)=(.+)$/.exec(value);
-				if (!selection?.[1] || !selection[2]) {
-					throw new Error("invalid --team-extension; use team-N=PATH");
+	const { values } = parseFlags(
+		args.slice(1),
+		{
+			teams: { type: "string" },
+			"workers-per-team": { type: "string" },
+			timeout: { type: "string" },
+			"worker-timeout": { type: "string" },
+			engine: { type: "string" },
+			provider: { type: "string" },
+			model: { type: "string" },
+			thinking: { type: "string" },
+			"worker-thinking": { type: "string" },
+			extension: { type: "string", multiple: true },
+			"team-extension": { type: "string", multiple: true },
+			"team-model": { type: "string", multiple: true },
+			"new-run": { type: "boolean" },
+			tab: { type: "boolean" },
+			detached: { type: "boolean" },
+		} as const,
+		{
+			// Every word after the feature is a flag; a known one with a bad value reads as invalid, not unknown.
+			unknown: (word, next) =>
+				word && next && !next.startsWith("--") ? `unknown group flag ${word}; ${GROUP_SETTINGS}` : INVALID_START,
+			missing: (flag) => {
+				if (flag === "--team-model") {
+					return INVALID_TEAM_MODEL;
 				}
-				const paths = teamSelections[selection[1]] ?? [];
-				paths.push(selection[2]);
-				teamSelections[selection[1]] = paths;
-			}
-			continue;
+				return flag === "--extension" || flag === "--team-extension" ? `${flag} requires a value` : INVALID_START;
+			},
+			repeated: (flag) => {
+				if (flag === "--new-run") {
+					return undefined;
+				}
+				return flag === "--tab" || flag === "--detached" ? BOTH_MODES : INVALID_START;
+			},
+			positionals: false,
+			endOfFlags: false,
+		},
+	);
+	const flags = new Map<string, string>();
+	for (const name of VALUE_FLAGS) {
+		const value = values[name];
+		if (value) {
+			flags.set(`--${name}`, value);
 		}
-		if (flag === "--team-model") {
-			const route = /^(team-[1-9]\d*)=([^/\s]+)\/(\S+)$/.exec(args[++index] ?? "");
-			if (!route?.[1] || !route[2] || !route[3]) {
-				throw new Error(
-					"invalid --team-model; run limen group start FEATURE --team-model team-N=provider/model with the other group settings",
-				);
-			}
-			if (teamModels[route[1]]) {
-				throw new Error(
-					`${route[1]} model supplied twice; run limen group start FEATURE with one --team-model for that team`,
-				);
-			}
-			teamModels[route[1]] = { provider: route[2], model: route[3] };
-			continue;
+	}
+	const teamSelections = teamExtensionPaths(values["team-extension"] ?? []);
+	const teamModels = teamModelRoutes(values["team-model"] ?? []);
+	if (values.tab && values.detached) {
+		throw new Error(BOTH_MODES);
+	}
+	let mode: GroupRun["mode"] = "auto";
+	if (values.tab) {
+		mode = "tab";
+	}
+	if (values.detached) {
+		mode = "detached";
+	}
+	return { flags, teamModels, extensions: values.extension ?? [], teamSelections, newRun: !!values["new-run"], mode };
+}
+function teamExtensionPaths(values: readonly string[]): Record<string, string[]> {
+	const paths: Record<string, string[]> = {};
+	for (const value of values) {
+		const selection = /^(team-[1-9]\d*)=(.+)$/.exec(value);
+		if (!selection?.[1] || !selection[2]) {
+			throw new Error("invalid --team-extension; use team-N=PATH");
 		}
-		if (flag === "--new-run") {
-			newRun = true;
-			continue;
+		paths[selection[1]] = [...(paths[selection[1]] ?? []), selection[2]];
+	}
+	return paths;
+}
+function teamModelRoutes(values: readonly string[]): Record<string, { provider: string; model: string }> {
+	const routes: Record<string, { provider: string; model: string }> = {};
+	for (const value of values) {
+		const route = /^(team-[1-9]\d*)=([^/\s]+)\/(\S+)$/.exec(value);
+		if (!route?.[1] || !route[2] || !route[3]) {
+			throw new Error(INVALID_TEAM_MODEL);
 		}
-		if (flag === "--tab" || flag === "--detached") {
-			if (mode !== "auto") {
-				throw new Error(
-					"choose either hosted tabs or detached jobs, not both; run limen group start FEATURE with one of --tab or --detached",
-				);
-			}
-			mode = flag === "--tab" ? "tab" : "detached";
-			continue;
-		}
-		const value = args[++index];
-		if (!flag || !value || value.startsWith("--") || flags.has(flag)) {
+		if (routes[route[1]]) {
 			throw new Error(
-				"invalid or repeated group start argument; run limen group start FEATURE with the settings in docs/groups.md",
+				`${route[1]} model supplied twice; run limen group start FEATURE with one --team-model for that team`,
 			);
 		}
-		if (
-			![
-				"--teams",
-				"--workers-per-team",
-				"--timeout",
-				"--worker-timeout",
-				"--engine",
-				"--provider",
-				"--model",
-				"--thinking",
-				"--worker-thinking",
-			].includes(flag)
-		) {
-			throw new Error(`unknown group flag ${flag}; run limen group start FEATURE with the settings in docs/groups.md`);
-		}
-		flags.set(flag, value);
+		routes[route[1]] = { provider: route[2], model: route[3] };
 	}
-	return { flags, teamModels, extensions, teamSelections, newRun, mode };
+	return routes;
 }
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: split pending: group start command
 // biome-ignore lint/complexity/noExcessiveLinesPerFunction: same split as the line above

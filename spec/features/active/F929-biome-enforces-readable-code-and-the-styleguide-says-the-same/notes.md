@@ -122,7 +122,6 @@ On `main` at `76a2f6d`: 48 functions over the complexity limit and 22 over the l
 | `src/picture/markdown.ts` `renderInline` | 36 | — | — |
 | `src/runtime/wrapper.ts` `runInternalJob` | 35 | 204 | — |
 | `hook/wake.ts` `sendAdvisory` | 35 | 94 | — |
-| `src/commands/group.ts` `parseGroupStartArgs` | 35 | — | Team 4 |
 | `src/project/git.ts` `unlandedBranches` | 35 | — | — |
 | `picture/viewer/viewer.js` `parse` | 34 | — | — |
 | `src/picture/frontmatter.ts` `parseInlineList` | 34 | — | — |
