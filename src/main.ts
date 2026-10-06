@@ -147,7 +147,9 @@ export async function main(args: readonly string[], cwd = process.cwd()): Promis
 			console.log(HELP);
 			return;
 		}
-		if (!(name in COMMANDS)) throw new Error(`unknown command ${JSON.stringify(name)}\n\n${HELP}`);
+		if (!(name in COMMANDS)) {
+			throw new Error(`unknown command ${JSON.stringify(name)}\n\n${HELP}`);
+		}
 		const flags = rest.slice(0, rest.includes("--") ? rest.indexOf("--") : undefined);
 		if (flags.includes("--help") || flags.includes("-h")) {
 			console.log(commandHelp(name));
@@ -155,7 +157,9 @@ export async function main(args: readonly string[], cwd = process.cwd()): Promis
 		}
 		await COMMANDS[name as keyof typeof COMMANDS](rest, cwd);
 	} catch (error) {
-		if (process.env.LIMEN_INTERNAL_RUN === "1" || process.env.LIMEN_INTERNAL_HOSTED === "1") await failInternalJob(error);
+		if (process.env.LIMEN_INTERNAL_RUN === "1" || process.env.LIMEN_INTERNAL_HOSTED === "1") {
+			await failInternalJob(error);
+		}
 		console.error(error instanceof Error ? error.message : String(error));
 		process.exitCode = 1;
 	}
@@ -166,9 +170,14 @@ function commandHelp(name: string): string {
 	const lines = ["usage:"];
 	let inside = false;
 	for (const line of HELP.split("\n")) {
-		if (line.startsWith("  limen ")) inside = line === `  limen ${name}` || line.startsWith(`  limen ${name} `);
-		else if (!/^\s+#/.test(line)) inside = false;
-		if (inside) lines.push(line);
+		if (line.startsWith("  limen ")) {
+			inside = line === `  limen ${name}` || line.startsWith(`  limen ${name} `);
+		} else if (!/^\s+#/.test(line)) {
+			inside = false;
+		}
+		if (inside) {
+			lines.push(line);
+		}
 	}
 	return lines.join("\n");
 }

@@ -16,10 +16,27 @@
 	/* Without filter text, the work list hides these lanes and shows only the newest landed work. */
 	const QUIET_HIDDEN = new Set(["planned", "dropped", "map"]);
 	const RECENT = 10;
-	const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+	const MONTHS = [
+		"January",
+		"February",
+		"March",
+		"April",
+		"May",
+		"June",
+		"July",
+		"August",
+		"September",
+		"October",
+		"November",
+		"December",
+	];
 	const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 	const KIND_LABEL = { opened: "Opened", landed: "Landed", "needs-adam": "Needs Adam", wrong: "Wrong" };
-	const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+	const esc = (s) =>
+		String(s ?? "").replace(
+			/[&<>"']/g,
+			(c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c],
+		);
 	const plural = (n, one, many) => `${n} ${n === 1 ? one : many || `${one}s`}`;
 
 	function ymd(iso) {
@@ -29,12 +46,16 @@
 	/* "5 Oct", with the year only when it is not the newest year in the data. */
 	function shortDate(iso) {
 		const t = ymd(iso);
-		if (!t) return "no date";
+		if (!t) {
+			return "no date";
+		}
 		return `${t.d} ${MONTHS[t.m - 1].slice(0, 3)}${t.y === lastYear ? "" : ` ${t.y}`}`;
 	}
 	function dayTitle(iso) {
 		const t = ymd(iso);
-		if (!t) return String(iso);
+		if (!t) {
+			return String(iso);
+		}
 		return `${WEEKDAYS[new Date(Date.UTC(t.y, t.m - 1, t.d)).getUTCDay()]} · ${t.d} ${MONTHS[t.m - 1]}${t.y === lastYear ? "" : ` ${t.y}`}`;
 	}
 	const decode = (s) =>
@@ -55,7 +76,9 @@
 		for (const e of edges) {
 			const a = modOfId(e.from);
 			const b = modOfId(e.to);
-			if (a === b) continue;
+			if (a === b) {
+				continue;
+			}
 			net.set(a, net.get(a) + 1);
 			net.set(b, net.get(b) - 1);
 			const k = [a, b].sort().join("|");
@@ -71,16 +94,23 @@
 		const score = (row) => {
 			let span = 0;
 			let dips = 0;
-			for (let i = 0; i < row.length; i++)
+			for (let i = 0; i < row.length; i++) {
 				for (let j = i + 1; j < row.length; j++) {
 					const n = w(row[i].id, row[j].id);
 					span += n * (j - i);
-					if (n && j - i > 1) dips++;
+					if (n && j - i > 1) {
+						dips++;
+					}
 				}
+			}
 			return [span, dips, ...row.map((m) => (entry ? -w(m.id, entry.id) : 0))];
 		};
 		const before = (a, b) => {
-			for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return a[i] < b[i];
+			for (let i = 0; i < a.length; i++) {
+				if (a[i] !== b[i]) {
+					return a[i] < b[i];
+				}
+			}
 			return false;
 		};
 		let best = mids;
@@ -99,9 +129,15 @@
 			};
 			permute([], mids);
 		}
-		if (entry) entry.layer = "entry";
-		for (const m of best) m.layer = "mid";
-		if (floor) floor.layer = "floor";
+		if (entry) {
+			entry.layer = "entry";
+		}
+		for (const m of best) {
+			m.layer = "mid";
+		}
+		if (floor) {
+			floor.layer = "floor";
+		}
 		return [entry, ...best, floor].filter(Boolean);
 	}
 
@@ -110,7 +146,9 @@
 		const byId = new Map(nodes.map((n) => [n.id, n]));
 		const chainOf = (id) => {
 			const c = [];
-			for (let n = byId.get(id); n; n = n.parent ? byId.get(n.parent) : null) c.unshift(n.id);
+			for (let n = byId.get(id); n; n = n.parent ? byId.get(n.parent) : null) {
+				c.unshift(n.id);
+			}
 			return c;
 		};
 		const tops = nodes.filter((n) => !n.parent || !byId.has(n.parent));
@@ -118,13 +156,21 @@
 		/* A place is a top module's child (deeper nodes fold into it), or a top module with no children. */
 		const placeOf = (id) => {
 			const c = chainOf(id);
-			if (c.length >= 2) return c[1];
+			if (c.length >= 2) {
+				return c[1];
+			}
 			return c.length && !hasKids(c[0]) ? c[0] : null;
 		};
 		const modOfId = (id) => chainOf(id)[0] || null;
 		const endOf = (id) => placeOf(id) || modOfId(id);
 		const dates = [];
-		for (const w of model.work || []) for (const d of [w.opened, w.landed, w.needsAdam?.on, w.wrong?.on]) if (ymd(d)) dates.push(d);
+		for (const w of model.work || []) {
+			for (const d of [w.opened, w.landed, w.needsAdam?.on, w.wrong?.on]) {
+				if (ymd(d)) {
+					dates.push(d);
+				}
+			}
+		}
 		lastYear = dates.length ? ymd(dates.sort().at(-1)).y : ymd(model.generatedAt)?.y;
 
 		const modules = tops.map((t) => ({
@@ -138,13 +184,30 @@
 			places: hasKids(t.id) ? nodes.filter((n) => n.parent === t.id).map((n) => n.id) : [t.id],
 		}));
 		const places = {};
-		for (const m of modules)
+		for (const m of modules) {
 			for (const id of m.places) {
 				const n = byId.get(id);
-				places[id] = { id, title: n.title, module: m.id, gloss: n.summary, bodyHtml: n.bodyHtml || "", status: n.status, sources: n.sources || [], path: n.source };
+				places[id] = {
+					id,
+					title: n.title,
+					module: m.id,
+					gloss: n.summary,
+					bodyHtml: n.bodyHtml || "",
+					status: n.status,
+					sources: n.sources || [],
+					path: n.source,
+				};
 			}
+		}
 		const edges = (model.edges || [])
-			.map((e) => ({ id: e.id, from: endOf(e.from), to: endOf(e.to), relation: e.kind, title: e.title, body: e.summary }))
+			.map((e) => ({
+				id: e.id,
+				from: endOf(e.from),
+				to: endOf(e.to),
+				relation: e.kind,
+				title: e.title,
+				body: e.summary,
+			}))
 			.filter((e) => e.from && e.to && e.from !== e.to);
 		const ordered = arrange(modules, edges, (id) => (places[id] ? places[id].module : id));
 
@@ -162,10 +225,29 @@
 			const group = w.needsAdam ? "needs" : w.wrong ? "wrong" : w.lane;
 			const date = w.needsAdam?.on || w.wrong?.on || w.landed || w.opened || null;
 			const evidence = [
-				{ title: "Ticket", purpose: "The outcome, as the ticket states it.", path: w.path, excerpt: w.outcome || w.purpose || "The ticket has no Outcome section." },
+				{
+					title: "Ticket",
+					purpose: "The outcome, as the ticket states it.",
+					path: w.path,
+					excerpt: w.outcome || w.purpose || "The ticket has no Outcome section.",
+				},
 			];
-			if (w.board) evidence.push({ title: "Board line", purpose: "Where the board files this feature.", path: `spec/build.md, line ${w.board.line}`, excerpt: boardText(w.board) });
-			if (f) evidence.push({ title: f.title, purpose: "The feature record in the plant map.", path: f.source, excerpt: f.summary });
+			if (w.board) {
+				evidence.push({
+					title: "Board line",
+					purpose: "Where the board files this feature.",
+					path: `spec/build.md, line ${w.board.line}`,
+					excerpt: boardText(w.board),
+				});
+			}
+			if (f) {
+				evidence.push({
+					title: f.title,
+					purpose: "The feature record in the plant map.",
+					path: f.source,
+					excerpt: f.summary,
+				});
+			}
 			return {
 				id: w.id,
 				code: w.code,
@@ -194,7 +276,9 @@
 		});
 		const linked = new Set((model.work || []).map((w) => w.mapFeature).filter(Boolean));
 		for (const f of model.features || []) {
-			if (linked.has(f.id)) continue;
+			if (linked.has(f.id)) {
+				continue;
+			}
 			work.push({
 				id: f.id,
 				code: (/\((F\d+)\)\s*$/.exec(f.title) || [])[1] || "Map",
@@ -218,14 +302,24 @@
 				touchNote: "Places named in the map feature record. No ticket links to it.",
 				partial: f.status !== "ready",
 				path: f.source,
-				evidence: [{ title: f.title, purpose: "The feature record in the plant map.", path: f.source, excerpt: f.summary }],
+				evidence: [
+					{ title: f.title, purpose: "The feature record in the plant map.", path: f.source, excerpt: f.summary },
+				],
 			});
 		}
-		const rank = { needs: (w) => w.askOn, wrong: (w) => w.wrongOn, done: (w) => w.landed, active: (w) => w.opened, planned: (w) => w.opened };
+		const rank = {
+			needs: (w) => w.askOn,
+			wrong: (w) => w.wrongOn,
+			done: (w) => w.landed,
+			active: (w) => w.opened,
+			planned: (w) => w.opened,
+		};
 		work.sort((a, b) => {
 			const ga = GROUPS.findIndex((g) => g[0] === a.group);
 			const gb = GROUPS.findIndex((g) => g[0] === b.group);
-			if (ga !== gb) return ga - gb;
+			if (ga !== gb) {
+				return ga - gb;
+			}
 			const key = rank[a.group];
 			const ka = key ? key(a) || "" : "";
 			const kb = key ? key(b) || "" : "";
@@ -236,13 +330,18 @@
 			const html = j.bodyHtml || "";
 			const list = /<ol>([\s\S]*?)<\/ol>/.exec(html);
 			const texts = list ? [...list[1].matchAll(/<li>([\s\S]*?)<\/li>/g)].map((x) => decode(x[1])) : [];
-			const notes = [...html.replace(/<ol>[\s\S]*?<\/ol>/, "").matchAll(/<p>([\s\S]*?)<\/p>/g)].map((x) => decode(x[1])).filter(Boolean);
+			const notes = [...html.replace(/<ol>[\s\S]*?<\/ol>/, "").matchAll(/<p>([\s\S]*?)<\/p>/g)]
+				.map((x) => decode(x[1]))
+				.filter(Boolean);
 			return {
 				id: j.id,
 				title: j.title,
 				purpose: j.summary,
 				partial: j.status !== "ready",
-				steps: (j.steps || []).map((s, i) => ({ place: endOf(s), text: texts[i] || (byId.get(s) ? byId.get(s).title : s) })),
+				steps: (j.steps || []).map((s, i) => ({
+					place: endOf(s),
+					text: texts[i] || (byId.get(s) ? byId.get(s).title : s),
+				})),
 				notes,
 				sources: j.sources || [],
 				path: j.source,
@@ -252,7 +351,9 @@
 		const days = (model.days || []).map((d) => {
 			const items = (d.items || []).filter((i) => workIds.has(i.work));
 			const count = {};
-			for (const i of items) count[i.kind] = (count[i.kind] || 0) + 1;
+			for (const i of items) {
+				count[i.kind] = (count[i.kind] || 0) + 1;
+			}
 			return {
 				id: d.date,
 				title: dayTitle(d.date),
@@ -271,7 +372,9 @@
 		].map(([kind, label, none]) => {
 			const list = (pins3[kind] || []).filter((p) => workIds.has(p.work));
 			const p = list[0];
-			return p ? { kind, label, date: shortDate(p.date), scope: p.scope, text: p.text, work: p.work, more: list.length - 1 } : { kind, label, text: none, empty: true };
+			return p
+				? { kind, label, date: shortDate(p.date), scope: p.scope, text: p.text, work: p.work, more: list.length - 1 }
+				: { kind, label, text: none, empty: true };
 		});
 		const project = model.project || {};
 		return {
@@ -316,13 +419,18 @@
 				workAt[t].push(w.id);
 			}
 		}
-		for (const j of D.journeys)
+		for (const j of D.journeys) {
 			j.steps.forEach((s, i) => {
-				if (!s.place) return;
+				if (!s.place) {
+					return;
+				}
 				jAt[s.place] ??= [];
 				const a = jAt[s.place];
-				if (!a.some((x) => x.j === j.id)) a.push({ j: j.id, i });
+				if (!a.some((x) => x.j === j.id)) {
+					a.push({ j: j.id, i });
+				}
 			});
+		}
 	}
 	const spread = (id) => (P[id] ? [id] : M[id] ? M[id].places : []);
 	const modOf = (id) => (P[id] ? P[id].module : id);
@@ -340,40 +448,76 @@
 		const s = text.split("/");
 		if (s[0] === "work" && W[s[1]]) {
 			const w = W[s[1]];
-			return { view: "work", id: s[1], ev: s[2] === "evidence" && /^\d+$/.test(s[3] || "") && w.evidence[+s[3]] ? +s[3] : null };
+			return {
+				view: "work",
+				id: s[1],
+				ev: s[2] === "evidence" && /^\d+$/.test(s[3] || "") && w.evidence[+s[3]] ? +s[3] : null,
+			};
 		}
 		if (s[0] === "place" && P[s[1]]) {
 			const r = { view: "place", id: s[1] };
-			if (s[2] === "via" && s[3] === "work" && W[s[4]] && W[s[4]].lit.includes(s[1])) r.via = s[4];
+			if (s[2] === "via" && s[3] === "work" && W[s[4]] && W[s[4]].lit.includes(s[1])) {
+				r.via = s[4];
+			}
 			return r;
 		}
-		if (s[0] === "module" && M[s[1]]) return { view: "module", id: s[1] };
+		if (s[0] === "module" && M[s[1]]) {
+			return { view: "module", id: s[1] };
+		}
 		if (s[0] === "journey" && J[s[1]]) {
 			const j = J[s[1]];
-			return { view: "journey", id: s[1], step: s[2] === "step" && /^\d+$/.test(s[3] || "") && j.steps[+s[3] - 1] ? +s[3] : null };
+			return {
+				view: "journey",
+				id: s[1],
+				step: s[2] === "step" && /^\d+$/.test(s[3] || "") && j.steps[+s[3] - 1] ? +s[3] : null,
+			};
 		}
-		if (s[0] === "day" && Y[s[1]]) return { view: "day", id: s[1] };
+		if (s[0] === "day" && Y[s[1]]) {
+			return { view: "day", id: s[1] };
+		}
 		return { view: "plant", tab: s[0] === "plant" && TABS.some((t) => t[0] === s[1]) ? s[1] : "work" };
 	}
 	function tabOf(r) {
-		return r.view === "plant" ? r.tab : r.view === "work" || (r.view === "place" && r.via) ? "work" : r.view === "journey" ? "journeys" : r.view === "day" ? "days" : "places";
+		return r.view === "plant"
+			? r.tab
+			: r.view === "work" || (r.view === "place" && r.via)
+				? "work"
+				: r.view === "journey"
+					? "journeys"
+					: r.view === "day"
+						? "days"
+						: "places";
 	}
 	const workOf = (r) => (r.view === "work" ? r.id : r.view === "place" && r.via ? r.via : null);
 	function placeHref(id, r) {
 		const w = workOf(r);
-		if (w && P[id] && W[w].lit.includes(id)) return `#place/${id}/via/work/${w}`;
+		if (w && P[id] && W[w].lit.includes(id)) {
+			return `#place/${id}/via/work/${w}`;
+		}
 		if (r.view === "journey") {
 			const i = J[r.id].steps.findIndex((s) => s.place === id);
-			if (i >= 0) return `#journey/${r.id}/step/${i + 1}`;
+			if (i >= 0) {
+				return `#journey/${r.id}/step/${i + 1}`;
+			}
 		}
 		return P[id] ? `#place/${id}` : M[id] ? `#module/${id}` : "#plant/places";
 	}
 	function parentHref(r) {
-		if (r.view === "work") return r.ev !== null ? `#work/${r.id}` : "#plant/work";
-		if (r.view === "place") return r.via ? `#work/${r.via}` : "#plant/places";
-		if (r.view === "module") return "#plant/places";
-		if (r.view === "journey") return r.step ? `#journey/${r.id}` : "#plant/journeys";
-		if (r.view === "day") return "#plant/days";
+		if (r.view === "work") {
+			return r.ev !== null ? `#work/${r.id}` : "#plant/work";
+		}
+		if (r.view === "place") {
+			return r.via ? `#work/${r.via}` : "#plant/places";
+		}
+		if (r.view === "module") {
+			return "#plant/places";
+		}
+		if (r.view === "journey") {
+			return r.step ? `#journey/${r.id}` : "#plant/journeys";
+		}
+		if (r.view === "day") {
+			return "#plant/days";
+		}
 		return `#plant/${r.tab}`;
 	}
 
@@ -397,7 +541,9 @@
 	function chip(id, band) {
 		const p = P[id];
 		const n = (workAt[id] || []).length;
-		const inner = band ? `<span class="nm"><b>${esc(p.title)}</b><span>${esc(M[id].gloss)}</span></span>` : `<span class="nm">${esc(p.title)}</span>`;
+		const inner = band
+			? `<span class="nm"><b>${esc(p.title)}</b><span>${esc(M[id].gloss)}</span></span>`
+			: `<span class="nm">${esc(p.title)}</span>`;
 		return `<a class="place" data-place="${esc(id)}" href="#place/${esc(id)}" title="${esc(p.gloss)}">${p.status === "partial" ? '<i class="pd" aria-label="only partly described"></i>' : ""}${inner}<span class="ct" aria-label="${plural(n, "work item")}">${n || ""}</span></a>`;
 	}
 	function modCard(m, cls) {
@@ -413,7 +559,9 @@
 				: `<div data-row="${row}">${modCard(m, "floor")}</div>`;
 		return (
 			(entry ? wide(entry, 0) : "") +
-			(mids.length ? `<div class="midrow" data-row="1" style="--mids:${mids.length}">${mids.map((m) => modCard(m, "")).join("")}</div>` : "") +
+			(mids.length
+				? `<div class="midrow" data-row="1" style="--mids:${mids.length}">${mids.map((m) => modCard(m, "")).join("")}</div>`
+				: "") +
 			(floor ? wide(floor, 2) : "")
 		);
 	}
@@ -434,7 +582,9 @@
 	}
 	function hintRows(id, on) {
 		document.querySelectorAll("#read .row[data-places]").forEach((r) => {
-			if (r.dataset.places.split(" ").includes(id)) r.classList.toggle("hint-on", on);
+			if (r.dataset.places.split(" ").includes(id)) {
+				r.classList.toggle("hint-on", on);
+			}
 		});
 	}
 
@@ -444,10 +594,17 @@
 		const w = workOf(r);
 		if (w) {
 			const x = W[w];
-			for (const t of x.lit) L.lit.add(t);
+			for (const t of x.lit) {
+				L.lit.add(t);
+			}
 			L.wires = sub(L.lit);
 			const mods = new Set(x.lit.map(modOf));
-			const by = x.touchSource === "ticket" ? " (places named in its ticket)" : x.touchSource === "map" ? " (places named in the map)" : "";
+			const by =
+				x.touchSource === "ticket"
+					? " (places named in its ticket)"
+					: x.touchSource === "map"
+						? " (places named in the map)"
+						: "";
 			L.text = x.lit.length
 				? `<b>${esc(x.code)} · ${esc(x.title)}</b> lights ${plural(x.lit.length, "place")} in ${plural(mods.size, "module")}${by}.`
 				: `<b>${esc(x.code)} · ${esc(x.title)}</b> names no place yet.`;
@@ -457,52 +614,75 @@
 			L.focus = r.id;
 			for (const e of edgesAt(r.id)) {
 				const o = e.from === r.id ? e.to : e.from;
-				if (P[o]) L.near.add(o);
+				if (P[o]) {
+					L.near.add(o);
+				}
 				L.wires.push({ e, cls: "ink" });
 			}
 			if (!r.via) {
 				L.text = `<b>${esc(P[r.id].title)}</b> · ${plural(edgesAt(r.id).length, "connection")} · touched by ${plural((workAt[r.id] || []).length, "work item")}.`;
 				L.mode = "focus";
-			} else L.text += ` Open place: <b>${esc(P[r.id].title)}</b>.`;
+			} else {
+				L.text += ` Open place: <b>${esc(P[r.id].title)}</b>.`;
+			}
 		}
 		if (r.view === "module") {
 			L.mfocus = r.id;
 			const inside = (id) => modOf(id) === r.id;
-			for (const e of D.edges)
+			for (const e of D.edges) {
 				if (inside(e.from) !== inside(e.to)) {
 					L.wires.push({ e, cls: "ink" });
 					const o = inside(e.from) ? e.to : e.from;
-					if (P[o]) L.near.add(o);
+					if (P[o]) {
+						L.near.add(o);
+					}
 				}
-			for (const p of M[r.id].places) L.lit.add(p);
+			}
+			for (const p of M[r.id].places) {
+				L.lit.add(p);
+			}
 			L.text = `<b>${esc(M[r.id].title)}</b> · ${plural(L.wires.length, "connection")} cross its border to ${plural(new Set([...L.near].map(modOf)).size, "module")}.`;
 			L.mode = "focus";
 		}
 		if (r.view === "journey") {
 			const j = J[r.id];
 			j.steps.forEach((s, i) => {
-				if (!s.place) return;
-				for (const p of spread(s.place)) L.lit.add(p);
+				if (!s.place) {
+					return;
+				}
+				for (const p of spread(s.place)) {
+					L.lit.add(p);
+				}
 				L.badges[s.place] ??= [];
 				L.badges[s.place].push(i + 1);
 			});
 			for (let i = 1; i < j.steps.length; i++) {
 				const a = j.steps[i - 1].place;
 				const b = j.steps[i].place;
-				if (a && b && a !== b) L.wires.push({ e: { from: a, to: b, k: i }, cls: "sel" });
+				if (a && b && a !== b) {
+					L.wires.push({ e: { from: a, to: b, k: i }, cls: "sel" });
+				}
 			}
-			if (r.step) L.focus = j.steps[r.step - 1].place;
+			if (r.step) {
+				L.focus = j.steps[r.step - 1].place;
+			}
 			L.text = `<b>${esc(j.title)}</b> · ${plural(j.steps.length, "ordered step")} through ${plural(L.lit.size, "place")}.${r.step ? ` Step ${r.step}: <b>${esc(nodeTitle(L.focus))}</b>.` : ""}`;
 			L.mode = "on";
 		}
 		if (r.view === "day") {
 			const d = Y[r.id];
-			for (const it of d.items) for (const t of W[it.work].lit) L.lit.add(t);
+			for (const it of d.items) {
+				for (const t of W[it.work].lit) {
+					L.lit.add(t);
+				}
+			}
 			L.wires = sub(L.lit);
 			L.text = `<b>${esc(d.title)}</b> · ${plural(d.items.length, "entry", "entries")} light ${plural(L.lit.size, "place")}.`;
 			L.mode = "on";
 		}
-		if (r.view === "plant") L.text = `Nothing selected. All ${plural(D.modules.length, "module")} and their connections are in view. Pick work to light its places.`;
+		if (r.view === "plant") {
+			L.text = `Nothing selected. All ${plural(D.modules.length, "module")} and their connections are in view. Pick work to light its places.`;
+		}
 		return L;
 	}
 	function applyAtlas(r) {
@@ -526,7 +706,9 @@
 		ll.className = `lightline ${L.mode}`;
 		ll.innerHTML = `<i class="sw"></i><span>${L.text}</span>${r.view !== "plant" ? `<a href="#plant/${tabOf(r)}">Clear selection</a>` : ""}`;
 		const uniq = new Map();
-		for (const x of L.wires) uniq.set(`${x.e.from}|${x.e.to}`, [x.e.from, x.e.to, x.cls]); /* one wire per direction; focus ink wins */
+		for (const x of L.wires) {
+			uniq.set(`${x.e.from}|${x.e.to}`, [x.e.from, x.e.to, x.cls]); /* one wire per direction; focus ink wins */
+		}
 		atlas.dataset.wires = JSON.stringify([...uniq.values()]);
 		drawWires();
 	}
@@ -566,8 +748,11 @@
 		}
 		let x1 = a.x;
 		let x2 = b.x; /* above and below: a wide box meets a narrow one straight */
-		if (a.w > b.w * 1.5) x1 = clamp(b.x, a.l + 14, a.r - 14);
-		else if (b.w > a.w * 1.5) x2 = clamp(a.x, b.l + 14, b.r - 14);
+		if (a.w > b.w * 1.5) {
+			x1 = clamp(b.x, a.l + 14, a.r - 14);
+		} else if (b.w > a.w * 1.5) {
+			x2 = clamp(a.x, b.l + 14, b.r - 14);
+		}
 		x1 += jit;
 		x2 += jit;
 		const y1 = dy > 0 ? a.b : a.t;
@@ -576,7 +761,10 @@
 		return `M${x1} ${y1}C${x1} ${y1 + k} ${x2} ${y2 - k} ${x2} ${y2}`;
 	}
 	function anchorEl(id) {
-		return stage.querySelector(`.place[data-place="${CSS.escape(id)}"]`) || stage.querySelector(`[data-mod="${CSS.escape(id)}"]`);
+		return (
+			stage.querySelector(`.place[data-place="${CSS.escape(id)}"]`) ||
+			stage.querySelector(`[data-mod="${CSS.escape(id)}"]`)
+		);
 	}
 	const layerOf = (el) => +el.closest("[data-row]").dataset.row;
 	const gapX = (jit) => {
@@ -600,7 +788,9 @@
 		/* Between layers, a wire runs down the left rail of its middle module, so it never crosses a module title. */
 		const la = layerOf(A);
 		const lb = layerOf(B);
-		if (la === lb) return path(box(A), box(B), jit, same);
+		if (la === lb) {
+			return path(box(A), box(B), jit, same);
+		}
 		const down = la < lb;
 		const [U, V] = down ? [A, B] : [B, A];
 		const u = box(U);
@@ -628,7 +818,9 @@
 			];
 		} else {
 			const gx = gapX(jit);
-			if (gx === null) return path(u, v, jit);
+			if (gx === null) {
+				return path(u, v, jit);
+			}
 			const gy = v.t - 22;
 			const tx = clamp(gx, v.l + 14, v.r - 14);
 			pts = [
@@ -638,7 +830,9 @@
 				[tx, v.t],
 			];
 		}
-		if (!down) pts.reverse();
+		if (!down) {
+			pts.reverse();
+		}
 		return poly(pts);
 	}
 	const DEFS = `<defs>${[
@@ -657,12 +851,17 @@
 		for (const e of D.edges) {
 			const a = modOf(e.from);
 			const b = modOf(e.to);
-			if (a === b) continue;
+			if (a === b) {
+				continue;
+			}
 			const [lo, hi] = [a, b].sort();
 			const k = `${lo}|${hi}`;
 			pairs[k] ??= { a: lo, b: hi, fw: 0, bw: 0 };
-			if (a === lo) pairs[k].fw++;
-			else pairs[k].bw++;
+			if (a === lo) {
+				pairs[k].fw++;
+			} else {
+				pairs[k].bw++;
+			}
 		}
 		const order = D.modules.map((m) => m.id);
 		const baseSvg = document.getElementById("base");
@@ -689,15 +888,21 @@
 				const y = L.b;
 				d = `M${x1} ${y}C${x1} ${y + 34} ${x2} ${y + 34} ${x2} ${y}`;
 				at = (L) => L * 0.2;
-				if (L !== a) [fw, bw] = [bw, fw];
+				if (L !== a) {
+					[fw, bw] = [bw, fw];
+				}
 			} else if (Math.abs(layerOf(A) - layerOf(B)) === 2 && gx !== null) {
 				/* entry to floor: pass through the first gap of the middle row */
 				const T = a.y < b.y ? a : b;
 				const F = a.y < b.y ? b : a;
 				d = `M${gx} ${T.b}L${gx} ${F.t}`;
 				at = () => 22;
-				if (T !== a) [fw, bw] = [bw, fw];
-			} else d = path(a, b);
+				if (T !== a) {
+					[fw, bw] = [bw, fw];
+				}
+			} else {
+				d = path(a, b);
+			}
 			base += `<path class="wire" d="${d}" ${fw ? 'marker-end="url(#mg)"' : ""} ${bw ? 'marker-start="url(#mg)"' : ""}><title>${esc(M[p.a].title)} ↔ ${esc(M[p.b].title)}: ${plural(fw + bw, "connection")}</title></path>`;
 			const tmp = document.createElementNS("http://www.w3.org/2000/svg", "path");
 			tmp.setAttribute("d", d);
@@ -714,7 +919,9 @@
 		for (const [f, t, cls] of wires) {
 			const A = anchorEl(f);
 			const B = anchorEl(t);
-			if (!A || !B) continue;
+			if (!A || !B) {
+				continue;
+			}
 			const key = [f, t].sort().join("|");
 			seen[key] = (seen[key] || 0) + 1;
 			const n = seen[key];
@@ -725,16 +932,25 @@
 
 	/* Reading column */
 	function tag(x) {
-		if (x.signal === "needs") return '<span class="tag needs">Needs Adam</span>';
-		if (x.signal === "wrong") return '<span class="tag wrong">Wrong</span>';
-		if (x.signal === "changed") return '<span class="tag changed">Changed</span>';
-		if (x.partial) return '<span class="tag partial">Partial</span>';
+		if (x.signal === "needs") {
+			return '<span class="tag needs">Needs Adam</span>';
+		}
+		if (x.signal === "wrong") {
+			return '<span class="tag wrong">Wrong</span>';
+		}
+		if (x.signal === "changed") {
+			return '<span class="tag changed">Changed</span>';
+		}
+		if (x.partial) {
+			return '<span class="tag partial">Partial</span>';
+		}
 		return "";
 	}
 	function row(key, href, open, kind, title, pp, meta, places, sub) {
 		return `<a class="row${sub ? " sub" : ""}" data-key="${esc(key)}" href="${href}" aria-expanded="${open}" ${places ? `data-places="${esc(places.join(" "))}"` : ""}><span class="kind">${kind}</span><span><span class="t">${title}</span><span class="pp">${pp}</span><span class="meta">${meta}</span></span><span class="ch" aria-hidden="true">${open ? "−" : "↗"}</span></a>`;
 	}
-	const asLayer = (kind, id, href) => `<p class="as-layer"><a data-layer="${kind}/${esc(id)}" href="${href}">Open as a layer ↗</a></p>`;
+	const asLayer = (kind, id, href) =>
+		`<p class="as-layer"><a data-layer="${kind}/${esc(id)}" href="${href}">Open as a layer ↗</a></p>`;
 	const relation = (e) => esc(String(e.relation || "").replace(/-/g, " "));
 	function placeList(ids, r, opts = {}) {
 		return `<div class="plist">${ids
@@ -782,10 +998,17 @@
 	}
 	function stateLine(w) {
 		const parts = [];
-		if (w.board) parts.push(`On the board: ${esc(boardText(w.board))}`);
-		else if (w.group !== "map") parts.push("Not on the board");
-		if (w.opened) parts.push(`opened ${esc(shortDate(w.opened))}`);
-		if (w.landed) parts.push(`landed ${esc(shortDate(w.landed))}`);
+		if (w.board) {
+			parts.push(`On the board: ${esc(boardText(w.board))}`);
+		} else if (w.group !== "map") {
+			parts.push("Not on the board");
+		}
+		if (w.opened) {
+			parts.push(`opened ${esc(shortDate(w.opened))}`);
+		}
+		if (w.landed) {
+			parts.push(`landed ${esc(shortDate(w.landed))}`);
+		}
 		return parts.join(" · ");
 	}
 	function workMid(w, r) {
@@ -865,7 +1088,10 @@
     <div class="blk"><h4>Places<small>${m.places.length}</small></h4>${placeList(m.places, r)}</div>
     <div class="blk"><h4>Connections with other modules<small>${cross.length}</small></h4>${
 			Object.entries(by)
-				.map(([o, es]) => `<p class="note sub-h"><b><a href="#module/${esc(o)}">${esc(M[o].title)}</a></b> · ${es.length}</p>${edgeRows(es, r)}`)
+				.map(
+					([o, es]) =>
+						`<p class="note sub-h"><b><a href="#module/${esc(o)}">${esc(M[o].title)}</a></b> · ${es.length}</p>${edgeRows(es, r)}`,
+				)
 				.join("") || '<p class="note">No connection crosses this module.</p>'
 		}</div>
     <div class="blk"><h4>Work that touches this module<small>${ws.length}</small></h4>${ws.length ? `<div class="inl">${ws.map((w) => `<a href="#work/${esc(w)}" data-key="go:${esc(w)}">${esc(W[w].code)} · ${esc(W[w].title)}</a>`).join("")}</div>` : '<p class="note">No work item names this module.</p>'}</div></div>`;
@@ -876,23 +1102,35 @@
 		const t = tabOf(r);
 		/* The work list stays quiet: asks, problems, open work, and the newest landed work.
 		   Typing in the filter searches every lane. An opened item always shows in its group. */
-		if (t === "work")
+		if (t === "work") {
 			return GROUPS.map(([g, name, hint]) => {
-				let ws = D.work.filter((w) => w.group === g && (match(w.code, w.title, w.purpose, ...w.touches.map(nodeTitle)) || workOf(r) === w.id));
+				let ws = D.work.filter(
+					(w) =>
+						w.group === g && (match(w.code, w.title, w.purpose, ...w.touches.map(nodeTitle)) || workOf(r) === w.id),
+				);
 				let label = name;
 				let note = hint;
-				if (!query && QUIET_HIDDEN.has(g)) ws = ws.filter((w) => workOf(r) === w.id);
+				if (!query && QUIET_HIDDEN.has(g)) {
+					ws = ws.filter((w) => workOf(r) === w.id);
+				}
 				if (!query && g === "done") {
 					ws = ws.filter((w, i) => i < RECENT || workOf(r) === w.id);
 					label = "Landed recently";
 					note = `The ${RECENT} newest. Type in the filter to search all.`;
 				}
 				/* Needs Adam stays visible when empty, so "nothing to decide" is said, not implied. */
-				if (!ws.length && (g !== "needs" || query)) return "";
+				if (!ws.length && (g !== "needs" || query)) {
+					return "";
+				}
 				return `<section class="sec"><div class="sec-h"><h2>${label}<small>${ws.length}</small></h2><span>${ws.length ? note : "Nothing waits for you."}</span></div>${ws
 					.map((w) => {
 						const open = workOf(r) === w.id;
-						const meta = [w.date, w.code, w.board ? `${boardText(w.board)} on the board` : null, w.lit.length ? plural(w.lit.length, "place") : null]
+						const meta = [
+							w.date,
+							w.code,
+							w.board ? `${boardText(w.board)} on the board` : null,
+							w.lit.length ? plural(w.lit.length, "place") : null,
+						]
 							.filter(Boolean)
 							.map(esc)
 							.join(" · ");
@@ -900,6 +1138,7 @@
 					})
 					.join("")}</section>`;
 			}).join("");
+		}
 		if (t === "journeys") {
 			const js = D.journeys.filter((j) => match(j.title, j.purpose) || r.id === j.id);
 			return `<section class="sec"><div class="sec-h"><h2>Journeys<small>${js.length}</small></h2><span>Ordered steps through the plant</span></div>${js
@@ -911,12 +1150,16 @@
 				.join("")}</section>`;
 		}
 		if (t === "days") {
-			const ds = D.days.filter((d) => match(d.title, d.purpose, ...d.items.map((i) => W[i.work].code)) || r.id === d.id);
+			const ds = D.days.filter(
+				(d) => match(d.title, d.purpose, ...d.items.map((i) => W[i.work].code)) || r.id === d.id,
+			);
 			return `<section class="sec"><div class="sec-h"><h2>Days<small>${ds.length}</small></h2><span>What changed, by date</span></div>${ds
 				.map((d) => {
 					const open = r.view === "day" && r.id === d.id;
 					const ps = [...new Set(d.items.flatMap((i) => W[i.work].lit))];
-					const tags = [...new Set(d.items.map((i) => W[i.work]).filter((w) => w.signal && w.signal !== "changed"))].map(tag).join("");
+					const tags = [...new Set(d.items.map((i) => W[i.work]).filter((w) => w.signal && w.signal !== "changed"))]
+						.map(tag)
+						.join("");
 					const codes = [...new Set(d.items.map((i) => W[i.work].code))];
 					return `<div class="entry${open ? " open" : ""}">${row(`day:${d.id}`, open ? "#plant/days" : `#day/${esc(d.id)}`, open, "Day", esc(d.title) + tags, esc(d.purpose), `${plural(d.items.length, "entry", "entries")} · ${esc(codes.join(" · "))}`, ps)}${open ? dayMid(d) : ""}</div>`;
 				})
@@ -925,7 +1168,9 @@
 		return D.modules
 			.map((m) => {
 				const ps = m.places.filter((p) => match(P[p].title, P[p].gloss) || r.id === p);
-				if (!ps.length && !match(m.title)) return "";
+				if (!ps.length && !match(m.title)) {
+					return "";
+				}
 				const mopen = r.view === "module" && r.id === m.id;
 				const single = m.places.length === 1 && m.places[0] === m.id;
 				const crossing = D.edges.filter((e) => (modOf(e.from) === m.id) !== (modOf(e.to) === m.id)).length;
@@ -944,7 +1189,9 @@
 	}
 	/* Cut at a word boundary, so a title never ends mid-word. */
 	function cut(s, n) {
-		if (s.length <= n) return s;
+		if (s.length <= n) {
+			return s;
+		}
 		const head = s.slice(0, n - 1);
 		const space = head.lastIndexOf(" ");
 		return `${(space > n / 2 ? head.slice(0, space) : head).replace(/[\s,;:·-]+$/, "")}…`;
@@ -953,32 +1200,56 @@
 		const t = tabOf(r);
 		const tabName = TABS.find((x) => x[0] === t)[1];
 		const c = [`<a href="#plant/${t}">Plant</a>`];
-		if (r.view !== "plant") c.push(`<a href="#plant/${t}">${tabName}</a>`);
-		else c.push(`<b>${tabName}</b>`);
+		if (r.view !== "plant") {
+			c.push(`<a href="#plant/${t}">${tabName}</a>`);
+		} else {
+			c.push(`<b>${tabName}</b>`);
+		}
 		const w = workOf(r);
 		if (w) {
 			const x = W[w];
 			const deeper = (r.ev !== null && r.ev !== undefined) || r.view === "place";
-			c.push(deeper ? `<a href="#work/${esc(w)}">${esc(x.code)} · ${esc(cut(x.title, 24))}</a>` : `<b>${esc(x.code)} · ${esc(cut(x.title, 48))}</b>`);
-			if (r.view === "work" && r.ev !== null) c.push(`<b>Source: ${esc(x.evidence[r.ev].title)}</b>`);
-			if (r.view === "place") c.push(`<b>Place: ${esc(P[r.id].title)}</b>`);
+			c.push(
+				deeper
+					? `<a href="#work/${esc(w)}">${esc(x.code)} · ${esc(cut(x.title, 24))}</a>`
+					: `<b>${esc(x.code)} · ${esc(cut(x.title, 48))}</b>`,
+			);
+			if (r.view === "work" && r.ev !== null) {
+				c.push(`<b>Source: ${esc(x.evidence[r.ev].title)}</b>`);
+			}
+			if (r.view === "place") {
+				c.push(`<b>Place: ${esc(P[r.id].title)}</b>`);
+			}
 		}
 		if (r.view === "place" && !r.via) {
 			c.push(`<a href="#module/${esc(P[r.id].module)}">${esc(M[P[r.id].module].title)}</a>`);
 			c.push(`<b>${esc(P[r.id].title)}</b>`);
 		}
-		if (r.view === "module") c.push(`<b>Module: ${esc(M[r.id].title)}</b>`);
+		if (r.view === "module") {
+			c.push(`<b>Module: ${esc(M[r.id].title)}</b>`);
+		}
 		if (r.view === "journey") {
 			const j = J[r.id];
 			c.push(r.step ? `<a href="#journey/${esc(j.id)}">${esc(cut(j.title, 30))}</a>` : `<b>${esc(j.title)}</b>`);
-			if (r.step) c.push(`<b>Step ${r.step}: ${esc(nodeTitle(j.steps[r.step - 1].place))}</b>`);
+			if (r.step) {
+				c.push(`<b>Step ${r.step}: ${esc(nodeTitle(j.steps[r.step - 1].place))}</b>`);
+			}
 		}
-		if (r.view === "day") c.push(`<b>${esc(Y[r.id].title)}</b>`);
+		if (r.view === "day") {
+			c.push(`<b>${esc(Y[r.id].title)}</b>`);
+		}
 		const up = parentHref(r);
 		let upName = null;
 		if (r.view !== "plant") {
 			const q = parse(up);
-			upName = q.view === "plant" ? TABS.find((x) => x[0] === q.tab)[1] : q.view === "work" ? `${W[q.id].code} detail` : q.view === "journey" ? "all steps" : "list";
+			upName =
+				q.view === "plant"
+					? TABS.find((x) => x[0] === q.tab)[1]
+					: q.view === "work"
+						? `${W[q.id].code} detail`
+						: q.view === "journey"
+							? "all steps"
+							: "list";
 		}
 		return `<nav class="crumbs" aria-label="Where you are"><div class="trail"><span class="lbl">Where you are</span>${c.join('<span class="sep">/</span>')}</div>${upName ? `<a class="up" href="${up}" title="Esc">← Back to ${esc(upName)}</a>` : ""}</nav>`;
 	}
@@ -986,11 +1257,18 @@
 	function noteCount() {
 		const notes = D.diagnostics.filter((d) => d.level !== "info");
 		const errors = notes.filter((d) => d.level === "error").length;
-		return [errors ? plural(errors, "error") : "", notes.length - errors ? plural(notes.length - errors, "warning") : ""].filter(Boolean).join(" and ");
+		return [
+			errors ? plural(errors, "error") : "",
+			notes.length - errors ? plural(notes.length - errors, "warning") : "",
+		]
+			.filter(Boolean)
+			.join(" and ");
 	}
 	function notesHtml() {
 		const notes = D.diagnostics.filter((d) => d.level !== "info");
-		if (!notes.length) return "";
+		if (!notes.length) {
+			return "";
+		}
 		return `<details class="notes" id="notes"><summary>${noteCount()} from the build</summary><ul>${notes
 			.map(
 				(d) =>
@@ -1039,22 +1317,34 @@
 	const baseOf = (h) => String(h).split("~")[0] || "#plant";
 	const headH = () => {
 		const m = document.getElementById("mast");
-		return (getComputedStyle(m).position === "sticky" ? m.offsetHeight : 0) + document.querySelector("#read .crumbs").offsetHeight;
+		return (
+			(getComputedStyle(m).position === "sticky" ? m.offsetHeight : 0) +
+			document.querySelector("#read .crumbs").offsetHeight
+		);
 	};
 	function reveal(el) {
 		window.scrollTo({ top: Math.max(0, el.getBoundingClientRect().top + window.scrollY - headH() - 10) });
 	}
 	function upAnchor() {
 		const open = document.querySelector("#read .entry.open>.row");
-		const k = (document.querySelector('#read .evl[aria-expanded="true"],#read .pl.cur,#read .steps a[aria-current="step"]') || open)?.closest("[data-key]");
-		if (!k) return null;
+		const k = (
+			document.querySelector('#read .evl[aria-expanded="true"],#read .pl.cur,#read .steps a[aria-current="step"]') ||
+			open
+		)?.closest("[data-key]");
+		if (!k) {
+			return null;
+		}
 		const t = k.getBoundingClientRect().top;
-		return t > headH() ? { key: k.dataset.key, top: t, row: open?.dataset.key } : { key: (open || k).dataset.key, reveal: true };
+		return t > headH()
+			? { key: k.dataset.key, top: t, row: open?.dataset.key }
+			: { key: (open || k).dataset.key, reveal: true };
 	}
 	function go(force) {
 		const base = baseOf(location.hash);
 		/* A layer opened or closed: the page behind stays exactly where it is. */
-		if (base === lastBase && !force) return;
+		if (base === lastBase && !force) {
+			return;
+		}
 		lastBase = base;
 		route = parse(base);
 		document.getElementById("mast").innerHTML = renderMastHtml(route);
@@ -1062,11 +1352,19 @@
 		applyAtlas(route);
 		const find = (key) => key && document.querySelector(`#read [data-key="${CSS.escape(key)}"]`);
 		const el = anchor && find(anchor.key);
-		if (el && !anchor.reveal) window.scrollBy(0, el.getBoundingClientRect().top - anchor.top);
-		else {
-			const tgt = el || (anchor && find(anchor.row)) || document.getElementById("deep") || document.querySelector("#read .entry.open");
-			if (tgt) reveal(tgt);
-			else if (route.view === "plant") window.scrollTo({ top: 0 });
+		if (el && !anchor.reveal) {
+			window.scrollBy(0, el.getBoundingClientRect().top - anchor.top);
+		} else {
+			const tgt =
+				el ||
+				(anchor && find(anchor.row)) ||
+				document.getElementById("deep") ||
+				document.querySelector("#read .entry.open");
+			if (tgt) {
+				reveal(tgt);
+			} else if (route.view === "plant") {
+				window.scrollTo({ top: 0 });
+			}
 		}
 		anchor = null;
 	}
@@ -1084,7 +1382,9 @@
 			"click",
 			(e) => {
 				const a = e.target.closest('a[href^="#"]');
-				if (!a || a.closest("[data-layer],.layers-root")) return;
+				if (!a || a.closest("[data-layer],.layers-root")) {
+					return;
+				}
 				if (a.hasAttribute("data-notes")) {
 					e.preventDefault();
 					const n = document.getElementById("notes");
@@ -1093,7 +1393,11 @@
 					return;
 				}
 				const k = a.closest("[data-key]");
-				anchor = a.closest(".crumbs,.deep .back") ? upAnchor() : a.closest("#read") && k ? { key: k.dataset.key, top: k.getBoundingClientRect().top } : null;
+				anchor = a.closest(".crumbs,.deep .back")
+					? upAnchor()
+					: a.closest("#read") && k
+						? { key: k.dataset.key, top: k.getBoundingClientRect().top }
+						: null;
 				if (a.getAttribute("href") === baseOf(location.hash)) {
 					e.preventDefault();
 					go(true);
@@ -1104,7 +1408,9 @@
 		window.addEventListener("hashchange", () => go());
 		document.addEventListener("keydown", (e) => {
 			if (e.target instanceof HTMLInputElement) {
-				if (e.key === "Escape") e.target.blur();
+				if (e.key === "Escape") {
+					e.target.blur();
+				}
 				return;
 			}
 			if (e.key === "Escape" && route.view !== "plant") {
@@ -1123,15 +1429,23 @@
 			const preview = !!rw && rw.getAttribute("aria-expanded") !== "true";
 			atlas.classList.toggle("preview", preview);
 			stage.querySelectorAll(".place.pv").forEach((x) => x.classList.remove("pv"));
-			if (preview) for (const id of rw.dataset.places.split(" ")) stage.querySelector(`.place[data-place="${CSS.escape(id)}"]`)?.classList.add("pv");
+			if (preview) {
+				for (const id of rw.dataset.places.split(" ")) {
+					stage.querySelector(`.place[data-place="${CSS.escape(id)}"]`)?.classList.add("pv");
+				}
+			}
 			stage.querySelectorAll(".place.hov").forEach((x) => x.classList.remove("hov"));
 			const h = e.target.closest("#read [data-hover]");
-			if (h?.dataset.hover) stage.querySelector(`.place[data-place="${CSS.escape(h.dataset.hover)}"]`)?.classList.add("hov");
+			if (h?.dataset.hover) {
+				stage.querySelector(`.place[data-place="${CSS.escape(h.dataset.hover)}"]`)?.classList.add("hov");
+			}
 			document.querySelectorAll("#over .wire.hot").forEach((x) => x.classList.remove("hot"));
 			const er = e.target.closest("#read [data-wire]");
 			if (er) {
 				const [f, t] = er.dataset.wire.split("|");
-				document.querySelector(`#over .wire[data-from="${CSS.escape(f)}"][data-to="${CSS.escape(t)}"]`)?.classList.add("hot");
+				document
+					.querySelector(`#over .wire[data-from="${CSS.escape(f)}"][data-to="${CSS.escape(t)}"]`)
+					?.classList.add("hot");
 			}
 		});
 		go();

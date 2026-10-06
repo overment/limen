@@ -19,7 +19,11 @@
 	const LANES = { planned: "Planned", active: "Active", done: "Done", dropped: "Dropped" };
 	const DAY_KINDS = { opened: "Opened", landed: "Landed", "needs-adam": "Needs Adam", wrong: "Wrong" };
 	const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-	const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+	const esc = (s) =>
+		String(s ?? "").replace(
+			/[&<>"']/g,
+			(c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c],
+		);
 	const enc = (id) => encodeURIComponent(id).replace(/~/g, "%7E");
 	const same = (a, b) => a.kind === b.kind && a.id === b.id;
 	const keyOf = (layer) => `${layer.kind}/${layer.id}`;
@@ -29,7 +33,9 @@
 	// "6 Oct", like the pins and the column; the year only when it differs from the build year (from the model, not the clock).
 	const date = (iso) => {
 		const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso ?? "");
-		if (!m) return String(iso ?? "");
+		if (!m) {
+			return String(iso ?? "");
+		}
 		return `${Number(m[3])} ${MONTHS[Number(m[2]) - 1]}${index?.year === m[1] ? "" : ` ${m[1]}`}`;
 	};
 
@@ -42,14 +48,18 @@
 		for (const part of parts.slice(1)) {
 			const at = part.indexOf("/");
 			const kind = part.slice(0, at);
-			if (at < 1 || !KINDS.includes(kind)) continue;
+			if (at < 1 || !KINDS.includes(kind)) {
+				continue;
+			}
 			let id = "";
 			try {
 				id = decodeURIComponent(part.slice(at + 1));
 			} catch {
 				continue;
 			}
-			if (id) layers.push({ kind, id });
+			if (id) {
+				layers.push({ kind, id });
+			}
 		}
 		return { base: `#${parts[0] || "plant"}`, layers };
 	}
@@ -60,7 +70,9 @@
 	function lanesOf(work) {
 		const lanes = new Map();
 		for (const w of [...work].sort((a, b) => ticketNumber(b) - ticketNumber(a))) {
-			if (!lanes.has(w.lane)) lanes.set(w.lane, []);
+			if (!lanes.has(w.lane)) {
+				lanes.set(w.lane, []);
+			}
 			lanes.get(w.lane).push(w);
 		}
 		return lanes;
@@ -84,8 +96,12 @@
 		};
 	}
 	function find(kind, id) {
-		if (!index) return null;
-		if (kind === "work") return index.work.get(id) ?? index.features.get(id) ?? null;
+		if (!index) {
+			return null;
+		}
+		if (kind === "work") {
+			return index.work.get(id) ?? index.features.get(id) ?? null;
+		}
 		if (kind === "place") {
 			const n = index.nodes.get(id);
 			return n && index.isPlace(n) ? n : null;
@@ -94,8 +110,12 @@
 			const n = index.nodes.get(id);
 			return n && !n.parent ? n : null;
 		}
-		if (kind === "day") return index.days.get(id) ?? null;
-		if (kind === "journey") return index.journeys.get(id) ?? null;
+		if (kind === "day") {
+			return index.days.get(id) ?? null;
+		}
+		if (kind === "journey") {
+			return index.journeys.get(id) ?? null;
+		}
 		return null;
 	}
 	// Context switch siblings. Work: the same lane, newest ticket first, like the decide column. Map features, places,
@@ -105,9 +125,15 @@
 			const w = index.work.get(layer.id);
 			return w ? (index.lanes.get(w.lane) ?? [w]).map((other) => other.id) : [...index.features.keys()];
 		}
-		if (layer.kind === "place") return index.places;
-		if (layer.kind === "module") return index.modules;
-		if (layer.kind === "day") return [...index.days.keys()];
+		if (layer.kind === "place") {
+			return index.places;
+		}
+		if (layer.kind === "module") {
+			return index.modules;
+		}
+		if (layer.kind === "day") {
+			return [...index.days.keys()];
+		}
 		return [...index.journeys.keys()];
 	}
 	const noun = (layer) => NOUNS[layer.kind === "work" && !index.work.has(layer.id) ? "feature" : layer.kind];
@@ -134,7 +160,9 @@
 	const link = (kind, id, text) => `<a href="#${kind}/${enc(id)}">${esc(text)}</a>`;
 	const nodeLink = (id) => {
 		const n = index.nodes.get(id);
-		if (!n) return `<span>${esc(id)}</span>`;
+		if (!n) {
+			return `<span>${esc(id)}</span>`;
+		}
 		return link(index.isPlace(n) ? "place" : "module", id, n.title || id);
 	};
 	const workName = (w) => (w.code ? `${w.code} · ${w.title || ""}` : w.title || w.id);
@@ -143,22 +171,29 @@
 		return w ? link("work", id, workName(w)) : `<span>${esc(id)}</span>`;
 	};
 	const section = (title, body) => (body ? `<section class="layer-part"><h3>${esc(title)}</h3>${body}</section>` : "");
-	const list = (items) => (items.length ? `<ul class="layer-list">${items.map((item) => `<li>${item}</li>`).join("")}</ul>` : "");
+	const list = (items) =>
+		items.length ? `<ul class="layer-list">${items.map((item) => `<li>${item}</li>`).join("")}</ul>` : "";
 	const meta = (text) => (text ? ` <small>${esc(text)}</small>` : "");
 	const facts = (rows) => {
 		const kept = rows.filter(([, value]) => value);
-		return kept.length ? `<dl class="layer-facts">${kept.map(([name, value]) => `<dt>${esc(name)}</dt><dd>${value}</dd>`).join("")}</dl>` : "";
+		return kept.length
+			? `<dl class="layer-facts">${kept.map(([name, value]) => `<dt>${esc(name)}</dt><dd>${value}</dd>`).join("")}</dl>`
+			: "";
 	};
 	const flag = (kind, label, on, text) =>
 		`<div class="layer-flag ${kind}"><p class="layer-flag-label">${esc(label)}${on ? ` · ${esc(date(on))}` : ""}</p><p>${esc(text)}</p></div>`;
 	const moduleTitle = (n) => (n.parent ? (index.nodes.get(n.parent)?.title ?? "") : "");
 	const touching = (ids) => [...index.work.values()].filter((w) => (w.touches ?? []).some((t) => ids.includes(t)));
-	const featuresTouching = (ids) => [...index.features.values()].filter((f) => (f.touches ?? []).some((t) => ids.includes(t)));
+	const featuresTouching = (ids) =>
+		[...index.features.values()].filter((f) => (f.touches ?? []).some((t) => ids.includes(t)));
 	// "PARKED · PLANNED" reads "Parked · planned"; "PROVEN · PROVEN" reads "Proven".
-	const boardText = (b) => (word(b.section) === word(b.state) || !b.state ? capital(b.section) : `${capital(b.section)} · ${word(b.state)}`);
+	const boardText = (b) =>
+		word(b.section) === word(b.state) || !b.state ? capital(b.section) : `${capital(b.section)} · ${word(b.state)}`;
 	// Journey bodies list one sentence per step; show it under the step when the counts agree.
 	function stepNotes(j) {
-		if (!j.bodyHtml || typeof document === "undefined") return [];
+		if (!j.bodyHtml || typeof document === "undefined") {
+			return [];
+		}
 		const t = document.createElement("template");
 		t.innerHTML = j.bodyHtml;
 		const notes = [...(t.content?.querySelectorAll("ol > li") ?? [])].map((li) => li.textContent.trim());
@@ -166,14 +201,25 @@
 	}
 
 	function renderWork(w) {
-		const touchNote = w.touchSource === "map" ? "The ticket names no places; these come from the map." : w.touchSource === "none" ? "The ticket names no places yet." : "";
+		const touchNote =
+			w.touchSource === "map"
+				? "The ticket names no places; these come from the map."
+				: w.touchSource === "none"
+					? "The ticket names no places yet."
+					: "";
 		const days = (index.model.days ?? []).flatMap((d) =>
-			(d.items ?? []).filter((item) => item.work === w.id).map((item) => `${esc(DAY_KINDS[item.kind] ?? capital(item.kind))} ${link("day", d.date, date(d.date))}`),
+			(d.items ?? [])
+				.filter((item) => item.work === w.id)
+				.map((item) => `${esc(DAY_KINDS[item.kind] ?? capital(item.kind))} ${link("day", d.date, date(d.date))}`),
 		);
-		const places = (w.touches ?? []).map((id) => `${nodeLink(id)}${meta(index.nodes.get(id) ? moduleTitle(index.nodes.get(id)) : "")}`);
+		const places = (w.touches ?? []).map(
+			(id) => `${nodeLink(id)}${meta(index.nodes.get(id) ? moduleTitle(index.nodes.get(id)) : "")}`,
+		);
 		const flags = [w.needsAdam ? "Needs Adam" : "", w.wrong ? "Wrong" : ""].filter(Boolean).join(" · ");
 		return {
-			eyebrow: [w.code ? `Feature ${w.code}` : "Feature", LANES[w.lane] ?? capital(w.lane), flags].filter(Boolean).join(" · "),
+			eyebrow: [w.code ? `Feature ${w.code}` : "Feature", LANES[w.lane] ?? capital(w.lane), flags]
+				.filter(Boolean)
+				.join(" · "),
 			title: w.title || w.code || w.id,
 			html:
 				(w.needsAdam ? flag("needs", "Needs Adam", w.needsAdam.on, w.needsAdam.ask) : "") +
@@ -211,7 +257,10 @@
 		// "<a>X</a> generates this place" or "This place depends on <a>X</a>", with the edge title as small text.
 		const verb = (e) => String(e.kind || "connects to").replace(/-/g, " ");
 		const lines = edges.map(
-			(e) => (e.from === n.id ? `This place ${esc(verb(e))} ${nodeLink(e.to)}` : `${nodeLink(e.from)} ${esc(verb(e))} this place`) + meta(e.title ? `· ${e.title}` : ""),
+			(e) =>
+				(e.from === n.id
+					? `This place ${esc(verb(e))} ${nodeLink(e.to)}`
+					: `${nodeLink(e.from)} ${esc(verb(e))} this place`) + meta(e.title ? `· ${e.title}` : ""),
 		);
 		const journeys = (index.model.journeys ?? [])
 			.filter((j) => (j.steps ?? []).includes(n.id))
@@ -235,7 +284,10 @@
 			title: n.title || n.id,
 			html:
 				(n.summary ? `<p class="layer-lead">${esc(n.summary)}</p>` : "") +
-				section("Places", list((n.children ?? []).map((id) => `${nodeLink(id)}${meta(index.nodes.get(id)?.summary ?? "")}`))) +
+				section(
+					"Places",
+					list((n.children ?? []).map((id) => `${nodeLink(id)}${meta(index.nodes.get(id)?.summary ?? "")}`)),
+				) +
 				section("Work that touches this module", list(touching(ids).map((w) => workLink(w.id)))),
 		};
 	}
@@ -259,23 +311,37 @@
 				(j.summary ? `<p class="layer-lead">${esc(j.summary)}</p>` : "") +
 				section(
 					"Steps",
-					steps.length ? `<ol class="layer-list">${steps.map((id, i) => `<li>${nodeLink(id)}${notes[i] ? `<br><small>${esc(notes[i])}</small>` : ""}</li>`).join("")}</ol>` : "",
+					steps.length
+						? `<ol class="layer-list">${steps.map((id, i) => `<li>${nodeLink(id)}${notes[i] ? `<br><small>${esc(notes[i])}</small>` : ""}</li>`).join("")}</ol>`
+						: "",
 				),
 		};
 	}
 	function render(layer) {
 		const item = find(layer.kind, layer.id);
-		if (layer.kind === "work") return index.work.has(layer.id) ? renderWork(item) : renderFeature(item);
-		if (layer.kind === "place") return renderPlace(item);
-		if (layer.kind === "module") return renderModule(item);
-		if (layer.kind === "day") return renderDay(item);
+		if (layer.kind === "work") {
+			return index.work.has(layer.id) ? renderWork(item) : renderFeature(item);
+		}
+		if (layer.kind === "place") {
+			return renderPlace(item);
+		}
+		if (layer.kind === "module") {
+			return renderModule(item);
+		}
+		if (layer.kind === "day") {
+			return renderDay(item);
+		}
 		return renderJourney(item);
 	}
 	// Trail names. The top layer gets a longer name; lower layers get a short one so three or four fit beside it.
 	function label(layer, short = false) {
 		const item = find(layer.kind, layer.id);
-		if (layer.kind === "day") return date(layer.id);
-		if (layer.kind === "work" && item.code) return short ? item.code : `${item.code} · ${cut(item.title || "", 24)}`;
+		if (layer.kind === "day") {
+			return date(layer.id);
+		}
+		if (layer.kind === "work" && item.code) {
+			return short ? item.code : `${item.code} · ${cut(item.title || "", 24)}`;
+		}
 		return cut(item.title || layer.id, short ? 18 : 30);
 	}
 
@@ -315,8 +381,12 @@
 		const holder = root.querySelector(".layers-stack");
 		const shown = [...holder.children];
 		let keep = 0;
-		while (keep < shown.length && keep < stack.length && shown[keep].dataset.key === keyOf(stack[keep])) keep++;
-		for (const el of shown.slice(keep)) el.remove();
+		while (keep < shown.length && keep < stack.length && shown[keep].dataset.key === keyOf(stack[keep])) {
+			keep++;
+		}
+		for (const el of shown.slice(keep)) {
+			el.remove();
+		}
 		for (let depth = keep; depth < stack.length; depth++) {
 			const el = layerElement(stack[depth], depth);
 			if (why !== "switch") {
@@ -346,16 +416,22 @@
 	// Lock the page without a width jump: the lost scrollbar width becomes body padding.
 	function hold(on) {
 		const html = document.documentElement;
-		if (on === html.classList.contains("layers-open")) return;
+		if (on === html.classList.contains("layers-open")) {
+			return;
+		}
 		if (on) {
 			html.style.setProperty("--layers-bar", `${Math.max(0, window.innerWidth - html.clientWidth)}px`);
 			for (const el of document.body.children) {
-				if (el === root || el.inert) continue;
+				if (el === root || el.inert) {
+					continue;
+				}
 				el.inert = true;
 				inerted.push(el);
 			}
 		} else {
-			for (const el of inerted.splice(0)) el.inert = false;
+			for (const el of inerted.splice(0)) {
+				el.inert = false;
+			}
 			// Back on the page: later page routes get the browser's own scroll restoration again.
 			history.scrollRestoration = "auto";
 		}
@@ -373,25 +449,37 @@
 		const page = () =>
 			byKey(back?.dataset?.layer) ??
 			byKey(keyOf(closed)) ??
-			[...document.querySelectorAll(`a[href="#${CSS.escape(`${closed.kind}/${closed.id}`)}"]`)].find((a) => !root.contains(a)) ??
+			[...document.querySelectorAll(`a[href="#${CSS.escape(`${closed.kind}/${closed.id}`)}"]`)].find(
+				(a) => !root.contains(a),
+			) ??
 			document.querySelector("#read a[href]");
 		const to = usable(back) ? back : top ? top.querySelector("h2") : page();
 		to?.focus({ preventScroll: true });
 	}
 	function show(next, why) {
 		const before = stack;
-		if (next.length === before.length && next.every((layer, i) => same(layer, before[i]))) return;
+		if (next.length === before.length && next.every((layer, i) => same(layer, before[i]))) {
+			return;
+		}
 		const stepping = document.activeElement?.closest?.("[data-layer-step]")?.dataset.layerStep;
 		stack = next;
 		paint(why);
 		hold(stack.length > 0);
 		const top = root.querySelector(".layers-stack").lastElementChild;
-		if (stack.length < before.length) refocus(before[stack.length], top);
-		else if (why === "switch" && stepping) {
-			const button = top.querySelector(`[data-layer-step="${stepping}"]:not([disabled])`) ?? top.querySelector("[data-layer-step]:not([disabled])");
+		if (stack.length < before.length) {
+			refocus(before[stack.length], top);
+		} else if (why === "switch" && stepping) {
+			const button =
+				top.querySelector(`[data-layer-step="${stepping}"]:not([disabled])`) ??
+				top.querySelector("[data-layer-step]:not([disabled])");
 			(button ?? top.querySelector("h2")).focus({ preventScroll: true });
-		} else top?.querySelector("h2")?.focus({ preventScroll: true });
-		if (why === "switch") root.querySelector(".layers-live").textContent = `${label(stack[stack.length - 1])}, ${count(stack[stack.length - 1])}`;
+		} else {
+			top?.querySelector("h2")?.focus({ preventScroll: true });
+		}
+		if (why === "switch") {
+			root.querySelector(".layers-live").textContent =
+				`${label(stack[stack.length - 1])}, ${count(stack[stack.length - 1])}`;
+		}
 		onChange?.(stack.slice());
 	}
 
@@ -401,7 +489,9 @@
 	let pageY = 0;
 	const entry = (depth) => ({ pictureLayers: depth, pageY });
 	function open(kind, id) {
-		if (!find(kind, id)) return false;
+		if (!find(kind, id)) {
+			return false;
+		}
 		const at = stack.findIndex((layer) => same(layer, { kind, id }));
 		if (at >= 0) {
 			jump(at + 1);
@@ -421,7 +511,9 @@
 	}
 	function jump(depth) {
 		const keep = Math.max(0, Math.min(stack.length, Math.trunc(Number(depth) || 0)));
-		if (keep === stack.length) return;
+		if (keep === stack.length) {
+			return;
+		}
 		if (history.state?.pictureLayers === stack.length) {
 			history.go(keep - stack.length);
 			return;
@@ -431,16 +523,24 @@
 		show(next, "close");
 	}
 	function close() {
-		if (stack.length) jump(stack.length - 1);
+		if (stack.length) {
+			jump(stack.length - 1);
+		}
 	}
 	function step(delta) {
-		if (!stack.length) return;
+		if (!stack.length) {
+			return;
+		}
 		const top = stack[stack.length - 1];
 		const below = stack.slice(0, -1);
 		const all = siblings(top);
 		let at = all.indexOf(top.id) + delta;
-		while (at >= 0 && at < all.length && below.some((layer) => same(layer, { kind: top.kind, id: all[at] }))) at += delta;
-		if (at < 0 || at >= all.length) return;
+		while (at >= 0 && at < all.length && below.some((layer) => same(layer, { kind: top.kind, id: all[at] }))) {
+			at += delta;
+		}
+		if (at < 0 || at >= all.length) {
+			return;
+		}
 		const next = [...below, { kind: top.kind, id: all[at] }];
 		history.replaceState(entry(next.length), "", join(base, next));
 		show(next, "switch");
@@ -448,24 +548,34 @@
 	// A link or reload gives a hash with no layer history: rebuild one entry per layer so Back closes them one by one.
 	// Unknown kinds, dead ids and repeats are dropped, and the URL is corrected.
 	function restore(hash, load = false) {
-		if (!index) return;
+		if (!index) {
+			return;
+		}
 		const parsed = split(hash);
 		base = parsed.base;
-		const next = parsed.layers.filter((layer, i, all) => find(layer.kind, layer.id) && all.findIndex((other) => same(other, layer)) === i);
+		const next = parsed.layers.filter(
+			(layer, i, all) => find(layer.kind, layer.id) && all.findIndex((other) => same(other, layer)) === i,
+		);
 		const saved = history.state?.pageY;
 		pageY = load && typeof saved === "number" ? saved : window.scrollY;
 		if (next.length && history.state?.pictureLayers !== next.length) {
 			history.scrollRestoration = "manual";
 			history.replaceState(entry(0), "", base);
 			next.forEach((_, i) => history.pushState(entry(i + 1), "", join(base, next.slice(0, i + 1))));
-		} else if (next.length || String(hash).includes("~")) history.replaceState(entry(next.length), "", join(base, next));
+		} else if (next.length || String(hash).includes("~")) {
+			history.replaceState(entry(next.length), "", join(base, next));
+		}
 		show(next, "restore");
-		if (load && next.length && Math.round(window.scrollY) !== Math.round(pageY)) window.scrollTo(0, pageY);
+		if (load && next.length && Math.round(window.scrollY) !== Math.round(pageY)) {
+			window.scrollTo(0, pageY);
+		}
 	}
 	function init(options) {
 		index = build(options.model);
 		onChange = options.onChange ?? null;
-		if (!root) mount();
+		if (!root) {
+			mount();
+		}
 		restore(location.hash, true);
 	}
 
@@ -473,23 +583,43 @@
 	document.addEventListener(
 		"click",
 		(e) => {
-			if (!index || !(e.target instanceof Element) || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+			if (
+				!index ||
+				!(e.target instanceof Element) ||
+				e.button !== 0 ||
+				e.metaKey ||
+				e.ctrlKey ||
+				e.shiftKey ||
+				e.altKey
+			) {
+				return;
+			}
 			const inside = root?.contains(e.target);
 			const hit = (selector) => e.target.closest(selector);
 			let done = true;
-			if (inside && hit("[data-layer-jump]")) jump(hit("[data-layer-jump]").dataset.layerJump);
-			else if (inside && hit("[data-layer-close]")) close();
-			else if (inside && hit("[data-layer-step]")) step(Number(hit("[data-layer-step]").dataset.layerStep));
-			else if (inside && hit('a[href^="#"]')) {
+			if (inside && hit("[data-layer-jump]")) {
+				jump(hit("[data-layer-jump]").dataset.layerJump);
+			} else if (inside && hit("[data-layer-close]")) {
+				close();
+			} else if (inside && hit("[data-layer-step]")) {
+				step(Number(hit("[data-layer-step]").dataset.layerStep));
+			} else if (inside && hit('a[href^="#"]')) {
 				const t = target(hit('a[href^="#"]').getAttribute("href"));
-				if (t) open(t.kind, t.id);
-				else done = false;
+				if (t) {
+					open(t.kind, t.id);
+				} else {
+					done = false;
+				}
 			} else if (!inside && hit("[data-layer]")) {
 				const value = hit("[data-layer]").dataset.layer;
 				const at = value.indexOf("/");
 				done = open(value.slice(0, at), value.slice(at + 1));
-			} else done = false;
-			if (!done) return;
+			} else {
+				done = false;
+			}
+			if (!done) {
+				return;
+			}
 			e.preventDefault();
 			e.stopImmediatePropagation();
 		},
@@ -498,7 +628,9 @@
 	window.addEventListener(
 		"keydown",
 		(e) => {
-			if (!stack.length) return;
+			if (!stack.length) {
+				return;
+			}
 			e.stopPropagation();
 			const plain = !e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey;
 			if (e.key === "Escape") {
@@ -507,19 +639,29 @@
 			} else if (plain && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
 				e.preventDefault();
 				step(e.key === "ArrowLeft" ? -1 : 1);
-			} else if (e.key === "Tab") trap(e);
+			} else if (e.key === "Tab") {
+				trap(e);
+			}
 		},
 		true,
 	);
 	// Tab cycles through the trail and the top layer only, in that order.
 	function trap(e) {
 		const top = root.querySelector(".layers-stack").lastElementChild;
-		const items = [...root.querySelectorAll(".layers-trail button"), ...top.querySelectorAll("h2, a[href], button:not([disabled])")];
-		if (!items.length) return;
+		const items = [
+			...root.querySelectorAll(".layers-trail button"),
+			...top.querySelectorAll("h2, a[href], button:not([disabled])"),
+		];
+		if (!items.length) {
+			return;
+		}
 		const at = items.indexOf(document.activeElement);
 		e.preventDefault();
-		if (at === -1) (e.shiftKey ? items[items.length - 1] : items[0]).focus();
-		else items[(at + (e.shiftKey ? -1 : 1) + items.length) % items.length].focus();
+		if (at === -1) {
+			(e.shiftKey ? items[items.length - 1] : items[0]).focus();
+		} else {
+			items[(at + (e.shiftKey ? -1 : 1) + items.length) % items.length].focus();
+		}
 	}
 	window.addEventListener("popstate", () => restore(location.hash));
 	window.addEventListener("hashchange", () => restore(location.hash));

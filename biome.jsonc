@@ -8,7 +8,8 @@
 	"formatter": {
 		"enabled": true,
 		"indentStyle": "tab",
-		"lineWidth": 180
+		// Wide lines hide a second idea at the end of the first. Long string literals stay wide; the formatter does not split them.
+		"lineWidth": 120
 	},
 	// No preset. Each rule is named here with the reason it exists. A rule joins this list with its existing sites fixed.
 	"linter": {
@@ -27,6 +28,8 @@
 				"noUnusedImports": "error"
 			},
 			"style": {
+				// Every `if`, `for` and `else` body has braces, so a nested `if (...) for (...) if (...)` cannot hide on one line.
+				"useBlockStatements": "error",
 				// `else` after `return`, `throw`, `break` or `continue` only adds nesting. Write the early return and stop.
 				"noUselessElse": "error",
 				// `if (a) { if (b) ... }` with nothing else in the outer block is one condition: `if (a && b)`.
@@ -51,17 +54,13 @@
 			}
 		}
 	},
-	// Target style for new and rewritten code. Today it binds only the files listed here; the code quality brief (F929) asks Adam whether it binds the whole tree.
+	// Target style for new and rewritten code. Today it binds only the files listed here.
 	"overrides": [
 		{
 			"includes": ["src/commands/keeper.ts"],
-			// Wide lines hide a second idea at the end of the first.
-			"formatter": { "lineWidth": 120 },
 			"linter": {
 				"rules": {
 					"style": {
-						// Every `if`, `for` and `else` body has braces, so a nested `if (...) for (...) if (...)` cannot hide on one line.
-						"useBlockStatements": "error",
 						// A nested ternary makes the reader evaluate every branch. Use `if` and early returns.
 						"noNestedTernary": "error"
 					},

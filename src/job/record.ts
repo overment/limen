@@ -30,45 +30,73 @@ export async function appendLimenLog(jobDir: string, message: string): Promise<v
 export function isFailedStopReason(reason: string): boolean {
 	return reason === "error" || reason.startsWith("error: ") || reason === "aborted" || reason.startsWith("aborted: ");
 }
-export const requestedTerminal = (reason: string): "done" | "stopped" => (reason.startsWith("done:") ? "done" : "stopped");
-export async function finalizeJob(jobDir: string, state: TerminalState, detail: string, shutdownDeadline?: number): Promise<void> {
-	if (isTerminal(await textFile(`${jobDir}/state`))) return;
+export const requestedTerminal = (reason: string): "done" | "stopped" =>
+	reason.startsWith("done:") ? "done" : "stopped";
+export async function finalizeJob(
+	jobDir: string,
+	state: TerminalState,
+	detail: string,
+	shutdownDeadline?: number,
+): Promise<void> {
+	if (isTerminal(await textFile(`${jobDir}/state`))) {
+		return;
+	}
 	await recordCommits(jobDir).catch(() => {});
 	await atomicWrite(`${jobDir}/finished-at`, `${new Date().toISOString()}\n`);
 	// The terminal log line lands before the state flip; state is the commit point observers key on, and the story must already be durable when they see it.
 	const inbox = await readdir(`${jobDir}/steer/inbox`).catch(() => []);
-	await appendLimenLog(jobDir, inbox.length ? `${state}: ${detail}; ${inbox.length} steer(s) never delivered` : `${state}: ${detail}`).catch(() => {});
+	await appendLimenLog(
+		jobDir,
+		inbox.length ? `${state}: ${detail}; ${inbox.length} steer(s) never delivered` : `${state}: ${detail}`,
+	).catch(() => {});
 	await atomicWrite(`${jobDir}/state`, `${state}\n`);
 	await rm(`${jobDir}/ownership-uncertainty`, { force: true });
 	const group = await textFile(`${jobDir}/group`);
 	if (group) {
 		const membership = await jobMembership(jobDir);
-		if (membership) await syncLifecycle(membership.run, "skip").catch(() => {});
+		if (membership) {
+			await syncLifecycle(membership.run, "skip").catch(() => {});
+		}
 	}
 	await rm(`${jobDir}/pid`, { force: true });
 	await rm(`${jobDir}/born`, { force: true });
 	// A tmp whose writer still runs is an in-flight rename by a racing finalizer, not a leftover; deleting it makes that rename ENOENT and crashes the other process.
 	for (const name of await readdir(jobDir).catch(() => [])) {
 		const writer = /\.(\d+)\.[0-9a-f]+\.tmp$/.exec(name);
-		if (writer && !processAlive(Number(writer[1]))) await rm(`${jobDir}/${name}`, { force: true });
+		if (writer && !processAlive(Number(writer[1]))) {
+			await rm(`${jobDir}/${name}`, { force: true });
+		}
 	}
 	// The Herdr prompt is the coordinator's wake; the finish webhook is an opt-in side channel and never stands in for it.
 	// They run side by side so neither spends the other's share of a shutdown grace. A group member's wake decides there whether group events carry it.
 	await Promise.all([
 		promptCoordinator(jobDir, shutdownDeadline).catch(() =>
-			appendLimenLog(jobDir, "coordinator wake via Herdr: could not be recorded; inspect notify/herdr-prompt").catch(() => {}),
+			appendLimenLog(jobDir, "coordinator wake via Herdr: could not be recorded; inspect notify/herdr-prompt").catch(
+				() => {},
+			),
 		),
 		deliverFinishWebhook(jobDir, shutdownDeadline, detail).catch(() =>
-			appendLimenLog(jobDir, "finish webhook: delivery could not be recorded; inspect finish-webhook-attempt before manual retry").catch(() => {}),
+			appendLimenLog(
+				jobDir,
+				"finish webhook: delivery could not be recorded; inspect finish-webhook-attempt before manual retry",
+			).catch(() => {}),
 		),
 	]);
 	await settleJobTab(jobDir);
 }
 export async function recordCommits(jobDir: string): Promise<void> {
-	const [base, branch, worktree] = await Promise.all([textFile(`${jobDir}/base`), textFile(`${jobDir}/branch`), textFile(`${jobDir}/worktree`)]);
-	if (!base || !branch || !worktree) return;
+	const [base, branch, worktree] = await Promise.all([
+		textFile(`${jobDir}/base`),
+		textFile(`${jobDir}/branch`),
+		textFile(`${jobDir}/worktree`),
+	]);
+	if (!base || !branch || !worktree) {
+		return;
+	}
 	const commits = commitList(worktree, base, branch);
-	if (commits !== undefined) await atomicWrite(`${jobDir}/commits`, commits ? `${commits}\n` : "");
+	if (commits !== undefined) {
+		await atomicWrite(`${jobDir}/commits`, commits ? `${commits}\n` : "");
+	}
 	await atomicWrite(`${jobDir}/tip`, `${headCommit(worktree)}\n`);
 }
 export async function textFile(path: string): Promise<string> {
@@ -83,7 +111,11 @@ export async function writeHandshake(jobDir: string): Promise<void> {
 }
 async function recordBorn(jobDir: string): Promise<void> {
 	const outcome = await processInfo(process.pid);
-	if (outcome.kind !== "present" || isTerminal(await textFile(`${jobDir}/state`))) return;
+	if (outcome.kind !== "present" || isTerminal(await textFile(`${jobDir}/state`))) {
+		return;
+	}
 	await atomicWrite(`${jobDir}/born`, `${outcome.process.born}\n`);
-	if (await textFile(`${jobDir}/group`)) await saveJson(`${jobDir}/group-owner.json`, { pid: process.pid, born: outcome.process.born });
+	if (await textFile(`${jobDir}/group`)) {
+		await saveJson(`${jobDir}/group-owner.json`, { pid: process.pid, born: outcome.process.born });
+	}
 }

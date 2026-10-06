@@ -19,7 +19,11 @@ export type Plant = {
 	cleanup(): Promise<void>;
 };
 export type Run = { readonly stdout: string; readonly stderr: string; readonly status: number };
-export type RunOptions = { readonly cwd?: string; readonly env?: Readonly<Record<string, string>>; readonly input?: string };
+export type RunOptions = {
+	readonly cwd?: string;
+	readonly env?: Readonly<Record<string, string>>;
+	readonly input?: string;
+};
 
 export const TICKET = "spec/features/active/F001-demo/ticket.md";
 const ticket = `---
@@ -92,7 +96,9 @@ export async function plant(): Promise<Plant> {
 	};
 	await repository(root);
 	const init = limen(made, ["init"]);
-	if (init.status !== 0) throw new Error(`limen init failed: ${init.stderr}`);
+	if (init.status !== 0) {
+		throw new Error(`limen init failed: ${init.stderr}`);
+	}
 	await mkdir(join(root, dirname(TICKET)), { recursive: true });
 	await mkdir(join(root, ".limen/picture/nodes"), { recursive: true });
 	await writeFile(join(root, TICKET), ticket);
@@ -122,7 +128,9 @@ export function limen(plant: Plant, args: readonly string[], options: RunOptions
 		env: { ...plant.env, ...options.env },
 		...(options.input !== undefined ? { input: options.input } : {}),
 	});
-	if (result.error) throw result.error;
+	if (result.error) {
+		throw result.error;
+	}
 	return { stdout: result.stdout, stderr: result.stderr, status: result.status ?? 1 };
 }
 
@@ -130,14 +138,18 @@ export function limen(plant: Plant, args: readonly string[], options: RunOptions
 export function spawnJob(plant: Plant, task: string, flags: readonly string[] = [], options: RunOptions = {}): string {
 	const run = limen(plant, ["spawn", ...flags, task], options);
 	const id = run.stdout.trim().split("\n").at(-1);
-	if (run.status !== 0 || !id) throw new Error(`spawn failed (${run.status}): ${run.stdout}${run.stderr}`);
+	if (run.status !== 0 || !id) {
+		throw new Error(`spawn failed (${run.status}): ${run.stdout}${run.stderr}`);
+	}
 	return id;
 }
 
 /** Blocks on `limen wait <id>` and returns the terminal state. */
 export function waitJob(plant: Plant, id: string, options: RunOptions = {}): string {
 	const run = limen(plant, ["wait", id], options);
-	if (run.status !== 0) throw new Error(`wait failed: ${run.stderr}`);
+	if (run.status !== 0) {
+		throw new Error(`wait failed: ${run.stderr}`);
+	}
 	return run.stdout.split(" ")[0]?.toLowerCase() ?? "";
 }
 
@@ -159,7 +171,9 @@ export function jobFile(plant: Plant, id: string, name: string): string {
 export function until(dir: string, check: () => boolean): Promise<void> {
 	const { promise, resolve } = Promise.withResolvers<void>();
 	const settle = () => {
-		if (!check()) return;
+		if (!check()) {
+			return;
+		}
 		watcher.close();
 		clearInterval(fallback);
 		resolve();
@@ -177,22 +191,36 @@ export async function release(dir: string, n = 1): Promise<void> {
 }
 
 /** What the fake engine received through the extension API: steers, follow-ups, messages, notices, its exit. */
-export function engineEvents(dir: string): Array<{ readonly event: string; readonly text?: string; readonly code?: number }> {
+export function engineEvents(
+	dir: string,
+): Array<{ readonly event: string; readonly text?: string; readonly code?: number }> {
 	const path = join(dir, "fake-events.jsonl");
 	return existsSync(path) ? JSON.parse(`[${readFileSync(path, "utf8").trim().split("\n").join(",")}]`) : [];
 }
 
 /** Every fetch any Limen process in this plant made; `respond` rows answer the first request whose URL contains `match`. */
-export function requests(plant: Plant): Array<{ readonly url: string; readonly method: string; readonly headers: Record<string, string>; readonly body: string }> {
+export function requests(plant: Plant): Array<{
+	readonly url: string;
+	readonly method: string;
+	readonly headers: Record<string, string>;
+	readonly body: string;
+}> {
 	const path = join(plant.parent, "fetch.jsonl");
 	return existsSync(path) ? JSON.parse(`[${readFileSync(path, "utf8").trim().split("\n").join(",")}]`) : [];
 }
-export async function respond(plant: Plant, rows: ReadonlyArray<{ readonly match: string; readonly status?: number; readonly body: unknown }>): Promise<void> {
+export async function respond(
+	plant: Plant,
+	rows: ReadonlyArray<{ readonly match: string; readonly status?: number; readonly body: unknown }>,
+): Promise<void> {
 	await writeFile(join(plant.parent, "fetch-responses.json"), JSON.stringify(rows));
 }
 
 export function git(cwd: string, ...args: readonly string[]): string {
-	return execFileSync("git", args, { cwd, encoding: "utf8", env: { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1" } }).trim();
+	return execFileSync("git", args, {
+		cwd,
+		encoding: "utf8",
+		env: { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1" },
+	}).trim();
 }
 
 function sinkSource(parent: string): string {

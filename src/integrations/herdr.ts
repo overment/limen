@@ -6,7 +6,12 @@ import { setTimeout as delay } from "node:timers/promises";
 import { closedFeatures, closedJobFeatures } from "../job/job.ts";
 import { ENGINES, type EngineId, engineProfile } from "../runtime/engine.ts";
 
-export type HerdrPlace = { readonly workspace: string; readonly tab: string; readonly pane: string; readonly mode: "watch" | "log" | "hosted" | "diff" };
+export type HerdrPlace = {
+	readonly workspace: string;
+	readonly tab: string;
+	readonly pane: string;
+	readonly mode: "watch" | "log" | "hosted" | "diff";
+};
 export type HostedAgentStatus = "idle" | "working" | "blocked" | "done" | "unknown" | "missing";
 
 export function herdrAvailable(): boolean {
@@ -20,7 +25,9 @@ export async function openWatchTab(input: {
 	readonly logPath: string;
 	readonly role: string;
 }): Promise<HerdrPlace | undefined> {
-	if (process.env.HERDR_ENV !== "1") return;
+	if (process.env.HERDR_ENV !== "1") {
+		return;
+	}
 	return createTab({ ...input, label: `${input.label} · running`, mode: "watch", follow: true, focus: false });
 }
 
@@ -32,7 +39,9 @@ export async function openHostedTab(input: {
 	readonly role: string;
 	readonly env: Readonly<Record<string, string>>;
 }): Promise<HerdrPlace> {
-	if (!herdrAvailable()) throw new Error("hosted spawn requires Herdr (HERDR_ENV=1); use an ordinary job instead");
+	if (!herdrAvailable()) {
+		throw new Error("hosted spawn requires Herdr (HERDR_ENV=1); use an ordinary job instead");
+	}
 	const place = await createTab({
 		jobDir: input.jobDir,
 		// Herdr reports a pane waiting for input as idle; the label carries the job state.
@@ -47,7 +56,9 @@ export async function openHostedTab(input: {
 		env: input.env,
 		shellOnly: true,
 	});
-	if (!place) throw new Error("herdr skipped opening the hosted tab");
+	if (!place) {
+		throw new Error("herdr skipped opening the hosted tab");
+	}
 	return place;
 }
 
@@ -79,13 +90,26 @@ export function startHostedPi(input: {
 			try {
 				const started = call(
 					herdr,
-					["agent", "start", input.name, "--kind", input.kind, "--pane", input.place.pane, "--timeout", String(readyMs), "--", ...input.args],
+					[
+						"agent",
+						"start",
+						input.name,
+						"--kind",
+						input.kind,
+						"--pane",
+						input.place.pane,
+						"--timeout",
+						String(readyMs),
+						"--",
+						...input.args,
+					],
 					readyMs + 250,
 				);
 				return agentTarget(started) || input.place.pane;
 			} catch (error) {
 				failed = error;
-				const paneShellFailure = error instanceof Error && error.message === `agent target pane ${input.place.pane} is not an available shell`;
+				const paneShellFailure =
+					error instanceof Error && error.message === `agent target pane ${input.place.pane} is not an available shell`;
 				if (attempt === 1 && paneShellFailure) {
 					input.log?.(`hosted agent start attempt 1 failed: ${error.message}; waiting for shell before attempt 2`);
 					try {
@@ -101,22 +125,33 @@ export function startHostedPi(input: {
 		}
 		const live = locateHostedAgent(input.place.pane, engineProfile(input.kind).id);
 		if (live) {
-			input.log?.(`hosted agent ready after start warning: ${failed instanceof Error ? failed.message : String(failed)}`);
+			input.log?.(
+				`hosted agent ready after start warning: ${failed instanceof Error ? failed.message : String(failed)}`,
+			);
 			return live;
 		}
 		throw failed;
 	} finally {
 		const coordinator = input.coordinatorTab?.trim();
-		if (coordinator && coordinator !== input.place.tab) restoreCoordinatorFocus(herdr, input.place.tab, coordinator, input.log);
+		if (coordinator && coordinator !== input.place.tab) {
+			restoreCoordinatorFocus(herdr, input.place.tab, coordinator, input.log);
+		}
 	}
 }
 
 function assertHostedStartActive(stopped?: () => boolean): void {
-	if (stopped?.()) throw Object.assign(new Error("hosted start stopped by request"), { code: "hosted_start_stopped" });
+	if (stopped?.()) {
+		throw Object.assign(new Error("hosted start stopped by request"), { code: "hosted_start_stopped" });
+	}
 }
 
 /** Give the coordinator its tab back only when the human has not already focused elsewhere during the start window. */
-function restoreCoordinatorFocus(herdr: string, jobTab: string, coordinatorTab: string, log?: (message: string) => void): void {
+function restoreCoordinatorFocus(
+	herdr: string,
+	jobTab: string,
+	coordinatorTab: string,
+	log?: (message: string) => void,
+): void {
 	let focused: boolean | undefined;
 	try {
 		const row = asRecord(asRecord(call(herdr, ["tab", "get", jobTab])).tab);
@@ -130,7 +165,9 @@ function restoreCoordinatorFocus(herdr: string, jobTab: string, coordinatorTab: 
 	}
 	try {
 		const sep = coordinatorTab.indexOf(":");
-		if (sep > 0) call(herdr, ["workspace", "focus", coordinatorTab.slice(0, sep)]);
+		if (sep > 0) {
+			call(herdr, ["workspace", "focus", coordinatorTab.slice(0, sep)]);
+		}
 		call(herdr, ["tab", "focus", coordinatorTab]);
 		log?.(`coordinator tab restored${focused === undefined ? " (focus state unknown)" : ""}`);
 	} catch (error) {
@@ -145,31 +182,55 @@ export function hostedAgentAlive(target: string): boolean {
 }
 
 /** Hosted jobs end when the session ends or the agent is gone. Herdr idle/done is unseen background, not completion. */
-export function hostedTerminalReason(status: HostedAgentStatus, sessionEnded: boolean): "hosted session ended" | "hosted agent ended" | undefined {
-	if (sessionEnded) return "hosted session ended";
-	if (status === "missing") return "hosted agent ended";
+export function hostedTerminalReason(
+	status: HostedAgentStatus,
+	sessionEnded: boolean,
+): "hosted session ended" | "hosted agent ended" | undefined {
+	if (sessionEnded) {
+		return "hosted session ended";
+	}
+	if (status === "missing") {
+		return "hosted agent ended";
+	}
 }
 
 /** Live target for a hosted job whose recorded target stopped resolving cleanly: the agent found under a moved pane ID, or an unclassifiable but present process on the recorded pane. Undefined means genuinely gone. With read "fresh", returns "unknown" when Herdr cannot tell. */
-export function locateHostedAgent(target: string, engine: EngineId, agentName = "", read: "cached" | "fresh" = "cached"): string | undefined {
+export function locateHostedAgent(
+	target: string,
+	engine: EngineId,
+	agentName = "",
+	read: "cached" | "fresh" = "cached",
+): string | undefined {
 	const concrete = read === "fresh";
 	const status = hostedAgentStatus(target, read);
-	if (concrete && status === "unknown") return "unknown";
-	if (status !== "missing") return target;
+	if (concrete && status === "unknown") {
+		return "unknown";
+	}
+	if (status !== "missing") {
+		return target;
+	}
 	const herdr = herdrBinary();
-	if (!herdr) return concrete ? "unknown" : undefined;
+	if (!herdr) {
+		return concrete ? "unknown" : undefined;
+	}
 	let uncertain = false;
 	try {
 		const agents = asRecord(call(herdr, ["agent", "list"])).agents;
 		if (Array.isArray(agents)) {
 			for (const row of agents) {
 				const agent = asRecord(row);
-				if (agent.pane_id === target) return target;
+				if (agent.pane_id === target) {
+					return target;
+				}
 				const name = String(asRecord(agent.agent).name ?? agent.name ?? "");
 				const rowPane = typeof agent.pane_id === "string" ? agent.pane_id : undefined;
-				if (agentName && rowPane && (name === agentName || name.startsWith(`${agentName}-`))) return rowPane;
+				if (agentName && rowPane && (name === agentName || name.startsWith(`${agentName}-`))) {
+					return rowPane;
+				}
 			}
-		} else uncertain = true;
+		} else {
+			uncertain = true;
+		}
 	} catch {
 		uncertain = true;
 	}
@@ -177,12 +238,20 @@ export function locateHostedAgent(target: string, engine: EngineId, agentName = 
 		const info = asRecord(asRecord(call(herdr, ["pane", "process-info", "--pane", target])).process_info);
 		const foreground = Array.isArray(info.foreground_processes) ? info.foreground_processes : [];
 		const names = foreground.map((row) => String(asRecord(row).name ?? "").toLowerCase());
-		if (names.some((n) => n === ENGINES[engine].binaryDefault || n === "node")) return target;
-		if (!Array.isArray(info.foreground_processes)) uncertain = true;
+		if (names.some((n) => n === ENGINES[engine].binaryDefault || n === "node")) {
+			return target;
+		}
+		if (!Array.isArray(info.foreground_processes)) {
+			uncertain = true;
+		}
 	} catch (error) {
-		if (!["target_not_found", "pane_not_found", "agent_not_found"].includes(String(errorCode(error)))) uncertain = true;
+		if (!["target_not_found", "pane_not_found", "agent_not_found"].includes(String(errorCode(error)))) {
+			uncertain = true;
+		}
 	}
-	if (concrete && uncertain) return "unknown";
+	if (concrete && uncertain) {
+		return "unknown";
+	}
 }
 
 const SHELL_NAMES = new Set(["zsh", "bash", "sh", "fish", "nu", "pwsh", "powershell"]);
@@ -201,8 +270,14 @@ function waitForShell(herdr: string, pane: string, timeoutMs: number, stopped?: 
 				.toLowerCase();
 			const pid = Number(only.pid);
 			last = name || "none";
-			const aligned = !Number.isFinite(pid) || [info.shell_pid, info.foreground_process_group_id].every((value) => !Number.isFinite(Number(value)) || Number(value) === pid);
-			if (foreground.length === 1 && SHELL_NAMES.has(name) && aligned) return;
+			const aligned =
+				!Number.isFinite(pid) ||
+				[info.shell_pid, info.foreground_process_group_id].every(
+					(value) => !Number.isFinite(Number(value)) || Number(value) === pid,
+				);
+			if (foreground.length === 1 && SHELL_NAMES.has(name) && aligned) {
+				return;
+			}
 		} catch (error) {
 			last = error instanceof Error ? error.message : String(error);
 		}
@@ -217,11 +292,14 @@ const lastHostedFault = new Map<string, string>();
 export function hostedAgentStatus(target: string, read: "cached" | "fresh" = "cached"): HostedAgentStatus {
 	const fresh = read === "fresh";
 	const herdr = herdrBinary();
-	if (!herdr) return fresh ? "unknown" : noteHostedFault(target, "herdr_unavailable");
+	if (!herdr) {
+		return fresh ? "unknown" : noteHostedFault(target, "herdr_unavailable");
+	}
 	try {
 		const row = asRecord(call(herdr, ["agent", "get", target]));
 		const raw = asRecord(row.agent).agent_status ?? row.agent_status;
-		const status = raw === "idle" || raw === "working" || raw === "blocked" || raw === "done" || raw === "unknown" ? raw : "unknown";
+		const status =
+			raw === "idle" || raw === "working" || raw === "blocked" || raw === "done" || raw === "unknown" ? raw : "unknown";
 		lastHostedStatus.set(target, status);
 		lastHostedFault.delete(target);
 		return status;
@@ -238,8 +316,12 @@ export function hostedAgentStatus(target: string, read: "cached" | "fresh" = "ca
 }
 
 function errorCode(error: unknown): unknown {
-	if (typeof error !== "object" || error === null) return;
-	if (!("code" in error)) return;
+	if (typeof error !== "object" || error === null) {
+		return;
+	}
+	if (!("code" in error)) {
+		return;
+	}
 	return error.code;
 }
 
@@ -247,14 +329,18 @@ function noteHostedFault(target: string, code: string): HostedAgentStatus {
 	if (lastHostedFault.get(target) !== code) {
 		lastHostedFault.set(target, code);
 		const jobDir = process.env.LIMEN_JOB_DIR?.trim();
-		if (jobDir) void appendFile(`${jobDir}/log`, `[limen ${new Date().toISOString()}] herdr agent get failed: ${code}\n`);
+		if (jobDir) {
+			void appendFile(`${jobDir}/log`, `[limen ${new Date().toISOString()}] herdr agent get failed: ${code}\n`);
+		}
 	}
 	return lastHostedStatus.get(target) ?? "unknown";
 }
 
 export function hostedLaunchParent(target: string): number {
 	try {
-		const info = asRecord(asRecord(call(requireHerdr(), ["pane", "process-info", "--pane", target], 2_000)).process_info);
+		const info = asRecord(
+			asRecord(call(requireHerdr(), ["pane", "process-info", "--pane", target], 2_000)).process_info,
+		);
 		return Number(info.shell_pid);
 	} catch {
 		return 0;
@@ -262,10 +348,14 @@ export function hostedLaunchParent(target: string): number {
 }
 export function hostedForegroundPid(target: string, pid: number): "present" | "mismatch" | "unavailable" {
 	const herdr = herdrBinary();
-	if (!herdr) return "unavailable";
+	if (!herdr) {
+		return "unavailable";
+	}
 	try {
 		const info = asRecord(asRecord(call(herdr, ["pane", "process-info", "--pane", target], 2_000)).process_info);
-		if (!Array.isArray(info.foreground_processes)) return "unavailable";
+		if (!Array.isArray(info.foreground_processes)) {
+			return "unavailable";
+		}
 		return info.foreground_processes.some((value) => asRecord(value).pid === pid) ? "present" : "mismatch";
 	} catch {
 		return "unavailable";
@@ -274,7 +364,9 @@ export function hostedForegroundPid(target: string, pid: number): "present" | "m
 
 export function stopHostedAgent(target: string): void {
 	const herdr = herdrBinary();
-	if (!herdr) return;
+	if (!herdr) {
+		return;
+	}
 	try {
 		call(herdr, ["agent", "send-keys", target, "ctrl+c"]);
 		spawnSync("sleep", ["0.2"], { stdio: "ignore" });
@@ -285,9 +377,16 @@ export function stopHostedAgent(target: string): void {
 }
 
 /** Make a hosted stall visible without depending on a coordinator session. */
-export function reportHostedStall(input: { readonly pane: string; readonly label: string; readonly duration: string; readonly notify: boolean }): void {
+export function reportHostedStall(input: {
+	readonly pane: string;
+	readonly label: string;
+	readonly duration: string;
+	readonly notify: boolean;
+}): void {
 	const herdr = herdrBinary();
-	if (!herdr) return;
+	if (!herdr) {
+		return;
+	}
 	const stalled = `⚠ stalled ${input.duration}`;
 	if (input.pane) {
 		advisoryCall(herdr, [
@@ -306,25 +405,53 @@ export function reportHostedStall(input: { readonly pane: string; readonly label
 			`blocked=${stalled}`,
 		]);
 	}
-	if (input.notify) advisoryCall(herdr, ["notification", "show", `limen: ${input.label} stalled`, "--body", stalled, "--sound", "request"]);
+	if (input.notify) {
+		advisoryCall(herdr, [
+			"notification",
+			"show",
+			`limen: ${input.label} stalled`,
+			"--body",
+			stalled,
+			"--sound",
+			"request",
+		]);
+	}
 }
 
 /** Restore the role description installed by the hosted hook after a stall recovers. */
 export function restoreHostedPane(pane: string, role: string): void {
 	const herdr = herdrBinary();
-	if (!herdr) return;
-	advisoryCall(herdr, ["pane", "report-metadata", pane, "--source", "limen", "--display-agent", `limen ${role}`, "--clear-state-labels"]);
+	if (!herdr) {
+		return;
+	}
+	advisoryCall(herdr, [
+		"pane",
+		"report-metadata",
+		pane,
+		"--source",
+		"limen",
+		"--display-agent",
+		`limen ${role}`,
+		"--clear-state-labels",
+	]);
 }
 
 /** Terminal jobs leave no open tabs. A detached closer does the close so finalize never waits on Herdr; the closer records the result in the job log. */
 export async function settleJobTab(jobDir: string): Promise<void> {
 	const place = await readPlace(jobDir);
-	if (!place) return;
+	if (!place) {
+		return;
+	}
 	const herdr = herdrBinary();
-	if (!herdr) return skip(jobDir, "herdr is not available");
+	if (!herdr) {
+		return skip(jobDir, "herdr is not available");
+	}
 	const closer = `import { closeJobTab } from ${JSON.stringify(import.meta.url)}; await closeJobTab(${JSON.stringify(herdr)}, ${JSON.stringify(jobDir)}, ${JSON.stringify(place.tab)});`;
 	try {
-		const child = spawn(process.execPath, ["--no-warnings", "--input-type=module", "--eval", closer], { detached: true, stdio: "ignore" });
+		const child = spawn(process.execPath, ["--no-warnings", "--input-type=module", "--eval", closer], {
+			detached: true,
+			stdio: "ignore",
+		});
 		child.once("error", (error) => void skip(jobDir, `tab close could not start: ${error.message}`).catch(() => {}));
 		child.unref();
 	} catch (error) {
@@ -334,14 +461,19 @@ export async function settleJobTab(jobDir: string): Promise<void> {
 
 /** The detached closer: close the tab, retry a refusal once, and record the result in the job log. */
 export async function closeJobTab(herdr: string, jobDir: string, tab: string): Promise<void> {
-	const note = (message: string) => appendFile(`${jobDir}/log`, `[limen ${new Date().toISOString()}] herdr tab close ${tab}: ${message}\n`).catch(() => {});
+	const note = (message: string) =>
+		appendFile(`${jobDir}/log`, `[limen ${new Date().toISOString()}] herdr tab close ${tab}: ${message}\n`).catch(
+			() => {},
+		);
 	let refusal = "";
 	for (const attempt of [1, 2]) {
 		try {
 			call(herdr, ["tab", "close", tab], 10_000);
 			return note(attempt === 1 ? "closed" : "closed on retry");
 		} catch (error) {
-			if (errorCode(error) === "tab_not_found") return note("already closed");
+			if (errorCode(error) === "tab_not_found") {
+				return note("already closed");
+			}
 			refusal = error instanceof Error ? error.message : String(error);
 			if (attempt === 1) {
 				await note(`refused (${refusal}); retrying once`);
@@ -382,14 +514,22 @@ export async function openDiffTab(input: {
 		shellOnly: true,
 		record: "diff",
 	});
-	if (!place) throw new Error("herdr skipped opening the diff tab");
+	if (!place) {
+		throw new Error("herdr skipped opening the diff tab");
+	}
 	call(herdr, ["pane", "run", place.pane, input.hunk, ...input.args]);
 	return `opened ${input.label} diff`;
 }
 
-export async function openJobPlace(input: { readonly jobDir: string; readonly cwd: string; readonly running: boolean }): Promise<string> {
+export async function openJobPlace(input: {
+	readonly jobDir: string;
+	readonly cwd: string;
+	readonly running: boolean;
+}): Promise<string> {
 	const herdr = herdrBinary();
-	if (!herdr) throw new Error("herdr is not available");
+	if (!herdr) {
+		throw new Error("herdr is not available");
+	}
 	const label = (await text(`${input.jobDir}/label`)) || basename(input.jobDir);
 	const recorded = await readPlace(input.jobDir);
 	const hosted = Boolean(await text(`${input.jobDir}/hosted`));
@@ -414,27 +554,41 @@ export async function openJobPlace(input: { readonly jobDir: string; readonly cw
 		focus: true,
 		herdr,
 	});
-	if (!place) throw new Error("herdr skipped");
+	if (!place) {
+		throw new Error("herdr skipped");
+	}
 	return `opened ${label}`;
 }
 
 export async function closeFeatureTabs(input: { readonly root: string; readonly feature: string }): Promise<string> {
 	const feature = /(?:^|\/)(F\d+)/i.exec(input.feature.trim())?.[1]?.toUpperCase();
-	if (!feature) throw new Error("close requires a feature like F012");
+	if (!feature) {
+		throw new Error("close requires a feature like F012");
+	}
 	const closedSet = closedFeatures(input.root);
-	if (!closedSet.has(feature)) throw new Error(`${feature} is not in done/ or dropped/; leftover tabs stay`);
+	if (!closedSet.has(feature)) {
+		throw new Error(`${feature} is not in done/ or dropped/; leftover tabs stay`);
+	}
 	const herdr = herdrBinary();
-	if (!herdr) throw new Error("herdr is not available");
+	if (!herdr) {
+		throw new Error("herdr is not available");
+	}
 	const coordinator = process.env.HERDR_TAB_ID?.trim();
 	const entries = await readdir(`${input.root}/.limen/jobs`, { withFileTypes: true }).catch(() => []);
 	let closed = 0;
 	for (const entry of entries) {
-		if (!entry.isDirectory()) continue;
+		if (!entry.isDirectory()) {
+			continue;
+		}
 		const jobDir = `${input.root}/.limen/jobs/${entry.name}`;
-		if (!closedJobFeatures(await text(`${jobDir}/label`), entry.name, closedSet).includes(feature)) continue;
+		if (!closedJobFeatures(await text(`${jobDir}/label`), entry.name, closedSet).includes(feature)) {
+			continue;
+		}
 		const places = await Promise.all([readPlace(jobDir), readPlace(jobDir, "diff")]);
 		for (const place of places) {
-			if (!place || place.tab === coordinator) continue;
+			if (!place || place.tab === coordinator) {
+				continue;
+			}
 			try {
 				call(herdr, ["tab", "close", place.tab]);
 				closed += 1;
@@ -470,15 +624,39 @@ async function createTab(input: {
 		const { workspace, seeded } = ensureWorkspace(
 			herdr,
 			input.workspaceCwd ?? input.cwd,
-			input.role ?? ((await text(`${input.jobDir}/role`)) || ((await text(`${input.jobDir}/candidate`)) ? "reviewer" : "worker")),
+			input.role ??
+				((await text(`${input.jobDir}/role`)) || ((await text(`${input.jobDir}/candidate`)) ? "reviewer" : "worker")),
 		);
 		const envArgs = Object.entries(input.env ?? {}).flatMap(([key, value]) => ["--env", `${key}=${value}`]);
-		const created = call(herdr, ["tab", "create", "--workspace", workspace, "--label", input.label, "--cwd", input.cwd, ...envArgs, input.focus ? "--focus" : "--no-focus"]);
-		const place: HerdrPlace = { workspace, tab: id(created, "tab", "tab_id"), pane: id(created, "root_pane", "pane_id"), mode: input.mode };
+		const created = call(herdr, [
+			"tab",
+			"create",
+			"--workspace",
+			workspace,
+			"--label",
+			input.label,
+			"--cwd",
+			input.cwd,
+			...envArgs,
+			input.focus ? "--focus" : "--no-focus",
+		]);
+		const place: HerdrPlace = {
+			workspace,
+			tab: id(created, "tab", "tab_id"),
+			pane: id(created, "root_pane", "pane_id"),
+			mode: input.mode,
+		};
 		await recordPlace(input.jobDir, place, input.record);
-		if (seeded) advisoryCall(herdr, ["tab", "close", seeded]);
+		if (seeded) {
+			advisoryCall(herdr, ["tab", "close", seeded]);
+		}
 		if (!input.shellOnly) {
-			call(herdr, input.follow ? ["pane", "run", place.pane, "tail", "-f", input.logPath] : ["pane", "run", place.pane, "tail", "-n", "+1", input.logPath]);
+			call(
+				herdr,
+				input.follow
+					? ["pane", "run", place.pane, "tail", "-f", input.logPath]
+					: ["pane", "run", place.pane, "tail", "-n", "+1", input.logPath],
+			);
 		}
 		return place;
 	} catch (error) {
@@ -489,22 +667,34 @@ async function createTab(input: {
 /** The one rule for the Herdr binary: `LIMEN_HERDR=0` turns Herdr off; another value must exist; otherwise `herdr` on PATH. */
 export function herdrBinary(): string | undefined {
 	const override = process.env.LIMEN_HERDR?.trim();
-	if (override === "0") return;
-	if (override) return existsSync(override) ? override : undefined;
+	if (override === "0") {
+		return;
+	}
+	if (override) {
+		return existsSync(override) ? override : undefined;
+	}
 	for (const dir of (process.env.PATH ?? "").split(":")) {
 		const candidate = `${dir}/herdr`;
-		if (dir && existsSync(candidate)) return candidate;
+		if (dir && existsSync(candidate)) {
+			return candidate;
+		}
 	}
 }
 
 function requireHerdr(): string {
 	const herdr = herdrBinary();
-	if (!herdr) throw new Error("herdr is not available");
+	if (!herdr) {
+		throw new Error("herdr is not available");
+	}
 	return herdr;
 }
 
 /** A created workspace is seeded with one empty tab; `seeded` names it so the first job tab can replace it. */
-function ensureWorkspace(herdr: string, cwd: string, role: string): { readonly workspace: string; readonly seeded?: string } {
+function ensureWorkspace(
+	herdr: string,
+	cwd: string,
+	role: string,
+): { readonly workspace: string; readonly seeded?: string } {
 	const root = realpathSync(cwd);
 	// Herdr has no immutable root field. Qualify the label; an unqualified legacy space proves nothing.
 	const name = `${basename(root)} ${role}s · ${root}`;
@@ -514,17 +704,28 @@ function ensureWorkspace(herdr: string, cwd: string, role: string): { readonly w
 	if (Array.isArray(listed)) {
 		for (const item of listed) {
 			const row = asRecord(item);
-			if (row.label !== name) continue;
+			if (row.label !== name) {
+				continue;
+			}
 			matches++;
 			workspace = row.workspace_id;
 		}
 	}
-	if (matches > 1) throw new Error(`ambiguous Herdr role space: ${name} (${matches} matches)`);
-	if (matches && (typeof workspace !== "string" || !workspace)) throw new Error(`Herdr role space has no workspace ID: ${name}`);
-	if (typeof workspace === "string") return { workspace };
+	if (matches > 1) {
+		throw new Error(`ambiguous Herdr role space: ${name} (${matches} matches)`);
+	}
+	if (matches && (typeof workspace !== "string" || !workspace)) {
+		throw new Error(`Herdr role space has no workspace ID: ${name}`);
+	}
+	if (typeof workspace === "string") {
+		return { workspace };
+	}
 	const created = call(herdr, ["workspace", "create", "--cwd", root, "--label", name, "--no-focus"]);
 	const seeded = asRecord(asRecord(created).tab).tab_id;
-	return { workspace: id(created, "workspace", "workspace_id"), ...(typeof seeded === "string" && seeded ? { seeded } : {}) };
+	return {
+		workspace: id(created, "workspace", "workspace_id"),
+		...(typeof seeded === "string" && seeded ? { seeded } : {}),
+	};
 }
 
 function tabExists(herdr: string, tab: string): boolean {
@@ -542,7 +743,9 @@ function advisoryCall(herdr: string, args: readonly string[]): void {
 
 function call(herdr: string, args: readonly string[], timeout = 180_000): unknown {
 	const result = spawnSync(herdr, args, { encoding: "utf8", timeout });
-	if (result.error) throw result.error;
+	if (result.error) {
+		throw result.error;
+	}
 	if (result.status !== 0) {
 		const raw = result.stderr.trim() || result.stdout.trim() || `herdr ${args[0]} failed`;
 		try {
@@ -551,7 +754,9 @@ function call(herdr: string, args: readonly string[], timeout = 180_000): unknow
 			const code = typeof err.code === "string" && err.code ? err.code : undefined;
 			throw Object.assign(new Error(message), code ? { code } : {});
 		} catch (error) {
-			if (error instanceof Error && error.message !== raw) throw error;
+			if (error instanceof Error && error.message !== raw) {
+				throw error;
+			}
 		}
 		throw new Error(raw);
 	}
@@ -561,7 +766,9 @@ function call(herdr: string, args: readonly string[], timeout = 180_000): unknow
 
 function id(result: unknown, object: string, field: string): string {
 	const value = asRecord(asRecord(result)[object])[field];
-	if (typeof value !== "string" || !value) throw new Error(`herdr response missing ${object}.${field}`);
+	if (typeof value !== "string" || !value) {
+		throw new Error(`herdr response missing ${object}.${field}`);
+	}
 	return value;
 }
 
@@ -570,10 +777,14 @@ function agentTarget(result: unknown): string | undefined {
 	const agent = asRecord(row.agent);
 	for (const key of ["pane_id", "name", "agent_id", "target"] as const) {
 		const value = agent[key] ?? row[key];
-		if (typeof value === "string" && value) return value;
+		if (typeof value === "string" && value) {
+			return value;
+		}
 	}
 	const pane = asRecord(row.pane).pane_id;
-	if (typeof pane === "string" && pane) return pane;
+	if (typeof pane === "string" && pane) {
+		return pane;
+	}
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -583,13 +794,21 @@ function asRecord(value: unknown): Record<string, unknown> {
 async function recordPlace(jobDir: string, place: HerdrPlace, record?: "diff"): Promise<void> {
 	const directory = record ? `${jobDir}/herdr/${record}` : `${jobDir}/herdr`;
 	await mkdir(directory, { recursive: true });
-	await Promise.all((["workspace", "tab", "pane", "mode"] as const).map((name) => writeFile(`${directory}/${name}`, `${place[name]}\n`)));
+	await Promise.all(
+		(["workspace", "tab", "pane", "mode"] as const).map((name) =>
+			writeFile(`${directory}/${name}`, `${place[name]}\n`),
+		),
+	);
 }
 
 async function readPlace(jobDir: string, record?: "diff"): Promise<HerdrPlace | undefined> {
 	const directory = record ? `${jobDir}/herdr/${record}` : `${jobDir}/herdr`;
-	const [workspace, tab, pane, mode] = await Promise.all((["workspace", "tab", "pane", "mode"] as const).map((name) => text(`${directory}/${name}`)));
-	if (!workspace || !tab || !pane || (mode !== "watch" && mode !== "log" && mode !== "hosted" && mode !== "diff")) return;
+	const [workspace, tab, pane, mode] = await Promise.all(
+		(["workspace", "tab", "pane", "mode"] as const).map((name) => text(`${directory}/${name}`)),
+	);
+	if (!workspace || !tab || !pane || (mode !== "watch" && mode !== "log" && mode !== "hosted" && mode !== "diff")) {
+		return;
+	}
 	return { workspace, tab, pane, mode };
 }
 

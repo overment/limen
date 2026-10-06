@@ -29,13 +29,16 @@ const isModule = (node) => Boolean(node && !node.parent);
 const encode = encodeURIComponent;
 const route = (hash, title, level = "mid") => ({ hash, title, level });
 const routes = [route("#plant", model.project.title, "plant")];
-for (const tab of ["work", "journeys", "days", "places"]) routes.push(route(`#plant/${tab}`, model.project.title, "plant"));
+for (const tab of ["work", "journeys", "days", "places"])
+	routes.push(route(`#plant/${tab}`, model.project.title, "plant"));
 for (const item of model.work) {
 	routes.push(route(`#work/${encode(item.id)}`, item.title));
 	const evidenceCount = 1 + Number(Boolean(item.board)) + Number(Boolean(item.mapFeature));
-	for (let n = 0; n < evidenceCount; n++) routes.push(route(`#work/${encode(item.id)}/evidence/${n}`, item.title, "deep"));
+	for (let n = 0; n < evidenceCount; n++)
+		routes.push(route(`#work/${encode(item.id)}/evidence/${n}`, item.title, "deep"));
 	for (const place of item.touches) {
-		if (isPlace(nodes.get(place))) routes.push(route(`#place/${encode(place)}/via/work/${encode(item.id)}`, nodes.get(place).title));
+		if (isPlace(nodes.get(place)))
+			routes.push(route(`#place/${encode(place)}/via/work/${encode(item.id)}`, nodes.get(place).title));
 	}
 }
 for (const item of standaloneFeatures.values()) routes.push(route(`#work/${encode(item.id)}`, item.title));
@@ -45,7 +48,10 @@ for (const node of model.nodes) {
 }
 for (const item of model.journeys) {
 	routes.push(route(`#journey/${encode(item.id)}`, item.title));
-	for (let n = 1; n <= item.steps.length; n++) routes.push(route(`#journey/${encode(item.id)}/step/${n}`, nodes.get(item.steps[n - 1])?.title || item.title, "deep"));
+	for (let n = 1; n <= item.steps.length; n++)
+		routes.push(
+			route(`#journey/${encode(item.id)}/step/${n}`, nodes.get(item.steps[n - 1])?.title || item.title, "deep"),
+		);
 }
 for (const day of model.days) routes.push(route(`#day/${encode(day.date)}`, day.date));
 const uniqueRoutes = [...new Map(routes.map((item) => [item.hash, item])).values()];
@@ -88,12 +94,25 @@ function validLink(hash) {
 			return false;
 	} else if (s[0] === "place") {
 		if (!isPlace(nodes.get(s[1]))) return false;
-		if (s.length > 2 && (s.length !== 5 || s[2] !== "via" || s[3] !== "work" || !work.get(s[4])?.touches.includes(s[1]))) return false;
+		if (
+			s.length > 2 &&
+			(s.length !== 5 || s[2] !== "via" || s[3] !== "work" || !work.get(s[4])?.touches.includes(s[1]))
+		)
+			return false;
 	} else if (s[0] === "module") {
 		if (s.length !== 2 || !isModule(nodes.get(s[1]))) return false;
 	} else if (s[0] === "journey") {
 		const item = journeys.get(s[1]);
-		if (!item || (s.length > 2 && (s.length !== 4 || s[2] !== "step" || !Number.isInteger(Number(s[3])) || Number(s[3]) < 1 || Number(s[3]) > item.steps.length))) return false;
+		if (
+			!item ||
+			(s.length > 2 &&
+				(s.length !== 4 ||
+					s[2] !== "step" ||
+					!Number.isInteger(Number(s[3])) ||
+					Number(s[3]) < 1 ||
+					Number(s[3]) > item.steps.length))
+		)
+			return false;
 	} else if (s[0] === "day") {
 		if (s.length !== 2 || !days.has(s[1])) return false;
 	} else return false;
@@ -104,7 +123,17 @@ function validLink(hash) {
 		} catch {
 			return false;
 		}
-		if (!id || !{ work: work.has(id) || features.has(id), place: nodes.has(id), module: nodes.has(id), journey: journeys.has(id), day: days.has(id) }[kind]) return false;
+		if (
+			!id ||
+			!{
+				work: work.has(id) || features.has(id),
+				place: nodes.has(id),
+				module: nodes.has(id),
+				journey: journeys.has(id),
+				day: days.has(id),
+			}[kind]
+		)
+			return false;
 	}
 	return true;
 }
@@ -126,7 +155,8 @@ try {
 		if (decodeURI(seen.hash).split("~")[0] !== decodeURI(item.hash)) fail(item.hash, "reload route changed", seen.hash);
 		if (item.hash.startsWith("#day/")) {
 			if (seen.openKey !== `day:${item.hash.slice(5)}`) fail(item.hash, "wrong day opened", seen.openKey);
-		} else if (item.level !== "plant" && !relevant(seen.read, item.title)) fail(item.hash, "target absent from reading column", item.title);
+		} else if (item.level !== "plant" && !relevant(seen.read, item.title))
+			fail(item.hash, "target absent from reading column", item.title);
 		if (item.level === "mid" && !seen.mid) fail(item.hash, "target did not open", "missing #read .entry.open .mid");
 		if (item.level === "deep" && !seen.deep) fail(item.hash, "deep target did not open", "missing #read #deep");
 		const badText = seen.page.match(/\b(?:undefined|null|NaN)\b/);
@@ -165,9 +195,14 @@ try {
 				const focus = await page.evaluate(() => {
 					const el = document.activeElement;
 					const style = getComputedStyle(el);
-					return { node: el?.outerHTML.slice(0, 110), visible: el?.matches(":focus-visible"), marked: style.outlineStyle !== "none" || style.boxShadow !== "none" };
+					return {
+						node: el?.outerHTML.slice(0, 110),
+						visible: el?.matches(":focus-visible"),
+						marked: style.outlineStyle !== "none" || style.boxShadow !== "none",
+					};
 				});
-				if (!focus.visible || !focus.marked) fail(hash, "closing a restored layer lost visible focus", JSON.stringify(focus));
+				if (!focus.visible || !focus.marked)
+					fail(hash, "closing a restored layer lost visible focus", JSON.stringify(focus));
 			}
 			await page.goto(`${base}${hash}`, { waitUntil: "load" });
 			await page.goBack();
@@ -184,18 +219,24 @@ try {
 			if (decodeURI(jumped) !== decodeURI(`#plant~${segments[0]}`)) fail(fullHash, "trail depth 1 jump", jumped);
 		}
 		const pageTrail = page.locator('.layers-root [data-layer-jump="0"]');
-		if (!(await pageTrail.count())) fail(fullHash, "stack trail Page link missing", '.layers-root [data-layer-jump="0"]');
+		if (!(await pageTrail.count()))
+			fail(fullHash, "stack trail Page link missing", '.layers-root [data-layer-jump="0"]');
 		else {
 			await pageTrail.first().click();
 			const jumpedHome = await page.evaluate(() => location.hash);
 			if (jumpedHome !== "#plant") fail(fullHash, "trail Page jump", jumpedHome);
 		}
 		await page.goto(`${base}#plant~${segments[0]}`, { waitUntil: "load" });
-		const before = await page.evaluate(() => ({ hash: location.hash, scroll: window.scrollY, active: document.activeElement?.tagName }));
+		const before = await page.evaluate(() => ({
+			hash: location.hash,
+			scroll: window.scrollY,
+			active: document.activeElement?.tagName,
+		}));
 		await page.keyboard.press("ArrowRight");
 		const after = await page.evaluate(() => ({ hash: location.hash, scroll: window.scrollY }));
 		if (after.hash === before.hash) fail(before.hash, "ArrowRight did not change layer context", after.hash);
-		if (after.hash.split("~").length !== 2 || after.scroll !== before.scroll) fail(before.hash, "context switch changed stack or page scroll", JSON.stringify(after));
+		if (after.hash.split("~").length !== 2 || after.scroll !== before.scroll)
+			fail(before.hash, "context switch changed stack or page scroll", JSON.stringify(after));
 	}
 	// Click an actual entry instead of only constructing hashes: the page behind must not move.
 	if (firstWork) {
@@ -205,19 +246,31 @@ try {
 		if (!(await opener.count())) fail(hash, "open-as-layer control missing", `data-layer=work/${firstWork.id}`);
 		else {
 			await opener.first().scrollIntoViewIfNeeded();
-			const before = await page.evaluate(() => ({ scroll: window.scrollY, width: document.body.getBoundingClientRect().width }));
+			const before = await page.evaluate(() => ({
+				scroll: window.scrollY,
+				width: document.body.getBoundingClientRect().width,
+			}));
 			await opener.first().click();
 			const opened = await page.evaluate(() => ({
 				scroll: window.scrollY,
 				width: document.body.getBoundingClientRect().width,
 				locked: document.documentElement.classList.contains("layers-open"),
-				inert: [...document.body.children].filter((el) => !el.classList.contains("layers-root")).every((el) => el.inert),
+				inert: [...document.body.children]
+					.filter((el) => !el.classList.contains("layers-root"))
+					.every((el) => el.inert),
 				focused: Boolean(document.activeElement?.closest(".layers-root")),
 			}));
-			if (!opened.locked || !opened.inert || !opened.focused || opened.scroll !== before.scroll || Math.abs(opened.width - before.width) > 1)
+			if (
+				!opened.locked ||
+				!opened.inert ||
+				!opened.focused ||
+				opened.scroll !== before.scroll ||
+				Math.abs(opened.width - before.width) > 1
+			)
 				fail(hash, "opening layer moved or left page active", JSON.stringify({ before, opened }));
 			await page.keyboard.press("Escape");
-			if ((await page.evaluate(() => window.scrollY)) !== before.scroll) fail(hash, "closing layer moved page", await page.evaluate(() => window.scrollY));
+			if ((await page.evaluate(() => window.scrollY)) !== before.scroll)
+				fail(hash, "closing layer moved page", await page.evaluate(() => window.scrollY));
 		}
 	}
 	// Open from a page with no hash, reload, then close the last layer: the bare entry is the plant, so the page must not redraw.
@@ -231,8 +284,13 @@ try {
 			await pin.click();
 			await page.reload({ waitUntil: "load" });
 			await page.keyboard.press("Escape");
-			const closed = await page.evaluate(() => ({ hash: location.hash, scroll: window.scrollY, focus: document.activeElement?.tagName }));
-			if (closed.scroll !== before || closed.focus === "BODY") fail("(no hash)", "closing the last layer after a reload redrew the page", JSON.stringify({ before, closed }));
+			const closed = await page.evaluate(() => ({
+				hash: location.hash,
+				scroll: window.scrollY,
+				focus: document.activeElement?.tagName,
+			}));
+			if (closed.scroll !== before || closed.focus === "BODY")
+				fail("(no hash)", "closing the last layer after a reload redrew the page", JSON.stringify({ before, closed }));
 		}
 	}
 	await page.goto(`${base}#plant`, { waitUntil: "load" });
@@ -247,12 +305,18 @@ try {
 			})),
 		);
 	}
-	if (new Set(order.map((x) => x.node)).size < 3 || order.some((x) => !x.visible || x.outline === "none")) fail("#plant", "Tab order or visible focus", JSON.stringify(order));
+	if (new Set(order.map((x) => x.node)).size < 3 || order.some((x) => !x.visible || x.outline === "none"))
+		fail("#plant", "Tab order or visible focus", JSON.stringify(order));
 	await page.keyboard.press("/");
 	if ((await page.evaluate(() => document.activeElement?.id)) !== "filter")
-		fail("#plant", "/ did not focus list filter", await page.evaluate(() => document.activeElement?.outerHTML.slice(0, 150)));
+		fail(
+			"#plant",
+			"/ did not focus list filter",
+			await page.evaluate(() => document.activeElement?.outerHTML.slice(0, 150)),
+		);
 	await page.keyboard.press("Escape");
-	if ((await page.evaluate(() => document.activeElement?.id)) === "filter") fail("#plant", "Esc did not release filter", "filter still focused");
+	if ((await page.evaluate(() => document.activeElement?.id)) === "filter")
+		fail("#plant", "Esc did not release filter", "filter still focused");
 	for (const width of [1440, 1240, 900]) {
 		await page.setViewportSize({ width, height: 900 });
 		await page.goto(`${base}#plant`, { waitUntil: "load" });
@@ -262,7 +326,9 @@ try {
 			const layerHash = `#plant~work/${encode(firstWork.id)}`;
 			currentHash = layerHash;
 			await page.goto(`${base}${layerHash}`, { waitUntil: "load" });
-			const layerOverflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+			const layerOverflow = await page.evaluate(
+				() => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+			);
 			if (layerOverflow > 1) fail(layerHash, `horizontal overflow with layer at ${width}px`, layerOverflow);
 		}
 	}
@@ -279,16 +345,21 @@ try {
 			const layerHash = `#plant~work/${encode(firstWork.id)}`;
 			currentHash = layerHash;
 			await page.evaluate((id) => PictureLayers.open("work", id), firstWork.id);
-			if ((await page.evaluate(() => window.scrollY)) !== pageY) fail(layerHash, "opening layer lost page position", await page.evaluate(() => window.scrollY));
+			if ((await page.evaluate(() => window.scrollY)) !== pageY)
+				fail(layerHash, "opening layer lost page position", await page.evaluate(() => window.scrollY));
 			await page.reload({ waitUntil: "load" });
-			if ((await page.evaluate(() => window.scrollY)) !== pageY) fail(layerHash, "reload lost page position", await page.evaluate(() => window.scrollY));
+			if ((await page.evaluate(() => window.scrollY)) !== pageY)
+				fail(layerHash, "reload lost page position", await page.evaluate(() => window.scrollY));
 			await page.goBack();
-			if ((await page.evaluate(() => window.scrollY)) !== pageY) fail(layerHash, "Back lost page position", await page.evaluate(() => window.scrollY));
+			if ((await page.evaluate(() => window.scrollY)) !== pageY)
+				fail(layerHash, "Back lost page position", await page.evaluate(() => window.scrollY));
 		}
 	}
 } finally {
 	await browser.close();
 }
-console.log(`routes=${uniqueRoutes.length} checked_links=${checkedLinks} layer_depths=3 scroll_y=${pageScroll} widths=1440,1240,900 failures=${failures.length}`);
+console.log(
+	`routes=${uniqueRoutes.length} checked_links=${checkedLinks} layer_depths=3 scroll_y=${pageScroll} widths=1440,1240,900 failures=${failures.length}`,
+);
 for (const message of failures) console.error(`FAIL ${message}`);
 process.exitCode = failures.length ? 1 : 0;

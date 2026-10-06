@@ -23,7 +23,9 @@ export type HostedBinding = HostedLaunch & {
 };
 export function hostedBoot(): string | undefined {
 	// Other adapters stay unowned until their boot and session evidence is proven.
-	if (process.platform !== "linux") return;
+	if (process.platform !== "linux") {
+		return;
+	}
 	try {
 		return readFileSync("/proc/sys/kernel/random/boot_id", "utf8").trim() || undefined;
 	} catch {
@@ -39,60 +41,127 @@ export function readHostedBinding(jobDir: string): HostedBinding | undefined {
 	try {
 		const binding: HostedBinding = JSON.parse(readFileSync(join(jobDir, "engine-binding"), "utf8"));
 		const launch: HostedLaunch = JSON.parse(readFileSync(join(jobDir, "engine-launch"), "utf8"));
-		if (binding.jobDir !== realpathSync(jobDir) || binding.sessionDir !== realpathSync(join(jobDir, "session"))) return;
-		if (binding.engine !== "pi" || binding.platform !== "linux" || typeof binding.boot !== "string" || !binding.boot || typeof binding.sessionId !== "string" || !binding.sessionId)
+		if (binding.jobDir !== realpathSync(jobDir) || binding.sessionDir !== realpathSync(join(jobDir, "session"))) {
 			return;
-		if (typeof binding.pane !== "string" || !binding.pane || !Number.isSafeInteger(binding.parent) || binding.parent <= 0 || !/^\d+$/.test(binding.parentBorn)) return;
-		if (!Number.isSafeInteger(binding.pid) || binding.pid <= 0 || !/^\d+$/.test(binding.born)) return;
-		if (typeof binding.launchId !== "string" || !binding.launchId) return;
-		for (const key of ["launchId", "jobDir", "sessionDir", "engine", "pane", "parent", "parentBorn", "boot"] as const) if (binding[key] !== launch[key]) return;
+		}
+		if (
+			binding.engine !== "pi" ||
+			binding.platform !== "linux" ||
+			typeof binding.boot !== "string" ||
+			!binding.boot ||
+			typeof binding.sessionId !== "string" ||
+			!binding.sessionId
+		) {
+			return;
+		}
+		if (
+			typeof binding.pane !== "string" ||
+			!binding.pane ||
+			!Number.isSafeInteger(binding.parent) ||
+			binding.parent <= 0 ||
+			!/^\d+$/.test(binding.parentBorn)
+		) {
+			return;
+		}
+		if (!Number.isSafeInteger(binding.pid) || binding.pid <= 0 || !/^\d+$/.test(binding.born)) {
+			return;
+		}
+		if (typeof binding.launchId !== "string" || !binding.launchId) {
+			return;
+		}
+		for (const key of ["launchId", "jobDir", "sessionDir", "engine", "pane", "parent", "parentBorn", "boot"] as const) {
+			if (binding[key] !== launch[key]) {
+				return;
+			}
+		}
 		return binding;
 	} catch {
 		return;
 	}
 }
-export async function hostedIdentityObservation(binding: HostedBinding): Promise<"present" | "mismatch" | "unavailable"> {
-	if (binding.platform !== process.platform) return "unavailable";
+export async function hostedIdentityObservation(
+	binding: HostedBinding,
+): Promise<"present" | "mismatch" | "unavailable"> {
+	if (binding.platform !== process.platform) {
+		return "unavailable";
+	}
 	const boot = hostedBoot();
-	if (!boot) return "unavailable";
-	if (binding.boot !== boot) return "mismatch";
+	if (!boot) {
+		return "unavailable";
+	}
+	if (binding.boot !== boot) {
+		return "mismatch";
+	}
 	const current = await processInfo(binding.pid);
-	if (current.kind === "unavailable") return "unavailable";
+	if (current.kind === "unavailable") {
+		return "unavailable";
+	}
 	return current.kind === "present" && current.process.born === binding.born ? "present" : "mismatch";
 }
 /** Current pane membership is checked between two fresh checks of the immutable binding. */
-export async function hostedBindingInPane(target: string, pid: number, engine: EngineId, jobDir: string): Promise<"owned" | "mismatch" | "unavailable"> {
+export async function hostedBindingInPane(
+	target: string,
+	pid: number,
+	engine: EngineId,
+	jobDir: string,
+): Promise<"owned" | "mismatch" | "unavailable"> {
 	const binding = readHostedBinding(jobDir);
-	if (!binding || binding.pid !== pid || binding.engine !== engine) return "mismatch";
+	if (!binding || binding.pid !== pid || binding.engine !== engine) {
+		return "mismatch";
+	}
 	let session: string;
 	try {
 		session = readFileSync(`${jobDir}/engine-session`, "utf8");
 		const association = JSON.parse(session);
-		if (association.pid !== binding.pid || association.born !== binding.born || association.sessionId !== binding.sessionId) return "mismatch";
+		if (
+			association.pid !== binding.pid ||
+			association.born !== binding.born ||
+			association.sessionId !== binding.sessionId
+		) {
+			return "mismatch";
+		}
 	} catch {
 		return "mismatch";
 	}
 	const before = await hostedIdentityObservation(binding);
-	if (before !== "present") return before;
+	if (before !== "present") {
+		return before;
+	}
 	const foreground = hostedForegroundPid(target, pid);
-	if (foreground !== "present") return foreground;
+	if (foreground !== "present") {
+		return foreground;
+	}
 	const after = await hostedIdentityObservation(binding);
-	if (after !== "present") return after;
+	if (after !== "present") {
+		return after;
+	}
 	try {
 		return readFileSync(`${jobDir}/engine-session`, "utf8") === session ? "owned" : "mismatch";
 	} catch {
 		return "mismatch";
 	}
 }
-export async function hostedEngineObservation(target: string, pid: number, engine: EngineId, jobDir: string): Promise<"owned" | "mismatch" | "unavailable"> {
+export async function hostedEngineObservation(
+	target: string,
+	pid: number,
+	engine: EngineId,
+	jobDir: string,
+): Promise<"owned" | "mismatch" | "unavailable"> {
 	try {
-		if (readFileSync(`${jobDir}/herdr/pane`, "utf8").trim() !== target) return "mismatch";
+		if (readFileSync(`${jobDir}/herdr/pane`, "utf8").trim() !== target) {
+			return "mismatch";
+		}
 	} catch {
 		return "mismatch";
 	}
 	return hostedBindingInPane(target, pid, engine, jobDir);
 }
-export async function hostedEngineOwned(target: string, pid: number, engine: EngineId, jobDir: string): Promise<boolean> {
+export async function hostedEngineOwned(
+	target: string,
+	pid: number,
+	engine: EngineId,
+	jobDir: string,
+): Promise<boolean> {
 	return (await hostedEngineObservation(target, pid, engine, jobDir)) === "owned";
 }
 function publishExclusive(path: string, value: unknown): void {
@@ -104,11 +173,20 @@ function publishExclusive(path: string, value: unknown): void {
 		rmSync(prepared, { force: true });
 	}
 }
-export async function prepareHostedLaunch(jobDir: string, pane: string, engine: string, parentPid: number): Promise<void> {
-	if (!hostedBindingSupported(engine)) return;
+export async function prepareHostedLaunch(
+	jobDir: string,
+	pane: string,
+	engine: string,
+	parentPid: number,
+): Promise<void> {
+	if (!hostedBindingSupported(engine)) {
+		return;
+	}
 	const parent = await processInfo(parentPid);
 	const boot = hostedBoot();
-	if (parent.kind !== "present" || !boot) return;
+	if (parent.kind !== "present" || !boot) {
+		return;
+	}
 	mkdirSync(join(jobDir, "session"), { recursive: true });
 	const launch: HostedLaunch = {
 		launchId: randomUUID(),
@@ -124,18 +202,40 @@ export async function prepareHostedLaunch(jobDir: string, pane: string, engine: 
 }
 export async function registerHostedBinding(jobDir: string, pane: string, context: unknown): Promise<boolean> {
 	try {
-		const manager = (context as { sessionManager?: { getSessionDir(): string; getSessionId(): string; getSessionFile(): string | undefined } })?.sessionManager;
-		if (!manager) return false;
+		const manager = (
+			context as {
+				sessionManager?: { getSessionDir(): string; getSessionId(): string; getSessionFile(): string | undefined };
+			}
+		)?.sessionManager;
+		if (!manager) {
+			return false;
+		}
 		const sessionDir = realpathSync(manager.getSessionDir());
 		const file = manager.getSessionFile();
 		const sessionId = manager.getSessionId();
-		if (sessionDir !== realpathSync(join(jobDir, "session")) || (file && realpathSync(dirname(file)) !== sessionDir) || !sessionId) return false;
+		if (
+			sessionDir !== realpathSync(join(jobDir, "session")) ||
+			(file && realpathSync(dirname(file)) !== sessionDir) ||
+			!sessionId
+		) {
+			return false;
+		}
 		const saved = readHostedBinding(jobDir);
-		if (saved) return saved.pid === process.pid && saved.sessionId === sessionId && (await hostedIdentityObservation(saved)) === "present";
+		if (saved) {
+			return (
+				saved.pid === process.pid &&
+				saved.sessionId === sessionId &&
+				(await hostedIdentityObservation(saved)) === "present"
+			);
+		}
 		// A legacy PID or a damaged binding is not permission to adopt this process.
-		if (existsSync(join(jobDir, "engine-pid")) || existsSync(join(jobDir, "engine-binding"))) return false;
+		if (existsSync(join(jobDir, "engine-pid")) || existsSync(join(jobDir, "engine-binding"))) {
+			return false;
+		}
 		const launch: HostedLaunch = JSON.parse(readFileSync(join(jobDir, "engine-launch"), "utf8"));
-		if (typeof launch.launchId !== "string" || !launch.launchId) return false;
+		if (typeof launch.launchId !== "string" || !launch.launchId) {
+			return false;
+		}
 		const current = await processInfo(process.pid);
 		const parent = await processInfo(launch.parent);
 		if (
@@ -145,13 +245,24 @@ export async function registerHostedBinding(jobDir: string, pane: string, contex
 			launch.pane !== pane ||
 			launch.boot !== hostedBoot() ||
 			!launch.boot
-		)
+		) {
 			return false;
-		if (current.kind !== "present" || parent.kind !== "present" || parent.process.born !== launch.parentBorn) return false;
+		}
+		if (current.kind !== "present" || parent.kind !== "present" || parent.process.born !== launch.parentBorn) {
+			return false;
+		}
 		const directChild = current.process.ppid === launch.parent;
 		const shellExec = current.process.pid === launch.parent && current.process.born === launch.parentBorn;
-		if (!directChild && !shellExec) return false;
-		const binding: HostedBinding = { ...launch, pid: process.pid, born: current.process.born, sessionId, platform: process.platform };
+		if (!directChild && !shellExec) {
+			return false;
+		}
+		const binding: HostedBinding = {
+			...launch,
+			pid: process.pid,
+			born: current.process.born,
+			sessionId,
+			platform: process.platform,
+		};
 		publishExclusive(join(jobDir, "engine-binding"), binding);
 		return true;
 	} catch {

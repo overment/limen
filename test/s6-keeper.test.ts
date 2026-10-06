@@ -10,7 +10,8 @@ import { git, jobDir, jobFile, limen, plant, release, spawnJob, TICKET, waitJob 
 const p = await plant();
 after(p.cleanup);
 const ROUTE = ["--engine", "omp", "--provider", "p", "--model", "m", "--thinking", "high"];
-const lane = (name: string) => (existsSync(join(p.root, "spec/features", name)) ? readdirSync(join(p.root, "spec/features", name)) : []);
+const lane = (name: string) =>
+	existsSync(join(p.root, "spec/features", name)) ? readdirSync(join(p.root, "spec/features", name)) : [];
 
 // The F009 job stays running until the keeper refusal below has been seen.
 await mkdir(join(p.root, "spec/features/done/2026-09/F004-x"), { recursive: true });
@@ -37,7 +38,10 @@ test("ticket check names the file, the line and a fix for each fault", async () 
 	git(p.root, "worktree", "add", "-q", "-b", "check", tree);
 	const path = "spec/features/active/F020-bad/ticket.md";
 	await mkdir(join(tree, "spec/features/active/F020-bad"), { recursive: true });
-	await writeFile(join(tree, path), "---\ntouches:\n  - demo.place\nopened: 2026-13-45\ncolour: red\n---\n\n# F020 · Bad\n\n## Outcome\n\nBad.\n");
+	await writeFile(
+		join(tree, path),
+		"---\ntouches:\n  - demo.place\nopened: 2026-13-45\ncolour: red\n---\n\n# F020 · Bad\n\n## Outcome\n\nBad.\n",
+	);
 	git(tree, "add", ".");
 	git(tree, "commit", "-q", "-m", "bad ticket");
 	const check = limen(p, ["ticket", "check", "check"]);
@@ -48,7 +52,13 @@ test("ticket check names the file, the line and a fix for each fault", async () 
 		[path, "4"],
 		[path, "5"],
 	]);
-	assert.ok(check.stderr.split("\n").includes(`fix: limen keeper ${path} --job <id> --engine <engine> --provider <provider> --model <model> --thinking <level>`));
+	assert.ok(
+		check.stderr
+			.split("\n")
+			.includes(
+				`fix: limen keeper ${path} --job <id> --engine <engine> --provider <provider> --model <model> --thinking <level>`,
+			),
+	);
 });
 
 test("keeper refuses a running job, then starts on a new branch at the candidate tip", async () => {
@@ -82,7 +92,17 @@ test("keeper refuses a running job, then starts on a new branch at the candidate
 test("two strict picture builds give identical bytes", () => {
 	const dir = join(p.root, ".limen/picture");
 	const build = () => {
-		const run = limen(p, ["picture", "build", "--dir", dir, "--out", join(p.parent, "map.html"), "--json", join(p.parent, "map.json"), "--strict"]);
+		const run = limen(p, [
+			"picture",
+			"build",
+			"--dir",
+			dir,
+			"--out",
+			join(p.parent, "map.html"),
+			"--json",
+			join(p.parent, "map.json"),
+			"--strict",
+		]);
 		assert.equal(run.status, 0, run.stderr);
 		return [readFileSync(join(p.parent, "map.html")), readFileSync(join(p.parent, "map.json"))];
 	};

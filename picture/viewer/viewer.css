@@ -35,7 +35,8 @@
 	--teal-line: #8cc4bb;
 	--head: 88px;
 	--gap: var(--sp-6);
-	font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, "Helvetica Neue", Arial, sans-serif;
+	font-family:
+		ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, "Helvetica Neue", Arial, sans-serif;
 	color: var(--ink);
 	background: var(--paper);
 	font-size: 15px;

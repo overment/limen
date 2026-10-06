@@ -1,4 +1,16 @@
-import { appendFileSync, existsSync, type FSWatcher, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, watch, writeFileSync } from "node:fs";
+import {
+	appendFileSync,
+	existsSync,
+	type FSWatcher,
+	mkdirSync,
+	readdirSync,
+	readFileSync,
+	renameSync,
+	rmSync,
+	statSync,
+	watch,
+	writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 
 type PiApi = {
@@ -16,24 +28,34 @@ export default function limenSteering(pi: PiApi): void {
 	const stop = () => {
 		watcher?.close();
 		watcher = undefined;
-		if (sweepTimer) clearInterval(sweepTimer);
+		if (sweepTimer) {
+			clearInterval(sweepTimer);
+		}
 		sweepTimer = undefined;
-		if (changeTimer) clearTimeout(changeTimer);
+		if (changeTimer) {
+			clearTimeout(changeTimer);
+		}
 		changeTimer = undefined;
 		jobDir = undefined;
 	};
 	const sweep = () => {
-		if (!jobDir) return;
+		if (!jobDir) {
+			return;
+		}
 		try {
 			for (const name of pendingNames(jobDir)) {
-				if (!deliver(pi, jobDir, name)) break;
+				if (!deliver(pi, jobDir, name)) {
+					break;
+				}
 			}
 		} catch {
 			// Delivery is advisory; inbox files remain until a later sweep.
 		}
 	};
 	const scheduleSweep = () => {
-		if (!jobDir || changeTimer) return;
+		if (!jobDir || changeTimer) {
+			return;
+		}
 		changeTimer = setTimeout(() => {
 			changeTimer = undefined;
 			sweep();
@@ -41,19 +63,27 @@ export default function limenSteering(pi: PiApi): void {
 		changeTimer.unref();
 	};
 	pi.on("session_start", () => {
-		if (process.env.LIMEN_JOB !== "1") return;
+		if (process.env.LIMEN_JOB !== "1") {
+			return;
+		}
 		stop();
 		const root = process.env.LIMEN_CONTEXT_ROOT;
 		const id = process.env.LIMEN_JOB_ID;
-		if (!root || !id) return;
+		if (!root || !id) {
+			return;
+		}
 		const job = join(root, ".limen", "jobs", id);
-		if (!existsSync(job)) return;
+		if (!existsSync(job)) {
+			return;
+		}
 		try {
 			mkdirSync(join(job, "steer", "inbox"), { recursive: true });
 			mkdirSync(join(job, "steer", "delivered"), { recursive: true });
 			writeFileSync(join(job, "steer", "ready"), "1\n", { flag: "wx" });
 		} catch {
-			if (!existsSync(join(job, "steer", "ready"))) return;
+			if (!existsSync(join(job, "steer", "ready"))) {
+				return;
+			}
 		}
 		jobDir = job;
 		try {
@@ -85,7 +115,9 @@ function deliver(pi: PiApi, job: string, name: string): boolean {
 		return true;
 	}
 	const text = readText(inbox);
-	if (!text) return false;
+	if (!text) {
+		return false;
+	}
 	try {
 		mkdirSync(claim);
 		writeFileSync(join(claim, "owner"), `${process.pid}\n${new Date().toISOString()}\n`);
@@ -118,12 +150,19 @@ function pendingNames(job: string): string[] {
 
 function recoverClaim(claim: string, delivered: string): void {
 	try {
-		if (!existsSync(claim)) return;
+		if (!existsSync(claim)) {
+			return;
+		}
 		const age = Date.now() - statSync(claim).mtimeMs;
-		if (age < CLAIM_STALE_MS) return;
+		if (age < CLAIM_STALE_MS) {
+			return;
+		}
 		if (existsSync(join(claim, "accepted"))) {
-			if (!existsSync(delivered)) renameSync(claim, delivered);
-			else rmSync(claim, { recursive: true, force: true });
+			if (!existsSync(delivered)) {
+				renameSync(claim, delivered);
+			} else {
+				rmSync(claim, { recursive: true, force: true });
+			}
 			return;
 		}
 		rmSync(claim, { recursive: true, force: true });
@@ -133,7 +172,9 @@ function recoverClaim(claim: string, delivered: string): void {
 }
 
 function readText(path: string): string {
-	if (!existsSync(path)) return "";
+	if (!existsSync(path)) {
+		return "";
+	}
 	return readFileSync(path, "utf8").trim();
 }
 

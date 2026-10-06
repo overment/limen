@@ -16,17 +16,25 @@ export function recordedPlanningSource(jobDir: string): PlanningSource {
 }
 
 export function parsePlanningSource(value: string): PlanningSource {
-	if (value !== "committed" && value !== "private") throw new Error("planning source must be committed or private");
+	if (value !== "committed" && value !== "private") {
+		throw new Error("planning source must be committed or private");
+	}
 	return value;
 }
 
 /** Inside a job's own worktree, return the canonical root, recorded source, and workspace repository from its job record. */
-export function inheritedPlanning(worktree: string): { root: string; source: PlanningSource; repo?: string } | undefined {
+export function inheritedPlanning(
+	worktree: string,
+): { root: string; source: PlanningSource; repo?: string } | undefined {
 	const root = process.env.LIMEN_CONTEXT_ROOT;
 	const id = process.env.LIMEN_JOB_ID;
-	if (process.env.LIMEN_JOB !== "1" || !root || !id || !/^[A-Za-z0-9._-]+$/.test(id)) return;
+	if (process.env.LIMEN_JOB !== "1" || !root || !id || !/^[A-Za-z0-9._-]+$/.test(id)) {
+		return;
+	}
 	const jobDir = `${root}/.limen/jobs/${id}`;
-	if (resolve(readFileSync(`${jobDir}/worktree`, "utf8").trim()) !== resolve(worktree)) return;
+	if (resolve(readFileSync(`${jobDir}/worktree`, "utf8").trim()) !== resolve(worktree)) {
+		return;
+	}
 	const repo = readIfPresent(`${jobDir}/repo`)?.trim();
 	return { root, source: recordedPlanningSource(jobDir), ...(repo ? { repo } : {}) };
 }
@@ -34,12 +42,18 @@ export function inheritedPlanning(worktree: string): { root: string; source: Pla
 /** Return the absolute path of a readable planning file inside the canonical root. Reject `..` and symlink escapes before the read. */
 export async function privatePlanningFile(root: string, path: string): Promise<string> {
 	const absolute = resolve(root, path);
-	if (path.split(/[\\/]/).includes("..") || !inside(resolve(root), absolute)) throw new Error(`private planning path must be inside canonical root: ${path}`);
+	if (path.split(/[\\/]/).includes("..") || !inside(resolve(root), absolute)) {
+		throw new Error(`private planning path must be inside canonical root: ${path}`);
+	}
 	const canonicalRoot = await realpath(root);
 	const file = await realpath(absolute);
-	if (!inside(canonicalRoot, file)) throw new Error(`private planning path escapes canonical root: ${path}`);
+	if (!inside(canonicalRoot, file)) {
+		throw new Error(`private planning path escapes canonical root: ${path}`);
+	}
 	const info = await stat(file);
-	if (!info.isFile() || !(info.mode & 0o444)) throw new Error(`private planning file is not readable: ${path}`);
+	if (!info.isFile() || !(info.mode & 0o444)) {
+		throw new Error(`private planning file is not readable: ${path}`);
+	}
 	await readFile(file, "utf8");
 	return absolute;
 }
@@ -81,7 +95,9 @@ function readIfPresent(file: string): string | undefined {
 	try {
 		return readFileSync(file, "utf8");
 	} catch (error) {
-		if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
+		if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+			return;
+		}
 		throw error;
 	}
 }

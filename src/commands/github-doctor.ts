@@ -49,15 +49,25 @@ async function safeParents(path: string, allowed: readonly number[]): Promise<bo
 	let current = dirname(await realpath(path).catch(() => path));
 	for (;;) {
 		const entry = await info(current);
-		if (!entry?.isDirectory() || !allowed.includes(entry.uid) || (entry.mode & 0o022) !== 0) return false;
-		if (current === dirname(current)) return true;
+		if (!entry?.isDirectory() || !allowed.includes(entry.uid) || (entry.mode & 0o022) !== 0) {
+			return false;
+		}
+		if (current === dirname(current)) {
+			return true;
+		}
 		current = dirname(current);
 	}
 }
 
 async function rootExecutable(path: string): Promise<boolean> {
 	const entry = await lstat(path).catch(() => undefined);
-	return !!entry?.isFile() && entry.uid === 0 && (entry.mode & 0o022) === 0 && (entry.mode & 0o111) !== 0 && (await safeParents(path, [0]));
+	return (
+		!!entry?.isFile() &&
+		entry.uid === 0 &&
+		(entry.mode & 0o022) === 0 &&
+		(entry.mode & 0o111) !== 0 &&
+		(await safeParents(path, [0]))
+	);
 }
 
 async function rootOwnedRelease(root: string): Promise<boolean> {
@@ -65,13 +75,21 @@ async function rootOwnedRelease(root: string): Promise<boolean> {
 	while (pending.length) {
 		const dir = pending.pop() as string;
 		const entries = await readdir(dir).catch(() => undefined);
-		if (!entries) return false;
+		if (!entries) {
+			return false;
+		}
 		for (const name of entries) {
-			if (dir === root && (name === ".git" || name === "node_modules")) continue;
+			if (dir === root && (name === ".git" || name === "node_modules")) {
+				continue;
+			}
 			const path = join(dir, name);
 			const entry = await lstat(path).catch(() => undefined);
-			if (entry?.uid !== 0 || (entry.mode & 0o022) !== 0 || entry.isSymbolicLink()) return false;
-			if (entry.isDirectory()) pending.push(path);
+			if (entry?.uid !== 0 || (entry.mode & 0o022) !== 0 || entry.isSymbolicLink()) {
+				return false;
+			}
+			if (entry.isDirectory()) {
+				pending.push(path);
+			}
 		}
 	}
 	return true;
@@ -79,16 +97,24 @@ async function rootOwnedRelease(root: string): Promise<boolean> {
 
 function aclAllows(path: string, poller: string, permission: "r" | "x", uid: number, gid: number): boolean {
 	const entry = command("getfacl", ["-cp", path]);
-	if (!entry) return false;
+	if (!entry) {
+		return false;
+	}
 	const owner = Number(command("stat", ["-c", "%u", path]));
 	const group = Number(command("stat", ["-c", "%g", path]));
 	const rows = entry.split("\n");
 	const rights = (prefix: string) => rows.find((row) => row.startsWith(prefix))?.split(":")[2];
-	if (owner === uid) return !!rights("user::")?.includes(permission);
+	if (owner === uid) {
+		return !!rights("user::")?.includes(permission);
+	}
 	const mask = rights("mask::") ?? "rwx";
 	const named = rights(`user:${poller}:`);
-	if (named !== undefined) return named.includes(permission) && mask.includes(permission);
-	if (group === gid) return !!rights("group::")?.includes(permission) && mask.includes(permission);
+	if (named !== undefined) {
+		return named.includes(permission) && mask.includes(permission);
+	}
+	if (group === gid) {
+		return !!rights("group::")?.includes(permission) && mask.includes(permission);
+	}
 	return !!rights("other::")?.includes(permission);
 }
 
@@ -97,7 +123,9 @@ export async function githubDoctor(root: string, seat: Seat = seatDefaults()): P
 	let failures = 0;
 	const report = (ok: boolean, label: string, fix: string) => {
 		console.log(`${ok ? "OK" : "FIX"} ${label}${ok ? "" : ` — ${fix}`}`);
-		if (!ok) failures++;
+		if (!ok) {
+			failures++;
+		}
 	};
 	const pollerId = command("id", ["-u", seat.poller]);
 	const pollerUid = pollerId && /^\d+$/.test(pollerId) ? Number(pollerId) : -1;
@@ -106,7 +134,11 @@ export async function githubDoctor(root: string, seat: Seat = seatDefaults()): P
 	const groups = command("id", ["-nG"]);
 	const sudo = spawnSync("sudo", ["-n", "-l"], { encoding: "utf8", timeout: 2000 });
 	report(
-		workerUid > 0 && workerUid !== pollerUid && !!groups && !/\b(?:sudo|wheel|admin)\b/.test(groups) && sudo.status !== 0,
+		workerUid > 0 &&
+			workerUid !== pollerUid &&
+			!!groups &&
+			!/\b(?:sudo|wheel|admin)\b/.test(groups) &&
+			sudo.status !== 0,
 		"worker has no sudo and is distinct from poller",
 		"remove worker sudo/admin groups and noninteractive sudo grants as root; log in again",
 	);
@@ -181,7 +213,9 @@ export async function githubDoctor(root: string, seat: Seat = seatDefaults()): P
 			command("systemctl", ["show", "-P", "FragmentPath", "limen-github.service"]) === seat.service &&
 			command("systemctl", ["show", "-P", "DropInPaths", "limen-github.service"]) === "" &&
 			command("systemctl", ["show", "-P", "User", "limen-github.service"]) === seat.poller &&
-			(command("systemctl", ["show", "-P", "ExecStart", "limen-github.service"]) ?? "").includes(`${seat.node} ${seat.release}/bin/limen github poll`),
+			(command("systemctl", ["show", "-P", "ExecStart", "limen-github.service"]) ?? "").includes(
+				`${seat.node} ${seat.release}/bin/limen github poll`,
+			),
 		"safe poller service command and PATH",
 		"install docs/seat/limen-github.service as root; use the root-owned interpreter explicitly",
 	);
@@ -223,28 +257,50 @@ export async function githubDoctor(root: string, seat: Seat = seatDefaults()): P
 	);
 	const state = await info(seat.state);
 	report(
-		!!state?.isDirectory() && state.uid === pollerUid && pollerUid > 0 && (state.mode & 0o077) === 0 && (await safeParents(seat.state, [0, pollerUid])),
+		!!state?.isDirectory() &&
+			state.uid === pollerUid &&
+			pollerUid > 0 &&
+			(state.mode & 0o077) === 0 &&
+			(await safeParents(seat.state, [0, pollerUid])),
 		"private poller state",
 		"install /var/lib/limen-github/state as poller:poller mode 0700; keep parents non-worker-writable",
 	);
 	report(
-		command("systemctl", ["is-enabled", seat.timer]) === "enabled" && command("systemctl", ["is-active", seat.timer]) === "active",
+		command("systemctl", ["is-enabled", seat.timer]) === "enabled" &&
+			command("systemctl", ["is-active", seat.timer]) === "active",
 		"enabled active GitHub timer",
 		"systemctl daemon-reload && systemctl enable --now limen-github.timer; inspect journalctl -u limen-github.service",
 	);
 
 	const registry = await readFile(seat.registry, "utf8").catch(() => undefined);
-	let registryAccess = registry !== undefined && pollerUid > 0 && aclAllows(seat.registry, seat.poller, "r", pollerUid, gid);
-	for (let parent = dirname(seat.registry); parent !== dirname(parent); parent = dirname(parent)) registryAccess &&= aclAllows(parent, seat.poller, "x", pollerUid, gid);
-	report(registryAccess, "readable seat project registry", `create ${seat.registry} with limen init; grant poller read/traverse ACL`);
+	let registryAccess =
+		registry !== undefined && pollerUid > 0 && aclAllows(seat.registry, seat.poller, "r", pollerUid, gid);
+	for (let parent = dirname(seat.registry); parent !== dirname(parent); parent = dirname(parent)) {
+		registryAccess &&= aclAllows(parent, seat.poller, "x", pollerUid, gid);
+	}
+	report(
+		registryAccess,
+		"readable seat project registry",
+		`create ${seat.registry} with limen init; grant poller read/traverse ACL`,
+	);
 	const projects = registry?.split("\n").filter(Boolean) ?? [];
-	report(projects.includes(root), "project registered on this seat", "run limen init in this checkout, then grant the poller traverse ACLs on its parents");
+	report(
+		projects.includes(root),
+		"project registered on this seat",
+		"run limen init in this checkout, then grant the poller traverse ACLs on its parents",
+	);
 	const seen = new Set<string>();
 	for (const project of [root, ...projects]) {
-		if (seen.has(project)) continue;
+		if (seen.has(project)) {
+			continue;
+		}
 		seen.add(project);
 		if (!isAbsolute(project) || resolve(project) !== project) {
-			report(false, `project registry path ${JSON.stringify(project)}`, "replace with an absolute normalized project root");
+			report(
+				false,
+				`project registry path ${JSON.stringify(project)}`,
+				"replace with an absolute normalized project root",
+			);
 			continue;
 		}
 		const label = `project ${project}`;
@@ -257,9 +313,13 @@ export async function githubDoctor(root: string, seat: Seat = seatDefaults()): P
 			continue;
 		}
 		let traverse = !!registryPath?.isDirectory();
-		for (let parent = project; parent !== dirname(parent); parent = dirname(parent)) traverse &&= aclAllows(parent, seat.poller, "x", pollerUid, gid);
+		for (let parent = project; parent !== dirname(parent); parent = dirname(parent)) {
+			traverse &&= aclAllows(parent, seat.poller, "x", pollerUid, gid);
+		}
 		traverse &&= aclAllows(join(project, ".limen"), seat.poller, "x", pollerUid, gid);
-		traverse &&= aclAllows(join(project, ".limen/github"), seat.poller, "x", pollerUid, gid) && aclAllows(bindingPath(project), seat.poller, "r", pollerUid, gid);
+		traverse &&=
+			aclAllows(join(project, ".limen/github"), seat.poller, "x", pollerUid, gid) &&
+			aclAllows(bindingPath(project), seat.poller, "r", pollerUid, gid);
 		report(
 			!!traverse &&
 				!!limen?.isDirectory() &&
@@ -281,7 +341,11 @@ export async function githubDoctor(root: string, seat: Seat = seatDefaults()): P
 			/* an absent/invalid origin is reported below */
 		}
 		report(
-			!!binding?.coordinator && !!binding.user && !!origin && binding.repo.toLowerCase() === origin.toLowerCase() && binding.user === worker,
+			!!binding?.coordinator &&
+				!!binding.user &&
+				!!origin &&
+				binding.repo.toLowerCase() === origin.toLowerCase() &&
+				binding.user === worker,
 			`${label} coordinator binding`,
 			"from its persistent Herdr coordinator run limen github connect (or disconnect before changing origin)",
 		);
@@ -301,5 +365,7 @@ export async function githubDoctor(root: string, seat: Seat = seatDefaults()): P
 			"attach/start its persistent Herdr coordinator and reconnect if its pane identity changed; done is warm idle unless Herdr reports interactive_ready false",
 		);
 	}
-	if (failures) throw new Error(`github doctor: ${failures} prerequisite${failures === 1 ? "" : "s"} need repair`);
+	if (failures) {
+		throw new Error(`github doctor: ${failures} prerequisite${failures === 1 ? "" : "s"} need repair`);
+	}
 }

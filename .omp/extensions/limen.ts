@@ -13,9 +13,13 @@ export default async function limen(pi: unknown): Promise<void> {
 
 function findPackage(): string {
 	for (const dir of (process.env.PATH ?? "").split(":")) {
-		if (!dir) continue;
+		if (!dir) {
+			continue;
+		}
 		const bin = join(dir, "limen");
-		if (!existsSync(bin)) continue;
+		if (!existsSync(bin)) {
+			continue;
+		}
 		return join(dirname(realpathSync(bin)), "..");
 	}
 	throw new Error("limen is not on PATH; cannot load package hooks");

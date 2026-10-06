@@ -19,7 +19,14 @@ import {
 
 const API = "https://api.github.com";
 const PAGE = 100;
-type Comment = { id: number; body: string | null; created_at: string; html_url: string; issue_url: string; user: { login: string } | null };
+type Comment = {
+	id: number;
+	body: string | null;
+	created_at: string;
+	html_url: string;
+	issue_url: string;
+	user: { login: string } | null;
+};
 type Pull = {
 	number: number;
 	state: string;
@@ -48,13 +55,20 @@ function mentionsLimen(body: string): boolean {
 	for (const line of body.replace(/<!--[\s\S]*?(?:-->|$)/g, "").split("\n")) {
 		const marker = /^\s*(`{3,}|~{3,})/.exec(line)?.[1];
 		if (marker) {
-			if (!fence) fence = marker;
-			else if (marker[0] === fence[0] && marker.length >= fence.length) fence = undefined;
+			if (!fence) {
+				fence = marker;
+			} else if (marker[0] === fence[0] && marker.length >= fence.length) {
+				fence = undefined;
+			}
 			continue;
 		}
-		if (fence || /^\s*>/.test(line) || /^( {4}|\t)/.test(line)) continue;
+		if (fence || /^\s*>/.test(line) || /^( {4}|\t)/.test(line)) {
+			continue;
+		}
 		const plain = line.replace(/`+[^`]*`+/g, "");
-		if (/(^|\s)(?:@limen|\/limen)(?=$|[\s.,!?;:])/i.test(plain)) return true;
+		if (/(^|\s)(?:@limen|\/limen)(?=$|[\s.,!?;:])/i.test(plain)) {
+			return true;
+		}
 	}
 	return false;
 }
@@ -79,7 +93,9 @@ async function api<T>(path: string, token: string, method = "GET", body?: object
 		...(body ? { body: JSON.stringify(body) } : {}),
 		signal: AbortSignal.timeout(15_000),
 	});
-	if (!response.ok) throw new Error(`GitHub ${method} ${path.split("?")[0]} returned HTTP ${response.status}`);
+	if (!response.ok) {
+		throw new Error(`GitHub ${method} ${path.split("?")[0]} returned HTTP ${response.status}`);
+	}
 	return response.status === 204 ? (undefined as T) : ((await response.json()) as T);
 }
 
@@ -88,33 +104,47 @@ async function found<T>(path: string, token: string): Promise<T | undefined> {
 	try {
 		return await api<T>(path, token);
 	} catch (error) {
-		if (String(error).includes("HTTP 404")) return undefined;
+		if (String(error).includes("HTTP 404")) {
+			return undefined;
+		}
 		throw error;
 	}
 }
 
 async function installationToken(repo: string, jwt: string): Promise<string> {
 	const installation = await api<{ id: number }>(`/repos/${repo}/installation`, jwt);
-	const result = await api<{ token: string }>(`/app/installations/${installation.id}/access_tokens`, jwt, "POST", { repositories: [repo.split("/")[1]] });
-	if (!result.token) throw new Error(`GitHub did not issue an installation token for ${repo}`);
+	const result = await api<{ token: string }>(`/app/installations/${installation.id}/access_tokens`, jwt, "POST", {
+		repositories: [repo.split("/")[1]],
+	});
+	if (!result.token) {
+		throw new Error(`GitHub did not issue an installation token for ${repo}`);
+	}
 	return result.token;
 }
 async function privatePath(path: string, allowed: readonly number[]): Promise<void> {
 	const real = await realpath(path);
 	for (let parent = dirname(real); ; parent = dirname(parent)) {
 		const info = await stat(parent);
-		if (!allowed.includes(info.uid) || (info.mode & 0o022) !== 0) throw new Error(`unsafe owner or permissions on ${parent}`);
-		if (parent === dirname(parent)) break;
+		if (!allowed.includes(info.uid) || (info.mode & 0o022) !== 0) {
+			throw new Error(`unsafe owner or permissions on ${parent}`);
+		}
+		if (parent === dirname(parent)) {
+			break;
+		}
 	}
 }
 
 async function appJwt(): Promise<string> {
 	const id = process.env.LIMEN_GITHUB_APP_ID;
 	const path = process.env.LIMEN_GITHUB_KEY_FILE;
-	if (!id || !/^\d+$/.test(id) || !path || !isAbsolute(path)) throw new Error("poller needs LIMEN_GITHUB_APP_ID and absolute LIMEN_GITHUB_KEY_FILE");
+	if (!id || !/^\d+$/.test(id) || !path || !isAbsolute(path)) {
+		throw new Error("poller needs LIMEN_GITHUB_APP_ID and absolute LIMEN_GITHUB_KEY_FILE");
+	}
 	const key = await stat(path);
 	await privatePath(path, [0, process.getuid?.() ?? -1]);
-	if (key.uid !== process.getuid?.() || !key.isFile() || (key.mode & 0o077) !== 0) throw new Error("App key must be a mode-0600 regular file owned by the poller Unix user");
+	if (key.uid !== process.getuid?.() || !key.isFile() || (key.mode & 0o077) !== 0) {
+		throw new Error("App key must be a mode-0600 regular file owned by the poller Unix user");
+	}
 	const now = Math.floor(Date.now() / 1000);
 	const header = Buffer.from(JSON.stringify({ alg: "RS256", typ: "JWT" })).toString("base64url");
 	const payload = Buffer.from(JSON.stringify({ iat: now - 60, exp: now + 540, iss: id })).toString("base64url");
@@ -142,33 +172,62 @@ async function persist(root: string, state: string, claim: GithubClaim): Promise
 
 async function existingReceipt(repo: string, pr: number, marker: string, token: string): Promise<number | undefined> {
 	for (let page = 1; ; page++) {
-		const comments = await api<Array<{ id: number; body: string | null; performed_via_github_app: { id: number } | null }>>(
-			`/repos/${repo}/issues/${pr}/comments?per_page=${PAGE}&page=${page}`,
-			token,
+		const comments = await api<
+			Array<{ id: number; body: string | null; performed_via_github_app: { id: number } | null }>
+		>(`/repos/${repo}/issues/${pr}/comments?per_page=${PAGE}&page=${page}`, token);
+		const found = comments.find(
+			(comment) =>
+				comment.performed_via_github_app?.id === Number(process.env.LIMEN_GITHUB_APP_ID) &&
+				comment.body?.includes(marker),
 		);
-		const found = comments.find((comment) => comment.performed_via_github_app?.id === Number(process.env.LIMEN_GITHUB_APP_ID) && comment.body?.includes(marker));
-		if (found) return found.id;
-		if (comments.length < PAGE) return undefined;
+		if (found) {
+			return found.id;
+		}
+		if (comments.length < PAGE) {
+			return undefined;
+		}
 	}
 }
 
-async function reply(root: string, state: string, claim: GithubClaim, token: string, kind: "start" | "terminal" | "notice", body: string): Promise<void> {
+async function reply(
+	root: string,
+	state: string,
+	claim: GithubClaim,
+	token: string,
+	kind: "start" | "terminal" | "notice",
+	body: string,
+): Promise<void> {
 	const field = kind === "start" ? "startComment" : kind === "terminal" ? "terminalComment" : "noticeComment";
-	if (claim[field]) return;
+	if (claim[field]) {
+		return;
+	}
 	const marker = `<!-- limen-github ${claim.repo.toLowerCase()} ${claim.id} ${kind} -->`;
 	const prior = await existingReceipt(claim.repo, claim.pr, marker, token);
-	const posted = prior ?? (await api<{ id: number }>(`/repos/${claim.repo}/issues/${claim.pr}/comments`, token, "POST", { body: `${body}\n\n${marker}` })).id;
+	const posted =
+		prior ??
+		(
+			await api<{ id: number }>(`/repos/${claim.repo}/issues/${claim.pr}/comments`, token, "POST", {
+				body: `${body}\n\n${marker}`,
+			})
+		).id;
 	claim[field] = posted;
 	await persist(root, state, claim);
 }
 
 // The test seam also reads authority from the private store; a checkout claim is never an input.
-export async function reconcileGithubClaim(root: string, state: string, id: number | string, token: string): Promise<void> {
+export async function reconcileGithubClaim(
+	root: string,
+	state: string,
+	id: number | string,
+	token: string,
+): Promise<void> {
 	let claim: GithubClaim;
 	try {
 		claim = JSON.parse(await readFile(join(state, "claims", `${id}.json`), "utf8")) as GithubClaim;
 	} catch (error) {
-		if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
+		if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+			return;
+		}
 		throw error;
 	}
 	await reconcile(root, state, claim, token);
@@ -195,13 +254,24 @@ async function reconcile(root: string, state: string, claim: GithubClaim, token:
 		) {
 			const binding = await readBinding(root);
 			const outcome = await readFile(join(githubDir(root), "outcomes", `${claim.id}.json`), "utf8")
-				.then((text) => JSON.parse(text) as { repo: string; id: number; coordinator: string; nonce: string; answer: string })
+				.then(
+					(text) =>
+						JSON.parse(text) as { repo: string; id: number; coordinator: string; nonce: string; answer: string },
+				)
 				.catch(() => undefined);
 			if (binding && claim.outcomeNonce && outcome?.nonce === claim.outcomeNonce) {
 				const repositoriesMatch =
-					typeof outcome.repo === "string" && sameRepo(outcome.repo, claim.repo) && sameRepo(binding.repo, claim.repo) && sameRepo(originRepository(root, true), claim.repo);
-				const requestMatches = repositoriesMatch && outcome.id === claim.id && outcome.coordinator === binding.coordinator;
-				const answerUsable = requestMatches && typeof outcome.answer === "string" && outcome.answer.trim() && outcome.answer.length <= GITHUB_ANSWER_MAX;
+					typeof outcome.repo === "string" &&
+					sameRepo(outcome.repo, claim.repo) &&
+					sameRepo(binding.repo, claim.repo) &&
+					sameRepo(originRepository(root, true), claim.repo);
+				const requestMatches =
+					repositoriesMatch && outcome.id === claim.id && outcome.coordinator === binding.coordinator;
+				const answerUsable =
+					requestMatches &&
+					typeof outcome.answer === "string" &&
+					outcome.answer.trim() &&
+					outcome.answer.length <= GITHUB_ANSWER_MAX;
 				if (answerUsable) {
 					claim.answer = outcome.answer.trim();
 					claim.receipt = "resolved";
@@ -218,11 +288,19 @@ async function reconcile(root: string, state: string, claim: GithubClaim, token:
 				}
 			}
 		}
-		if (claim.receipt?.startsWith("pending: coordinator unavailable") && Date.now() - Date.parse(claim.attemptedAt ?? "") > 30_000) {
+		if (
+			claim.receipt?.startsWith("pending: coordinator unavailable") &&
+			Date.now() - Date.parse(claim.attemptedAt ?? "") > 30_000
+		) {
 			const binding = await readBinding(root);
-			if (binding && sameRepo(binding.repo, claim.repo) && sameRepo(originRepository(root, true), claim.repo)) await handoff(root, state, binding, claim, token);
+			if (binding && sameRepo(binding.repo, claim.repo) && sameRepo(originRepository(root, true), claim.repo)) {
+				await handoff(root, state, binding, claim, token);
+			}
 		}
-		if ((claim.receipt?.startsWith("handoff attempted; outcome unconfirmed") || claim.receipt === "prompt accepted") && Date.now() - Date.parse(claim.attemptedAt ?? "") > 90_000) {
+		if (
+			(claim.receipt?.startsWith("handoff attempted; outcome unconfirmed") || claim.receipt === "prompt accepted") &&
+			Date.now() - Date.parse(claim.attemptedAt ?? "") > 90_000
+		) {
 			claim.receipt = "pending: no matching job record; inspect coordinator before retry";
 			await persist(root, state, claim);
 			await reply(
@@ -243,7 +321,7 @@ async function reconcile(root: string, state: string, claim: GithubClaim, token:
 		await persist(root, state, claim);
 	}
 	if (!found.started) {
-		if (found.state !== "running")
+		if (found.state !== "running") {
 			await reply(
 				root,
 				state,
@@ -252,6 +330,7 @@ async function reconcile(root: string, state: string, claim: GithubClaim, token:
 				"notice",
 				`Limen created job \`${found.id}\` for ${githubSubject(claim)}, but the hosted agent never started (state: ${found.state}). Inspect \`limen jobs ${found.id}\` on the owning seat. No review approval or detached fallback occurred.`,
 			);
+		}
 		return;
 	}
 	await reply(
@@ -262,10 +341,17 @@ async function reconcile(root: string, state: string, claim: GithubClaim, token:
 		"start",
 		`Limen started a hosted ${found.review ? "review" : "task"} for ${githubSubject(claim)}${found.review ? ` at pinned head \`${claim.head}\` against base \`${claim.base}\`` : " from the registered repository"}. Job: \`${found.id}\`; branch: \`${found.branch}\`. On its owning seat: \`limen jobs ${found.id}\`. This is not an approval.`,
 	);
-	if (!found.state || found.state === "running") return;
+	if (!found.state || found.state === "running") {
+		return;
+	}
 	const dir = join(root, ".limen/jobs", found.id);
-	const [result, log] = await Promise.all(["result", "log"].map((name) => readFile(join(dir, name), "utf8").catch(() => "")));
-	const evidence = (result ?? "").trim().slice(0, 1600) || (log ?? "").trim().split("\n").slice(-10).join("\n").slice(0, 1600) || "No result or check evidence recorded.";
+	const [result, log] = await Promise.all(
+		["result", "log"].map((name) => readFile(join(dir, name), "utf8").catch(() => "")),
+	);
+	const evidence =
+		(result ?? "").trim().slice(0, 1600) ||
+		(log ?? "").trim().split("\n").slice(-10).join("\n").slice(0, 1600) ||
+		"No result or check evidence recorded.";
 	await reply(
 		root,
 		state,
@@ -279,42 +365,119 @@ async function reconcile(root: string, state: string, claim: GithubClaim, token:
 export { accept as acceptGithubComment };
 
 async function authorized(binding: GithubBinding, login: string, token: string): Promise<boolean> {
-	const permission = await found<{ permission: string }>(`/repos/${binding.repo}/collaborators/${encodeURIComponent(login)}/permission`, token);
+	const permission = await found<{ permission: string }>(
+		`/repos/${binding.repo}/collaborators/${encodeURIComponent(login)}/permission`,
+		token,
+	);
 	return Boolean(permission && ["admin", "write", "maintain"].includes(permission.permission));
 }
 
-async function accept(root: string, state: string, binding: GithubBinding, comment: Comment, token: string): Promise<void> {
-	if (!comment.body || !mentionsLimen(comment.body) || !comment.user || Date.parse(comment.created_at) < Date.parse(binding.connectedAt)) return;
-	if (!Number.isSafeInteger(comment.id) || comment.id < 1) throw new Error("GitHub comment has an invalid ID");
+async function accept(
+	root: string,
+	state: string,
+	binding: GithubBinding,
+	comment: Comment,
+	token: string,
+): Promise<void> {
+	if (
+		!comment.body ||
+		!mentionsLimen(comment.body) ||
+		!comment.user ||
+		Date.parse(comment.created_at) < Date.parse(binding.connectedAt)
+	) {
+		return;
+	}
+	if (!Number.isSafeInteger(comment.id) || comment.id < 1) {
+		throw new Error("GitHub comment has an invalid ID");
+	}
 	const pr = Number(/\/issues\/(\d+)$/.exec(comment.issue_url)?.[1]);
-	if (!Number.isSafeInteger(pr) || pr < 1) return;
-	if (!(await authorized(binding, comment.user.login, token))) return;
+	if (!Number.isSafeInteger(pr) || pr < 1) {
+		return;
+	}
+	if (!(await authorized(binding, comment.user.login, token))) {
+		return;
+	}
 	// GitHub answers 404 on /pulls/<n> for an issue. The issue API also returns pull requests, so it re-checks.
 	const pull = await found<Pull>(`/repos/${binding.repo}/pulls/${pr}`, token);
 	const issue = pull ? undefined : await found<Issue>(`/repos/${binding.repo}/issues/${pr}`, token);
 	const thread = pull ?? issue;
-	if (thread?.state !== "open" || thread.number !== pr) return;
-	if (pull) {
-		if (!sameRepo(pull.base.repo.full_name, binding.repo)) return;
-		if (!/^[0-9a-f]{40}$/.test(pull.head.sha) || !/^[0-9a-f]{40}$/.test(pull.base.sha) || !/^[\w./-]+$/.test(pull.base.ref)) throw new Error("GitHub returned invalid PR refs");
-	} else {
-		if (issue?.pull_request) return;
-		if (!issue || !sameRepo(issue.repository_url, `${API}/repos/${binding.repo}`)) return;
+	if (thread?.state !== "open" || thread.number !== pr) {
+		return;
 	}
-	await request(root, state, binding, { id: comment.id, pr, actor: comment.user.login, url: comment.html_url, command: comment.body }, thread, token);
+	if (pull) {
+		if (!sameRepo(pull.base.repo.full_name, binding.repo)) {
+			return;
+		}
+		if (
+			!/^[0-9a-f]{40}$/.test(pull.head.sha) ||
+			!/^[0-9a-f]{40}$/.test(pull.base.sha) ||
+			!/^[\w./-]+$/.test(pull.base.ref)
+		) {
+			throw new Error("GitHub returned invalid PR refs");
+		}
+	} else {
+		if (issue?.pull_request) {
+			return;
+		}
+		if (!issue || !sameRepo(issue.repository_url, `${API}/repos/${binding.repo}`)) {
+			return;
+		}
+	}
+	await request(
+		root,
+		state,
+		binding,
+		{ id: comment.id, pr, actor: comment.user.login, url: comment.html_url, command: comment.body },
+		thread,
+		token,
+	);
 }
 
 // The body as first read decides: an open issue, not a pull request, opened after connect by a write-or-higher author. The title never counts.
-async function acceptIssue(root: string, state: string, binding: GithubBinding, issue: Issue, token: string): Promise<void> {
-	if (issue.pull_request || issue.state !== "open" || !issue.body || !mentionsLimen(issue.body) || !issue.user || Date.parse(issue.created_at) < Date.parse(binding.connectedAt))
+async function acceptIssue(
+	root: string,
+	state: string,
+	binding: GithubBinding,
+	issue: Issue,
+	token: string,
+): Promise<void> {
+	if (
+		issue.pull_request ||
+		issue.state !== "open" ||
+		!issue.body ||
+		!mentionsLimen(issue.body) ||
+		!issue.user ||
+		Date.parse(issue.created_at) < Date.parse(binding.connectedAt)
+	) {
 		return;
-	if (!Number.isSafeInteger(issue.number) || issue.number < 1) throw new Error("GitHub issue has an invalid number");
-	if (!sameRepo(issue.repository_url, `${API}/repos/${binding.repo}`)) return;
-	if (!(await authorized(binding, issue.user.login, token))) return;
-	await request(root, state, binding, { id: `issue-${issue.number}`, pr: issue.number, actor: issue.user.login, url: issue.html_url }, issue, token);
+	}
+	if (!Number.isSafeInteger(issue.number) || issue.number < 1) {
+		throw new Error("GitHub issue has an invalid number");
+	}
+	if (!sameRepo(issue.repository_url, `${API}/repos/${binding.repo}`)) {
+		return;
+	}
+	if (!(await authorized(binding, issue.user.login, token))) {
+		return;
+	}
+	await request(
+		root,
+		state,
+		binding,
+		{ id: `issue-${issue.number}`, pr: issue.number, actor: issue.user.login, url: issue.html_url },
+		issue,
+		token,
+	);
 }
 
-async function request(root: string, state: string, binding: GithubBinding, trigger: Trigger, thread: Pull | Issue, token: string): Promise<void> {
+async function request(
+	root: string,
+	state: string,
+	binding: GithubBinding,
+	trigger: Trigger,
+	thread: Pull | Issue,
+	token: string,
+): Promise<void> {
 	const pull = "base" in thread ? thread : undefined;
 	const pr = trigger.pr;
 	const path = join(state, "claims", `${trigger.id}.json`);
@@ -322,7 +485,9 @@ async function request(root: string, state: string, binding: GithubBinding, trig
 	try {
 		claim = JSON.parse(await readFile(path, "utf8")) as GithubClaim;
 	} catch (error) {
-		if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+		if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+			throw error;
+		}
 		const link = `https://github.com/${binding.repo}/${pull ? "pull" : "issues"}/${pr}`;
 		const discussion: string[] = [];
 		for (const endpoint of [
@@ -341,7 +506,9 @@ async function request(root: string, state: string, binding: GithubBinding, trig
 			}
 			let used = 0;
 			for (const entry of entries) {
-				if (endpoint.includes("/issues/") && entry.id === trigger.id) continue;
+				if (endpoint.includes("/issues/") && entry.id === trigger.id) {
+					continue;
+				}
 				const body = entry.body ?? "";
 				const line = `${entry.user?.login ?? "unknown"}: ${body.slice(0, 1200)}${body.length > 1200 ? " [comment excerpt truncated]" : ""}`;
 				if (used + line.length > 3500) {
@@ -351,7 +518,9 @@ async function request(root: string, state: string, binding: GithubBinding, trig
 				discussion.push(line);
 				used += line.length;
 			}
-			if (entries.length === PAGE) discussion.push(`[More ${endpoint.split("/").at(-1)} may exist; first ${PAGE} fetched at ${link}]`);
+			if (entries.length === PAGE) {
+				discussion.push(`[More ${endpoint.split("/").at(-1)} may exist; first ${PAGE} fetched at ${link}]`);
+			}
 		}
 		const excerpt = discussion.join("\n");
 		claim = {
@@ -365,7 +534,9 @@ async function request(root: string, state: string, binding: GithubBinding, trig
 			body: boundedContext(thread.body ?? "", 6000, pull ? "PR body" : "Issue body", link),
 			discussion: boundedContext(excerpt, 12000, "Discussion", link),
 			outcomeNonce: randomBytes(HANDOFF_NONCE_BYTES).toString("hex"),
-			...(trigger.command === undefined ? {} : { command: boundedContext(trigger.command, 4000, "Triggering comment", trigger.url) }),
+			...(trigger.command === undefined
+				? {}
+				: { command: boundedContext(trigger.command, 4000, "Triggering comment", trigger.url) }),
 		};
 		await writeFile(path, `${JSON.stringify(claim)}\n`, { flag: "wx", mode: 0o600, flush: true }); // authoritative claim before handoff
 		await mirror(root, claim);
@@ -377,13 +548,22 @@ async function request(root: string, state: string, binding: GithubBinding, trig
 	await handoff(root, state, binding, claim, token);
 }
 
-async function handoff(root: string, state: string, binding: GithubBinding, claim: GithubClaim, token: string): Promise<void> {
+async function handoff(
+	root: string,
+	state: string,
+	binding: GithubBinding,
+	claim: GithubClaim,
+	token: string,
+): Promise<void> {
 	claim.outcomeNonce ??= randomBytes(HANDOFF_NONCE_BYTES).toString("hex");
 	claim.attemptedAt = new Date().toISOString();
 	claim.receipt = "pending: coordinator unavailable";
 	await persist(root, state, claim);
 	const command = process.env.LIMEN_GITHUB_LIMEN_BIN || "/opt/limen/bin/limen";
-	const ensure = spawnSync("sudo", ["-n", "-u", binding.user, "--", command, "github", "ensure", root], { encoding: "utf8", timeout: 20_000 });
+	const ensure = spawnSync("sudo", ["-n", "-u", binding.user, "--", command, "github", "ensure", root], {
+		encoding: "utf8",
+		timeout: 20_000,
+	});
 	if (ensure.status !== 0) {
 		await reply(
 			root,
@@ -398,12 +578,18 @@ async function handoff(root: string, state: string, binding: GithubBinding, clai
 	// Record an ambiguous attempt before invoking Herdr. Never blindly prompt twice after this point.
 	claim.receipt = "handoff attempted; outcome unconfirmed";
 	await persist(root, state, claim);
-	const delivered = spawnSync("sudo", ["-n", "-u", binding.user, "--", command, "github", "deliver", root, String(claim.id), claim.outcomeNonce], {
-		encoding: "utf8",
-		timeout: 20_000,
-	});
+	const delivered = spawnSync(
+		"sudo",
+		["-n", "-u", binding.user, "--", command, "github", "deliver", root, String(claim.id), claim.outcomeNonce],
+		{
+			encoding: "utf8",
+			timeout: 20_000,
+		},
+	);
 	if (delivered.status !== 0) {
-		claim.receipt = /(?:bare.shell|not an available shell|agent_not_found|target_not_found)/i.test(delivered.stderr ?? "")
+		claim.receipt = /(?:bare.shell|not an available shell|agent_not_found|target_not_found)/i.test(
+			delivered.stderr ?? "",
+		)
 			? "pending: coordinator unavailable (Herdr refused prompt before acceptance)"
 			: `handoff attempted; outcome unconfirmed (${(delivered.stderr || delivered.error?.message || "unavailable").trim().slice(0, 250)})`;
 		await persist(root, state, claim);
@@ -424,7 +610,12 @@ async function handoff(root: string, state: string, binding: GithubBinding, clai
 
 // Issue bodies keep their own cursor: the creation time and number of the last issue read. A failed read leaves it in place.
 // `since` filters on update time, never earlier than creation, so every issue opened after the cursor is listed again.
-export async function pollGithubIssues(root: string, state: string, binding: GithubBinding, token: string): Promise<void> {
+export async function pollGithubIssues(
+	root: string,
+	state: string,
+	binding: GithubBinding,
+	token: string,
+): Promise<void> {
 	const cursorPath = join(state, "issue-cursor.json");
 	const cursor = await readFile(cursorPath, "utf8").then(
 		(text) => JSON.parse(text) as { number: number; createdAt: string },
@@ -432,11 +623,16 @@ export async function pollGithubIssues(root: string, state: string, binding: Git
 	);
 	const since = new Date(Date.parse(cursor.createdAt) - 1000).toISOString().replace(/\.\d{3}Z$/, "Z");
 	for (let page = 1; ; page++) {
-		const issues = await api<Issue[]>(`/repos/${binding.repo}/issues?state=all&sort=created&direction=asc&since=${encodeURIComponent(since)}&per_page=${PAGE}&page=${page}`, token);
+		const issues = await api<Issue[]>(
+			`/repos/${binding.repo}/issues?state=all&sort=created&direction=asc&since=${encodeURIComponent(since)}&per_page=${PAGE}&page=${page}`,
+			token,
+		);
 		for (const issue of issues) {
 			const created = Date.parse(issue.created_at);
 			const mark = Date.parse(cursor.createdAt);
-			if (created < mark || (created === mark && issue.number <= cursor.number)) continue;
+			if (created < mark || (created === mark && issue.number <= cursor.number)) {
+				continue;
+			}
 			await acceptIssue(root, state, binding, issue, token);
 			cursor.number = issue.number;
 			cursor.createdAt = issue.created_at;
@@ -444,23 +640,31 @@ export async function pollGithubIssues(root: string, state: string, binding: Git
 			await writeFile(temp, `${JSON.stringify(cursor)}\n`, { flag: "wx", mode: 0o600 });
 			await rename(temp, cursorPath);
 		}
-		if (issues.length < PAGE) break;
+		if (issues.length < PAGE) {
+			break;
+		}
 	}
 }
 
 async function project(root: string, stateDir: string, jwt: string): Promise<void> {
 	const binding = await readBinding(root);
-	if (!binding || !sameRepo(originRepository(root, true), binding.repo)) return;
+	if (!binding || !sameRepo(originRepository(root, true), binding.repo)) {
+		return;
+	}
 	const state = join(stateDir, createHash("sha256").update(root).digest("hex"));
 	await mkdir(join(state, "claims"), { recursive: true, mode: 0o700 });
 	for (const dir of [state, join(state, "claims")]) {
 		const info = await stat(dir);
-		if (info.uid !== process.getuid?.() || (info.mode & 0o077) !== 0 || !info.isDirectory()) throw new Error(`unsafe poller claim directory ${dir}`);
+		if (info.uid !== process.getuid?.() || (info.mode & 0o077) !== 0 || !info.isDirectory()) {
+			throw new Error(`unsafe poller claim directory ${dir}`);
+		}
 	}
 	const lock = join(githubDir(root), "poll.lock");
 	await writeFile(lock, `${process.pid}\n`, { flag: "wx", mode: 0o660 });
 	try {
-		if ((await readBinding(root))?.connectedAt !== binding.connectedAt) return; // disconnect won the race
+		if ((await readBinding(root))?.connectedAt !== binding.connectedAt) {
+			return; // disconnect won the race
+		}
 		const identity = spawnSync("id", ["-u", binding.user], { encoding: "utf8" });
 		const groups = spawnSync("id", ["-nG", binding.user], { encoding: "utf8" });
 		if (
@@ -468,14 +672,19 @@ async function project(root: string, stateDir: string, jwt: string): Promise<voi
 			Number(identity.stdout.trim()) !== Number(process.env.LIMEN_GITHUB_WORKER_UID) ||
 			groups.status !== 0 ||
 			/\b(?:sudo|wheel|admin)\b/.test(groups.stdout)
-		)
+		) {
 			throw new Error("registered coordinator has unsafe Unix privileges; disconnect until its sudo access is removed");
+		}
 		const token = await installationToken(binding.repo, jwt); // a token scoped to this installed repository only
 		const claimsDir = join(state, "claims");
 		for (const entry of await readdir(claimsDir)) {
-			if (!entry.endsWith(".json") || claimId(entry.slice(0, -5)) === undefined) continue;
+			if (!entry.endsWith(".json") || claimId(entry.slice(0, -5)) === undefined) {
+				continue;
+			}
 			const claim = JSON.parse(await readFile(join(claimsDir, entry), "utf8")) as GithubClaim;
-			if (sameRepo(claim.repo, binding.repo)) await reconcile(root, state, claim, token);
+			if (sameRepo(claim.repo, binding.repo)) {
+				await reconcile(root, state, claim, token);
+			}
 		}
 		// Keep a durable cursor, with one second overlap for comments sharing a GitHub timestamp.
 		const cursorPath = join(state, "cursor.json");
@@ -483,14 +692,18 @@ async function project(root: string, stateDir: string, jwt: string): Promise<voi
 			(text) => JSON.parse(text) as { id: number; createdAt: string },
 			() => ({ id: 0, createdAt: binding.connectedAt }),
 		);
-		const since = new Date(Math.max(Date.parse(binding.connectedAt), Date.parse(cursor.createdAt) - 1000)).toISOString().replace(/\.\d{3}Z$/, "Z");
+		const since = new Date(Math.max(Date.parse(binding.connectedAt), Date.parse(cursor.createdAt) - 1000))
+			.toISOString()
+			.replace(/\.\d{3}Z$/, "Z");
 		for (let page = 1; ; page++) {
 			const comments = await api<Comment[]>(
 				`/repos/${binding.repo}/issues/comments?sort=created&direction=asc&since=${encodeURIComponent(since)}&per_page=${PAGE}&page=${page}`,
 				token,
 			);
 			for (const comment of comments) {
-				if (comment.id <= cursor.id) continue;
+				if (comment.id <= cursor.id) {
+					continue;
+				}
 				await accept(root, state, binding, comment, token);
 				cursor.id = comment.id;
 				cursor.createdAt = comment.created_at;
@@ -498,7 +711,9 @@ async function project(root: string, stateDir: string, jwt: string): Promise<voi
 				await writeFile(temp, `${JSON.stringify(cursor)}\n`, { flag: "wx", mode: 0o600 });
 				await rename(temp, cursorPath);
 			}
-			if (comments.length < PAGE) break;
+			if (comments.length < PAGE) {
+				break;
+			}
 		}
 		await pollGithubIssues(root, state, binding, token);
 	} finally {
@@ -508,25 +723,38 @@ async function project(root: string, stateDir: string, jwt: string): Promise<voi
 
 export async function pollGithub(): Promise<void> {
 	const registry = process.env.LIMEN_GITHUB_PROJECTS_FILE;
-	if (!registry || !isAbsolute(registry) || process.getuid?.() === 0) throw new Error("github poll requires an isolated non-root poller and absolute LIMEN_GITHUB_PROJECTS_FILE");
+	if (!registry || !isAbsolute(registry) || process.getuid?.() === 0) {
+		throw new Error("github poll requires an isolated non-root poller and absolute LIMEN_GITHUB_PROJECTS_FILE");
+	}
 	const stateDir = process.env.LIMEN_GITHUB_STATE_DIR;
-	if (!stateDir || !isAbsolute(stateDir)) throw new Error("github poll requires absolute LIMEN_GITHUB_STATE_DIR");
+	if (!stateDir || !isAbsolute(stateDir)) {
+		throw new Error("github poll requires absolute LIMEN_GITHUB_STATE_DIR");
+	}
 	const stateInfo = await stat(stateDir);
-	if (!stateInfo.isDirectory() || stateInfo.uid !== process.getuid?.() || (stateInfo.mode & 0o077) !== 0)
+	if (!stateInfo.isDirectory() || stateInfo.uid !== process.getuid?.() || (stateInfo.mode & 0o077) !== 0) {
 		throw new Error("poller state directory must be private and poller-owned");
+	}
 	await privatePath(stateDir, [0, process.getuid?.() ?? -1]);
 	const workerUid = Number(process.env.LIMEN_GITHUB_WORKER_UID);
-	if (!Number.isSafeInteger(workerUid) || workerUid <= 0) throw new Error("poller requires LIMEN_GITHUB_WORKER_UID");
-	if (process.getuid?.() === workerUid) throw new Error("poller and hosted workers must have different Unix users");
+	if (!Number.isSafeInteger(workerUid) || workerUid <= 0) {
+		throw new Error("poller requires LIMEN_GITHUB_WORKER_UID");
+	}
+	if (process.getuid?.() === workerUid) {
+		throw new Error("poller and hosted workers must have different Unix users");
+	}
 	const modulePath = await realpath(fileURLToPath(import.meta.url));
 	const file = await stat(modulePath);
-	if ((file.mode & 0o022) !== 0 || file.uid === workerUid) throw new Error("poller code must not be writable by the worker account");
+	if ((file.mode & 0o022) !== 0 || file.uid === workerUid) {
+		throw new Error("poller code must not be writable by the worker account");
+	}
 	await privatePath(modulePath, [0, process.getuid?.() ?? -1]);
 	const jwt = await appJwt();
 	const projects = [...new Set((await readFile(registry, "utf8")).split("\n").filter(Boolean))];
 	for (const root of projects) {
 		try {
-			if (resolve(root) === root) await project(root, stateDir, jwt);
+			if (resolve(root) === root) {
+				await project(root, stateDir, jwt);
+			}
 		} catch (error) {
 			console.error(`${root}: ${error instanceof Error ? error.message : String(error)}`);
 			process.exitCode = 1;

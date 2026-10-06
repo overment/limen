@@ -7,7 +7,19 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { join } from "node:path";
 import { after, before, test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { engineEvents, git, jobDir, jobFile, limen, type Plant, plant, release, spawnJob, until, waitJob } from "./plant.ts";
+import {
+	engineEvents,
+	git,
+	jobDir,
+	jobFile,
+	limen,
+	type Plant,
+	plant,
+	release,
+	spawnJob,
+	until,
+	waitJob,
+} from "./plant.ts";
 
 const PACKAGE = fileURLToPath(new URL("..", import.meta.url));
 const FLAGS = ["--engine", "pi", "--detached"];
@@ -32,19 +44,24 @@ before(async () => {
 		".pi/extensions/limen-communication.ts": `export { default } from ${JSON.stringify(join(PACKAGE, "hook/communication.ts"))};\n`,
 		".omp/extensions/limen-steering.ts": `export { default } from ${JSON.stringify(join(PACKAGE, "hook/steering.ts"))};\n`,
 	};
-	for (const [path, text] of Object.entries(files)) writeFileSync(join(p.root, path), text);
+	for (const [path, text] of Object.entries(files)) {
+		writeFileSync(join(p.root, path), text);
+	}
 	git(p.root, "add", "-A");
 	git(p.root, "commit", "-q", "-m", "project guidance and old hook copies");
 	first = join(p.parent, "first.ts");
 	second = join(p.parent, "second.ts");
-	for (const path of [first, second]) writeFileSync(path, "export default () => {};\n");
+	for (const path of [first, second]) {
+		writeFileSync(path, "export default () => {};\n");
+	}
 });
 after(() => p.cleanup());
 
 const count = (text: string, marker: string) => text.split(marker).length - 1;
 const steers = (dir: string) => engineEvents(dir).flatMap((entry) => (entry.event === "steer" ? [entry.text] : []));
 const argv = (id: string): string[] => JSON.parse(jobFile(p, id, "fake-argv.json"));
-const extensions = (id: string) => argv(id).flatMap((value, index, all) => (value === "--extension" ? [all[index + 1] ?? ""] : []));
+const extensions = (id: string) =>
+	argv(id).flatMap((value, index, all) => (value === "--extension" ? [all[index + 1] ?? ""] : []));
 
 test("a second init removes old hook copies, so a coordinator gets each guidance source once", async () => {
 	const init = limen(p, ["init"]);
@@ -53,12 +70,19 @@ test("a second init removes old hook copies, so a coordinator gets each guidance
 	const coord = join(p.parent, "coord");
 	mkdirSync(coord);
 	writeFileSync(join(coord, "task.md"), "say hi\n");
-	const loaded = readdirSync(join(p.root, ".pi/extensions")).flatMap((name) => ["--extension", join(p.root, ".pi/extensions", name)]);
-	const child = spawn(join(p.bin, "pi"), ["--session-dir", join(coord, "session"), ...loaded, `@${join(coord, "task.md")}`], {
-		cwd: p.root,
-		env: { ...p.env, LIMEN_PACKAGE: PACKAGE },
-		stdio: "ignore",
-	});
+	const loaded = readdirSync(join(p.root, ".pi/extensions")).flatMap((name) => [
+		"--extension",
+		join(p.root, ".pi/extensions", name),
+	]);
+	const child = spawn(
+		join(p.bin, "pi"),
+		["--session-dir", join(coord, "session"), ...loaded, `@${join(coord, "task.md")}`],
+		{
+			cwd: p.root,
+			env: { ...p.env, LIMEN_PACKAGE: PACKAGE },
+			stdio: "ignore",
+		},
+	);
 	const { promise, resolve } = Promise.withResolvers<number | null>();
 	child.once("exit", resolve);
 	assert.equal(await promise, 0);
@@ -121,7 +145,10 @@ test("continue resumes the parent's session, linked, with its extensions or a re
 	assert.equal(argv(inherited).at(-2), "--continue");
 	assert.ok(!argv(inherited).some((value) => value.startsWith("@")));
 	const resumed = readFileSync(join(jobDir(p, inherited), "session/fake.jsonl"), "utf8");
-	assert.ok(resumed.startsWith(transcript) && resumed.length > transcript.length, "the child's transcript extends the parent's");
+	assert.ok(
+		resumed.startsWith(transcript) && resumed.length > transcript.length,
+		"the child's transcript extends the parent's",
+	);
 	assert.deepEqual(extensions(inherited).slice(-1), [first]);
 	const replaced = continued(["--extension", second]);
 	assert.deepEqual(extensions(replaced).slice(-1), [second]);

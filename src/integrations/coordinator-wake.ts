@@ -21,10 +21,15 @@ export async function promptCoordinator(jobDir: string, shutdownDeadline = Numbe
 	const pane = await textFile(`${jobDir}/origin-pane`);
 	const message = await wakeMessage(jobDir, pane);
 	const herdr = herdrBinary();
-	if (!message || !pane || !herdr || shutdownDeadline - Date.now() < 1_000) return;
+	if (!message || !pane || !herdr || shutdownDeadline - Date.now() < 1_000) {
+		return;
+	}
 	await mkdir(`${jobDir}/notify`, { recursive: true });
 	try {
-		await writeFile(`${jobDir}/notify/herdr-prompt`, `attempting ${pane} ${new Date().toISOString()}\n`, { flag: "wx", flush: true });
+		await writeFile(`${jobDir}/notify/herdr-prompt`, `attempting ${pane} ${new Date().toISOString()}\n`, {
+			flag: "wx",
+			flush: true,
+		});
 	} catch {
 		return; // Another finalizer already owns this wake.
 	}
@@ -36,7 +41,11 @@ export async function promptCoordinator(jobDir: string, shutdownDeadline = Numbe
 			break;
 		}
 		const wait = String(Math.max(budget - 2_000, 1_000));
-		const outcome = await run(herdr, ["agent", "prompt", pane, message, "--wait", "--until", "working", "--until", "blocked", "--timeout", wait], budget);
+		const outcome = await run(
+			herdr,
+			["agent", "prompt", pane, message, "--wait", "--until", "working", "--until", "blocked", "--timeout", wait],
+			budget,
+		);
 		const result = outcome.ok
 			? `turn observed on ${pane}`
 			: /agent_prompt_stalled/.test(outcome.detail)
@@ -46,17 +55,27 @@ export async function promptCoordinator(jobDir: string, shutdownDeadline = Numbe
 		await appendLimenLog(jobDir, `coordinator wake via Herdr: attempt ${attempt}: ${result}`);
 		if (outcome.ok) {
 			await mkdir(`${jobDir}/notify/delivered`, { recursive: true });
-			await writeFile(`${jobDir}/notify/delivered/_herdr`, `${new Date().toISOString()}\n`, { flag: "wx", flush: true }).catch(() => {});
+			await writeFile(`${jobDir}/notify/delivered/_herdr`, `${new Date().toISOString()}\n`, {
+				flag: "wx",
+				flush: true,
+			}).catch(() => {});
 			break;
 		}
-		if (attempt < ATTEMPTS) await atomicWrite(`${jobDir}/notify/herdr-prompt`, `attempting ${pane}\n${lines.join("\n")}\n`);
-		else lines.push(`automatic delivery stopped after ${ATTEMPTS} unsuccessful attempts; inspect the job and wake the coordinator deliberately`);
+		if (attempt < ATTEMPTS) {
+			await atomicWrite(`${jobDir}/notify/herdr-prompt`, `attempting ${pane}\n${lines.join("\n")}\n`);
+		} else {
+			lines.push(
+				`automatic delivery stopped after ${ATTEMPTS} unsuccessful attempts; inspect the job and wake the coordinator deliberately`,
+			);
+		}
 	}
 	await atomicWrite(`${jobDir}/notify/herdr-prompt`, `${lines.join("\n")}\n`);
 }
 
 async function wakeMessage(jobDir: string, pane: string): Promise<string | undefined> {
-	const [label = "", state = "", branch = "", repo = ""] = await Promise.all(["label", "state", "branch", "repo"].map((name) => textFile(`${jobDir}/${name}`)));
+	const [label = "", state = "", branch = "", repo = ""] = await Promise.all(
+		["label", "state", "branch", "repo"].map((name) => textFile(`${jobDir}/${name}`)),
+	);
 	const id = jobDir.split("/").at(-1) ?? "";
 	const membership = await jobMembership(jobDir);
 	if (!membership) {
@@ -65,9 +84,14 @@ async function wakeMessage(jobDir: string, pane: string): Promise<string | undef
 		return completionWake(jobDir, label || id, state, id, branch, repo, false, instruction);
 	}
 	const { run, member } = membership;
-	if (member?.role !== "coordinator") return;
+	if (member?.role !== "coordinator") {
+		return;
+	}
 	if (await leadHookLive(run.root, run.lead)) {
-		await appendLimenLog(jobDir, `coordinator wake via Herdr: not sent; the lead group hook for session ${run.lead} is live and group events carry this finish`);
+		await appendLimenLog(
+			jobDir,
+			`coordinator wake via Herdr: not sent; the lead group hook for session ${run.lead} is live and group events carry this finish`,
+		);
 		return;
 	}
 	await appendLimenLog(
@@ -79,15 +103,28 @@ async function wakeMessage(jobDir: string, pane: string): Promise<string | undef
 	const coordinators = run.members.filter((entry) => entry.role === "coordinator");
 	const states = await Promise.all(coordinators.map((entry) => textFile(`${run.root}/.limen/jobs/${entry.id}/state`)));
 	const finished = states.filter(isTerminal).length;
-	return groupLeadWake(jobDir, label || id, state, id, branch, { group: run.id, feature: run.feature, lead: run.lead, team: member.team, finished, total: coordinators.length });
+	return groupLeadWake(jobDir, label || id, state, id, branch, {
+		group: run.id,
+		feature: run.feature,
+		lead: run.lead,
+		team: member.team,
+		finished,
+		total: coordinators.length,
+	});
 }
 
-function run(binary: string, args: readonly string[], timeout: number): Promise<{ readonly ok: boolean; readonly detail: string }> {
+function run(
+	binary: string,
+	args: readonly string[],
+	timeout: number,
+): Promise<{ readonly ok: boolean; readonly detail: string }> {
 	const { promise, resolve } = Promise.withResolvers<{ readonly ok: boolean; readonly detail: string }>();
 	execFile(binary, args, { encoding: "utf8", timeout }, (error, stdout, stderr) => {
 		// error.message repeats the full argv, wake text included; the receipt keeps Herdr's own first line instead.
 		const said = `${stderr || ""}${stdout || ""}`.trim().split("\n")[0] ?? "";
-		const detail = error?.killed ? `herdr exceeded ${timeout}ms` : said || (error ? `herdr exited ${error.code ?? "abnormally"}` : "");
+		const detail = error?.killed
+			? `herdr exceeded ${timeout}ms`
+			: said || (error ? `herdr exited ${error.code ?? "abnormally"}` : "");
 		resolve({ ok: !error, detail });
 	});
 	return promise;

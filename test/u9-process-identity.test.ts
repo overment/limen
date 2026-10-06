@@ -15,13 +15,18 @@ const query = (pid: number) => processInfo(pid, Date.now() + 60_000);
 
 test("a recycled pid with another birth is never signaled and is named for cleanup; the recorded birth is signaled", async (t) => {
 	const job = await mkdtemp(join(tmpdir(), "u9-"));
-	const child = spawn(process.execPath, ["-e", "Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0)"], { detached: true, stdio: "ignore" });
+	const child = spawn(process.execPath, ["-e", "Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0)"], {
+		detached: true,
+		stdio: "ignore",
+	});
 	t.after(() => rm(job, { recursive: true, force: true }));
 	t.after(() => child.kill("SIGKILL"));
 	const exited = once(child, "exit");
 	const info = await query(child.pid ?? 0);
 	assert.equal(info.kind, "present");
-	if (info.kind !== "present") return;
+	if (info.kind !== "present") {
+		return;
+	}
 	await containEscapedDescendants(job, [{ ...info.process, born: "0.000000" }], "u9", { query });
 	assert.deepEqual([child.exitCode, child.signalCode], [null, null], "the stranger is still running");
 	assert.match(await readFile(join(job, "cleanup"), "utf8"), new RegExp(`^${info.process.pid} 0\\.000000 `, "m"));

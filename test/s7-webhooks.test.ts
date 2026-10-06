@@ -32,7 +32,8 @@ const wait = (id: string) => {
 };
 const payloads = () => requests(p).map((request) => ({ url: request.url, body: JSON.parse(request.body) }));
 // The finish path writes its final result line after the sender exits; every request it made is recorded by then.
-const settled = (id: string) => until(p.parent, () => /^(accepted|failed|skipped)/.test(jobFile(p, id, "finish-webhook")));
+const settled = (id: string) =>
+	until(p.parent, () => /^(accepted|failed|skipped)/.test(jobFile(p, id, "finish-webhook")));
 
 async function ticket(code: string, author: string, lane = "active"): Promise<string> {
 	const path = `spec/features/${lane}/${code}-s7/ticket.md`;
@@ -111,12 +112,33 @@ test("a continuation from a subdirectory keeps the parent's config and author ro
 
 test("no secret or target URL leaves the request header, and nothing names the quiet job", () => {
 	assert.equal(requests(p).length, 3);
-	assert.ok(requests(p).every((request) => request.url.startsWith("https://hooks.s7.test/") && SECRETS.includes(request.headers.authorization ?? "")));
+	assert.ok(
+		requests(p).every(
+			(request) =>
+				request.url.startsWith("https://hooks.s7.test/") && SECRETS.includes(request.headers.authorization ?? ""),
+		),
+	);
 	assert.ok(payloads().every((ping) => ping.body.jobId !== quiet));
-	const leaks = (text: string) => [...SECRETS.map((secret) => secret.slice(7)), "hooks.s7.test"].filter((value) => text.includes(value));
-	for (const request of requests(p)) assert.deepEqual(leaks(JSON.stringify({ ...request, url: "", headers: { ...request.headers, authorization: "" } })), []);
-	for (const result of runs) assert.deepEqual(leaks(result.stdout + result.stderr), []);
-	for (const id of ids)
-		for (const entry of readdirSync(jobDir(p, id), { recursive: true, withFileTypes: true }))
-			if (entry.isFile()) assert.deepEqual(leaks(readFileSync(join(entry.parentPath, entry.name), "utf8")), [], join(entry.parentPath, entry.name));
+	const leaks = (text: string) =>
+		[...SECRETS.map((secret) => secret.slice(7)), "hooks.s7.test"].filter((value) => text.includes(value));
+	for (const request of requests(p)) {
+		assert.deepEqual(
+			leaks(JSON.stringify({ ...request, url: "", headers: { ...request.headers, authorization: "" } })),
+			[],
+		);
+	}
+	for (const result of runs) {
+		assert.deepEqual(leaks(result.stdout + result.stderr), []);
+	}
+	for (const id of ids) {
+		for (const entry of readdirSync(jobDir(p, id), { recursive: true, withFileTypes: true })) {
+			if (entry.isFile()) {
+				assert.deepEqual(
+					leaks(readFileSync(join(entry.parentPath, entry.name), "utf8")),
+					[],
+					join(entry.parentPath, entry.name),
+				);
+			}
+		}
+	}
 });

@@ -48,7 +48,9 @@ export function parseFrontmatter(text: string): Frontmatter {
 			break;
 		}
 	}
-	if (close < 0) return fail(src, 'the "---" frontmatter fence is not closed');
+	if (close < 0) {
+		return fail(src, 'the "---" frontmatter fence is not closed');
+	}
 
 	const fm = all.slice(1, close);
 	const lineOf = (k: number) => k + 2;
@@ -86,7 +88,9 @@ export function parseFrontmatter(text: string): Frontmatter {
 		const key = m[1]!;
 		const rest = m[2] ?? "";
 		const duplicate = data.has(key);
-		if (duplicate) error(i, `duplicate key "${key}"; the first value is kept`);
+		if (duplicate) {
+			error(i, `duplicate key "${key}"; the first value is kept`);
+		}
 
 		if (isCommentOrEmpty(rest)) {
 			let j = i + 1;
@@ -94,7 +98,9 @@ export function parseFrontmatter(text: string): Frontmatter {
 			while (j < fm.length) {
 				const r = fm[j]!;
 				if (!isCommentOrEmpty(r)) {
-					if (leading(r).length === 0 && !/^-(?: |$)/.test(r.trimEnd())) break;
+					if (leading(r).length === 0 && !/^-(?: |$)/.test(r.trimEnd())) {
+						break;
+					}
 					block.push(j);
 				}
 				j++;
@@ -109,8 +115,9 @@ export function parseFrontmatter(text: string): Frontmatter {
 		}
 
 		const r = parseScalar(rest);
-		if (!r.ok) error(i, r.message);
-		else if (!duplicate) {
+		if (!r.ok) {
+			error(i, r.message);
+		} else if (!duplicate) {
 			data.set(key, r.value);
 			lines[key] = lineOf(i);
 		}
@@ -131,8 +138,17 @@ function fail(src: string, message: string): Frontmatter {
 	return { ok: false, data: {}, lines: {}, body: src, bodyLine: 1, errors: [{ line: 1, message }] };
 }
 
-function parseBlock(fm: string[], block: number[], key: string, lines: LineMap, error: ReportError, lineOf: (index: number) => number): unknown {
-	if (block.length === 0) return null;
+function parseBlock(
+	fm: string[],
+	block: number[],
+	key: string,
+	lines: LineMap,
+	error: ReportError,
+	lineOf: (index: number) => number,
+): unknown {
+	if (block.length === 0) {
+		return null;
+	}
 	const itemIndent = leading(fm[block[0]!]!).length;
 	const items: unknown[] = [];
 	let cur: OpenItem | null = null;
@@ -175,8 +191,11 @@ function parseBlock(fm: string[], block: number[], key: string, lines: LineMap, 
 		}
 		if (cur && !im && ind.length === cur.col) {
 			const km = KEY.exec(line.slice(cur.col));
-			if (!km) error(k, 'expected "key: value" inside the list item');
-			else setEntry(cur, km, k, key, lines, error, lineOf);
+			if (!km) {
+				error(k, 'expected "key: value" inside the list item');
+			} else {
+				setEntry(cur, km, k, key, lines, error, lineOf);
+			}
 			continue;
 		}
 		if (ind.length > itemIndent && cur) {
@@ -191,7 +210,15 @@ function parseBlock(fm: string[], block: number[], key: string, lines: LineMap, 
 	return items.map((it) => (it instanceof Map ? Object.fromEntries(it) : it));
 }
 
-function setEntry(cur: OpenItem, km: RegExpExecArray, k: number, key: string, lines: LineMap, error: ReportError, lineOf: (index: number) => number): void {
+function setEntry(
+	cur: OpenItem,
+	km: RegExpExecArray,
+	k: number,
+	key: string,
+	lines: LineMap,
+	error: ReportError,
+	lineOf: (index: number) => number,
+): void {
 	const sub = km[1]!;
 	const rest = km[2] ?? "";
 	if (cur.map.has(sub)) {
@@ -210,29 +237,55 @@ function setEntry(cur: OpenItem, km: RegExpExecArray, k: number, key: string, li
 /** @returns {{ ok: true, value: unknown } | { ok: false, message: string }} */
 export function parseScalar(src: string): ScalarResult {
 	const s = src.trim();
-	if (s === "" || s[0] === "#") return { ok: true, value: null };
+	if (s === "" || s[0] === "#") {
+		return { ok: true, value: null };
+	}
 	const c = s[0]!;
 	if (c === '"' || c === "'") {
 		const r = readQuoted(s, 0);
-		if (!r.ok) return r;
-		if (!isCommentOrEmpty(s.slice(r.end))) return bad("unexpected text after the quoted string");
+		if (!r.ok) {
+			return r;
+		}
+		if (!isCommentOrEmpty(s.slice(r.end))) {
+			return bad("unexpected text after the quoted string");
+		}
 		return { ok: true, value: r.value };
 	}
-	if (c === "[") return parseInlineList(s);
-	if (c === "{") return bad("inline maps are not supported; use a block list of maps");
-	if (c === "|" || c === ">") return bad("block scalars are not supported; write the value on one line");
-	if ("&*!%@`".includes(c)) return bad(`quote values that start with "${c}"`);
+	if (c === "[") {
+		return parseInlineList(s);
+	}
+	if (c === "{") {
+		return bad("inline maps are not supported; use a block list of maps");
+	}
+	if (c === "|" || c === ">") {
+		return bad("block scalars are not supported; write the value on one line");
+	}
+	if ("&*!%@`".includes(c)) {
+		return bad(`quote values that start with "${c}"`);
+	}
 	const plain = stripComment(s);
-	if (/^-(?: |$)/.test(plain)) return bad('quote values that start with "- "');
-	if (/:(?: |$)/.test(plain)) return bad('quote values that contain ": "');
+	if (/^-(?: |$)/.test(plain)) {
+		return bad('quote values that start with "- "');
+	}
+	if (/:(?: |$)/.test(plain)) {
+		return bad('quote values that contain ": "');
+	}
 	return { ok: true, value: typed(plain) };
 }
 
 function typed(plain: string): string | number | boolean | null {
-	if (plain === "true") return true;
-	if (plain === "false") return false;
-	if (plain === "null" || plain === "~") return null;
-	if (NUMBER.test(plain) && String(Number(plain)) === plain) return Number(plain);
+	if (plain === "true") {
+		return true;
+	}
+	if (plain === "false") {
+		return false;
+	}
+	if (plain === "null" || plain === "~") {
+		return null;
+	}
+	if (NUMBER.test(plain) && String(Number(plain)) === plain) {
+		return Number(plain);
+	}
 	return plain;
 }
 
@@ -255,7 +308,9 @@ function readQuoted(s: string, start: number): QuotedResult {
 			i++;
 			continue;
 		}
-		if (c === '"') return { ok: true, value: out, end: i + 1 };
+		if (c === '"') {
+			return { ok: true, value: out, end: i + 1 };
+		}
 		if (c === "\\") {
 			const e = s[i + 1];
 			if (e === "u" && /^[0-9a-fA-F]{4}$/.test(s.slice(i + 2, i + 6))) {
@@ -280,7 +335,9 @@ function parseInlineList(s: string): ScalarResult {
 	const items: unknown[] = [];
 	let i = 1;
 	const skip = () => {
-		while (s[i] === " " || s[i] === "\t") i++;
+		while (s[i] === " " || s[i] === "\t") {
+			i++;
+		}
 	};
 	skip();
 	if (s[i] === "]") {
@@ -288,18 +345,28 @@ function parseInlineList(s: string): ScalarResult {
 	} else {
 		for (;;) {
 			skip();
-			if (i >= s.length) return bad('inline list is not closed with "]"');
+			if (i >= s.length) {
+				return bad('inline list is not closed with "]"');
+			}
 			if (s[i] === '"' || s[i] === "'") {
 				const r = readQuoted(s, i);
-				if (!r.ok) return r;
+				if (!r.ok) {
+					return r;
+				}
 				items.push(r.value);
 				i = r.end;
 			} else {
 				let j = i;
-				while (j < s.length && s[j] !== "," && s[j] !== "]") j++;
+				while (j < s.length && s[j] !== "," && s[j] !== "]") {
+					j++;
+				}
 				const plain = s.slice(i, j).trim();
-				if (plain === "") return bad("empty item in inline list");
-				if (/[[\]{}]/.test(plain)) return bad("nested lists and maps are not supported in inline lists");
+				if (plain === "") {
+					return bad("empty item in inline list");
+				}
+				if (/[[\]{}]/.test(plain)) {
+					return bad("nested lists and maps are not supported in inline lists");
+				}
 				items.push(typed(plain));
 				i = j;
 			}
@@ -315,7 +382,9 @@ function parseInlineList(s: string): ScalarResult {
 			return bad('expected "," or "]" in inline list');
 		}
 	}
-	if (!isCommentOrEmpty(s.slice(i))) return bad("unexpected text after the inline list");
+	if (!isCommentOrEmpty(s.slice(i))) {
+		return bad("unexpected text after the inline list");
+	}
 	return { ok: true, value: items };
 }
 

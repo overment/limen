@@ -27,7 +27,9 @@ test("a file without a closed front matter block fails at line 1", () => {
 });
 
 test("quoted lists keep their commas and quotes; prototype keys are ordinary data", () => {
-	const parsed = parseFrontmatter("---\n__proto__: literal\nsources: [\"a, b\", 'it''s a path']\nitems:\n  - __proto__: item\n    title: \"A: B\"\n---\n");
+	const parsed = parseFrontmatter(
+		"---\n__proto__: literal\nsources: [\"a, b\", 'it''s a path']\nitems:\n  - __proto__: item\n    title: \"A: B\"\n---\n",
+	);
 	assert.deepEqual(parsed.errors, []);
 	assert.deepEqual(parsed.data.sources, ["a, b", "it's a path"]);
 	assert.equal(Object.getPrototypeOf(parsed.data), Object.prototype);

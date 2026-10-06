@@ -29,7 +29,14 @@ const run = (mode) =>
 		cwd: project,
 		encoding: "utf8",
 		timeout: 15000,
-		env: { ...process.env, PROJECT: project, PROOF: proof, LIMEN_ROOT: root, LIMEN_HERDR: "0", LIMEN_FINISH_WEBHOOK_ENV: "" },
+		env: {
+			...process.env,
+			PROJECT: project,
+			PROOF: proof,
+			LIMEN_ROOT: root,
+			LIMEN_HERDR: "0",
+			LIMEN_FINISH_WEBHOOK_ENV: "",
+		},
 	});
 const success = (mode) => {
 	const result = run(mode);
@@ -40,9 +47,19 @@ const refusal = (mode) => {
 	assert.equal(result.status, 1, result.stderr);
 };
 const receipt = (target, transport = "accepted", http = "2xx") => JSON.stringify({ target, at: now, transport, http });
-const turn = { version: 1, event, target: 1, receiver: "johnny", state: "completed", session: "SYNTHETIC_SESSION", turn: "SYNTHETIC_TURN", completedAt: now };
+const turn = {
+	version: 1,
+	event,
+	target: 1,
+	receiver: "johnny",
+	state: "completed",
+	session: "SYNTHETIC_SESSION",
+	turn: "SYNTHETIC_TURN",
+	completedAt: now,
+};
 try {
-	for (const path of [job, join(proof, "receiver-held"), join(proof, "receiver-source")]) mkdirSync(path, { recursive: true });
+	for (const path of [job, join(proof, "receiver-held"), join(proof, "receiver-source")])
+		mkdirSync(path, { recursive: true });
 	assert.equal(spawnSync("git", ["init", "-q", project]).status, 0);
 	for (const [name, value] of Object.entries({
 		state: "done",
@@ -58,8 +75,13 @@ try {
 		"finish-webhook-targets": receipt(1),
 	}))
 		put(job, name, value);
-	put(join(proof, "receiver-source"), "receivers.json", JSON.stringify({ version: 1, targets: [{ target: 1, receiver: "johnny" }] }));
-	for (const name of ["mapping-owner.txt", "control-owner.txt", "receiver-history.txt", "release-owner.txt"]) put(proof, name, "SYNTHETIC fixture only; not Johnny evidence");
+	put(
+		join(proof, "receiver-source"),
+		"receivers.json",
+		JSON.stringify({ version: 1, targets: [{ target: 1, receiver: "johnny" }] }),
+	);
+	for (const name of ["mapping-owner.txt", "control-owner.txt", "receiver-history.txt", "release-owner.txt"])
+		put(proof, name, "SYNTHETIC fixture only; not Johnny evidence");
 	refusal("capture");
 	assert.equal(existsSync(join(proof, "job-id.txt")), false);
 	pass("missing held export refuses capture without snapshot");
@@ -72,7 +94,11 @@ try {
 	pass("extra recipient refuses Johnny-only control");
 	put(job, "finish-webhook-targets", receipt(1));
 	success("capture");
-	for (const view of ["compact", "human"]) assert.match(readFileSync(join(proof, `control-${view}.txt`), "utf8"), /target 1: transport accepted .*bot-turn unobserved/);
+	for (const view of ["compact", "human"])
+		assert.match(
+			readFileSync(join(proof, `control-${view}.txt`), "utf8"),
+			/target 1: transport accepted .*bot-turn unobserved/,
+		);
 	assert.equal(existsSync(source), false);
 	pass("both views stay unobserved while completed export is held");
 	refusal("capture");
@@ -100,7 +126,10 @@ try {
 	pass("changed automatic claim blocks release");
 	success("release");
 	for (const view of ["compact", "human"])
-		assert.match(readFileSync(join(proof, `observed-${view}.txt`), "utf8"), /bot-turn observed \(operator-trusted export\).*receiver johnny/);
+		assert.match(
+			readFileSync(join(proof, `observed-${view}.txt`), "utf8"),
+			/bot-turn observed \(operator-trusted export\).*receiver johnny/,
+		);
 	for (const name of ["finish-webhook-attempt", "finish-webhook", "finish-webhook-targets"])
 		assert.equal(readFileSync(join(proof, name), "utf8"), readFileSync(join(job, name), "utf8"));
 	assert.equal(existsSync(held), false);
@@ -109,7 +138,9 @@ try {
 	pass("atomic same-byte release changes both views without config access or changed receipts");
 	refusal("release");
 	pass("repeat release refuses without resending");
-	console.log(`${checks} synthetic checks passed; zero live sends; no receiver evidence created in real proof directory`);
+	console.log(
+		`${checks} synthetic checks passed; zero live sends; no receiver evidence created in real proof directory`,
+	);
 } finally {
 	rmSync(temp, { recursive: true, force: true });
 }

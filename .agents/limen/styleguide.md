@@ -20,12 +20,14 @@
 
 `npm run check` fails on these. `biome.jsonc` names each rule with its reason.
 
+- Lines at most 120 columns. The formatter wraps code; split a long string yourself when it holds two ideas.
+- Braces on every `if`, `for`, `while`, and `else` body, also `if (!value) continue;`.
 - One effect per statement. No assignment inside an expression: write `seq += 1;`, then `String(seq)`.
 - Flat control flow. No `else` after `return`, `throw`, `break`, or `continue`. Join `if (a) { if (b) … }` into `if (a && b)`.
 - Optional chains for guarded reads: `message?.role !== "user"`, not `!message || message.role !== "user"`.
 - Every promise is awaited or returned. Do not pass an async function where the caller expects a plain return.
 - A `switch` over a union handles every member or has a `default`.
-- Files that the `biome.jsonc` override lists follow the target style: lines at most 120 columns, braces on every `if`, `for`, and `else` body, no nested ternary, and cognitive complexity at most 20 per function.
+- Files that the `biome.jsonc` override lists follow the target style: no nested ternary, and cognitive complexity at most 20 per function.
 
 ## Avoid
 

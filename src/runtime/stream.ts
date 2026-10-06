@@ -8,8 +8,12 @@ export function createStreamParser(): { push(chunk: string): StreamEvent[]; flus
 	let buffer = "";
 	const take = (line: string): StreamEvent | undefined => {
 		const trimmed = line.trim();
-		if (!trimmed) return;
-		if (!trimmed.startsWith("{")) return { kind: "log", line: trimmed };
+		if (!trimmed) {
+			return;
+		}
+		if (!trimmed.startsWith("{")) {
+			return { kind: "log", line: trimmed };
+		}
 		try {
 			return interpret(JSON.parse(trimmed));
 		} catch {
@@ -31,41 +35,79 @@ export function createStreamParser(): { push(chunk: string): StreamEvent[]; flus
 	};
 }
 function interpret(event: unknown): StreamEvent | undefined {
-	if (!event || typeof event !== "object" || !("type" in event)) return;
+	if (!event || typeof event !== "object" || !("type" in event)) {
+		return;
+	}
 	const tool = "toolName" in event && typeof event.toolName === "string" ? event.toolName.trim() : "";
 	if (event.type === "tool_execution_start" && tool) {
 		const detail = "args" in event ? toolDetail(event.args) : "";
 		return { kind: "tool", name: tool, ...(detail ? { detail } : {}) };
 	}
-	if (event.type === "tool_execution_end") return { kind: "activity", name: "wait" };
+	if (event.type === "tool_execution_end") {
+		return { kind: "activity", name: "wait" };
+	}
 	if (event.type === "message_end") {
 		const message = "message" in event ? event.message : undefined;
-		if (!message || typeof message !== "object" || !("role" in message) || message.role !== "assistant") return { kind: "activity", name: "think" };
+		if (!message || typeof message !== "object" || !("role" in message) || message.role !== "assistant") {
+			return { kind: "activity", name: "think" };
+		}
 		const text = assistantText(message),
 			stopReason = assistantStopReason(message);
 		return { kind: "assistant", text, ...(stopReason ? { stopReason } : {}) };
 	}
-	if (event.type === "agent_start" || event.type === "turn_start" || event.type === "message_start" || event.type === "message_update") return { kind: "activity", name: "think" };
+	if (
+		event.type === "agent_start" ||
+		event.type === "turn_start" ||
+		event.type === "message_start" ||
+		event.type === "message_update"
+	) {
+		return { kind: "activity", name: "think" };
+	}
 }
 export function assistantText(message: unknown): string {
-	if (!message || typeof message !== "object" || !("role" in message) || message.role !== "assistant") return "";
-	if (!("content" in message) || !Array.isArray(message.content)) return "";
+	if (!message || typeof message !== "object" || !("role" in message) || message.role !== "assistant") {
+		return "";
+	}
+	if (!("content" in message) || !Array.isArray(message.content)) {
+		return "";
+	}
 	return message.content
-		.flatMap((part) => (part && typeof part === "object" && "type" in part && part.type === "text" && "text" in part && typeof part.text === "string" ? [part.text] : []))
+		.flatMap((part) =>
+			part &&
+			typeof part === "object" &&
+			"type" in part &&
+			part.type === "text" &&
+			"text" in part &&
+			typeof part.text === "string"
+				? [part.text]
+				: [],
+		)
 		.join("")
 		.trim();
 }
 export function assistantStopReason(message: unknown): string {
-	if (!message || typeof message !== "object" || !("role" in message) || message.role !== "assistant") return "";
-	const reason = "stopReason" in message && (message.stopReason === "error" || message.stopReason === "aborted") ? message.stopReason : "";
-	const detail = reason && "errorMessage" in message && typeof message.errorMessage === "string" ? message.errorMessage.replace(/\s+/g, " ").trim() : "";
+	if (!message || typeof message !== "object" || !("role" in message) || message.role !== "assistant") {
+		return "";
+	}
+	const reason =
+		"stopReason" in message && (message.stopReason === "error" || message.stopReason === "aborted")
+			? message.stopReason
+			: "";
+	const detail =
+		reason && "errorMessage" in message && typeof message.errorMessage === "string"
+			? message.errorMessage.replace(/\s+/g, " ").trim()
+			: "";
 	return detail ? `${reason}: ${detail}` : reason;
 }
 function toolDetail(args: unknown): string {
-	if (!args || typeof args !== "object") return "";
+	if (!args || typeof args !== "object") {
+		return "";
+	}
 	for (const key of ["command", "path", "file_path"]) {
 		const value = (args as Record<string, unknown>)[key];
-		if (typeof value === "string") return value.trim().replace(/\s+/g, " ").slice(0, 80);
+		if (typeof value === "string") {
+			return value.trim().replace(/\s+/g, " ").slice(0, 80);
+		}
 	}
 	return "";
 }

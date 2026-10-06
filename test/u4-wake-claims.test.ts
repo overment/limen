@@ -38,7 +38,9 @@ async function job(t: TestContext) {
 	/** Moves the claim, and its heartbeat when asked, 31 seconds into the past: past the 30-second stale line. */
 	const age = (heartbeat: boolean) => {
 		const old = new Date(Date.now() - 31_000);
-		if (heartbeat) utimesSync(join(claim, "live"), old, old);
+		if (heartbeat) {
+			utimesSync(join(claim, "live"), old, old);
+		}
 		utimesSync(claim, old, old);
 	};
 	return { dir, claim, events, listen, age, sends: () => sends };
@@ -76,17 +78,23 @@ test("after two unsuccessful attempts the claim stays blocked for a human and no
 	for (const failure of ["rejected injection", "errored turn"]) {
 		const { dir, claim, events, listen, sends } = await job(t);
 		const fail = () => {
-			if (failure === "rejected injection") throw new Error("pane is gone");
+			if (failure === "rejected injection") {
+				throw new Error("pane is gone");
+			}
 		};
 		for (const name of ["a", "b"]) {
 			assert.equal(listen(name, fail), failure === "errored turn", failure);
-			if (failure === "errored turn") recordUnconfirmed(claim);
+			if (failure === "errored turn") {
+				recordUnconfirmed(claim);
+			}
 		}
 		assert.equal(listen("c"), false);
 		assert.equal(recoverClaims(dir), false, "a blocked claim is not recovered again");
 		assert.equal(sends(), 2, failure);
 		assert.ok(existsSync(join(claim, "blocked")), failure);
 		assert.deepEqual(readdirSync(join(dir, "notify", "delivered")), []);
-		if (failure === "rejected injection") assert.deepEqual(events, ["a released", "b released", "b blocked"]);
+		if (failure === "rejected injection") {
+			assert.deepEqual(events, ["a released", "b released", "b blocked"]);
+		}
 	}
 });

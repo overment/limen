@@ -11,8 +11,12 @@ import { appendFileSync, createReadStream, existsSync, mkdirSync, readFileSync, 
 import { dirname, join } from "node:path";
 
 const args = process.argv.slice(2);
-if (args[0] === "--version") process.exit(console.log("0.0.0-test") ?? 0);
-if (args[0] === "config") process.exit(console.log(JSON.stringify({ value: [] })) ?? 0);
+if (args[0] === "--version") {
+	process.exit(console.log("0.0.0-test") ?? 0);
+}
+if (args[0] === "config") {
+	process.exit(console.log(JSON.stringify({ value: [] })) ?? 0);
+}
 const flag = (name) => (args.includes(name) ? args[args.indexOf(name) + 1] : undefined);
 const dir = dirname(flag("--session-dir") ?? join(process.cwd(), "session"));
 const prompt = args.find((value) => value.startsWith("@"));
@@ -45,16 +49,28 @@ let turns = Promise.resolve();
 let shutdown = false;
 const fire = async (event, payload) => {
 	const results = [];
-	for (const handler of handlers.get(event) ?? []) results.push(await handler(payload, context));
+	for (const handler of handlers.get(event) ?? []) {
+		results.push(await handler(payload, context));
+	}
 	return results;
 };
-const ui = new Proxy({}, { get: (_, method) => (method === "then" ? undefined : (text) => method === "notify" && record({ event: "notify", text })) });
+const ui = new Proxy(
+	{},
+	{
+		get: (_, method) =>
+			method === "then" ? undefined : (text) => method === "notify" && record({ event: "notify", text }),
+	},
+);
 const context = {
 	cwd: process.cwd(),
 	ui,
 	hasUI: true,
 	isIdle: () => idle,
-	sessionManager: { getSessionId: () => process.env.PI_SESSION_ID ?? "fake", getSessionFile: () => join(dir, "session.jsonl"), getSessionName: () => "fake" },
+	sessionManager: {
+		getSessionId: () => process.env.PI_SESSION_ID ?? "fake",
+		getSessionFile: () => join(dir, "session.jsonl"),
+		getSessionName: () => "fake",
+	},
 	shutdown: () => {
 		shutdown = true;
 	},
@@ -63,9 +79,13 @@ const context = {
 // and the turn gets one assistant reply, as Pi does with followUpMode "all". A hook's sendMessage enters as role custom.
 const deliver = (kind, text, as) => {
 	record({ event: as ?? kind, text });
-	if (as === "steer") return;
+	if (as === "steer") {
+		return;
+	}
 	queued.push({ role: kind === "message" ? "custom" : "user", content: [{ type: "text", text }] });
-	if (queued.length === 1) turns = turns.then(() => turn(queued.splice(0), "ok"));
+	if (queued.length === 1) {
+		turns = turns.then(() => turn(queued.splice(0), "ok"));
+	}
 };
 const api = {
 	on: (event, handler) => handlers.set(event, [...(handlers.get(event) ?? []), handler]),
@@ -83,7 +103,11 @@ async function turn(messages, reply, stopReason) {
 	await fire("turn_start", {});
 	// Pi hands the hooks the turn's messages in a context event before each model call.
 	await fire("context", { messages });
-	const assistant = { role: "assistant", content: [{ type: "text", text: reply }], ...(stopReason ? { stopReason } : {}) };
+	const assistant = {
+		role: "assistant",
+		content: [{ type: "text", text: reply }],
+		...(stopReason ? { stopReason } : {}),
+	};
 	emit({ type: "message_end", message: assistant });
 	await fire("message_end", { message: assistant });
 	await fire("turn_end", {});
@@ -93,14 +117,18 @@ async function turn(messages, reply, stopReason) {
 let blocks = 0;
 async function block() {
 	const gate = join(dir, "fake-gate");
-	if (!existsSync(gate)) execFileSync("mkfifo", [gate]);
+	if (!existsSync(gate)) {
+		execFileSync("mkfifo", [gate]);
+	}
 	blocks += 1;
 	const released = new Promise((resolve) => createReadStream(gate).once("data", resolve));
 	writeFileSync(join(dir, `fake-blocked-${blocks}`), "");
 	await released;
 }
 
-for (let index = args.indexOf("--extension"); index >= 0; index = args.indexOf("--extension", index + 1)) await (await import(args[index + 1])).default(api);
+for (let index = args.indexOf("--extension"); index >= 0; index = args.indexOf("--extension", index + 1)) {
+	await (await import(args[index + 1])).default(api);
+}
 await fire("session_start", {});
 const started = await fire("before_agent_start", { prompt: task, systemPrompt: preamble });
 writeFileSync(join(dir, "fake-system.txt"), started.map((result) => result?.systemPrompt ?? "").join("\n"));
@@ -116,21 +144,28 @@ for (const line of task.split("\n")) {
 		writeFileSync(`fake-${process.pid}-${blocks}-${Date.now()}.txt`, `${task}\n`);
 		execFileSync("git", ["add", "."]);
 		execFileSync("git", ["commit", "-q", "-m", "fake commit"]);
-	} else if (word === "fail") code = Number(value) || 1;
-	else if (word === "error") stopReason = "error";
-	else if (word === "say") reply = value;
-	else if (word === "tool") {
+	} else if (word === "fail") {
+		code = Number(value) || 1;
+	} else if (word === "error") {
+		stopReason = "error";
+	} else if (word === "say") {
+		reply = value;
+	} else if (word === "tool") {
 		emit({ type: "tool_execution_start", toolName: "bash", args: { command: value } });
 		await fire("tool_execution_start", { toolName: "bash", args: { command: value } });
 		emit({ type: "tool_execution_end", toolName: "bash" });
 		await fire("tool_execution_end", { toolName: "bash" });
-	} else if (word === "block") await block();
-	else if (word === "orphan") {
+	} else if (word === "block") {
+		await block();
+	} else if (word === "orphan") {
 		const child = spawn(process.execPath, ["-e", "setInterval(() => {}, 1e9)"], { detached: true, stdio: "ignore" });
 		child.unref();
 		writeFileSync(join(dir, "fake-orphan"), String(child.pid));
-	} else if (word === "finish") await tools.get("finish")?.execute("fake", { handoff: value }, undefined, undefined, context);
-	else if (word.startsWith("/")) await commands.get(word.slice(1))?.handler(value, context);
+	} else if (word === "finish") {
+		await tools.get("finish")?.execute("fake", { handoff: value }, undefined, undefined, context);
+	} else if (word.startsWith("/")) {
+		await commands.get(word.slice(1))?.handler(value, context);
+	}
 }
 turns = turns.then(() => turn([{ role: "user", content: [{ type: "text", text: task }] }], reply, stopReason));
 await turns;

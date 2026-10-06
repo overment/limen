@@ -3,7 +3,15 @@ import { inspectFinishWebhook } from "../integrations/finish-receipt.ts";
 import { hostedAgentStatus } from "../integrations/herdr.ts";
 import { derivePulse, type Pulse, parseJob, producedNothing, renderJob } from "../job/job.ts";
 import { resolveJob } from "../job/lookup.ts";
-import { colorWanted, humanDetail, humanSnapshot, type JobRecord, paintWhen, resolveView, tallyStates } from "../job/view.ts";
+import {
+	colorWanted,
+	humanDetail,
+	humanSnapshot,
+	type JobRecord,
+	paintWhen,
+	resolveView,
+	tallyStates,
+} from "../job/view.ts";
 import { limenRoot, liveDiffstat, workspaceRepository } from "../project/git.ts";
 import { hostedUncertaintyText, readHostedUncertainty } from "../runtime/hosted-uncertainty.ts";
 import { confirmDeadJobs, ownerAlive, startingJob } from "../runtime/reap.ts";
@@ -20,7 +28,9 @@ export async function jobsCommand(args: readonly string[], cwd: string): Promise
 		jobsRoot = `${root}/.limen/jobs`;
 	await confirmDeadJobs(jobsRoot);
 	const entries = await readdir(jobsRoot, { withFileTypes: true }).catch((error: unknown) => {
-		if (typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT") return [];
+		if (typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT") {
+			return [];
+		}
 		throw error;
 	});
 	if (typeof selection === "object" && "detail" in selection) {
@@ -42,7 +52,9 @@ export async function jobsCommand(args: readonly string[], cwd: string): Promise
 			console.log("nothing matched");
 			return;
 		}
-		const loaded = await Promise.all(listed.map(([id]) => renderJobDirectory(root, jobsRoot, id, human ? "human" : "row")));
+		const loaded = await Promise.all(
+			listed.map(([id]) => renderJobDirectory(root, jobsRoot, id, human ? "human" : "row")),
+		);
 		if (human) {
 			console.log(
 				humanSnapshot(
@@ -60,38 +72,75 @@ export async function jobsCommand(args: readonly string[], cwd: string): Promise
 	if (human) {
 		const running = order.filter(([, state]) => state === "running");
 		const terminal = order.filter(([, state]) => state !== "running");
-		const shown = selection === "all" ? order : selection === "running" ? running : [...running, ...terminal.slice(0, HUMAN_TERMINAL_ROWS)];
+		const shown =
+			selection === "all"
+				? order
+				: selection === "running"
+					? running
+					: [...running, ...terminal.slice(0, HUMAN_TERMINAL_ROWS)];
 		if (shown.length === 0) {
 			console.log("no running jobs");
 			return;
 		}
-		const records = await Promise.all(shown.map(async ([id]) => (await renderJobDirectory(root, jobsRoot, id, "human")).record));
-		console.log(humanSnapshot(records, tallyStates(order.map(([, state]) => state)), selection === "snapshot" && terminal.length > HUMAN_TERMINAL_ROWS, paint));
+		const records = await Promise.all(
+			shown.map(async ([id]) => (await renderJobDirectory(root, jobsRoot, id, "human")).record),
+		);
+		console.log(
+			humanSnapshot(
+				records,
+				tallyStates(order.map(([, state]) => state)),
+				selection === "snapshot" && terminal.length > HUMAN_TERMINAL_ROWS,
+				paint,
+			),
+		);
 		return;
 	}
 	if (selection === "all") {
-		console.log((await Promise.all(order.map(async ([id]) => (await renderJobDirectory(root, jobsRoot, id, "detail")).compact))).join("\n\n"));
+		console.log(
+			(
+				await Promise.all(order.map(async ([id]) => (await renderJobDirectory(root, jobsRoot, id, "detail")).compact))
+			).join("\n\n"),
+		);
 		return;
 	}
 	const running = order.filter(([, state]) => state === "running");
-	const rendered = await Promise.all(running.map(async ([id]) => (await renderJobDirectory(root, jobsRoot, id, "row")).compact));
+	const rendered = await Promise.all(
+		running.map(async ([id]) => (await renderJobDirectory(root, jobsRoot, id, "row")).compact),
+	);
 	if (selection !== "snapshot") {
 		console.log(rendered.length ? rendered.join("\n") : "no running jobs");
 		return;
 	}
 	const terminal = order.filter(([, state]) => state !== "running");
-	const observed = await Promise.all(terminal.map(async (entry) => ({ entry, empty: !entry[1] || (await jobProducedNothing(`${jobsRoot}/${entry[0]}`)) })));
+	const observed = await Promise.all(
+		terminal.map(async (entry) => ({
+			entry,
+			empty: !entry[1] || (await jobProducedNothing(`${jobsRoot}/${entry[0]}`)),
+		})),
+	);
 	const empty = observed.filter(({ empty }) => empty).map(({ entry }) => entry);
 	const now = Date.now();
-	const recent = await Promise.all(empty.map(async ([id, state]) => !state || now - (await finishedAt(`${jobsRoot}/${id}`)) <= RECENT_MS));
+	const recent = await Promise.all(
+		empty.map(async ([id, state]) => !state || now - (await finishedAt(`${jobsRoot}/${id}`)) <= RECENT_MS),
+	);
 	const shown = empty.filter((_, index) => recent[index]);
-	const emptyRendered = await Promise.all(shown.map(async ([id]) => (await renderJobDirectory(root, jobsRoot, id, "row")).compact));
+	const emptyRendered = await Promise.all(
+		shown.map(async ([id]) => (await renderJobDirectory(root, jobsRoot, id, "row")).compact),
+	);
 	const lines = [...rendered, ...emptyRendered];
-	if (!lines.length) lines.push("no running jobs");
+	if (!lines.length) {
+		lines.push("no running jobs");
+	}
 	const hiddenCount = terminal.length - empty.length;
-	if (hiddenCount) lines.push(`${hiddenCount} terminal ${hiddenCount === 1 ? "job" : "jobs"} hidden · use limen jobs --all or limen jobs <id> for detail`);
+	if (hiddenCount) {
+		lines.push(
+			`${hiddenCount} terminal ${hiddenCount === 1 ? "job" : "jobs"} hidden · use limen jobs --all or limen jobs <id> for detail`,
+		);
+	}
 	const olderCount = empty.length - shown.length;
-	if (olderCount) lines.push(`${olderCount} older empty ${olderCount === 1 ? "job" : "jobs"} hidden`);
+	if (olderCount) {
+		lines.push(`${olderCount} older empty ${olderCount === 1 ? "job" : "jobs"} hidden`);
+	}
 	console.log(lines.join("\n"));
 }
 async function finishedAt(jobDir: string): Promise<number> {
@@ -99,23 +148,50 @@ async function finishedAt(jobDir: string): Promise<number> {
 }
 function select(args: readonly string[]) {
 	if (args[0] === "--label") {
-		if (args.length !== 2 || !args[1] || args[1].startsWith("--")) throw new Error("jobs --label requires a prefix");
+		if (args.length !== 2 || !args[1] || args[1].startsWith("--")) {
+			throw new Error("jobs --label requires a prefix");
+		}
 		return { prefix: args[1] };
 	}
-	if (args.length > 1) throw new Error("jobs accepts no argument, --running, --active, --all, --label <prefix>, or one job id, suffix, or label");
+	if (args.length > 1) {
+		throw new Error(
+			"jobs accepts no argument, --running, --active, --all, --label <prefix>, or one job id, suffix, or label",
+		);
+	}
 	const arg = args[0];
-	if (!arg) return "snapshot";
-	if (arg === "--running" || arg === "--active") return "running";
-	if (arg === "--all") return "all";
-	if (arg.startsWith("--")) throw new Error(`unknown jobs option ${JSON.stringify(arg)}`);
+	if (!arg) {
+		return "snapshot";
+	}
+	if (arg === "--running" || arg === "--active") {
+		return "running";
+	}
+	if (arg === "--all") {
+		return "all";
+	}
+	if (arg.startsWith("--")) {
+		throw new Error(`unknown jobs option ${JSON.stringify(arg)}`);
+	}
 	return { detail: arg };
 }
-async function orderedJobs(ids: readonly string[], jobsRoot: string): Promise<ReadonlyArray<readonly [string, string, string]>> {
+async function orderedJobs(
+	ids: readonly string[],
+	jobsRoot: string,
+): Promise<ReadonlyArray<readonly [string, string, string]>> {
 	// A job its live spawner is still setting up lists as running, with pulse `starting`.
-	const order = await Promise.all(ids.map(async (id) => [id, await shownState(`${jobsRoot}/${id}`), (await text(`${jobsRoot}/${id}/started-at`)) || id] as const));
+	const order = await Promise.all(
+		ids.map(
+			async (id) =>
+				[id, await shownState(`${jobsRoot}/${id}`), (await text(`${jobsRoot}/${id}/started-at`)) || id] as const,
+		),
+	);
 	return order.sort((a, b) => Number(b[1] === "running") - Number(a[1] === "running") || b[2].localeCompare(a[2]));
 }
-export async function renderJobDirectory(root: string, jobsRoot: string, id: string, view: "row" | "human" | "detail"): Promise<{ compact: string; record: JobRecord }> {
+export async function renderJobDirectory(
+	root: string,
+	jobsRoot: string,
+	id: string,
+	view: "row" | "human" | "detail",
+): Promise<{ compact: string; record: JobRecord }> {
 	const jobDir = `${jobsRoot}/${id}`;
 	const detailed = view === "detail";
 	const [
@@ -140,19 +216,27 @@ export async function renderJobDirectory(root: string, jobsRoot: string, id: str
 			.split(" ")
 			.map((field) => (field === "state" ? shownState(jobDir) : text(`${jobDir}/${field}`))),
 	);
-	if (!state) return { compact: `ORPHAN ${id} · no state`, record: { id, invalid: "orphan · no state" } };
+	if (!state) {
+		return { compact: `ORPHAN ${id} · no state`, record: { id, invalid: "orphan · no state" } };
+	}
 	const uncertainty = readHostedUncertainty(jobDir);
 	const warning = advisory || (uncertainty ? hostedUncertaintyText(uncertainty) : "");
 	const agent = await text(`${jobDir}/herdr/agent`);
 	const [commits, commitsStat] = await Promise.all([text(`${jobDir}/commits`), optionalStat(`${jobDir}/commits`)]);
-	const [result, versions] = detailed ? await Promise.all([text(`${jobDir}/result`), text(`${jobDir}/versions`)]) : ["", ""];
+	const [result, versions] = detailed
+		? await Promise.all([text(`${jobDir}/result`), text(`${jobDir}/versions`)])
+		: ["", ""];
 	const [taskStat, logStat] = await Promise.all([optionalStat(`${jobDir}/task.md`), optionalStat(`${jobDir}/log`)]);
 	const cleanup = detailed ? await text(`${jobDir}/cleanup`) : "";
 	const finishWebhook = detailed && state !== "running" ? await inspectFinishWebhook(jobDir) : "";
 	const herdrWake = detailed ? await text(`${jobDir}/notify/herdr-prompt`) : "";
-	if (!taskStat || !logStat) return { compact: `INVALID ${id} · missing task.md or log`, record: { id, invalid: "missing task.md or log" } };
+	if (!taskStat || !logStat) {
+		return { compact: `INVALID ${id} · missing task.md or log`, record: { id, invalid: "missing task.md or log" } };
+	}
 	const log = view !== "row" ? await readLog(`${jobDir}/log`) : { tail: "", detail: "" };
-	if (hosted) log.tail = activitySummary(log.tail);
+	if (hosted) {
+		log.tail = activitySummary(log.tail);
+	}
 	const display = (value: string) => (detailed || value.length <= 160 ? value : `${value.slice(0, 159)}…`);
 	try {
 		const startedAt = recordedDate(started, taskStat.mtime, "started-at");
@@ -166,14 +250,19 @@ export async function renderJobDirectory(root: string, jobsRoot: string, id: str
 			lastOutputAt: logStat.mtime,
 			detail: detailed ? log.detail : "",
 		});
-		const observedAt = job.phase === "running" ? Date.now() : recordedDate(finished, new Date(), "finished-at").getTime();
+		const observedAt =
+			job.phase === "running" ? Date.now() : recordedDate(finished, new Date(), "finished-at").getTime();
 		const alive = job.phase === "running" && (await ownerAlive(jobDir));
 		const agentStatus = job.phase === "running" && hosted && agent ? hostedAgentStatus(agent) : undefined;
 		let pulse: Pulse | undefined;
 		if (job.phase === "running") {
 			const input: { alive: boolean; pid?: number; activity?: string } = { alive };
-			if (job.pid !== undefined) input.pid = job.pid;
-			if (activity) input.activity = activity;
+			if (job.pid !== undefined) {
+				input.pid = job.pid;
+			}
+			if (activity) {
+				input.activity = activity;
+			}
 			pulse = derivePulse(input);
 		}
 		const recordedTools = toolCalls ? recordedCount(toolCalls) : undefined;
@@ -190,26 +279,53 @@ export async function renderJobDirectory(root: string, jobsRoot: string, id: str
 			logTail: log.tail,
 		});
 		const blocks = [rendered];
-		if (repo) blocks.push(`  repo ${display(repo)}`);
-		if (parent) blocks.push(`  parent ${display(parent)}`);
-		if (candidate) blocks.push(`  candidate ${display(candidate)}`);
-		if (engine && engine !== "pi") blocks.push(`  engine ${display(engine)}`);
-		if (hosted) blocks.push("  hosted (weaker guarantees)");
-		if (agentStatus) blocks.push(`  agent ${agentStatus}`);
-		if (job.phase === "running" && warning) blocks.push(`  advisory ${display(warning)}`);
-		if (stopReason) blocks.push(indented("stop-reason", stopReason));
-		if (versions) blocks.push(indented("versions", versions));
-		if (detailed && commits) blocks.push(indented("commits", commits));
-		if (result) blocks.push(indented("result", result));
-		if (herdrWake) blocks.push(indented("herdr-wake", herdrWake));
-		if (finishWebhook) blocks.push(indented("finish-webhook", finishWebhook));
-		if (cleanup)
+		if (repo) {
+			blocks.push(`  repo ${display(repo)}`);
+		}
+		if (parent) {
+			blocks.push(`  parent ${display(parent)}`);
+		}
+		if (candidate) {
+			blocks.push(`  candidate ${display(candidate)}`);
+		}
+		if (engine && engine !== "pi") {
+			blocks.push(`  engine ${display(engine)}`);
+		}
+		if (hosted) {
+			blocks.push("  hosted (weaker guarantees)");
+		}
+		if (agentStatus) {
+			blocks.push(`  agent ${agentStatus}`);
+		}
+		if (job.phase === "running" && warning) {
+			blocks.push(`  advisory ${display(warning)}`);
+		}
+		if (stopReason) {
+			blocks.push(indented("stop-reason", stopReason));
+		}
+		if (versions) {
+			blocks.push(indented("versions", versions));
+		}
+		if (detailed && commits) {
+			blocks.push(indented("commits", commits));
+		}
+		if (result) {
+			blocks.push(indented("result", result));
+		}
+		if (herdrWake) {
+			blocks.push(indented("herdr-wake", herdrWake));
+		}
+		if (finishWebhook) {
+			blocks.push(indented("finish-webhook", finishWebhook));
+		}
+		if (cleanup) {
 			blocks.push(
 				`  cleanup:\n${cleanup
 					.split("\n")
 					.map((line) => `    ${line}`)
 					.join("\n")}`,
 			);
+		}
 		let reason = (stopReason || log.detail)
 			.replace(/^\[limen [^\]]*\]\s*/, "")
 			.replace(/^(error|failed|stopped):\s*/, "")
@@ -256,8 +372,14 @@ export async function renderJobDirectory(root: string, jobsRoot: string, id: str
 	}
 }
 async function jobProducedNothing(jobDir: string): Promise<boolean> {
-	const [toolCalls, commits, commitsStat] = await Promise.all([text(`${jobDir}/tool-calls`), text(`${jobDir}/commits`), optionalStat(`${jobDir}/commits`)]);
-	if (!toolCalls || !commitsStat) return false;
+	const [toolCalls, commits, commitsStat] = await Promise.all([
+		text(`${jobDir}/tool-calls`),
+		text(`${jobDir}/commits`),
+		optionalStat(`${jobDir}/commits`),
+	]);
+	if (!toolCalls || !commitsStat) {
+		return false;
+	}
 	try {
 		return producedNothing(recordedCount(toolCalls), commits);
 	} catch {
@@ -283,19 +405,27 @@ function optionalStat(path: string) {
 	return stat(path).catch(() => undefined);
 }
 function recordedDate(value: string, fallback: Date, name: string): Date {
-	if (!value) return fallback;
+	if (!value) {
+		return fallback;
+	}
 	const date = new Date(value);
-	if (Number.isNaN(date.getTime())) throw new Error(`invalid ${name} ${JSON.stringify(value.slice(0, 160))}`);
+	if (Number.isNaN(date.getTime())) {
+		throw new Error(`invalid ${name} ${JSON.stringify(value.slice(0, 160))}`);
+	}
 	return date;
 }
 function recordedCount(value: string): number {
 	const count = Number(value);
-	if (!Number.isSafeInteger(count) || count < 0) throw new Error(`invalid tool-calls ${JSON.stringify(value.slice(0, 160))}`);
+	if (!Number.isSafeInteger(count) || count < 0) {
+		throw new Error(`invalid tool-calls ${JSON.stringify(value.slice(0, 160))}`);
+	}
 	return count;
 }
 function activitySummary(tail: string): string {
 	const words = tail.split("\n");
-	if (words.length < 2 || !words.every((word) => /^[a-z_-]+$/.test(word))) return tail;
+	if (words.length < 2 || !words.every((word) => /^[a-z_-]+$/.test(word))) {
+		return tail;
+	}
 	return `recent activity: ${[...new Set(words)].join(", ")} (${words.length} events)`;
 }
 async function readLog(path: string): Promise<{ tail: string; detail: string }> {

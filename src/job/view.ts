@@ -29,11 +29,20 @@ export type JobRecord = {
 	readonly diffstat?: string;
 	readonly logTail?: string;
 };
-export type StateTally = { readonly total: number; readonly running: number; readonly done: number; readonly failed: number; readonly stopped: number; readonly invalid: number };
+export type StateTally = {
+	readonly total: number;
+	readonly running: number;
+	readonly done: number;
+	readonly failed: number;
+	readonly stopped: number;
+	readonly invalid: number;
+};
 export type Paint = (style: "dim" | "bold" | "red" | "green" | "yellow", text: string) => string;
 
 export function resolveView(forced: string | undefined, tty: boolean): "human" | "compact" {
-	if (forced === "human" || forced === "compact") return forced;
+	if (forced === "human" || forced === "compact") {
+		return forced;
+	}
 	return tty ? "human" : "compact";
 }
 export function colorWanted(tty: boolean, noColor: string | undefined, term: string | undefined): boolean {
@@ -48,23 +57,36 @@ export function jobSuffix(id: string): string {
 }
 export function formatAge(milliseconds: number): string {
 	const minutes = Math.floor(Math.max(0, milliseconds) / 60_000);
-	if (minutes < 1) return "just now";
-	if (minutes < 60) return `${minutes}m ago`;
+	if (minutes < 1) {
+		return "just now";
+	}
+	if (minutes < 60) {
+		return `${minutes}m ago`;
+	}
 	const hours = Math.floor(minutes / 60);
-	if (hours < 48) return `${hours}h ago`;
+	if (hours < 48) {
+		return `${hours}h ago`;
+	}
 	return `${Math.floor(hours / 24)}d ago`;
 }
 export function tallyStates(states: readonly string[]): StateTally {
 	const tally = { total: states.length, running: 0, done: 0, failed: 0, stopped: 0, invalid: 0 };
 	for (const state of states) {
-		if (state === "running" || state === "done" || state === "failed" || state === "stopped") tally[state] += 1;
-		else tally.invalid += 1;
+		if (state === "running" || state === "done" || state === "failed" || state === "stopped") {
+			tally[state] += 1;
+		} else {
+			tally.invalid += 1;
+		}
 	}
 	return tally;
 }
 /** Hosted stall notes start with their kind; every other running note is an ownership observation. */
 export function noteKind(note: string): "blocked" | "errored" | "idle" | "ownership" {
-	for (const kind of ["blocked", "errored", "idle"] as const) if (note.startsWith(kind)) return kind;
+	for (const kind of ["blocked", "errored", "idle"] as const) {
+		if (note.startsWith(kind)) {
+			return kind;
+		}
+	}
 	return "ownership";
 }
 export function humanSnapshot(records: readonly JobRecord[], tally: StateTally, hint: boolean, paint: Paint): string {
@@ -73,11 +95,17 @@ export function humanSnapshot(records: readonly JobRecord[], tally: StateTally, 
 }
 export function humanRow(record: JobRecord, labelWidth: number, paint: Paint): string {
 	const job = record.job;
-	if (record.invalid || !job) return `${paint("red", "!")} ${clip(record.id, labelWidth).padEnd(labelWidth)}  ${paint("red", record.invalid ?? "unreadable")}`;
+	if (record.invalid || !job) {
+		return `${paint("red", "!")} ${clip(record.id, labelWidth).padEnd(labelWidth)}  ${paint("red", record.invalid ?? "unreadable")}`;
+	}
 	const label = clip(job.label, labelWidth).padEnd(labelWidth);
 	const facts =
 		job.phase === "running"
-			? [...runningFacts(record, paint), ...(record.advisory ? [noteFact(record.advisory, paint)] : []), ...flags(record).map((flag) => paint("dim", flag))]
+			? [
+					...runningFacts(record, paint),
+					...(record.advisory ? [noteFact(record.advisory, paint)] : []),
+					...flags(record).map((flag) => paint("dim", flag)),
+				]
 			: terminalFacts(record, paint);
 	return `${glyph(record, paint)} ${job.phase === "running" ? paint("bold", label) : label}  ${paint("dim", jobSuffix(record.id).padEnd(12))}  ${facts.join(paint("dim", " · "))}`;
 }
@@ -87,9 +115,13 @@ export function humanDetail(record: JobRecord, paint: Paint): string {
 		const tail = record.logTail ? `\n${indented(record.logTail, paint)}` : "";
 		return `${paint("red", "!")} ${record.id}  ${paint("red", record.invalid ?? "unreadable")}${tail}`;
 	}
-	const lines = [[`${glyph(record, paint)} ${paint("bold", job.label)}`, job.phase, ...flags(record)].join(paint("dim", " · "))];
+	const lines = [
+		[`${glyph(record, paint)} ${paint("bold", job.label)}`, job.phase, ...flags(record)].join(paint("dim", " · ")),
+	];
 	const put = (key: string, value: string | undefined) => {
-		if (value) lines.push(...keyed(key, value, paint));
+		if (value) {
+			lines.push(...keyed(key, value, paint));
+		}
 	};
 	put("id", emphasizeSuffix(record.id, paint));
 	put("branch", job.branch);
@@ -98,7 +130,9 @@ export function humanDetail(record: JobRecord, paint: Paint): string {
 	put("candidate", record.candidate);
 	if (job.phase === "running") {
 		put("up", runningFacts(record, paint).join(" · "));
-		if (job.pid !== undefined) put("pid", `${job.pid}`);
+		if (job.pid !== undefined) {
+			put("pid", `${job.pid}`);
+		}
 		put("advisory", record.advisory);
 	} else {
 		put("ran", terminalRanLine(record, paint));
@@ -119,31 +153,55 @@ export function renderLogTail(tail: string, paint: Paint): string {
 	const kept: string[] = [];
 	for (const line of tail.split("\n")) {
 		const trimmed = line.trim();
-		if (!trimmed || trimmed === "…") continue;
+		if (!trimmed || trimmed === "…") {
+			continue;
+		}
 		const event = /^\[limen ([^\]]+)\] (.*)$/.exec(trimmed);
-		if (event) kept.push(`${paint("dim", clock(event[1] ?? ""))} ${event[2] ?? ""}`);
-		else if (!/^[a-z][a-z0-9_-]{0,19}$/.test(trimmed)) kept.push(paint("dim", trimmed));
+		if (event) {
+			kept.push(`${paint("dim", clock(event[1] ?? ""))} ${event[2] ?? ""}`);
+		} else if (!/^[a-z][a-z0-9_-]{0,19}$/.test(trimmed)) {
+			kept.push(paint("dim", trimmed));
+		}
 	}
 	return kept.join("\n");
 }
 function glyph(record: JobRecord, paint: Paint): string {
-	if (record.invalid || !record.job) return paint("red", "!");
-	if (record.job.phase === "running") return paint(record.pulse === "dead" ? "red" : "green", "●");
-	if (record.job.phase === "done") return paint("green", "✓");
-	if (record.job.phase === "failed") return paint("red", "✗");
+	if (record.invalid || !record.job) {
+		return paint("red", "!");
+	}
+	if (record.job.phase === "running") {
+		return paint(record.pulse === "dead" ? "red" : "green", "●");
+	}
+	if (record.job.phase === "done") {
+		return paint("green", "✓");
+	}
+	if (record.job.phase === "failed") {
+		return paint("red", "✗");
+	}
 	return paint("yellow", "■");
 }
 function runningFacts(record: JobRecord, paint: Paint): string[] {
 	const facts = [formatDuration(record.elapsedMs ?? 0)];
 	const pulse = record.pulse ?? "think";
-	if (pulse === "dead") facts.push(paint("red", "dead"));
-	else if (pulse === "starting") facts.push(paint("dim", "starting"));
-	else facts.push(pulse === "tool" && record.lastTool ? clip(record.lastTool, 24) : pulse);
-	if (record.agentStatus) facts.push(`agent ${record.agentStatus}`);
-	if (record.toolCalls !== undefined) facts.push(`${record.toolCalls} tools`);
+	if (pulse === "dead") {
+		facts.push(paint("red", "dead"));
+	} else if (pulse === "starting") {
+		facts.push(paint("dim", "starting"));
+	} else {
+		facts.push(pulse === "tool" && record.lastTool ? clip(record.lastTool, 24) : pulse);
+	}
+	if (record.agentStatus) {
+		facts.push(`agent ${record.agentStatus}`);
+	}
+	if (record.toolCalls !== undefined) {
+		facts.push(`${record.toolCalls} tools`);
+	}
 	const silent = record.silentMs ?? 0;
-	if (silent >= 300_000) facts.push(paint("red", `silent ${formatDuration(silent)}`));
-	else if (silent >= 90_000) facts.push(paint("yellow", `silent ${formatDuration(silent)}`));
+	if (silent >= 300_000) {
+		facts.push(paint("red", `silent ${formatDuration(silent)}`));
+	} else if (silent >= 90_000) {
+		facts.push(paint("yellow", `silent ${formatDuration(silent)}`));
+	}
 	return facts;
 }
 function noteFact(note: string, paint: Paint): string {
@@ -153,33 +211,58 @@ function noteFact(note: string, paint: Paint): string {
 function terminalFacts(record: JobRecord, paint: Paint): string[] {
 	const facts = record.ageMs === undefined ? [] : [paint("dim", formatAge(record.ageMs))];
 	facts.push(formatDuration(record.elapsedMs ?? 0), ...workFacts(record, paint));
-	if (record.reason) facts.push(clip(record.reason, 48));
+	if (record.reason) {
+		facts.push(clip(record.reason, 48));
+	}
 	return [...facts, ...flags(record).map((flag) => paint("dim", flag))];
 }
 function terminalRanLine(record: JobRecord, paint: Paint): string {
 	const facts = [formatDuration(record.elapsedMs ?? 0), ...workFacts(record, paint)];
-	if (record.ageMs !== undefined) facts.push(`finished ${formatAge(record.ageMs)}`);
+	if (record.ageMs !== undefined) {
+		facts.push(`finished ${formatAge(record.ageMs)}`);
+	}
 	return facts.join(" · ");
 }
 function workFacts(record: JobRecord, paint: Paint): string[] {
-	if (record.producedNothing) return [paint("red", "nothing")];
-	const facts = record.toolCalls === undefined ? [] : [`${record.toolCalls} ${record.toolCalls === 1 ? "tool" : "tools"}`];
-	if (record.commitCount) facts.push(`${record.commitCount} ${record.commitCount === 1 ? "commit" : "commits"}`);
+	if (record.producedNothing) {
+		return [paint("red", "nothing")];
+	}
+	const facts =
+		record.toolCalls === undefined ? [] : [`${record.toolCalls} ${record.toolCalls === 1 ? "tool" : "tools"}`];
+	if (record.commitCount) {
+		facts.push(`${record.commitCount} ${record.commitCount === 1 ? "commit" : "commits"}`);
+	}
 	return facts;
 }
 function flags(record: JobRecord): string[] {
 	const out: string[] = [];
-	if (record.candidate) out.push("review");
-	if (record.parent) out.push("continue");
-	if (record.hosted) out.push("hosted");
-	if (record.repo) out.push(`repo ${record.repo}`);
+	if (record.candidate) {
+		out.push("review");
+	}
+	if (record.parent) {
+		out.push("continue");
+	}
+	if (record.hosted) {
+		out.push("hosted");
+	}
+	if (record.repo) {
+		out.push(`repo ${record.repo}`);
+	}
 	return out;
 }
 function cabinetLine(tally: StateTally, hint: boolean, paint: Paint): string {
 	const parts = [paint("dim", `${tally.total} ${tally.total === 1 ? "job" : "jobs"}`)];
-	for (const phase of ["running", "done", "failed", "stopped"] as const) if (tally[phase]) parts.push(paint("dim", `${tally[phase]} ${phase}`));
-	if (tally.invalid) parts.push(paint("red", `${tally.invalid} invalid`));
-	if (hint) parts.push(paint("dim", "limen jobs --all"));
+	for (const phase of ["running", "done", "failed", "stopped"] as const) {
+		if (tally[phase]) {
+			parts.push(paint("dim", `${tally[phase]} ${phase}`));
+		}
+	}
+	if (tally.invalid) {
+		parts.push(paint("red", `${tally.invalid} invalid`));
+	}
+	if (hint) {
+		parts.push(paint("dim", "limen jobs --all"));
+	}
 	return parts.join(paint("dim", " · "));
 }
 function keyed(key: string, value: string, paint: Paint): string[] {
@@ -198,7 +281,9 @@ function indented(block: string, paint: Paint): string {
 }
 function clock(iso: string): string {
 	const date = new Date(iso);
-	if (Number.isNaN(date.getTime())) return iso;
+	if (Number.isNaN(date.getTime())) {
+		return iso;
+	}
 	const pad = (part: number) => `${part}`.padStart(2, "0");
 	return `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 }
