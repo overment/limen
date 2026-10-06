@@ -33,45 +33,55 @@ export function parseFlags<T extends ParseArgsOptionsConfig>(
 		tokens: true,
 	});
 	const flags: string[] = [];
-	const positionals: string[] = [];
 	const seen = new Set<string>();
-	let lastIndex = -1;
+	// `-abc` gives one token per letter, all at one index.
+	const positionalAt = new Set<number>();
 	for (const token of tokens) {
-		const word = args[token.index] ?? "";
-		const next = args[token.index + 1];
-		if (token.kind === "option-terminator" && rules.endOfFlags === false) {
-			throw new Error(rules.unknown(word, next));
-		}
-		if (token.kind === "option-terminator") {
+		if (token.kind === "option" && token.rawName.startsWith("--")) {
+			flags.push(checkedFlag(token, args, table, rules, seen));
 			continue;
 		}
-		const positional = token.kind === "positional" || !token.rawName.startsWith("--");
-		if (positional && rules.positionals === false) {
-			throw new Error(rules.unknown(word, next));
+		const allowed = token.kind === "option-terminator" ? rules.endOfFlags : rules.positionals;
+		if (allowed === false) {
+			throw new Error(rules.unknown(args[token.index] ?? "", args[token.index + 1]));
 		}
-		if (positional) {
-			// `-abc` gives one token per letter, all at one index.
-			if (token.index !== lastIndex) {
-				positionals.push(word);
-			}
-			lastIndex = token.index;
-			continue;
+		if (token.kind !== "option-terminator") {
+			positionalAt.add(token.index);
 		}
-		const option = Object.hasOwn(table, token.name) ? table[token.name] : undefined;
-		if (!option || (option.type === "boolean" && token.inlineValue)) {
-			throw new Error(rules.unknown(word, next));
-		}
-		// Without strict mode, parseArgs takes the next flag as the value: `--onto --yes`.
-		const flagAsValue = !token.inlineValue && token.value?.startsWith("--") && !rules.dashValues?.includes(token.name);
-		if (option.type === "string" && (!token.value || flagAsValue)) {
-			throw new Error(rules.missing(token.rawName));
-		}
-		const again = seen.has(token.name) && !option.multiple ? rules.repeated?.(token.rawName) : undefined;
-		if (again) {
-			throw new Error(again);
-		}
-		seen.add(token.name);
-		flags.push(option.type === "string" ? `--${token.name}=${token.value}` : `--${token.name}`);
 	}
+	const positionals = [...positionalAt].map((index) => args[index] ?? "");
 	return parseArgs({ args: [...flags, "--", ...positionals], options: table, allowPositionals: true });
+}
+
+type FlagToken = {
+	readonly index: number;
+	readonly name: string;
+	readonly rawName: string;
+	readonly value: string | undefined;
+	readonly inlineValue: boolean | undefined;
+};
+
+/** The flag as `--name=value` or `--name`, once the command's rules accept it. */
+function checkedFlag(
+	token: FlagToken,
+	args: readonly string[],
+	table: ParseArgsOptionsConfig,
+	rules: FlagRules<string>,
+	seen: Set<string>,
+): string {
+	const option = Object.hasOwn(table, token.name) ? table[token.name] : undefined;
+	if (!option || (option.type === "boolean" && token.inlineValue)) {
+		throw new Error(rules.unknown(args[token.index] ?? "", args[token.index + 1]));
+	}
+	// Without strict mode, parseArgs takes the next flag as the value: `--onto --yes`.
+	const flagAsValue = !token.inlineValue && token.value?.startsWith("--") && !rules.dashValues?.includes(token.name);
+	if (option.type === "string" && (!token.value || flagAsValue)) {
+		throw new Error(rules.missing(token.rawName));
+	}
+	const again = seen.has(token.name) && !option.multiple ? rules.repeated?.(token.rawName) : undefined;
+	if (again) {
+		throw new Error(again);
+	}
+	seen.add(token.name);
+	return option.type === "string" ? `--${token.name}=${token.value}` : `--${token.name}`;
 }
