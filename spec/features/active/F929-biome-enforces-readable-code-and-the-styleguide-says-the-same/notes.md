@@ -88,7 +88,7 @@ Why 25: it is the low end of the 25 to 40 range Adam set. On `main` at `a34d21d`
 
 Why 70 lines: on `main` at `a34d21d` the line limit flagged 58 functions at 50, 41 at 60, 26 at 70 and 24 at 80. At 70, 21 of the 26 were also over the complexity limit; the five others are three hook factories whose handlers share closure state, the coordinator signal factory, and one end-to-end test. At 60 it flagged eight more functions under the complexity limit, among them the keeper command's 63-line `keeperCommand`, the sample of the target style. `skipIifes` is on because the viewer scripts wrap their module in an IIFE (`src/picture/html.ts` inlines them into a classic script); without it, a whole viewer script counts as one function (`layers.js` as 506 lines).
 
-After the F929 splits and team 4's move of the command flag loops to `parseArgs`: 34 functions are over the complexity limit and 15 over the line limit, 39 functions and 49 suppression comments in all. Each row left is a later change of its own.
+After the F929 splits and team 4's move of the command flag loops to `parseArgs`: 33 functions are over the complexity limit and 15 over the line limit, 38 functions and 48 suppression comments in all. Each row left is a later change of its own.
 
 | Function | Complexity | Lines |
 | --- | ---: | ---: |
@@ -116,7 +116,6 @@ After the F929 splits and team 4's move of the command flag loops to `parseArgs`
 | `hook/wake.ts` `sendAdvisory` | 35 | 94 |
 | `picture/viewer/viewer.js` `parse` | 34 | — |
 | `src/picture/frontmatter.ts` `parseInlineList` | 34 | — |
-| `src/runtime/engine.ts` `prepareSkillConfig` | 34 | — |
 | `picture/viewer/viewer.js` `crumbs` | 33 | — |
 | `hook/group-peer.ts` `message_end` handler | 31 | — |
 | `src/integrations/herdr.ts` `locateHostedAgent` | 31 | — |
