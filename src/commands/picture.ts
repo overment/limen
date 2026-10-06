@@ -1,12 +1,24 @@
 import { resolve } from "node:path";
+import type { ParseArgsOptionsConfig } from "node:util";
 import { buildPicture } from "../picture/picture-build.ts";
 import { headCommit, repoRoot } from "../project/git.ts";
 import { firstPictureHint, pictureTick } from "../project/picture-tick.ts";
 import { pictureWatch } from "../project/picture-watch.ts";
+import { parseFlags } from "./flags.ts";
 
 const HELP =
 	"limen picture build [--dir D] [--out F] [--json F] [--strict]\nlimen picture tick [--dir D] [--branch B] [--dry-run] --engine E --provider P --model M --thinking T\nlimen picture watch [off | on [--branch B] [--dir D] --engine E --provider P --model M --thinking T]";
 const MODEL_FLAGS = ["--engine", "--provider", "--model", "--thinking"];
+const VALUE = { type: "string" } as const;
+const SWITCH = { type: "boolean" } as const;
+const ROUTE = { dir: VALUE, branch: VALUE, engine: VALUE, provider: VALUE, model: VALUE, thinking: VALUE };
+const TABLES: Record<"build" | "tick" | "on" | "off" | "status", ParseArgsOptionsConfig> = {
+	build: { dir: VALUE, out: VALUE, json: VALUE, strict: SWITCH },
+	tick: { ...ROUTE, "dry-run": SWITCH },
+	on: ROUTE,
+	off: {},
+	status: {},
+};
 
 export async function pictureCommand(args: readonly string[], cwd: string): Promise<void> {
 	const [mode, ...options] = args;
@@ -18,29 +30,23 @@ export async function pictureCommand(args: readonly string[], cwd: string): Prom
 		watch = options[0] === "on" || options[0] === "off" ? options[0] : "status";
 	}
 	const rest = watch === "on" || watch === "off" ? options.slice(1) : options;
+	const table = mode === "watch" ? TABLES[watch ?? "status"] : TABLES[mode];
+	const invalid = (word: string) => `invalid picture option ${word}\n${HELP}`;
+	const parsed = parseFlags(rest, table, {
+		unknown: invalid,
+		missing: invalid,
+		repeated: (flag) => (table[flag.slice(2)]?.type === "string" ? invalid(flag) : undefined),
+		positionals: false,
+		endOfFlags: false,
+	});
 	const values = new Map<string, string>();
-	let strict = false;
-	let dryRun = false;
-	let allowed = ["--dir", "--branch", ...MODEL_FLAGS];
-	if (mode === "build") {
-		allowed = ["--dir", "--out", "--json"];
-	} else if (watch === "off" || watch === "status") {
-		allowed = [];
-	}
-	for (let i = 0; i < rest.length; i++) {
-		const flag = rest[i] ?? "";
-		if (flag === "--strict" && mode === "build") {
-			strict = true;
-		} else if (flag === "--dry-run" && mode === "tick") {
-			dryRun = true;
-		} else {
-			const value = rest[++i];
-			if (!allowed.includes(flag) || !value || value.startsWith("--") || values.has(flag)) {
-				throw new Error(`invalid picture option ${flag}\n${HELP}`);
-			}
-			values.set(flag, value);
+	for (const [name, value] of Object.entries(parsed.values)) {
+		if (typeof value === "string") {
+			values.set(`--${name}`, value);
 		}
 	}
+	const strict = parsed.values.strict === true;
+	const dryRun = parsed.values["dry-run"] === true;
 	const dir = values.get("--dir");
 	if (watch) {
 		if (watch === "on" && MODEL_FLAGS.some((flag) => !values.has(flag))) {
