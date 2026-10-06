@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { readFile, rename, writeFile } from "node:fs/promises";
 import { limenRoot } from "../project/git.ts";
+import { parseFlags } from "./flags.ts";
 
 /** The Linear mirror toggle is one file: spec/linear.md on, spec/linear.md.off parked. Mirroring itself is agent work; this only moves the config and reports. */
 export async function linearCommand(args: readonly string[], cwd: string): Promise<void> {
@@ -58,20 +59,16 @@ function parseIdentity(
 	if (mode !== "on") {
 		throw new Error(`linear ${mode} takes no options`);
 	}
-	let team: string | undefined;
-	let project: string | undefined;
-	for (let index = 0; index < rest.length; index += 2) {
-		const flag = rest[index];
-		const value = rest[index + 1];
-		if ((flag !== "--team" && flag !== "--project") || !value) {
-			throw new Error("linear on takes --team <name> --project <name>");
-		}
-		if (flag === "--team") {
-			team = value;
-		} else {
-			project = value;
-		}
-	}
+	const usage = () => "linear on takes --team <name> --project <name>";
+	// A name may start with "--": "--team --project" names the team "--project" and then lacks a project.
+	const { values } = parseFlags(rest, { team: { type: "string" }, project: { type: "string" } } as const, {
+		unknown: usage,
+		missing: usage,
+		dashValues: ["team", "project"],
+		positionals: false,
+		endOfFlags: false,
+	});
+	const { team, project } = values;
 	if (!team || !project) {
 		throw new Error("linear on takes --team and --project together");
 	}
