@@ -125,7 +125,9 @@
 					}
 					return;
 				}
-				rest.forEach((m, i) => permute([...done, m], [...rest.slice(0, i), ...rest.slice(i + 1)]));
+				for (const [i, m] of rest.entries()) {
+					permute([...done, m], [...rest.slice(0, i), ...rest.slice(i + 1)]);
+				}
 			};
 			permute([], mids);
 		}
@@ -708,7 +710,9 @@
 				a.insertAdjacentHTML("beforeend", `<span class="badge${cur ? " cur" : ""}">${L.badges[id].join("·")}</span>`);
 			}
 		});
-		stage.querySelectorAll("[data-mod]").forEach((m) => m.classList.toggle("mfocus", m.dataset.mod === L.mfocus));
+		for (const m of stage.querySelectorAll("[data-mod]")) {
+			m.classList.toggle("mfocus", m.dataset.mod === L.mfocus);
+		}
 		const ll = document.getElementById("lightline");
 		ll.className = `lightline ${L.mode}`;
 		ll.innerHTML = `<i class="sw"></i><span>${L.text}</span>${r.view !== "plant" ? `<a href="#plant/${tabOf(r)}">Clear selection</a>` : ""}`;
@@ -1437,18 +1441,24 @@
 			const rw = e.target.closest("#read .row[data-places]");
 			const preview = !!rw && rw.getAttribute("aria-expanded") !== "true";
 			atlas.classList.toggle("preview", preview);
-			stage.querySelectorAll(".place.pv").forEach((x) => x.classList.remove("pv"));
+			for (const x of stage.querySelectorAll(".place.pv")) {
+				x.classList.remove("pv");
+			}
 			if (preview) {
 				for (const id of rw.dataset.places.split(" ")) {
 					stage.querySelector(`.place[data-place="${CSS.escape(id)}"]`)?.classList.add("pv");
 				}
 			}
-			stage.querySelectorAll(".place.hov").forEach((x) => x.classList.remove("hov"));
+			for (const x of stage.querySelectorAll(".place.hov")) {
+				x.classList.remove("hov");
+			}
 			const h = e.target.closest("#read [data-hover]");
 			if (h?.dataset.hover) {
 				stage.querySelector(`.place[data-place="${CSS.escape(h.dataset.hover)}"]`)?.classList.add("hov");
 			}
-			document.querySelectorAll("#over .wire.hot").forEach((x) => x.classList.remove("hot"));
+			for (const x of document.querySelectorAll("#over .wire.hot")) {
+				x.classList.remove("hot");
+			}
 			const er = e.target.closest("#read [data-wire]");
 			if (er) {
 				const [f, t] = er.dataset.wire.split("|");

@@ -562,7 +562,9 @@
 		if (next.length && history.state?.pictureLayers !== next.length) {
 			history.scrollRestoration = "manual";
 			history.replaceState(entry(0), "", base);
-			next.forEach((_, i) => history.pushState(entry(i + 1), "", join(base, next.slice(0, i + 1))));
+			for (const i of next.keys()) {
+				history.pushState(entry(i + 1), "", join(base, next.slice(0, i + 1)));
+			}
 		} else if (next.length || String(hash).includes("~")) {
 			history.replaceState(entry(next.length), "", join(base, next));
 		}
