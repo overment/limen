@@ -96,7 +96,6 @@ On `main` at `76a2f6d`: 48 functions over the complexity limit and 22 over the l
 | `src/commands/github.ts` `githubCommand` | 117 | 168 | Team 2 |
 | `src/commands/continue.ts` `continueJob` | 109 | 205 | Team 2 after Team 4 |
 | `src/commands/spawn.ts` `parseSpawnArgs` | 96 | 104 | Team 4 |
-| `src/runtime/supervisor.ts` `runHostedSupervisor` | 79 | 126 | Team 2 |
 | `src/picture/tickets.ts` `parseTicket` | 68 | 156 | — |
 | `picture/viewer/viewer.js` `lighting` | 67 | 72 | — |
 | `src/picture/picture-model.ts` `readRecord` | 65 | 162 | — |
@@ -127,7 +126,6 @@ On `main` at `76a2f6d`: 48 functions over the complexity limit and 22 over the l
 | `picture/viewer/viewer.js` `parse` | 34 | — | — |
 | `src/picture/frontmatter.ts` `parseInlineList` | 34 | — | — |
 | `src/runtime/engine.ts` `prepareSkillConfig` | 34 | — | — |
-| `src/runtime/supervisor.ts` `noteHostedIdle` | 34 | — | Team 2 |
 | `picture/viewer/viewer.js` `crumbs` | 33 | — | — |
 | `hook/group-peer.ts` `message_end` handler | 31 | — | — |
 | `src/commands/github.ts` `startGithubJob` | 31 | — | Team 2 |
@@ -138,7 +136,6 @@ On `main` at `76a2f6d`: 48 functions over the complexity limit and 22 over the l
 | `src/runtime/recovery.ts` `claimRecovery` | 30 | — | — |
 | `picture/viewer/viewer.js` `work.sort` comparator | 29 | — | — |
 | `src/commands/land.ts` `landCommand` | 29 | — | — |
-| `src/runtime/supervisor.ts` `startHostedAgent` | 27 | — | Team 2 |
 | `src/job/group-events.ts` `eligibleEvents` | 26 | — | — |
 | `hook/wake.ts` `limenWake` | — | 618 | — |
 | `src/integrations/coordinator-signal.ts` `coordinatorSignals` | — | 172 | — |
