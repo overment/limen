@@ -62,7 +62,6 @@ export function branchExists(cwd: string, branch: string): boolean {
  * processes per repository however many branches. Missing branches are absent: nothing to land.
  * Upstream patches are read from HEAD since the oldest unlanded commit; a cherry-pick is committed later.
  */
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: split pending: unlanded branch check
 export function unlandedBranches(cwd: string, branches: Iterable<string>): ReadonlySet<string> {
 	const wanted = new Set(branches);
 	const tips = new Map<string, string[]>();
@@ -78,7 +77,7 @@ export function unlandedBranches(cwd: string, branches: Iterable<string>): Reado
 		return new Set();
 	}
 	const input = `${[...tips.keys()].join("\n")}\n`;
-	const graph = new Map<string, { readonly parents: readonly string[]; readonly merge: boolean }>();
+	const graph: CommitGraph = new Map();
 	let oldest = Number.POSITIVE_INFINITY;
 	for (const line of requireGit(cwd, ["log", "--format=%H %ct %P", "--stdin"], `${input}^HEAD\n`).stdout.split("\n")) {
 		const [oid, time, ...parents] = line.split(" ");
@@ -117,33 +116,43 @@ export function unlandedBranches(cwd: string, branches: Iterable<string>): Reado
 	const upstream = new Set([...patchIds].filter(([oid]) => !graph.has(oid)).map(([, patch]) => patch));
 	const unlanded = new Set<string>();
 	for (const [tip, refs] of tips) {
-		const stack = [tip];
-		const visited = new Set<string>();
-		let landed = true;
-		while (landed && stack.length) {
-			const oid = stack.pop() as string;
-			const commit = graph.get(oid);
-			if (!commit || visited.has(oid)) {
-				continue;
-			}
-			visited.add(oid);
-			stack.push(...commit.parents);
-			if (commit.merge) {
-				continue;
-			}
-			// Unseen means the dated walk missed it: stay unlanded. Seen without a patch id is an empty commit.
-			const patch = patchIds.get(oid);
-			if (!seen.has(oid) || (patch !== undefined && !upstream.has(patch))) {
-				landed = false;
-			}
-		}
-		if (!landed) {
+		if (!tipLanded(tip, graph, seen, patchIds, upstream)) {
 			for (const ref of refs) {
 				unlanded.add(ref);
 			}
 		}
 	}
 	return unlanded;
+}
+type CommitGraph = Map<string, { readonly parents: readonly string[]; readonly merge: boolean }>;
+/** Walks the tip's unlanded commits; false at the first non-merge commit whose patch HEAD does not hold. */
+function tipLanded(
+	tip: string,
+	graph: CommitGraph,
+	seen: ReadonlySet<string>,
+	patchIds: ReadonlyMap<string, string>,
+	upstream: ReadonlySet<string>,
+): boolean {
+	const stack = [tip];
+	const visited = new Set<string>();
+	while (stack.length) {
+		const oid = stack.pop() as string;
+		const commit = graph.get(oid);
+		if (!commit || visited.has(oid)) {
+			continue;
+		}
+		visited.add(oid);
+		stack.push(...commit.parents);
+		if (commit.merge) {
+			continue;
+		}
+		// Unseen means the dated walk missed it: stay unlanded. Seen without a patch id is an empty commit.
+		const patch = patchIds.get(oid);
+		if (!seen.has(oid) || (patch !== undefined && !upstream.has(patch))) {
+			return false;
+		}
+	}
+	return true;
 }
 export function branchCommit(cwd: string, branch: string): string {
 	return requireGit(cwd, ["rev-parse", `refs/heads/${branch}`]).stdout.trim();
