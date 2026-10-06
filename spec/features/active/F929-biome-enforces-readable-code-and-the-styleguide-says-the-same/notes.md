@@ -58,6 +58,14 @@ After merging main `8bacea1` (group extensions, which adds `test/group-extension
 
 Biome's unsafe `useOptionalChain` fix rewrote `!identity?.member || identity.member.role !== "coordinator"` in `src/job/group-cabinet.ts:213` to `identity.member?.role !== "coordinator"`, which throws when the job has no group. tsc caught it. Run the typecheck after every `--unsafe` pass.
 
+## The reformat on `main`
+
+Recipe, from the repository root after setting `lineWidth` 120 and `style/useBlockStatements` in `biome.jsonc`: `npx biome lint --write --unsafe --only=style/useBlockStatements .`, then `npx biome format --write .` twice (the first pass left `test/plant.ts` unstable). It changed 104 files: 8,386 lines in, 2,380 out. Line counts match the "Width 120 and braces" row above (`bin` 253 to 269).
+
+Check: every changed `.ts`, `.js` and `.mjs` file was parsed before and after with TypeScript, normalized (a one-statement block body unwrapped, parentheses and trailing commas dropped, comments and whitespace ignored), and compared leaf token by leaf token: 102 files, 0 differ. tsc and Biome pass; `npm test` 68 of 68.
+
+Lines still wider than 120 columns (tab as two): `src` 206, `hook` 14, `test` 66, `picture` 75, `bin` 10. They are long string and template literals, mostly agent prompts and error messages; the formatter does not split strings.
+
 ## Seams
 
 - Flag loops: `src/commands/spawn.ts` (17 flag compares), `continue.ts` (10), `group.ts` (6), `keeper.ts` (4), `jobs.ts` (3), and one or two in `land.ts`, `picture.ts`, `sweep.ts`, `ticket.ts`, `init.ts`, `linear.ts`, `status.ts`, `steer.ts`, `src/main.ts`.
