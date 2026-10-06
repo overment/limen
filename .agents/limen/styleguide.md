@@ -18,10 +18,11 @@
 
 ## Checked by Biome
 
-`npm run check` fails on these. `biome.jsonc` names each rule with its reason.
+`npm run check` runs Biome's recommended rules plus the rules `biome.jsonc` names with their reasons, and fails on any warning. The rules a reader meets most:
 
 - Lines at most 120 columns. The formatter wraps code; split a long string yourself when it holds two ideas.
 - Braces on every `if`, `for`, `while`, and `else` body, also `if (!value) continue;`.
+- No non-null assertion (`x!`). Write a check, a narrowed type, or an early return; never a cast.
 - One effect per statement. No assignment inside an expression: write `seq += 1;`, then `String(seq)`.
 - Flat control flow. No `else` after `return`, `throw`, `break`, or `continue`. Join `if (a) { if (b) … }` into `if (a && b)`.
 - Optional chains for guarded reads: `message?.role !== "user"`, not `!message || message.role !== "user"`.
@@ -34,6 +35,6 @@
 
 - Abstracting a second example. Duplicating a short function is cheaper than a helper bag.
 - New workflow state, registries, or parsers for Markdown the human already owns.
-- Lint presets and style packs. Name each rule in `biome.jsonc`.
+- Style packs beyond Biome's recommended rules, and a rule turned off for the whole tree. Name each added rule in `biome.jsonc`; an exception names its reason and only the files it is true for.
 - Comment banners and defensive try/catch around impossible cases.
 - Rewriting working code to match a model's default taste.
