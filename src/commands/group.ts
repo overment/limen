@@ -41,7 +41,9 @@ export async function startGroup(args: readonly string[], cwd: string): Promise<
 			else {
 				const selection = /^(team-[1-9]\d*)=(.+)$/.exec(value);
 				if (!selection?.[1] || !selection[2]) throw new Error("invalid --team-extension; use team-N=PATH");
-				(teamSelections[selection[1]] ??= []).push(selection[2]);
+				const paths = teamSelections[selection[1]] ?? [];
+				paths.push(selection[2]);
+				teamSelections[selection[1]] = paths;
 			}
 			continue;
 		}
