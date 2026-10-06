@@ -34,6 +34,7 @@ import {
 import { defaultModel, engineProfile, preflightEngine, resolveSpawnEngine } from "../runtime/engine.ts";
 import { normalizeWorkerExtensions, readWorkerExtensions } from "../runtime/worker-extensions.ts";
 import { launchWrapper } from "../runtime/wrapper.ts";
+import { parseFlags } from "./flags.ts";
 import {
 	capturedVersions,
 	currentNotificationSession,
@@ -61,67 +62,56 @@ type ContinueOptions = {
 	readonly query: string;
 	readonly instruction: string;
 };
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: split pending: flag loop moves to parseArgs
 function parseContinueArgs(args: readonly string[]): ContinueOptions {
-	let review = false;
-	let tab = false;
-	let detached = false;
-	let label: string | undefined;
-	let model: string | undefined, provider: string | undefined, thinking: string | undefined, engine: string | undefined;
-	const positional: string[] = [];
-	const selected: string[] = [];
-	for (let index = 0; index < args.length; index += 1) {
-		const value = args[index];
-		if (!value) {
-			continue;
-		}
-		if (value === "--review") {
-			review = true;
-		} else if (value === "--tab") {
-			tab = true;
-		} else if (value === "--detached") {
-			detached = true;
-		} else if (
-			value === "--label" ||
-			value === "--model" ||
-			value === "--provider" ||
-			value === "--thinking" ||
-			value === "--engine" ||
-			value === "--extension"
-		) {
-			const optionValue = args[index + 1];
-			if (!optionValue || (value === "--extension" && optionValue.startsWith("--"))) {
-				throw new Error(`${value} requires a value`);
-			}
-			index += 1;
-			if (value === "--extension") {
-				selected.push(optionValue);
-			} else if (value === "--label") {
-				label = normalizeLabel(optionValue);
-			} else if (value === "--provider") {
-				provider = optionValue;
-			} else if (value === "--thinking") {
-				thinking = optionValue;
-			} else if (value === "--engine") {
-				engine = optionValue.trim();
-			} else {
-				model = optionValue;
-			}
-		} else if (value.startsWith("--")) {
-			throw new Error(`unknown continue option ${value}`);
-		} else {
-			positional.push(value);
-		}
-	}
-	const [query] = positional;
-	const instruction = positional.slice(1).join(" ").trim();
+	const { values, positionals } = parseFlags(
+		args,
+		{
+			review: { type: "boolean" },
+			tab: { type: "boolean" },
+			detached: { type: "boolean" },
+			// Every label is checked, the last one is used.
+			label: { type: "string", multiple: true },
+			model: { type: "string" },
+			provider: { type: "string" },
+			thinking: { type: "string" },
+			engine: { type: "string" },
+			extension: { type: "string", multiple: true },
+		} as const,
+		{
+			unknown: (word) => `unknown continue option ${word}`,
+			missing: (flag) => `${flag} requires a value`,
+			dashValues: ["label", "model", "provider", "thinking", "engine"],
+			endOfFlags: false,
+		},
+	);
+	const label = values.label?.map(normalizeLabel).at(-1);
+	// An empty word, such as an unset shell variable, is dropped.
+	const [query, ...words] = positionals.filter((word) => word !== "");
+	const instruction = words.join(" ").trim();
 	if (!query || !instruction) {
 		throw new Error('continue requires <id|suffix|label> "follow-up instruction"');
 	}
+	const review = values.review ?? false;
+	const tab = values.tab ?? false;
+	const detached = values.detached ?? false;
 	if (tab && detached) {
 		throw new Error("--tab and --detached cannot be combined");
 	}
-	return { review, tab, detached, label, model, provider, thinking, engine, selected, query, instruction };
+	const { model, provider, thinking } = values;
+	const engine = values.engine?.trim();
+	return {
+		review,
+		tab,
+		detached,
+		label,
+		model,
+		provider,
+		thinking,
+		engine,
+		selected: values.extension ?? [],
+		query,
+		instruction,
+	};
 }
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: split pending: job continue command
 // biome-ignore lint/complexity/noExcessiveLinesPerFunction: same split as the line above

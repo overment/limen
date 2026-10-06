@@ -44,6 +44,7 @@ import { liveJob } from "../runtime/reap.ts";
 import { normalizeWorkerExtensions } from "../runtime/worker-extensions.ts";
 import { launchHostedSupervisor, launchWrapper } from "../runtime/wrapper.ts";
 import { hunkBinary } from "./diff.ts";
+import { parseFlags } from "./flags.ts";
 import { pruneFinishedWorktrees } from "./prune.ts";
 
 type SpawnOptions = {
@@ -510,156 +511,108 @@ function claimsOwnerFacingLead(role: string | undefined): string | undefined {
 	}
 }
 
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: split pending: flag loop moves to parseArgs
-// biome-ignore lint/complexity/noExcessiveLinesPerFunction: same split as the line above
+const SPAWN_FLAGS = {
+	review: { type: "boolean" },
+	tab: { type: "boolean" },
+	detached: { type: "boolean" },
+	branch: { type: "string" },
+	repo: { type: "string" },
+	label: { type: "string" },
+	model: { type: "string" },
+	provider: { type: "string" },
+	thinking: { type: "string" },
+	timeout: { type: "string" },
+	"task-file": { type: "string" },
+	prepare: { type: "string" },
+	role: { type: "string" },
+	engine: { type: "string" },
+	base: { type: "string" },
+	head: { type: "string" },
+	extension: { type: "string", multiple: true },
+} as const;
+
 function parseSpawnArgs(args: readonly string[]): SpawnOptions {
-	let branch: string | undefined, repo: string | undefined, label: string | undefined, model: string | undefined;
-	let provider: string | undefined, thinking: string | undefined, base: string | undefined, head: string | undefined;
-	let timeoutMs: number | undefined,
-		taskFile: string | undefined,
-		prepare: string | undefined,
-		role: string | undefined,
-		engine: string | undefined;
-	let review = false,
-		tab = false,
-		detached = false,
-		positional = false;
-	const task: string[] = [];
-	const extensions: string[] = [];
-	for (let index = 0; index < args.length; index += 1) {
-		const value = args[index];
-		if (!value) {
-			continue;
-		}
-		if (value === "--") {
-			positional = true;
-		} else if (!positional && value === "--review") {
-			review = true;
-		} else if (!positional && value === "--tab") {
-			tab = true;
-		} else if (!positional && value === "--detached") {
-			detached = true;
-		} else if (!positional && value.startsWith("--")) {
-			if (
-				![
-					"--branch",
-					"--repo",
-					"--label",
-					"--model",
-					"--provider",
-					"--thinking",
-					"--timeout",
-					"--task-file",
-					"--prepare",
-					"--role",
-					"--engine",
-					"--base",
-					"--head",
-					"--extension",
-				].includes(value)
-			) {
-				throw new Error(`unknown spawn option ${value}`);
-			}
-			const optionValue = args[index + 1];
-			if (!optionValue || (value === "--extension" && optionValue.startsWith("--"))) {
-				throw new Error(`${value} requires a value`);
-			}
-			index += 1;
-			if (value === "--extension") {
-				extensions.push(optionValue);
-			} else if (value === "--branch") {
-				branch = once(branch, value, optionValue);
-			} else if (value === "--repo") {
-				repo = once(repo, value, optionValue);
-			} else if (value === "--label") {
-				label = once(label, value, normalizeLabel(optionValue));
-			} else if (value === "--base") {
-				base = once(base, value, optionValue);
-			} else if (value === "--head") {
-				head = once(head, value, optionValue);
-			} else if (value === "--model") {
-				model = once(model, value, optionValue);
-			} else if (value === "--provider") {
-				provider = once(provider, value, optionValue);
-			} else if (value === "--thinking") {
-				thinking = once(thinking, value, optionValue);
-			} else if (value === "--task-file") {
-				taskFile = once(taskFile, value, optionValue);
-			} else if (value === "--prepare") {
-				prepare = once(prepare, value, optionValue);
-			} else if (value === "--role") {
-				role = once(role, value, optionValue.trim());
-				if (!/^[a-z][a-z0-9-]*$/.test(role)) {
-					throw new Error("--role must be a lowercase name");
-				}
-			} else if (value === "--engine") {
-				engine = once(engine, value, optionValue.trim());
-			} else {
-				timeoutMs = once(timeoutMs, value, parseDuration(optionValue));
-			}
-		} else {
-			task.push(value);
-		}
+	const { values, positionals } = parseFlags(args, SPAWN_FLAGS, {
+		unknown: (word) => `unknown spawn option ${word}`,
+		missing: (flag) => `${flag} requires a value`,
+		repeated: (flag) =>
+			flag === "--review" || flag === "--tab" || flag === "--detached"
+				? undefined
+				: `${flag} may be supplied only once`,
+		// Every string flag but --extension takes a value that starts with `--`: `--label --tab` labels the job `--tab`.
+		dashValues: [
+			"branch",
+			"repo",
+			"label",
+			"model",
+			"provider",
+			"thinking",
+			"timeout",
+			"task-file",
+			"prepare",
+			"role",
+			"engine",
+			"base",
+			"head",
+		],
+	});
+	const role = values.role?.trim();
+	if (role !== undefined && !/^[a-z][a-z0-9-]*$/.test(role)) {
+		throw new Error("--role must be a lowercase name");
 	}
-	if (review && role) {
+	const engine = values.engine?.trim();
+	const timeoutMs = values.timeout === undefined ? undefined : parseDuration(values.timeout);
+	if (values.review && role) {
 		throw new Error("--role and --review cannot be combined");
 	}
-	if ((base || head) && !review) {
+	// Every `--` and every empty word is dropped from the task.
+	const task = positionals.filter((word) => word !== "" && word !== "--");
+	const label = spawnLabel(values, task);
+	const taskFile = values["task-file"];
+	const out: SpawnOptions = {
+		task: taskFile ? "" : task.join(" "),
+		extensions: values.extension ?? [],
+		review: values.review ?? false,
+		tab: values.tab ?? false,
+		detached: values.detached ?? false,
+		...(role ? { role } : {}),
+		...(engine ? { engine } : {}),
+		...(label ? { label } : {}),
+		...(taskFile ? { taskFile } : {}),
+		...(timeoutMs ? { timeoutMs } : {}),
+	};
+	for (const key of ["prepare", "branch", "base", "head", "repo", "model", "provider", "thinking"] as const) {
+		const value = values[key];
+		if (value) {
+			out[key] = value;
+		}
+	}
+	return out;
+}
+type SpawnTaskFlags = {
+	readonly review?: boolean | undefined;
+	readonly base?: string | undefined;
+	readonly head?: string | undefined;
+	readonly label?: string | undefined;
+	readonly "task-file"?: string | undefined;
+};
+/** Check the task against its flags; the label, which positional words give with --task-file. */
+function spawnLabel(values: SpawnTaskFlags, task: readonly string[]): string | undefined {
+	if ((values.base || values.head) && !values.review) {
 		throw new Error("--base and --head require --review");
 	}
+	const label = values.label === undefined ? undefined : normalizeLabel(values.label);
 	// With --task-file the file is the task, so positional words can only be its title.
-	if (taskFile && task.length) {
+	if (values["task-file"] && task.length) {
 		if (label) {
 			throw new Error("with --task-file, give the title positionally or as --label, not both");
 		}
-		label = normalizeLabel(task.join(" "));
+		return normalizeLabel(task.join(" "));
 	}
-	if (!taskFile && (task.length === 0 || !task.join(" ").trim())) {
+	if (!values["task-file"] && !task.join(" ").trim()) {
 		throw new Error("spawn requires task text");
 	}
-	const out: SpawnOptions = {
-		task: taskFile ? "" : task.join(" "),
-		extensions,
-		review,
-		tab,
-		detached,
-		...(role ? { role } : {}),
-		...(engine ? { engine } : {}),
-	};
-	if (label) {
-		out.label = label;
-	}
-	if (taskFile) {
-		out.taskFile = taskFile;
-	}
-	if (prepare) {
-		out.prepare = prepare;
-	}
-	if (branch) {
-		out.branch = branch;
-	}
-	if (base) {
-		out.base = base;
-	}
-	if (head) {
-		out.head = head;
-	}
-	if (repo) {
-		out.repo = repo;
-	}
-	if (model) {
-		out.model = model;
-	}
-	if (provider) {
-		out.provider = provider;
-	}
-	if (thinking) {
-		out.thinking = thinking;
-	}
-	if (timeoutMs) {
-		out.timeoutMs = timeoutMs;
-	}
-	return out;
+	return label;
 }
 async function readSpawnTask(
 	task: string,
@@ -728,12 +681,6 @@ function workspaceTask(task: string, root: string, repo: string): string {
 	}
 	return `Repository: ${repo}. Work only in this repository.\n\n${rewritten}`;
 }
-const once = <T>(current: T | undefined, flag: string, value: T): T => {
-	if (current !== undefined) {
-		throw new Error(`${flag} may be supplied only once`);
-	}
-	return value;
-};
 export function normalizeLabel(value: string): string {
 	const label = value.trim();
 	if (!label || /[\r\n]/.test(label)) {
