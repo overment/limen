@@ -471,7 +471,7 @@ export default function limenWake(pi: PiApi): void {
 		) {
 			return false;
 		}
-		const advisory = genuine || hostedUncertaintyText(uncertainty!);
+		const advisory = uncertainty ? hostedUncertaintyText(uncertainty) : genuine;
 		const family = genuine ? "_advisory" : "_uncertainty";
 		const slots = (names: readonly string[]) => names.filter((name) => receiptFamily(name) === family);
 		const label = text(join(job, "label")) || id;

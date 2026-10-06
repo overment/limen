@@ -20,22 +20,22 @@ export async function readBoard(root: string): Promise<Map<string, BoardEntry>> 
 	const entries = new Map<string, BoardEntry>();
 	let section: string | null = null;
 	for (const [index, line] of text.split(/\r?\n/).entries()) {
-		const heading = /^## (\S+)$/.exec(line);
-		if (heading) {
-			section = SECTIONS[heading[1]!] ? heading[1]! : null;
+		const heading = /^## (\S+)$/.exec(line)?.[1];
+		if (heading !== undefined) {
+			section = SECTIONS[heading] ? heading : null;
 		} else if (/^#{1,6}\s/.test(line)) {
 			section = null;
 		}
 		if (!section) {
 			continue;
 		}
-		const match = ENTRY.exec(line);
-		if (!match) {
+		const [, number, state] = ENTRY.exec(line) ?? [];
+		if (number === undefined || state === undefined) {
 			continue;
 		}
-		const id = `f${match[1]}`;
+		const id = `f${number}`;
 		if (!entries.has(id)) {
-			entries.set(id, { section, state: match[2]!, line: index + 1 });
+			entries.set(id, { section, state, line: index + 1 });
 		}
 	}
 	return entries;

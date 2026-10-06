@@ -42,8 +42,8 @@ export async function readTickets(root: string): Promise<{ tickets: TicketRecord
 		for (const group of groups) {
 			const parent = group ? `${lanePath}/${group}` : lanePath;
 			for (const slug of await directories(join(root, parent))) {
-				const match = /^(F\d+)-(.+)$/.exec(slug);
-				if (!match) {
+				const number = /^F\d+(?=-.+$)/.exec(slug)?.[0];
+				if (number === undefined) {
 					continue;
 				}
 				const path = `${parent}/${slug}/ticket.md`;
@@ -56,7 +56,7 @@ export async function readTickets(root: string): Promise<{ tickets: TicketRecord
 				if (text === null) {
 					continue;
 				}
-				const ticket = parseTicket(text, path, lane, match[1]!, match[2]!, diagnostics);
+				const ticket = parseTicket(text, path, lane, number, slug.slice(number.length + 1), diagnostics);
 				// One feature number is one work item; a second folder with the same number stays out of the picture and warns.
 				const first = tickets.find((other) => other.id === ticket.id);
 				if (first) {

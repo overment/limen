@@ -61,7 +61,7 @@ export async function privatePlanningFile(root: string, path: string): Promise<s
 /** Read every `Ticket:` path, preserving order and excluding sentence punctuation. */
 export function ticketPointers(task: string): Array<{ path: string; pointer: string }> {
 	return [...task.matchAll(/\bTicket:\s+(\S+)/g)].flatMap(([pointer, token]) => {
-		const path = token!.replace(/[.,;:!?)\]'"`]+$/, "");
+		const path = token?.replace(/[.,;:!?)\]'"`]+$/, "");
 		return path ? [{ path, pointer }] : [];
 	});
 }

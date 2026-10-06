@@ -49,37 +49,35 @@ function parseBlocks(md: string): Block[] {
 	const lines = String(md).replace(/\r\n?/g, "\n").split("\n");
 	const blocks: Block[] = [];
 	let i = 0;
-	while (i < lines.length) {
-		const line = lines[i]!;
+	for (let line = lines[i]; line !== undefined; line = lines[i]) {
 		if (line.trim() === "") {
 			i++;
 			continue;
 		}
-		const fence = FENCE_OPEN.exec(line);
-		if (fence) {
-			i = readFence(lines, i, fence, blocks);
+		const [, marker, lang] = FENCE_OPEN.exec(line) ?? [];
+		if (marker !== undefined && lang !== undefined) {
+			i = readFence(lines, i, marker, lang, blocks);
 			continue;
 		}
-		const h = HEADING.exec(line);
-		if (h) {
-			blocks.push({ type: "heading", level: h[1]!.length, text: h[2] ?? "", line: i + 1 });
+		const [, hashes, heading = ""] = HEADING.exec(line) ?? [];
+		if (hashes !== undefined) {
+			blocks.push({ type: "heading", level: hashes.length, text: heading, line: i + 1 });
 			i++;
 			continue;
 		}
-		const li = LIST_ITEM.exec(line);
-		if (li && li[1]!.length <= 3) {
-			i = readList(lines, i, blocks);
+		const item = listItem(line);
+		if (item && item.indent <= 3) {
+			i = readList(lines, i, item, blocks);
 			continue;
 		}
 		const start = i;
 		const text: string[] = [];
-		while (i < lines.length) {
-			const l = lines[i]!;
+		for (let l = lines[i]; l !== undefined; l = lines[i]) {
 			if (l.trim() === "" || FENCE_OPEN.test(l) || HEADING.test(l)) {
 				break;
 			}
-			const m = LIST_ITEM.exec(l);
-			if (m && m[1]!.length <= 3 && i > start) {
+			const m = listItem(l);
+			if (m && m.indent <= 3 && i > start) {
 				break;
 			}
 			text.push(l.trim());
@@ -90,62 +88,52 @@ function parseBlocks(md: string): Block[] {
 	return blocks;
 }
 
-function readFence(lines: string[], i: number, fence: RegExpExecArray, blocks: Block[]): number {
-	const marker = fence[1]!;
+function readFence(lines: string[], i: number, marker: string, lang: string, blocks: Block[]): number {
 	const close = new RegExp(`^ {0,3}${marker[0] === "`" ? "`" : "~"}{${marker.length},}[ \\t]*$`);
-	const body: string[] = [];
-	let j = i + 1;
-	while (j < lines.length && !close.test(lines[j]!)) {
-		body.push(lines[j++]!);
-	}
-	blocks.push({ type: "code", lang: fence[2]!.replace(/[^A-Za-z0-9_+-]/g, ""), text: body.join("\n"), line: i + 1 });
-	return j + 1;
+	const rest = lines.slice(i + 1);
+	const end = rest.findIndex((line) => close.test(line));
+	const body = end < 0 ? rest : rest.slice(0, end);
+	blocks.push({ type: "code", lang: lang.replace(/[^A-Za-z0-9_+-]/g, ""), text: body.join("\n"), line: i + 1 });
+	return i + body.length + 2;
 }
 
-function readList(lines: string[], i: number, blocks: Block[]): number {
-	const first = LIST_ITEM.exec(lines[i]!)!;
-	const base = first[1]!.length;
-	const ordered = /\d/.test(first[2]!);
-	const list: ListBlock = {
-		type: "list",
-		ordered,
-		start: ordered ? Number.parseInt(first[2]!, 10) : 1,
-		items: [],
-		line: i + 1,
-	};
+type ListMarker = { indent: number; ordered: boolean; start: number; text: string };
+
+function listItem(line: string): ListMarker | null {
+	const [, indent, marker, text = ""] = LIST_ITEM.exec(line) ?? [];
+	if (indent === undefined || marker === undefined) {
+		return null;
+	}
+	const ordered = /\d/.test(marker);
+	return { indent: indent.length, ordered, start: ordered ? Number.parseInt(marker, 10) : 1, text };
+}
+
+function readList(lines: string[], i: number, first: ListMarker, blocks: Block[]): number {
+	const base = first.indent;
+	const list: ListBlock = { type: "list", ordered: first.ordered, start: first.start, items: [], line: i + 1 };
 	let target: ListItem | null = null; // item that receives continuation lines
 	let blank = false;
-	while (i < lines.length) {
-		const line = lines[i]!;
+	for (let line = lines[i]; line !== undefined; line = lines[i]) {
 		if (line.trim() === "") {
 			blank = true;
 			i++;
 			continue;
 		}
-		const ind = /^ */.exec(line)![0].length;
+		const ind = line.search(/[^ ]/);
 		if (FENCE_OPEN.test(line) || (ind <= base + 1 && HEADING.test(line))) {
 			break;
 		}
-		const m = LIST_ITEM.exec(line);
-		if (m && m[1]!.length <= base + 1) {
-			if (/\d/.test(m[2]!) !== ordered) {
+		const m = listItem(line);
+		const parent = list.items.at(-1);
+		if (m && m.indent <= base + 1) {
+			if (m.ordered !== list.ordered) {
 				break;
 			}
-			target = { text: m[3] ?? "", line: i + 1, children: null };
+			target = { text: m.text, line: i + 1, children: null };
 			list.items.push(target);
-		} else if (m && list.items.length > 0) {
-			const parent = list.items[list.items.length - 1]!;
-			if (!parent.children) {
-				const nestedOrdered = /\d/.test(m[2]!);
-				parent.children = {
-					type: "list",
-					ordered: nestedOrdered,
-					start: nestedOrdered ? Number.parseInt(m[2]!, 10) : 1,
-					items: [],
-					line: i + 1,
-				};
-			}
-			target = { text: m[3] ?? "", line: i + 1, children: null };
+		} else if (m && parent) {
+			parent.children ??= { type: "list", ordered: m.ordered, start: m.start, items: [], line: i + 1 };
+			target = { text: m.text, line: i + 1, children: null };
 			parent.children.items.push(target);
 		} else if (target && (ind > base || !blank)) {
 			target.text += `\n${line.trim()}`;
@@ -195,8 +183,9 @@ export function renderInline(text: string): string {
 	let i = 0;
 	while (i < src.length) {
 		const c = src[i];
-		if (c === "\\" && i + 1 < src.length && /[!-/:-@[-`{-~]/.test(src[i + 1]!)) {
-			out += put(escapeHtml(src[i + 1]!));
+		const next = src[i + 1];
+		if (c === "\\" && next !== undefined && /[!-/:-@[-`{-~]/.test(next)) {
+			out += put(escapeHtml(next));
 			i += 2;
 			continue;
 		}
@@ -242,7 +231,8 @@ export function renderInline(text: string): string {
 		.replace(/\*(?=[^\s*])([\s\S]*?[^\s*])\*/g, "<em>$1</em>")
 		.replace(/(^|[^A-Za-z0-9_])_(?=[^\s_])([\s\S]*?[^\s_])_(?![A-Za-z0-9_])/g, "$1<em>$2</em>")
 		.replace(/\n/g, " ");
-	return out.replace(/\uE000(\d+)\uE001/g, (_, k) => slots[Number(k)]!);
+	// `src` lost every \uE000 and \uE001 above, so each marker here was made by `put` and names a slot.
+	return out.replace(/\uE000(\d+)\uE001/g, (marker, k) => slots[Number(k)] ?? marker);
 }
 
 function findCodeClose(src: string, from: number, n: number): number {
@@ -268,10 +258,11 @@ function findCodeClose(src: string, from: number, n: number): number {
 export function inlineText(text: string): string {
 	return renderInline(text)
 		.replace(/<[^>]*>/g, "")
-		.replace(
-			/&(lt|gt|quot|#39|amp);/g,
-			(_, e) => (({ lt: "<", gt: ">", quot: '"', "#39": "'", amp: "&" }) as Record<string, string>)[e]!,
-		);
+		.replaceAll("&lt;", "<")
+		.replaceAll("&gt;", ">")
+		.replaceAll("&quot;", '"')
+		.replaceAll("&#39;", "'")
+		.replaceAll("&amp;", "&");
 }
 
 function matchLink(src: string, i: number): { text: string; url: string; title: string; end: number } | null {
@@ -292,10 +283,11 @@ function matchLink(src: string, i: number): { text: string; url: string; title: 
 		return null;
 	}
 	const m = /^\(([^\s()]+(?:\([^\s()]*\)[^\s()]*)*)(?:[ \t]+"([^"]*)")?\)/.exec(src.slice(j + 1));
-	if (!m) {
+	const url = m?.[1];
+	if (!m || url === undefined) {
 		return null;
 	}
-	return { text: src.slice(i + 1, j), url: m[1]!, title: m[2] ?? "", end: j + 1 + m[0].length };
+	return { text: src.slice(i + 1, j), url, title: m[2] ?? "", end: j + 1 + m[0].length };
 }
 
 /** http(s) URLs and relative references only; no other scheme, no `//host`, no controls. */
@@ -313,8 +305,10 @@ export function isSafeHref(url: string): boolean {
 }
 
 export function escapeHtml(s: string): string {
-	return String(s).replace(
-		/[&<>"']/g,
-		(c) => (({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }) as Record<string, string>)[c]!,
-	);
+	return String(s)
+		.replaceAll("&", "&amp;")
+		.replaceAll("<", "&lt;")
+		.replaceAll(">", "&gt;")
+		.replaceAll('"', "&quot;")
+		.replaceAll("'", "&#39;");
 }

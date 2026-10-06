@@ -16,7 +16,7 @@ export async function normalizeWorkerExtensions(
 	for (const input of paths) {
 		if (
 			!input.trim() ||
-			/[\0\r\n*?\[\]]/.test(input) ||
+			/[\0\r\n*?[\]]/.test(input) ||
 			/^(?:[a-z][a-z0-9+.-]*:|[^/]+@[^/]+:|--)/i.test(input) ||
 			(input.startsWith("~") && !input.startsWith("~/"))
 		) {
