@@ -48,7 +48,20 @@ import {
 export async function continueCommand(args: readonly string[], cwd: string): Promise<void> {
 	await continueJob(args, cwd);
 }
-async function continueJob(args: readonly string[], cwd: string, locked = false): Promise<void> {
+type ContinueOptions = {
+	readonly review: boolean;
+	readonly tab: boolean;
+	readonly detached: boolean;
+	readonly label: string | undefined;
+	readonly model: string | undefined;
+	readonly provider: string | undefined;
+	readonly thinking: string | undefined;
+	readonly engine: string | undefined;
+	readonly selected: readonly string[];
+	readonly query: string;
+	readonly instruction: string;
+};
+function parseContinueArgs(args: readonly string[]): ContinueOptions {
 	let review = false;
 	let tab = false;
 	let detached = false;
@@ -107,6 +120,11 @@ async function continueJob(args: readonly string[], cwd: string, locked = false)
 	if (tab && detached) {
 		throw new Error("--tab and --detached cannot be combined");
 	}
+	return { review, tab, detached, label, model, provider, thinking, engine, selected, query, instruction };
+}
+async function continueJob(args: readonly string[], cwd: string, locked = false): Promise<void> {
+	const { review, tab, detached, label, model, provider, thinking, engine, selected, query, instruction } =
+		parseContinueArgs(args);
 	const herdr = herdrAvailable();
 	const hosted = detached ? false : tab || herdr;
 	if (tab && !herdr) {

@@ -29,18 +29,15 @@ import { stopCommand } from "./stop.ts";
 const WAIT_CAP_MS = 20_000;
 const WRAP_UP_RESERVE_MS = 60_000;
 
-export async function startGroup(args: readonly string[], cwd: string): Promise<GroupRun> {
-	if (process.env.LIMEN_GROUP_ID || process.env.LIMEN_JOB === "1") {
-		throw new Error(
-			"only the owner-facing lead may start a group: run limen group start from the plant's interactive Herdr coordinator pane (LIMEN_COORDINATOR=1) with hook/group-peer.ts loaded — a hosted limen job (LIMEN_JOB=1) cannot register as lead or start groups",
-		);
-	}
-	const featureArgument = args[0];
-	if (!featureArgument || featureArgument.startsWith("--")) {
-		throw new Error(
-			"group start has no feature directory; run limen group start spec/features/active/FEATURE with the settings in docs/groups.md",
-		);
-	}
+type GroupStartOptions = {
+	readonly flags: ReadonlyMap<string, string>;
+	readonly teamModels: Record<string, { provider: string; model: string }>;
+	readonly extensions: readonly string[];
+	readonly teamSelections: Readonly<Record<string, readonly string[]>>;
+	readonly newRun: boolean;
+	readonly mode: GroupRun["mode"];
+};
+function parseGroupStartArgs(args: readonly string[]): GroupStartOptions {
 	const flags = new Map<string, string>();
 	const teamModels: Record<string, { provider: string; model: string }> = {};
 	const extensions: string[] = [];
@@ -118,6 +115,21 @@ export async function startGroup(args: readonly string[], cwd: string): Promise<
 		}
 		flags.set(flag, value);
 	}
+	return { flags, teamModels, extensions, teamSelections, newRun, mode };
+}
+export async function startGroup(args: readonly string[], cwd: string): Promise<GroupRun> {
+	if (process.env.LIMEN_GROUP_ID || process.env.LIMEN_JOB === "1") {
+		throw new Error(
+			"only the owner-facing lead may start a group: run limen group start from the plant's interactive Herdr coordinator pane (LIMEN_COORDINATOR=1) with hook/group-peer.ts loaded — a hosted limen job (LIMEN_JOB=1) cannot register as lead or start groups",
+		);
+	}
+	const featureArgument = args[0];
+	if (!featureArgument || featureArgument.startsWith("--")) {
+		throw new Error(
+			"group start has no feature directory; run limen group start spec/features/active/FEATURE with the settings in docs/groups.md",
+		);
+	}
+	const { flags, teamModels, extensions, teamSelections, newRun, mode } = parseGroupStartArgs(args);
 	const required = (key: string): string => {
 		const value = flags.get(key);
 		if (!value) {
