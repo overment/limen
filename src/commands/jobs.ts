@@ -1,13 +1,15 @@
+import type { Stats } from "node:fs";
 import { open, readdir, readFile, stat } from "node:fs/promises";
 import { inspectFinishWebhook } from "../integrations/finish-receipt.ts";
 import { hostedAgentStatus } from "../integrations/herdr.ts";
-import { derivePulse, type Pulse, parseJob, producedNothing, renderJob } from "../job/job.ts";
+import { derivePulse, type Job, type Pulse, parseJob, producedNothing, renderJob } from "../job/job.ts";
 import { resolveJob } from "../job/lookup.ts";
 import {
 	colorWanted,
 	humanDetail,
 	humanSnapshot,
 	type JobRecord,
+	type Paint,
 	paintWhen,
 	resolveView,
 	tallyStates,
@@ -19,8 +21,11 @@ import { confirmDeadJobs, ownerAlive, startingJob } from "../runtime/reap.ts";
 export const RECENT_MS = 7 * 24 * 60 * 60 * 1000;
 const HUMAN_TERMINAL_ROWS = 6;
 
+type Selection = "snapshot" | "running" | "all" | { readonly prefix: string } | { readonly detail: string };
+type Ordered = ReadonlyArray<readonly [string, string, string]>;
+
 export async function jobsCommand(args: readonly string[], cwd: string): Promise<void> {
-	const selection = select(args);
+	const selection = parseJobsArgs(args);
 	const tty = process.stdout.isTTY === true;
 	const human = resolveView(process.env.LIMEN_VIEW, tty) === "human";
 	const paint = paintWhen(human && colorWanted(tty, process.env.NO_COLOR, process.env.TERM));
@@ -46,53 +51,11 @@ export async function jobsCommand(args: readonly string[], cwd: string): Promise
 	}
 	const order = await orderedJobs(ids, jobsRoot);
 	if (typeof selection === "object") {
-		const labels = await Promise.all(order.map(([id]) => text(`${jobsRoot}/${id}/label`)));
-		const listed = order.filter(([id], index) => (labels[index] || id).startsWith(selection.prefix));
-		if (listed.length === 0) {
-			console.log("nothing matched");
-			return;
-		}
-		const loaded = await Promise.all(
-			listed.map(([id]) => renderJobDirectory(root, jobsRoot, id, human ? "human" : "row")),
-		);
-		if (human) {
-			console.log(
-				humanSnapshot(
-					loaded.map((item) => item.record),
-					tallyStates(listed.map(([, state]) => state)),
-					false,
-					paint,
-				),
-			);
-			return;
-		}
-		console.log(loaded.map((item) => item.compact).join("\n"));
+		await printLabelledJobs(root, jobsRoot, order, selection.prefix, human ? paint : undefined);
 		return;
 	}
 	if (human) {
-		const running = order.filter(([, state]) => state === "running");
-		const terminal = order.filter(([, state]) => state !== "running");
-		const shown =
-			selection === "all"
-				? order
-				: selection === "running"
-					? running
-					: [...running, ...terminal.slice(0, HUMAN_TERMINAL_ROWS)];
-		if (shown.length === 0) {
-			console.log("no running jobs");
-			return;
-		}
-		const records = await Promise.all(
-			shown.map(async ([id]) => (await renderJobDirectory(root, jobsRoot, id, "human")).record),
-		);
-		console.log(
-			humanSnapshot(
-				records,
-				tallyStates(order.map(([, state]) => state)),
-				selection === "snapshot" && terminal.length > HUMAN_TERMINAL_ROWS,
-				paint,
-			),
-		);
+		await printHumanJobs(root, jobsRoot, order, selection, paint);
 		return;
 	}
 	if (selection === "all") {
@@ -103,6 +66,77 @@ export async function jobsCommand(args: readonly string[], cwd: string): Promise
 		);
 		return;
 	}
+	await printJobRows(root, jobsRoot, order, selection);
+}
+/** Every job whose label, or id when it has none, starts with the prefix. A paint means the human view. */
+async function printLabelledJobs(
+	root: string,
+	jobsRoot: string,
+	order: Ordered,
+	prefix: string,
+	paint: Paint | undefined,
+): Promise<void> {
+	const labels = await Promise.all(order.map(([id]) => text(`${jobsRoot}/${id}/label`)));
+	const listed = order.filter(([id], index) => (labels[index] || id).startsWith(prefix));
+	if (listed.length === 0) {
+		console.log("nothing matched");
+		return;
+	}
+	const loaded = await Promise.all(
+		listed.map(([id]) => renderJobDirectory(root, jobsRoot, id, paint ? "human" : "row")),
+	);
+	if (paint) {
+		console.log(
+			humanSnapshot(
+				loaded.map((item) => item.record),
+				tallyStates(listed.map(([, state]) => state)),
+				false,
+				paint,
+			),
+		);
+		return;
+	}
+	console.log(loaded.map((item) => item.compact).join("\n"));
+}
+/** The human board: running jobs first, then the latest terminal jobs unless the selection asks for all or running. */
+async function printHumanJobs(
+	root: string,
+	jobsRoot: string,
+	order: Ordered,
+	selection: "snapshot" | "running" | "all",
+	paint: Paint,
+): Promise<void> {
+	const running = order.filter(([, state]) => state === "running");
+	const terminal = order.filter(([, state]) => state !== "running");
+	const shown =
+		selection === "all"
+			? order
+			: selection === "running"
+				? running
+				: [...running, ...terminal.slice(0, HUMAN_TERMINAL_ROWS)];
+	if (shown.length === 0) {
+		console.log("no running jobs");
+		return;
+	}
+	const records = await Promise.all(
+		shown.map(async ([id]) => (await renderJobDirectory(root, jobsRoot, id, "human")).record),
+	);
+	console.log(
+		humanSnapshot(
+			records,
+			tallyStates(order.map(([, state]) => state)),
+			selection === "snapshot" && terminal.length > HUMAN_TERMINAL_ROWS,
+			paint,
+		),
+	);
+}
+/** Running job rows; the snapshot adds recent jobs that produced nothing and counts what it hides. */
+async function printJobRows(
+	root: string,
+	jobsRoot: string,
+	order: Ordered,
+	selection: "snapshot" | "running",
+): Promise<void> {
 	const running = order.filter(([, state]) => state === "running");
 	const rendered = await Promise.all(
 		running.map(async ([id]) => (await renderJobDirectory(root, jobsRoot, id, "row")).compact),
@@ -146,7 +180,7 @@ export async function jobsCommand(args: readonly string[], cwd: string): Promise
 async function finishedAt(jobDir: string): Promise<number> {
 	return Date.parse(await text(`${jobDir}/finished-at`)) || (await optionalStat(`${jobDir}/state`))?.mtimeMs || 0;
 }
-function select(args: readonly string[]) {
+function parseJobsArgs(args: readonly string[]): Selection {
 	if (args[0] === "--label") {
 		if (args.length !== 2 || !args[1] || args[1].startsWith("--")) {
 			throw new Error("jobs --label requires a prefix");
@@ -173,10 +207,7 @@ function select(args: readonly string[]) {
 	}
 	return { detail: arg };
 }
-async function orderedJobs(
-	ids: readonly string[],
-	jobsRoot: string,
-): Promise<ReadonlyArray<readonly [string, string, string]>> {
+async function orderedJobs(ids: readonly string[], jobsRoot: string): Promise<Ordered> {
 	// A job its live spawner is still setting up lists as running, with pulse `starting`.
 	const order = await Promise.all(
 		ids.map(
@@ -186,6 +217,59 @@ async function orderedJobs(
 	);
 	return order.sort((a, b) => Number(b[1] === "running") - Number(a[1] === "running") || b[2].localeCompare(a[2]));
 }
+type JobFields = {
+	readonly state: string;
+	readonly label: string;
+	readonly branch: string;
+	readonly repo: string;
+	readonly pid: string;
+	readonly started: string;
+	readonly finished: string;
+	readonly toolCalls: string;
+	readonly lastTool: string;
+	readonly activity: string;
+	readonly hosted: string;
+	readonly candidate: string;
+	readonly advisory: string;
+	readonly parent: string;
+	readonly engine: string;
+	readonly stopReason: string;
+};
+/** Files beside the job fields. Detail-only files stay empty in the row and human views. */
+type JobEvidence = {
+	readonly warning: string;
+	readonly agent: string;
+	readonly commits: string;
+	readonly commitsStat: Stats | undefined;
+	readonly result: string;
+	readonly versions: string;
+	readonly cleanup: string;
+	readonly finishWebhook: string;
+	readonly herdrWake: string;
+};
+/** A job directory with its task and log present, read for one view. */
+type LoadedJob = {
+	readonly root: string;
+	readonly jobDir: string;
+	readonly id: string;
+	readonly detailed: boolean;
+	readonly fields: JobFields;
+	readonly evidence: JobEvidence;
+	readonly taskStat: Stats;
+	readonly logStat: Stats;
+	readonly log: { readonly tail: string; readonly detail: string };
+};
+/** What the parsed job and its live owner say, shared by the compact text and the record. */
+type JobFacts = {
+	readonly job: Job;
+	readonly startedAt: Date;
+	readonly observedAt: number;
+	readonly agentStatus: string | undefined;
+	readonly pulse: Pulse | undefined;
+	readonly recordedTools: number | undefined;
+	readonly empty: boolean;
+	readonly diffstat: string;
+};
 export async function renderJobDirectory(
 	root: string,
 	jobsRoot: string,
@@ -194,18 +278,41 @@ export async function renderJobDirectory(
 ): Promise<{ compact: string; record: JobRecord }> {
 	const jobDir = `${jobsRoot}/${id}`;
 	const detailed = view === "detail";
+	const fields = await readJobFields(jobDir);
+	if (!fields.state) {
+		return { compact: `ORPHAN ${id} · no state`, record: { id, invalid: "orphan · no state" } };
+	}
+	const { evidence, taskStat, logStat } = await readJobEvidence(jobDir, fields, detailed);
+	if (!taskStat || !logStat) {
+		return { compact: `INVALID ${id} · missing task.md or log`, record: { id, invalid: "missing task.md or log" } };
+	}
+	const log = view !== "row" ? await readLog(`${jobDir}/log`) : { tail: "", detail: "" };
+	if (fields.hosted) {
+		log.tail = activitySummary(log.tail);
+	}
+	try {
+		return await renderReadableJob({ root, jobDir, id, detailed, fields, evidence, taskStat, logStat, log });
+	} catch (error: unknown) {
+		const message = error instanceof Error ? error.message : String(error);
+		return {
+			compact: `INVALID ${id} · ${message}${log.tail ? `\n  log:\n${log.tail}` : ""}`,
+			record: { id, invalid: message, ...(log.tail ? { logTail: log.tail } : {}) },
+		};
+	}
+}
+async function readJobFields(jobDir: string): Promise<JobFields> {
 	const [
 		state = "",
 		label = "",
 		branch = "",
 		repo = "",
-		pid,
+		pid = "",
 		started = "",
 		finished = "",
-		toolCalls,
-		lastTool,
-		activity,
-		hosted,
+		toolCalls = "",
+		lastTool = "",
+		activity = "",
+		hosted = "",
 		candidate = "",
 		advisory = "",
 		parent = "",
@@ -216,11 +323,32 @@ export async function renderJobDirectory(
 			.split(" ")
 			.map((field) => (field === "state" ? shownState(jobDir) : text(`${jobDir}/${field}`))),
 	);
-	if (!state) {
-		return { compact: `ORPHAN ${id} · no state`, record: { id, invalid: "orphan · no state" } };
-	}
+	return {
+		state,
+		label,
+		branch,
+		repo,
+		pid,
+		started,
+		finished,
+		toolCalls,
+		lastTool,
+		activity,
+		hosted,
+		candidate,
+		advisory,
+		parent,
+		engine,
+		stopReason,
+	};
+}
+async function readJobEvidence(
+	jobDir: string,
+	fields: JobFields,
+	detailed: boolean,
+): Promise<{ evidence: JobEvidence; taskStat: Stats | undefined; logStat: Stats | undefined }> {
 	const uncertainty = readHostedUncertainty(jobDir);
-	const warning = advisory || (uncertainty ? hostedUncertaintyText(uncertainty) : "");
+	const warning = fields.advisory || (uncertainty ? hostedUncertaintyText(uncertainty) : "");
 	const agent = await text(`${jobDir}/herdr/agent`);
 	const [commits, commitsStat] = await Promise.all([text(`${jobDir}/commits`), optionalStat(`${jobDir}/commits`)]);
 	const [result, versions] = detailed
@@ -228,148 +356,158 @@ export async function renderJobDirectory(
 		: ["", ""];
 	const [taskStat, logStat] = await Promise.all([optionalStat(`${jobDir}/task.md`), optionalStat(`${jobDir}/log`)]);
 	const cleanup = detailed ? await text(`${jobDir}/cleanup`) : "";
-	const finishWebhook = detailed && state !== "running" ? await inspectFinishWebhook(jobDir) : "";
+	const finishWebhook = detailed && fields.state !== "running" ? await inspectFinishWebhook(jobDir) : "";
 	const herdrWake = detailed ? await text(`${jobDir}/notify/herdr-prompt`) : "";
-	if (!taskStat || !logStat) {
-		return { compact: `INVALID ${id} · missing task.md or log`, record: { id, invalid: "missing task.md or log" } };
+	return {
+		evidence: { warning, agent, commits, commitsStat, result, versions, cleanup, finishWebhook, herdrWake },
+		taskStat,
+		logStat,
+	};
+}
+/** Parses the job and asks whether its owner is alive. Throws on a record that does not parse. */
+async function renderReadableJob(loaded: LoadedJob): Promise<{ compact: string; record: JobRecord }> {
+	const { id, detailed, fields, evidence, logStat, log } = loaded;
+	const startedAt = recordedDate(fields.started, loaded.taskStat.mtime, "started-at");
+	const job = parseJob({
+		id,
+		state: fields.state,
+		label: displayed(fields.label || id, detailed),
+		branch: displayed(fields.branch, detailed),
+		...(fields.pid ? { pid: fields.pid } : {}),
+		startedAt,
+		lastOutputAt: logStat.mtime,
+		detail: detailed ? log.detail : "",
+	});
+	const running = job.phase === "running";
+	const observedAt = running ? Date.now() : recordedDate(fields.finished, new Date(), "finished-at").getTime();
+	const alive = running && (await ownerAlive(loaded.jobDir));
+	const agentStatus = running && fields.hosted && evidence.agent ? hostedAgentStatus(evidence.agent) : undefined;
+	const pulse = running ? runningPulse(job.pid, alive, fields.activity) : undefined;
+	const recordedTools = fields.toolCalls ? recordedCount(fields.toolCalls) : undefined;
+	const empty = !running && producedNothing(recordedTools, evidence.commitsStat ? evidence.commits : undefined);
+	const diffstat = detailed
+		? liveDiffstat(fields.repo ? workspaceRepository(loaded.root, fields.repo) : loaded.root, fields.branch)
+		: "";
+	const rendered = renderJob(job, {
+		elapsedMs: observedAt - startedAt.getTime(),
+		silentMs: observedAt - logStat.mtimeMs,
+		...(recordedTools !== undefined ? { toolCalls: recordedTools } : {}),
+		...(empty ? { producedNothing: true } : {}),
+		...(fields.lastTool ? { lastTool: displayed(fields.lastTool, detailed) } : {}),
+		...(running && pulse ? { pulse, processAlive: alive } : {}),
+		diffstat,
+		logTail: log.tail,
+	});
+	const facts: JobFacts = { job, startedAt, observedAt, agentStatus, pulse, recordedTools, empty, diffstat };
+	return { compact: [rendered, ...jobBlocks(loaded, facts)].join("\n"), record: jobRecord(loaded, facts) };
+}
+function runningPulse(pid: number | undefined, alive: boolean, activity: string): Pulse {
+	const input: { alive: boolean; pid?: number; activity?: string } = { alive };
+	if (pid !== undefined) {
+		input.pid = pid;
 	}
-	const log = view !== "row" ? await readLog(`${jobDir}/log`) : { tail: "", detail: "" };
-	if (hosted) {
-		log.tail = activitySummary(log.tail);
+	if (activity) {
+		input.activity = activity;
 	}
-	const display = (value: string) => (detailed || value.length <= 160 ? value : `${value.slice(0, 159)}…`);
-	try {
-		const startedAt = recordedDate(started, taskStat.mtime, "started-at");
-		const job = parseJob({
-			id,
-			state,
-			label: display(label || id),
-			branch: display(branch),
-			...(pid ? { pid } : {}),
-			startedAt,
-			lastOutputAt: logStat.mtime,
-			detail: detailed ? log.detail : "",
-		});
-		const observedAt =
-			job.phase === "running" ? Date.now() : recordedDate(finished, new Date(), "finished-at").getTime();
-		const alive = job.phase === "running" && (await ownerAlive(jobDir));
-		const agentStatus = job.phase === "running" && hosted && agent ? hostedAgentStatus(agent) : undefined;
-		let pulse: Pulse | undefined;
-		if (job.phase === "running") {
-			const input: { alive: boolean; pid?: number; activity?: string } = { alive };
-			if (job.pid !== undefined) {
-				input.pid = job.pid;
-			}
-			if (activity) {
-				input.activity = activity;
-			}
-			pulse = derivePulse(input);
-		}
-		const recordedTools = toolCalls ? recordedCount(toolCalls) : undefined;
-		const empty = job.phase !== "running" && producedNothing(recordedTools, commitsStat ? commits : undefined);
-		const diffstat = detailed ? liveDiffstat(repo ? workspaceRepository(root, repo) : root, branch) : "";
-		const rendered = renderJob(job, {
-			elapsedMs: observedAt - startedAt.getTime(),
-			silentMs: observedAt - logStat.mtimeMs,
-			...(recordedTools !== undefined ? { toolCalls: recordedTools } : {}),
-			...(empty ? { producedNothing: true } : {}),
-			...(lastTool ? { lastTool: display(lastTool) } : {}),
-			...(job.phase === "running" && pulse ? { pulse, processAlive: alive } : {}),
-			diffstat,
-			logTail: log.tail,
-		});
-		const blocks = [rendered];
-		if (repo) {
-			blocks.push(`  repo ${display(repo)}`);
-		}
-		if (parent) {
-			blocks.push(`  parent ${display(parent)}`);
-		}
-		if (candidate) {
-			blocks.push(`  candidate ${display(candidate)}`);
-		}
-		if (engine && engine !== "pi") {
-			blocks.push(`  engine ${display(engine)}`);
-		}
-		if (hosted) {
-			blocks.push("  hosted (weaker guarantees)");
-		}
-		if (agentStatus) {
-			blocks.push(`  agent ${agentStatus}`);
-		}
-		if (job.phase === "running" && warning) {
-			blocks.push(`  advisory ${display(warning)}`);
-		}
-		if (stopReason) {
-			blocks.push(indented("stop-reason", stopReason));
-		}
-		if (versions) {
-			blocks.push(indented("versions", versions));
-		}
-		if (detailed && commits) {
-			blocks.push(indented("commits", commits));
-		}
-		if (result) {
-			blocks.push(indented("result", result));
-		}
-		if (herdrWake) {
-			blocks.push(indented("herdr-wake", herdrWake));
-		}
-		if (finishWebhook) {
-			blocks.push(indented("finish-webhook", finishWebhook));
-		}
-		if (cleanup) {
-			blocks.push(
-				`  cleanup:\n${cleanup
-					.split("\n")
-					.map((line) => `    ${line}`)
-					.join("\n")}`,
-			);
-		}
-		let reason = (stopReason || log.detail)
-			.replace(/^\[limen [^\]]*\]\s*/, "")
-			.replace(/^(error|failed|stopped):\s*/, "")
-			.replace(/\s+/g, " ");
-		if (/\b429\b/.test(reason) && /rate_limit_error|rate limit/i.test(reason)) {
-			const retryMs = /retry-after-ms=(\d+)/.exec(reason)?.[1];
-			reason = `rate limit (429)${retryMs ? `; retry after ${Math.max(1, Math.round(Number(retryMs) / 60_000))}m` : ""}`;
-		}
-		const record: JobRecord = {
-			id,
-			job,
-			...(pulse ? { pulse } : {}),
-			...(recordedTools !== undefined ? { toolCalls: recordedTools } : {}),
-			...(empty ? { producedNothing: true } : {}),
-			...(lastTool ? { lastTool: display(lastTool) } : {}),
-			...((job.phase === "failed" || job.phase === "stopped") && reason && reason !== "see log" ? { reason } : {}),
-			elapsedMs: observedAt - startedAt.getTime(),
-			silentMs: observedAt - logStat.mtimeMs,
-			...(job.phase !== "running" ? { ageMs: Date.now() - observedAt } : {}),
-			...(commitsStat ? { commitCount: commits.split("\n").filter((line) => line.trim()).length } : {}),
-			...(repo ? { repo } : {}),
-			...(parent ? { parent } : {}),
-			...(candidate ? { candidate } : {}),
-			...(hosted ? { hosted: true } : {}),
-			...(agentStatus ? { agentStatus } : {}),
-			...(job.phase === "running" && warning ? { advisory: warning } : {}),
-			...(stopReason ? { stopReason } : {}),
-			...(versions ? { versions } : {}),
-			...(detailed && commits ? { commits } : {}),
-			...(result ? { result } : {}),
-			...(cleanup ? { cleanup } : {}),
-			...(herdrWake ? { herdrWake } : {}),
-			...(finishWebhook ? { finishWebhook } : {}),
-			...(diffstat ? { diffstat } : {}),
-			...(log.tail ? { logTail: log.tail } : {}),
-		};
-		return { compact: blocks.join("\n"), record };
-	} catch (error: unknown) {
-		const message = error instanceof Error ? error.message : String(error);
-		return {
-			compact: `INVALID ${id} · ${message}${log.tail ? `\n  log:\n${log.tail}` : ""}`,
-			record: { id, invalid: message, ...(log.tail ? { logTail: log.tail } : {}) },
-		};
+	return derivePulse(input);
+}
+/** The indented lines under a job's first line, in the order the board has always shown them. */
+function jobBlocks(loaded: LoadedJob, facts: JobFacts): string[] {
+	const { detailed, fields, evidence } = loaded;
+	const blocks: string[] = [];
+	if (fields.repo) {
+		blocks.push(`  repo ${displayed(fields.repo, detailed)}`);
 	}
+	if (fields.parent) {
+		blocks.push(`  parent ${displayed(fields.parent, detailed)}`);
+	}
+	if (fields.candidate) {
+		blocks.push(`  candidate ${displayed(fields.candidate, detailed)}`);
+	}
+	if (fields.engine && fields.engine !== "pi") {
+		blocks.push(`  engine ${displayed(fields.engine, detailed)}`);
+	}
+	if (fields.hosted) {
+		blocks.push("  hosted (weaker guarantees)");
+	}
+	if (facts.agentStatus) {
+		blocks.push(`  agent ${facts.agentStatus}`);
+	}
+	if (facts.job.phase === "running" && evidence.warning) {
+		blocks.push(`  advisory ${displayed(evidence.warning, detailed)}`);
+	}
+	const sections: ReadonlyArray<readonly [string, string]> = [
+		["stop-reason", fields.stopReason],
+		["versions", evidence.versions],
+		["commits", detailed ? evidence.commits : ""],
+		["result", evidence.result],
+		["herdr-wake", evidence.herdrWake],
+		["finish-webhook", evidence.finishWebhook],
+		["cleanup", evidence.cleanup],
+	];
+	for (const [name, body] of sections) {
+		if (body) {
+			blocks.push(indented(name, body));
+		}
+	}
+	return blocks;
+}
+function jobRecord(loaded: LoadedJob, facts: JobFacts): JobRecord {
+	const { id, detailed, fields, evidence, logStat, log } = loaded;
+	const { job, observedAt, pulse, recordedTools, empty, agentStatus } = facts;
+	const reason = stopSummary(fields.stopReason || log.detail);
+	const running = job.phase === "running";
+	return {
+		id,
+		job,
+		...(pulse ? { pulse } : {}),
+		...(recordedTools !== undefined ? { toolCalls: recordedTools } : {}),
+		...(empty ? { producedNothing: true } : {}),
+		...(fields.lastTool ? { lastTool: displayed(fields.lastTool, detailed) } : {}),
+		...((job.phase === "failed" || job.phase === "stopped") && reason && reason !== "see log" ? { reason } : {}),
+		elapsedMs: observedAt - facts.startedAt.getTime(),
+		silentMs: observedAt - logStat.mtimeMs,
+		...(running ? {} : { ageMs: Date.now() - observedAt }),
+		...(evidence.commitsStat ? { commitCount: evidence.commits.split("\n").filter((line) => line.trim()).length } : {}),
+		...(fields.repo ? { repo: fields.repo } : {}),
+		...(fields.parent ? { parent: fields.parent } : {}),
+		...(fields.candidate ? { candidate: fields.candidate } : {}),
+		...(fields.hosted ? { hosted: true } : {}),
+		...(agentStatus ? { agentStatus } : {}),
+		...(running && evidence.warning ? { advisory: evidence.warning } : {}),
+		...recordedEvidence(loaded, facts.diffstat),
+	};
+}
+/** Stop reason, detail files, diffstat and log tail of the record, in the order the record has always held them. */
+function recordedEvidence(loaded: LoadedJob, diffstat: string): Partial<JobRecord> {
+	const { detailed, fields, evidence, log } = loaded;
+	return {
+		...(fields.stopReason ? { stopReason: fields.stopReason } : {}),
+		...(evidence.versions ? { versions: evidence.versions } : {}),
+		...(detailed && evidence.commits ? { commits: evidence.commits } : {}),
+		...(evidence.result ? { result: evidence.result } : {}),
+		...(evidence.cleanup ? { cleanup: evidence.cleanup } : {}),
+		...(evidence.herdrWake ? { herdrWake: evidence.herdrWake } : {}),
+		...(evidence.finishWebhook ? { finishWebhook: evidence.finishWebhook } : {}),
+		...(diffstat ? { diffstat } : {}),
+		...(log.tail ? { logTail: log.tail } : {}),
+	};
+}
+/** The stop reason or last log line without its prefix; a rate limit names its retry delay. */
+function stopSummary(line: string): string {
+	const reason = line
+		.replace(/^\[limen [^\]]*\]\s*/, "")
+		.replace(/^(error|failed|stopped):\s*/, "")
+		.replace(/\s+/g, " ");
+	if (!/\b429\b/.test(reason) || !/rate_limit_error|rate limit/i.test(reason)) {
+		return reason;
+	}
+	const retryMs = /retry-after-ms=(\d+)/.exec(reason)?.[1];
+	return `rate limit (429)${retryMs ? `; retry after ${Math.max(1, Math.round(Number(retryMs) / 60_000))}m` : ""}`;
+}
+/** Row and human views cut long values; the detail view shows them whole. */
+function displayed(value: string, detailed: boolean): string {
+	return detailed || value.length <= 160 ? value : `${value.slice(0, 159)}…`;
 }
 async function jobProducedNothing(jobDir: string): Promise<boolean> {
 	const [toolCalls, commits, commitsStat] = await Promise.all([
