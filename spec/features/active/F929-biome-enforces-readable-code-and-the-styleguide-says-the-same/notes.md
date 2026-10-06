@@ -100,13 +100,11 @@ On `main` at `76a2f6d`: 48 functions over the complexity limit and 22 over the l
 | `src/picture/tickets.ts` `parseTicket` | 68 | 156 | — |
 | `picture/viewer/viewer.js` `lighting` | 67 | 72 | — |
 | `src/picture/picture-model.ts` `readRecord` | 65 | 162 | — |
-| `src/commands/group.ts` `runGroupCommand` | 62 | 121 | Team 2 after Team 4 |
 | `src/picture/picture-model.ts` `buildModel` | 58 | 198 | — |
 | `src/commands/land.ts` `landTicketCheck` | 56 | 91 | — |
 | `src/commands/github-doctor.ts` `githubDoctor` | 52 | 227 | — |
 | `src/integrations/github-poller.ts` `request` | 52 | — | — |
 | `src/commands/prune.ts` `pruneFinishedWorktrees` | 51 | — | — |
-| `src/commands/group.ts` `startGroup` | 50 | 170 | Team 2 after Team 4 |
 | `picture/viewer/viewer.js` `model.work` map callback | 49 | — | — |
 | `picture/viewer/viewer.js` `drawWires` | 48 | — | — |
 | `src/commands/sweep.ts` `sweepProject` | 45 | — | — |
