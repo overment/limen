@@ -51,6 +51,28 @@
 			}
 		}
 	},
+	// Target style for new and rewritten code. Today it binds only the files listed here; the code quality brief (F929) asks Adam whether it binds the whole tree.
+	"overrides": [
+		{
+			"includes": ["src/commands/keeper.ts"],
+			// Wide lines hide a second idea at the end of the first.
+			"formatter": { "lineWidth": 120 },
+			"linter": {
+				"rules": {
+					"style": {
+						// Every `if`, `for` and `else` body has braces, so a nested `if (...) for (...) if (...)` cannot hide on one line.
+						"useBlockStatements": "error",
+						// A nested ternary makes the reader evaluate every branch. Use `if` and early returns.
+						"noNestedTernary": "error"
+					},
+					"complexity": {
+						// A function the reader cannot hold at once. Split it into named steps.
+						"noExcessiveCognitiveComplexity": { "level": "error", "options": { "maxAllowedComplexity": 20 } }
+					}
+				}
+			}
+		}
+	],
 	"assist": {
 		"actions": {
 			"source": {
