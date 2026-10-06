@@ -8,7 +8,7 @@ Mechanism stays small. Judgment stays in templates.
 npm run check
 ```
 
-That is typecheck, Biome format check, and the real-Git test suite. Each test has a 30s timeout so a leaked watcher fails instead of hanging. CI runs the same command on Linux and macOS.
+That is typecheck, Biome format and lint check, and the real-Git test suite. Each test has a 30s timeout so a leaked watcher fails instead of hanging. CI runs the same command on Linux and macOS.
 
 ## What belongs in source
 
@@ -30,6 +30,6 @@ Where code lives:
 
 Only impossible mechanics should error. Everything else informs. Migration is the exception where safety requires a complete read-only preflight: any legacy live job, handshake, type mismatch, or old/new path conflict must fail before the first write.
 
-## Formatter
+## Formatter and linter
 
-Biome formats. The linter preset stays `none` except `nursery.noFloatingPromises`. Do not enable a style pack to clean up the tree. Regenerate shipped template history with `LIMEN_WRITE_HISTORY=1 node --test test/structure.test.ts`. `limen init` never overwrites existing project files and refuses leftover Control paths (rename or remove them by hand). Change `templates/` and `hook/` in this package; projects inherit them unless they overlay a file.
+Biome formats and lints. The linter preset stays `none`: `biome.jsonc` names each rule with its reason, and a new rule lands with its existing sites fixed. Do not enable a preset or a style pack to clean up the tree. The override in `biome.jsonc` holds the files it lists to the target style (120 columns, braces on every body, no nested ternary, cognitive complexity at most 20). After `biome lint --write --unsafe`, run `npm run typecheck`: an unsafe fix can drop a needed `?.`. Regenerate shipped template history with `LIMEN_WRITE_HISTORY=1 node --test test/structure.test.ts`. `limen init` never overwrites existing project files and refuses leftover Control paths (rename or remove them by hand). Change `templates/` and `hook/` in this package; projects inherit them unless they overlay a file.

@@ -34,13 +34,12 @@ export async function claimRecovery(jobDir: string): Promise<(() => Promise<void
 				const [rawPid, rawTime] = name.split(".");
 				const pid = Number(rawPid),
 					time = Number(rawTime);
-				if (Number.isSafeInteger(pid) && pid > 0 && processAlive(pid)) {
+				const validPid = Number.isSafeInteger(pid) && pid > 0;
+				if (validPid && processAlive(pid)) {
 					const born = await textFile(`${claim}/${name}`);
 					const info = born ? await processInfo(pid) : undefined;
 					if (!info || info.kind === "unavailable" || (info.kind === "present" && info.process.born === born)) return;
-				} else if (!Number.isSafeInteger(pid) || pid <= 0) {
-					if (Number.isFinite(time) && Date.now() - time < 5_000) return;
-				}
+				} else if (!validPid && Number.isFinite(time) && Date.now() - time < 5_000) return;
 				await rm(`${claim}/${name}`, { force: true });
 			}
 			await rmdir(claim).catch(() => {});

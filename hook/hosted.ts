@@ -5,7 +5,7 @@ import { herdrBinary, hostedForegroundPid } from "../src/integrations/herdr.ts";
 import { readHostedBinding, registerHostedBinding } from "../src/runtime/hosted-binding.ts";
 
 type PiApi = {
-	on(event: "session_start" | "session_shutdown" | "agent_settled", handler: (event: unknown, context: unknown) => void): void;
+	on(event: "session_start" | "session_shutdown" | "agent_settled", handler: (event: unknown, context: unknown) => void | Promise<void>): void;
 	on(event: "tool_execution_start", handler: (event: { readonly toolName?: string; readonly args?: { readonly command?: string } }, context: unknown) => void): void;
 	on(event: "tool_execution_end", handler: (event: unknown, context: unknown) => void): void;
 	on(event: "turn_start" | "turn_end", handler: (event: unknown, context: unknown) => void): void;
@@ -71,7 +71,8 @@ export default function limenHosted(pi: PiApi): void {
 						"--ttl-ms",
 						String(METADATA_TTL_MS),
 					];
-			execFile(herdr.binary, ["pane", "report-metadata", herdr.pane, "--source", "limen", "--seq", String((seq += 1)), ...change], { timeout: 2_000 }, () => {}).unref();
+			seq += 1;
+			execFile(herdr.binary, ["pane", "report-metadata", herdr.pane, "--source", "limen", "--seq", String(seq), ...change], { timeout: 2_000 }, () => {}).unref();
 		} catch {
 			// Advisory. Never infer job completion from a pane settling or an unreadable record.
 		}

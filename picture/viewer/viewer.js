@@ -311,12 +311,16 @@
 		jAt = {};
 		for (const w of D.work) {
 			w.lit = [...new Set(w.touches.flatMap(spread))];
-			for (const t of w.lit) (workAt[t] ??= []).push(w.id);
+			for (const t of w.lit) {
+				workAt[t] ??= [];
+				workAt[t].push(w.id);
+			}
 		}
 		for (const j of D.journeys)
 			j.steps.forEach((s, i) => {
 				if (!s.place) return;
-				const a = (jAt[s.place] ??= []);
+				jAt[s.place] ??= [];
+				const a = jAt[s.place];
 				if (!a.some((x) => x.j === j.id)) a.push({ j: j.id, i });
 			});
 	}
@@ -350,30 +354,6 @@
 		}
 		if (s[0] === "day" && Y[s[1]]) return { view: "day", id: s[1] };
 		return { view: "plant", tab: s[0] === "plant" && TABS.some((t) => t[0] === s[1]) ? s[1] : "work" };
-	}
-	function hashOf(r) {
-		if (r.view === "work") return `#work/${r.id}${r.ev !== null && r.ev !== undefined ? `/evidence/${r.ev}` : ""}`;
-		if (r.view === "place") return `#place/${r.id}${r.via ? `/via/work/${r.via}` : ""}`;
-		if (r.view === "module") return `#module/${r.id}`;
-		if (r.view === "journey") return `#journey/${r.id}${r.step ? `/step/${r.step}` : ""}`;
-		if (r.view === "day") return `#day/${r.id}`;
-		return `#plant/${r.tab || "work"}`;
-	}
-	function allRoutes() {
-		const out = TABS.map((t) => `#plant/${t[0]}`);
-		for (const w of D.work) {
-			out.push(`#work/${w.id}`);
-			w.evidence.forEach((_, i) => out.push(`#work/${w.id}/evidence/${i}`));
-			for (const p of w.lit) out.push(`#place/${p}/via/work/${w.id}`);
-		}
-		for (const id of Object.keys(P)) out.push(`#place/${id}`);
-		for (const m of D.modules) out.push(`#module/${m.id}`);
-		for (const j of D.journeys) {
-			out.push(`#journey/${j.id}`);
-			j.steps.forEach((_, i) => out.push(`#journey/${j.id}/step/${i + 1}`));
-		}
-		for (const d of D.days) out.push(`#day/${d.id}`);
-		return out;
 	}
 	function tabOf(r) {
 		return r.view === "plant" ? r.tab : r.view === "work" || (r.view === "place" && r.via) ? "work" : r.view === "journey" ? "journeys" : r.view === "day" ? "days" : "places";
@@ -503,7 +483,8 @@
 			j.steps.forEach((s, i) => {
 				if (!s.place) return;
 				for (const p of spread(s.place)) L.lit.add(p);
-				(L.badges[s.place] ??= []).push(i + 1);
+				L.badges[s.place] ??= [];
+				L.badges[s.place].push(i + 1);
 			});
 			for (let i = 1; i < j.steps.length; i++) {
 				const a = j.steps[i - 1].place;
@@ -875,7 +856,8 @@
 		const by = {};
 		for (const e of cross) {
 			const o = modOf(inside(e.from) ? e.to : e.from);
-			(by[o] ??= []).push(e);
+			by[o] ??= [];
+			by[o].push(e);
 		}
 		const ws = [...new Set(m.places.flatMap((p) => workAt[p] || []))];
 		return `<div class="mid">${asLayer("module", m.id, `#module/${esc(m.id)}`)}
@@ -1089,7 +1071,7 @@
 		anchor = null;
 	}
 	function layerRoute(stack) {
-		const top = stack && stack[stack.length - 1];
+		const top = stack?.[stack.length - 1];
 		return top ? parse(`#${top.kind}/${top.id}`) : route;
 	}
 

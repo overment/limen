@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Limen code quality: Biome rules and library picks</title>
+<style>
+:root { color-scheme: light dark; --bg:#fbfaf7; --fg:#1d1d1f; --muted:#6b6b70; --line:#e3e1db; --card:#ffffff; --ok:#1f7a3a; --okbg:#e3f3e8; --wait:#8a5a00; --waitbg:#fcefd4; --no:#9b1c1c; --nobg:#fbe3e3; --code:#f2f0ea; }
+@media (prefers-color-scheme: dark) { :root { --bg:#141416; --fg:#ececef; --muted:#a0a0a8; --line:#2c2c31; --card:#1c1c20; --ok:#7bd88f; --okbg:#173322; --wait:#f0c060; --waitbg:#3a2c10; --no:#ff8a8a; --nobg:#3a1717; --code:#24242a; } }
+* { box-sizing: border-box; }
+body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+main { max-width: 980px; margin: 0 auto; padding: 32px 24px 80px; }
+h1 { font-size: 26px; margin: 0 0 4px; }
+h2 { font-size: 19px; margin: 36px 0 10px; padding-top: 12px; border-top: 1px solid var(--line); display:flex; gap:10px; align-items:center; }
+h3 { font-size: 16px; margin: 20px 0 6px; }
+.sub { color: var(--muted); margin: 0 0 20px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px 18px; margin: 12px 0; }
+.chip { display:inline-block; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.ok { color: var(--ok); background: var(--okbg); }
+.wait { color: var(--wait); background: var(--waitbg); }
+.no { color: var(--no); background: var(--nobg); }
+code { font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--code); padding: 1px 4px; border-radius: 4px; }
+pre { background: var(--code); padding: 12px 14px; border-radius: 8px; overflow-x: auto; margin: 8px 0; }
+pre code { background: none; padding: 0; font-size: 12.5px; }
+table { border-collapse: collapse; width: 100%; margin: 8px 0; font-size: 14px; }
+th, td { text-align: left; vertical-align: top; padding: 7px 8px; border-bottom: 1px solid var(--line); }
+th { color: var(--muted); font-weight: 600; font-size: 12.5px; text-transform: uppercase; letter-spacing: .03em; }
+ul { margin: 6px 0; padding-left: 22px; }
+li { margin: 3px 0; }
+.grid { display:grid; grid-template-columns: 1fr; gap: 4px; }
+.grid > div { min-width: 0; }
+.verdict { display:grid; grid-template-columns: 110px 70px 1fr; gap: 6px 12px; align-items: baseline; }
+.verdict b { font-size: 15px; }
+.pick { border-left: 4px solid var(--wait); }
+.small { font-size: 13px; color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+<h1>Limen code quality: what Biome checks now, and what waits on you</h1>
+<p class="sub">Feature F929 · checks ran at <code>421ed26</code> (this work merged with main <code>8bacea1</code>) · 6 October 2026 · Biome 2.5.8 · measurements at <code>19b0175</code>, reformat numbers after merging main <code>8bacea1</code></p>
+
+<div class="card">
+<h3 style="margin-top:0">The answer</h3>
+<ul>
+<li><span class="chip ok">Landed</span> Biome now fails <code>npm run check</code> on hidden assignments, needless <code>else</code>, nested <code>if</code> that should be one condition, unawaited or misused promises, and non-exhaustive switches. Each rule has its reason written next to it in <code>biome.jsonc</code>.
+  <ul><li>No preset. The rules are named one by one, so the styleguide line "avoid style-lint packs" still holds.</li>
+  <li>The keeper command (<code>src/commands/keeper.ts</code>) is the sample: one flag table through Node's built-in <code>parseArgs</code>, braces everywhere, 120 columns, no function over complexity 20. Biome enforces this on that file only.</li></ul></li>
+<li><span class="chip no">No</span> to Effect, XState and Zod for now. Built-in <code>parseArgs</code>, small hand-written unions, a transition table, and type guards cover the same needs with zero runtime dependencies.</li>
+<li><span class="chip wait">Waiting on you</span> Four picks, listed at the end: the repo-wide reformat (120 columns and braces), a complexity limit, Biome's recommended preset, and the follow-up refactors.</li>
+</ul>
+</div>
+
+<h2><span class="chip ok">1 · Landed</span> Named Biome rules</h2>
+<p>The preset stays <code>none</code>. Every rule below runs on <code>src/</code>, <code>hook/</code>, <code>bin/</code>, <code>test/</code> and <code>picture/</code>. The linter skips <code>spec/</code>, where feature folders keep saved HTML evidence.</p>
+<table><thead><tr><th>Rule</th><th>Sites today</th><th>Why</th></tr></thead><tbody>
+<tr><td><code>complexity/useOptionalChain</code></td><td>8 sites fixed</td><td><code>message?.role !== "user"</code> reads in one pass.</td></tr>
+<tr><td><code>correctness/noUnusedVariables, noUnusedImports</code></td><td>2 dead functions removed from the viewer</td><td>tsc covers TypeScript; these cover the viewer JS and bin scripts.</td></tr>
+<tr><td><code>style/noUselessElse</code></td><td>0 sites</td><td>No <code>else</code> after <code>return</code>, <code>throw</code>, <code>break</code>, <code>continue</code>.</td></tr>
+<tr><td><code>style/useCollapsedIf, useCollapsedElseIf</code></td><td>1 site fixed</td><td><code>if (a) { if (b) … }</code> is <code>if (a &amp;&amp; b)</code>.</td></tr>
+<tr><td><code>suspicious/noAssignInExpressions</code></td><td>8 sites fixed</td><td>No hidden side effects such as <code>String((seq += 1))</code>.</td></tr>
+<tr><td><code>nursery/noFloatingPromises</code></td><td>kept</td><td>An unawaited promise loses its error and its order.</td></tr>
+<tr><td><code>nursery/noMisusedPromises</code></td><td>1 site fixed (a type)</td><td>No async function where the caller expects a plain return.</td></tr>
+<tr><td><code>nursery/useAwaitThenable</code></td><td>0 sites</td><td><code>await</code> on a non-promise is a mistake.</td></tr>
+<tr><td><code>nursery/useExhaustiveSwitchCases</code></td><td>0 sites</td><td>A switch over a union handles every member, so a new job state fails the check where it is not handled.</td></tr>
+</tbody></table>
+<h3>What the fixes changed</h3>
+<ul>
+<li>Counter increments leave argument lists: <code>hook/hosted.ts</code>, <code>hook/wake.ts</code> (twice).</li>
+<li><code>src/project/git.ts</code> sets its fallback git binary on its own line.</li>
+<li>Eight guarded reads became optional chains; <code>src/runtime/recovery.ts</code> names its pid check (<code>validPid</code>).</li>
+<li>The picture viewer loses two unused route helpers and its <code>(x[k] ??= []).push(v)</code> one-liners.</li>
+<li>The hosted hook types its <code>session_start</code> handler as possibly async, which matches what it passes.</li>
+</ul>
+<div class="card small"><b>Lesson.</b> Biome's unsafe optional-chain fix dropped a needed <code>?.</code> in <code>src/job/group-cabinet.ts:213</code>. That would crash when a job is not in a group. tsc caught it. <code>CONTRIBUTING.md</code> now says: run the typecheck after every <code>--unsafe</code> fix.</div>
+
+<h2><span class="chip ok">2 · Landed</span> The keeper sample</h2>
+<div class="grid">
+<div><h3>Before (30 lines)</h3><pre><code>function parseKeeperArgs(args: readonly string[]): KeeperOptions {
+  const jobs: string[] = [];
+  const route: string[] = [];
+  const positional: string[] = [];
+  let candidate: string | undefined;
+  let group: string | undefined;
+  let timeout = &quot;20m&quot;;
+  for (let index = 0; index &lt; args.length; index += 1) {
+    const value = args[index];
+    if (!value) continue;
+    if (!value.startsWith(&quot;--&quot;)) {
+      positional.push(value);
+      continue;
+    }
+    const next = args[index + 1];
+    if (![&quot;--job&quot;, &quot;--candidate&quot;, &quot;--group&quot;, &quot;--timeout&quot;, ...ROUTE].includes(value)) throw new Error(`unknown keeper option ${value}`);
+    if (!next || next.startsWith(&quot;--&quot;)) throw new Error(`${value} requires a value`);
+    index += 1;
+    if (value === &quot;--job&quot;) jobs.push(next);
+    else if (value === &quot;--candidate&quot;) candidate = next;
+    else if (value === &quot;--group&quot;) group = next;
+    else if (value === &quot;--timeout&quot;) timeout = next;
+    else route.push(value, next);
+  }
+  const [ticket, ...extra] = positional;
+  if (!ticket || extra.length) throw new Error(&quot;keeper requires exactly one &lt;ticket-path&gt;&quot;);
+  if (jobs.length === 0 &amp;&amp; !group) throw new Error(&quot;keeper requires --job ID or --group GROUP-ID&quot;);
+  for (const flag of ROUTE) if (!route.includes(flag)) throw new Error(`keeper requires --engine --provider --model --thinking; missing ${flag}`);
+  return { ticket, jobs, route, timeout, ...(candidate ? { candidate } : {}), ...(group ? { group } : {}) };
+}</code></pre></div>
+<div><h3>After</h3><pre><code>// Every keeper flag takes a value. `--job` may repeat.
+const FLAGS = {
+  job: { type: &quot;string&quot;, multiple: true },
+  candidate: { type: &quot;string&quot; },
+  group: { type: &quot;string&quot; },
+  timeout: { type: &quot;string&quot;, default: &quot;20m&quot; },
+  engine: { type: &quot;string&quot; },
+  provider: { type: &quot;string&quot; },
+  model: { type: &quot;string&quot; },
+  thinking: { type: &quot;string&quot; },
+} as const;
+
+function parseKeeperArgs(args: readonly string[]): KeeperOptions {
+  rejectBadFlags(args);
+  const { values, positionals } = parseArgs({ args: [...args], options: FLAGS, allowPositionals: true });
+  const [ticket, ...extra] = positionals;
+  if (!ticket || extra.length &gt; 0) {
+    throw new Error(&quot;keeper requires exactly one &lt;ticket-path&gt;&quot;);
+  }
+  const jobs = values.job ?? [];
+  if (jobs.length === 0 &amp;&amp; !values.group) {
+    throw new Error(&quot;keeper requires --job ID or --group GROUP-ID&quot;);
+  }
+  const route: string[] = [];
+  for (const name of ROUTE) {
+    const value = values[name];
+    if (!value) {
+      throw new Error(`keeper requires --engine --provider --model --thinking; missing --${name}`);
+    }
+    route.push(`--${name}`, value);
+  }
+  return {
+    ticket,
+    jobs,
+    route,
+    timeout: values.timeout,
+    ...(values.candidate ? { candidate: values.candidate } : {}),
+    ...(values.group ? { group: values.group } : {}),
+  };
+}</code></pre></div>
+</div>
+<ul>
+<li><code>keeperCommand</code> splits into <code>finishedJobs</code>, <code>ticketAtTip</code> and <code>jobBlock</code>. Every body has braces.</li>
+<li>Error messages stay the same. A first <code>parseArgs</code> pass with <code>strict: false</code> names the bad flag in keeper's own words; then a strict pass gives exact types.
+  <ul><li>13 bad argument lists: same first error line before and after.</li>
+  <li>2 changes on purpose: <code>--job=x</code> now works; <code>-j</code> is now named as an unknown option.</li></ul></li>
+</ul>
+
+<h2><span class="chip ok">3 · Landed</span> Styleguide and contributing guide</h2>
+<ul>
+<li><code>.agents/limen/styleguide.md</code> gains "Checked by Biome" (36 lines in total):
+  <ul><li>One effect per statement. Flat control flow. Optional chains for guarded reads.</li>
+  <li>Every promise awaited or returned. Exhaustive switches over unions.</li>
+  <li>Files the override lists: 120 columns, braces, no nested ternary, complexity ≤ 20.</li>
+  <li>Avoid: lint presets and style packs; name each rule.</li></ul></li>
+<li><code>CONTRIBUTING.md</code>: the old line "the preset stays none except noFloatingPromises" becomes the named-rule policy.</li>
+<li><code>templates/styleguide.md</code> (the blank template for other projects) is unchanged.</li>
+</ul>
+
+<h2><span class="chip ok">4 · Checked</span> Evidence</h2>
+<ul>
+<li><code>npm run check</code> at <code>398d1b9</code>: tsc pass, Biome pass, tests 63 of 63 in 59 s. Again at <code>421ed26</code>, after the merge with main: tests 68 of 68 in 91 s.</li>
+<li>After merging main <code>8bacea1</code> (group extensions, PR #9): the new <code>noAssignInExpressions</code> rule caught a fresh <code>(teamSelections[team] ??= []).push(path)</code> in <code>src/commands/group.ts:44</code>. Fixed.</li>
+<li><code>limen ticket check</code>: pass (one warning: the board has no F929 line yet; workers do not edit the board).</li>
+<li><code>limen picture build --strict</code>: exit 0.</li>
+<li>Rule probe on a scratch copy: each pattern below fails <code>biome check</code>.
+  <ul>
+  <li>In <code>keeper.ts</code>: brace-less <code>for … if</code> → useBlockStatements; nested ternary → noNestedTernary; a 134-column line → format; a function over complexity 20 → noExcessiveCognitiveComplexity.</li>
+  <li>In any other file: <code>String((seq += 1))</code> → noAssignInExpressions; <code>else</code> after <code>return</code> → noUselessElse; nested <code>if</code> → useCollapsedIf; floating promise → noFloatingPromises; async callback for a void callback → noMisusedPromises.</li>
+  <li>A brace-less <code>if</code> in another file still passes. That is pick 1.</li>
+  </ul></li>
+</ul>
+
+<h2><span class="chip no">5 · Libraries</span> Effect, XState, Zod: no, for now</h2>
+<div class="card verdict">
+<b>Effect 4.0.1</b><span class="chip no">No</span><span>Typed errors and dependency injection, but every async function changes signature (<code>Effect&lt;A, E, R&gt;</code>). 49.6 MB unpacked. <code>src/main.ts:157-160</code> already turns any throw into one message and exit code 1, which is the right shape for a CLI.</span>
+<b>XState 5.33.2</b><span class="chip no">No</span><span>Job state is one word in a file, written by seven writers (spawn, continue, stop, group stop, the wrapper, the hosted supervisor, the reaper). XState is an in-memory actor runtime; each writer would restore, send and persist a snapshot. It does not help with the real risk, a cross-process race. 2.3 MB.</span>
+<b>Zod 4.6.5</b><span class="chip no">No</span><span>The best of the three: one schema gives the type and the check. But it would be the first runtime dependency (<code>test/structure.test.ts:24-29</code>, <code>spec/vision.md:12</code>). Five hand-written guards cover the risky JSON reads. If you ever allow one dependency, Zod is the candidate. 6.1 MB.</span>
+<b>neverthrow, Valibot, ArkType</b><span class="chip no">No</span><span>Same dependency conflict. neverthrow is class-based and needs an ESLint plugin to force handling. ArkType brings three dependencies.</span>
+<b>node:util parseArgs</b><span class="chip ok">Yes</span><span>Built in, stable since Node 20. One options table per command. Strict mode also fixes a real defect: today <code>limen spawn --label --tab task</code> takes <code>--tab</code> as the label (<code>spawn.ts:427-433</code>, <code>continue.ts:36-40</code>).</span>
+<b>Hand-rolled unions and guards</b><span class="chip ok">Yes</span><span>Already used: <code>frontmatter.ts:14-15</code>, <code>landTicketCheck</code> in <code>land.ts</code>. Declare a local <code>{ ok: true … } | { ok: false … }</code> only where a caller branches on an expected failure. No shared <code>Result</code> file.</span>
+</div>
+<p class="small">Versions and sizes from <code>npm view</code> on 6 October 2026. Full research with sources: <code>spec/features/active/F929-…/patterns.md</code>.</p>
+
+<h3>Patterns that fit limen</h3>
+<ul>
+<li><b>Flag parsing.</b> Nine commands parse flags with hand-written index loops, each with its own rules for repeats and missing values (<code>continue</code>, <code>group</code>, <code>keeper</code>, <code>land</code>, <code>spawn</code>, <code>picture</code>, <code>ticket</code>, <code>linear</code>, <code>github</code>). Nine more sites test one flag by position.
+  <ul><li>Shape: one <code>parseArgs</code> call per command, inside the command file. Cross-flag rules as early returns after the call.</li></ul></li>
+<li><b>Errors.</b> Keep <code>throw</code> for command failures. Use a local result union where try/catch only maps "file missing" (for example <code>github-poller.ts:168-172</code> and <code>:322-326</code>).</li>
+<li><b>Job lifecycle.</b> One <code>const</code> transition table and one <code>writeState</code> in <code>src/job/record.ts</code>:
+  <ul><li>none → running, failed, stopped; running → running, done, failed, stopped; terminal → nothing.</li>
+  <li>Two writers bypass the guard today: <code>group.ts:288</code> (plain write) and <code>wrapper.ts:154</code> (rewrites <code>running</code> with no check). A stop in that window could be overwritten; this is inferred from the code, not reproduced.</li></ul></li>
+<li><b>Edges.</b> Read JSON from other processes or GitHub as <code>unknown</code> and check it with a guard beside its type. Riskiest five: <code>github-poller.ts:83</code> (every GitHub response), <code>github-poller.ts:169</code> (claim files), <code>group-cabinet.ts:48</code> (<code>run.json</code>), <code>group-events.ts:51</code>, <code>project/git.ts:23</code>. Also <code>wrapper.ts:51</code>: a non-numeric <code>LIMEN_TIMEOUT_MS</code> becomes <code>NaN</code>.</li>
+</ul>
+
+<h2><span class="chip wait">6 · Waiting on you</span> Biome rules proposed, not landed</h2>
+<table><thead><tr><th>Rule</th><th>Cost today</th><th></th></tr></thead><tbody>
+<tr><td>formatter lineWidth 180 → 120</td><td>About 90 files reformat. <code>src/</code> 11,787 → 13,843 lines. Lines over 120 columns: 759 → 208 (the rest are long strings and comments; the formatter does not split them).</td><td><span class="chip wait">Pick 1</span></td></tr>
+<tr><td>style/useBlockStatements</td><td>1,699 hits in 94 files. One autofix pass (<code>--unsafe</code>). With width 120: <code>src/</code> → 16,028 lines; <code>test/</code> 2,648 → 3,225 (cap 3,500).</td><td><span class="chip wait">Pick 1</span></td></tr>
+<tr><td>style/noNestedTernary</td><td>43 hits in 15 files. Hand fixes. The styleguide scan already specified this work (F773, spec 36).</td><td><span class="chip wait">Pick 1</span></td></tr>
+<tr><td>complexity/noExcessiveCognitiveComplexity (max 20)</td><td>80 functions over 20. Worst: <code>continue.ts:21</code> 139, <code>spawn.ts:84</code> 127, <code>github.ts:58</code> 117, <code>status.ts:24</code> 112. Needs real refactors, so it can only start as a per-file list.</td><td><span class="chip wait">Pick 2</span></td></tr>
+<tr><td>Biome <code>recommended</code> preset</td><td>87 hits on this branch (107 before the fixes above): 65 non-null <code>!</code> in picture code, 9 viewer CSS order, 13 small ones. Two of the 13 are false: the viewer's <code>"use strict"</code> is needed, because <code>src/picture/html.ts:44</code> inlines it as a classic script. One is real: a <code>throw</code> inside <code>finally</code> at <code>seat.ts:75</code>.</td><td><span class="chip wait">Pick 3</span></td></tr>
+</tbody></table>
+<h3>Rules I do not recommend</h3>
+<ul><li><code>style/noTernary</code>: 930 hits. A single ternary is fine; only nesting hurts.</li>
+<li><code>complexity/noExcessiveLinesPerFunction, useMaxParams</code>: 38 and 32 hits. Cognitive complexity already catches the dense functions; line counts punish flat, readable lists.</li>
+<li><code>noMagicNumbers, noProcessEnv, noNodejsModules, useNamingConvention, useExplicitType</code>: Wrong for a Node CLI that reads env and uses Node modules by design.</li>
+<li><code>performance/noAwaitInLoops</code>: 134 hits; most loops must run in order (Git, locks).</li></ul>
+
+<h2><span class="chip wait">7 · Your picks</span></h2>
+<div class="card pick"><b>Pick 1 · Reformat the whole tree to the target style?</b>
+<ul><li>What: <code>lineWidth</code> 120 and braces on every body, in one mechanical commit, then nested ternaries by hand.</li>
+<li>Cost: <code>src/</code> grows 11,787 → 16,028 lines (+36%). Every open job branch must rebase or merge after it.</li>
+<li><code>test/</code> would grow 2,648 → 3,225 and leave only 275 lines under the 3,500 cap, with no new test. So the pick keeps <code>test/</code> at today's format.</li>
+<li>Brace rule has no "single-line guard" option in Biome 2.5.8: it is all or nothing. <code>if (!value) continue;</code> becomes three lines.</li>
+<li><b>My pick: yes, both, for <code>src/</code>, <code>hook/</code>, <code>bin/</code> and <code>picture/</code>, at a quiet moment with no open job branches</b>, and add the commit to <code>.git-blame-ignore-revs</code>. The fallback is width 120 alone (+17% lines, no braces).</li></ul></div>
+<div class="card pick"><b>Pick 2 · Complexity limit for all code?</b>
+<ul><li>What: cognitive complexity at most 20 per function. 80 functions are over it today; they cannot be fixed mechanically.</li>
+<li><b>My pick: yes, as a ratchet.</b> The rule binds every file; the files that hold today's offenders are listed in the override, and a file leaves the list when its functions are split.</li></ul></div>
+<div class="card pick"><b>Pick 3 · Turn on Biome's recommended preset?</b>
+<ul><li>What: about 300 correctness and suspicious rules in one line. On this branch it finds 13 small issues after two style rules are switched off (non-null <code>!</code>, CSS order). Two need a suppression comment with a reason (<code>"use strict"</code> in the inlined viewer).</li>
+<li>Conflict: the styleguide and <code>CONTRIBUTING.md</code> say "no presets". A yes changes that line.</li>
+<li><b>My pick: yes</b>, with <code>noNonNullAssertion</code> and <code>noDescendingSpecificity</code> off. Naming 300 rules by hand does not scale, and these rules find bugs, not style (for example a <code>throw</code> inside <code>finally</code> that can hide the first error at <code>seat.ts:75</code>).</li></ul></div>
+<div class="card pick"><b>Pick 4 · Which follow-up refactors to ticket?</b>
+<ul><li>a. Move the nine flag loops to <code>parseArgs</code> and accept Node's error wording (simpler than keeper's two-pass). <b>Yes.</b></li>
+<li>b. One <code>writeState</code> with a transition table for job state. <b>Yes.</b></li>
+<li>c. Guards for the five riskiest JSON reads, no Zod. <b>Yes.</b></li></ul></div>
+
+<h3>Styleguide draft if you pick yes</h3>
+<ul>
+<li>Pick 1 and 2 → "Checked by Biome": replace the override bullet with "All code outside <code>test/</code>: lines at most 120 columns, braces on every <code>if</code>, <code>for</code> and <code>else</code> body, no nested ternary, cognitive complexity at most 20 per function. Files in the <code>biome.jsonc</code> complexity list are older code; split a function before you add to it."</li>
+<li>Pick 3 → "Avoid": "Style packs. Biome's <code>recommended</code> preset is on; any other rule is named in <code>biome.jsonc</code> with its reason."</li>
+<li>Pick 4 → "Prefer":
+  <ul><li>"Parse command flags with <code>node:util</code> <code>parseArgs</code>: one options table per command, cross-flag rules as early returns after it."</li>
+  <li>"Read JSON that another process or GitHub wrote as <code>unknown</code>; check it with a guard next to its type."</li>
+  <li>"Job state moves only through <code>writeState</code> and its transition table."</li>
+  <li>"Errors: <code>throw</code> for a failed command; a local <code>ok</code> union only where the caller branches on an expected failure."</li></ul></li>
+<li>Always → "Avoid": "Runtime dependencies for errors, state machines or validation (Effect, XState, Zod). The built-in and hand-written forms above cover limen's needs."</li>
+</ul>
+
+<p class="small">Other findings, not fixed here: <code>CONTRIBUTING.md</code> says each test has a 30 s timeout, but <code>package.json</code> uses 180 s.</p>
+</main>
+</body>
+</html>

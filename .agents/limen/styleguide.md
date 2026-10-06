@@ -16,9 +16,21 @@
 - Inform, do not gate. Advisories and durable notes over new control flow.
 - Tests that exercise real Git and real files. Assert observable behavior, not ceremony.
 
+## Checked by Biome
+
+`npm run check` fails on these. `biome.jsonc` names each rule with its reason.
+
+- One effect per statement. No assignment inside an expression: write `seq += 1;`, then `String(seq)`.
+- Flat control flow. No `else` after `return`, `throw`, `break`, or `continue`. Join `if (a) { if (b) … }` into `if (a && b)`.
+- Optional chains for guarded reads: `message?.role !== "user"`, not `!message || message.role !== "user"`.
+- Every promise is awaited or returned. Do not pass an async function where the caller expects a plain return.
+- A `switch` over a union handles every member or has a `default`.
+- Files that the `biome.jsonc` override lists follow the target style: lines at most 120 columns, braces on every `if`, `for`, and `else` body, no nested ternary, and cognitive complexity at most 20 per function.
+
 ## Avoid
 
 - Abstracting a second example. Duplicating a short function is cheaper than a helper bag.
 - New workflow state, registries, or parsers for Markdown the human already owns.
-- Style-lint packs, comment banners, and defensive try/catch around impossible cases.
+- Lint presets and style packs. Name each rule in `biome.jsonc`.
+- Comment banners and defensive try/catch around impossible cases.
 - Rewriting working code to match a model's default taste.
