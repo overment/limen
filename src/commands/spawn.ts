@@ -5,7 +5,7 @@ import { basename, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { captureFinishAuthor, finishWebhookEnv } from "../integrations/finish-webhook.ts";
 import { herdrAvailable, herdrBinary, openHostedTab, openWatchTab } from "../integrations/herdr.ts";
-import type { GroupRun } from "../job/group-cabinet.ts";
+import type { GroupMember, GroupRun } from "../job/group-cabinet.ts";
 import { claimMember, groupIdentity, groupLock, groupPath, teamRoute } from "../job/group-cabinet.ts";
 import { syncLifecycle } from "../job/group-events.ts";
 import { hostedAgentName, makeJobId, parseDuration, SESSION_ID } from "../job/job.ts";
@@ -27,6 +27,7 @@ import {
 } from "../project/git.ts";
 import {
 	inheritedPlanning,
+	type PlanningSource,
 	planningSource,
 	privatePlanningFile,
 	privatePlanningTask,
@@ -35,6 +36,7 @@ import {
 import { signalProcessGroup, waitForProcessGroup } from "../runtime/contain.ts";
 import {
 	defaultModel,
+	type EngineId,
 	type EngineProfile,
 	engineBinary,
 	preflightEngine,
@@ -107,52 +109,134 @@ export async function spawnCommand(
 	}
 	await spawnJob(args, cwd);
 }
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: split pending: job spawn command
-// biome-ignore lint/complexity/noExcessiveLinesPerFunction: same split as the line above
-async function spawnJob(
-	args: readonly string[],
-	cwd: string,
-	group?: { run: GroupRun; team: string; role: "coordinator" | "worker" },
-): Promise<void> {
+type SpawnGroup = { run: GroupRun; team: string; role: "coordinator" | "worker" };
+type SpawnTask = { text: string; bytes: Buffer; raw: boolean };
+/** Where the job is recorded and which repository its worktree comes from. */
+type SpawnPlace = {
+	readonly workspace: string | undefined;
+	readonly currentRoot: string;
+	readonly root: string;
+	readonly source: PlanningSource;
+	readonly repository: string;
+	readonly repo: string | undefined;
+};
+/** What the checks decided before any job record exists. */
+type SpawnLaunch = {
+	readonly cwd: string;
+	readonly options: SpawnOptions & { readonly task: string; readonly label: string };
+	readonly loaded: SpawnTask;
+	readonly group: SpawnGroup | undefined;
+	readonly hosted: boolean;
+	readonly profile: EngineProfile;
+	readonly model: string | undefined;
+	readonly extensions: readonly string[];
+	readonly notificationSession: string | undefined;
+	readonly coordinatorTab: string | undefined;
+	readonly coordinatorPane: string | undefined;
+	readonly place: SpawnPlace;
+	readonly task: string;
+	readonly privatePacket: string;
+};
+type SpawnRecord = {
+	readonly jobDir: string;
+	readonly id: string;
+	readonly taskBody: string | Uint8Array;
+	readonly branch: string;
+	readonly worktree: string;
+	readonly base: string;
+	readonly role: string;
+	readonly member: GroupMember | undefined;
+	readonly candidate: string | undefined;
+};
+/** A recorded job with its worktree, ready to start in a Herdr pane or as a detached wrapper. */
+type SpawnedJob = {
+	readonly jobDir: string;
+	readonly id: string;
+	readonly root: string;
+	readonly worktree: string;
+	readonly preamble: string;
+	readonly role: string;
+	readonly memberDeadline: number | undefined;
+};
+async function spawnJob(args: readonly string[], cwd: string, group?: SpawnGroup): Promise<void> {
 	const parsed = parseSpawnArgs(args);
+	await checkLaunchAuthority(parsed, group);
+	const hosted = chooseHostedLaunch(parsed);
+	const loaded = await readSpawnTask(parsed.task, parsed.taskFile, cwd);
+	const options = {
+		...parsed,
+		task: loaded.text,
+		label: parsed.label ?? (loaded.text.trim().split(/\r?\n/, 1)[0]?.trim().slice(0, 80) || "job"),
+	};
+	const profile = resolveSpawnEngine(options.engine);
+	const model = options.model ?? defaultModel(options.review);
+	const extensions = await launchExtensions(group, options.extensions, cwd, profile.id);
+	preflightEngine(profile, model, options.provider);
+	const notificationSession = currentNotificationSession();
+	const coordinatorTab = process.env.HERDR_TAB_ID?.trim();
+	// A group member never subscribes a session, so its pane stays recorded even under Pi: it is the lead's route when the group hook is not running.
+	const coordinatorPane = herdrWakePane(group ? undefined : notificationSession);
+	const place = resolveSpawnPlace(cwd, group, options.repo);
+	const { task, privatePacket } = await spawnTaskText(loaded, options.repo, place, group);
+	await recordSpawnedJob({
+		cwd,
+		options,
+		loaded,
+		group,
+		hosted,
+		profile,
+		model,
+		extensions,
+		notificationSession,
+		coordinatorTab,
+		coordinatorPane,
+		place,
+		task,
+		privatePacket,
+	});
+}
+/** Outside a group no job may claim the owner-facing lead; a group launch keeps its recorded route and branches. */
+async function checkLaunchAuthority(parsed: SpawnOptions, group: SpawnGroup | undefined): Promise<void> {
 	if (!group) {
 		const roleClaim = claimsOwnerFacingLead(parsed.role);
 		if (roleClaim) {
 			throw new Error(roleClaim);
 		}
+		return;
 	}
-	if (group) {
-		const run = group.run;
-		const route = teamRoute(run, group.team);
-		if (
-			parsed.engine !== run.engine ||
-			parsed.provider !== route.provider ||
-			parsed.model !== route.model ||
-			parsed.thinking !== (group.role === "coordinator" ? run.thinking : run.workerThinking)
-		) {
-			throw new Error("group launches require the recorded engine/provider/model/reasoning explicitly");
-		}
-		if (
-			parsed.repo ||
-			(parsed.branch && !parsed.review) ||
-			(parsed.role && parsed.role !== group.role) ||
-			parsed.timeoutMs
-		) {
-			throw new Error(
-				"group launches use isolated new branches, recorded roles and deadlines; omit --repo, ordinary --branch and --timeout",
-			);
-		}
-		if (parsed.review) {
-			const teamBranches = await Promise.all(
-				run.members
-					.filter((member) => member.team === group.team)
-					.map((member) => text(`${run.root}/.limen/jobs/${member.id}/branch`)),
-			);
-			if (!teamBranches.includes(parsed.branch ?? "")) {
-				throw new Error("group review requires a candidate branch owned by this team");
-			}
+	const run = group.run;
+	const route = teamRoute(run, group.team);
+	if (
+		parsed.engine !== run.engine ||
+		parsed.provider !== route.provider ||
+		parsed.model !== route.model ||
+		parsed.thinking !== (group.role === "coordinator" ? run.thinking : run.workerThinking)
+	) {
+		throw new Error("group launches require the recorded engine/provider/model/reasoning explicitly");
+	}
+	if (
+		parsed.repo ||
+		(parsed.branch && !parsed.review) ||
+		(parsed.role && parsed.role !== group.role) ||
+		parsed.timeoutMs
+	) {
+		throw new Error(
+			"group launches use isolated new branches, recorded roles and deadlines; omit --repo, ordinary --branch and --timeout",
+		);
+	}
+	if (parsed.review) {
+		const teamBranches = await Promise.all(
+			run.members
+				.filter((member) => member.team === group.team)
+				.map((member) => text(`${run.root}/.limen/jobs/${member.id}/branch`)),
+		);
+		if (!teamBranches.includes(parsed.branch ?? "")) {
+			throw new Error("group review requires a candidate branch owned by this team");
 		}
 	}
+}
+/** True for a Herdr pane, false for a detached wrapper. */
+function chooseHostedLaunch(parsed: SpawnOptions): boolean {
 	const herdr = herdrAvailable();
 	const hosted = parsed.detached ? false : parsed.tab || herdr;
 	if (parsed.tab && parsed.detached) {
@@ -164,53 +248,57 @@ async function spawnJob(
 	if (hosted && !herdr) {
 		throw new Error("hosted spawn requires Herdr (HERDR_ENV=1); use --detached for an ordinary job");
 	}
-	const loaded = await readSpawnTask(parsed.task, parsed.taskFile, cwd);
-	const options = {
-		...parsed,
-		task: loaded.text,
-		label: parsed.label ?? (loaded.text.trim().split(/\r?\n/, 1)[0]?.trim().slice(0, 80) || "job"),
-	};
-	const profile = resolveSpawnEngine(options.engine);
-	const engine = profile.id;
-	const model = options.model ?? defaultModel(options.review);
+	return hosted;
+}
+/** A group launch takes its team's recorded extensions; --extension must then name the same ones. */
+async function launchExtensions(
+	group: SpawnGroup | undefined,
+	requested: readonly string[],
+	cwd: string,
+	engine: EngineId,
+): Promise<string[]> {
 	const recorded = group?.run.teamExtensions?.[group.team];
-	const extensions = await normalizeWorkerExtensions(recorded ?? options.extensions, cwd, engine);
+	const extensions = await normalizeWorkerExtensions(recorded ?? requested, cwd, engine);
 	if (
 		recorded &&
-		options.extensions.length &&
-		JSON.stringify(await normalizeWorkerExtensions(options.extensions, cwd, engine)) !== JSON.stringify(extensions)
+		requested.length &&
+		JSON.stringify(await normalizeWorkerExtensions(requested, cwd, engine)) !== JSON.stringify(extensions)
 	) {
 		throw new Error("group launches require the recorded team extensions; omit --extension to inherit them");
 	}
-	preflightEngine(profile, model, options.provider);
-	const notificationSession = currentNotificationSession();
-	const coordinatorTab = process.env.HERDR_TAB_ID?.trim();
-	// A group member never subscribes a session, so its pane stays recorded even under Pi: it is the lead's route when the group hook is not running.
-	const coordinatorPane = herdrWakePane(group ? undefined : notificationSession);
+	return extensions;
+}
+function resolveSpawnPlace(cwd: string, group: SpawnGroup | undefined, repoFlag: string | undefined): SpawnPlace {
 	const workspace = group ? undefined : workspaceRoot(cwd);
 	const currentRoot = workspace ?? repoRoot(cwd);
 	// A job that spawns from its own worktree keeps its canonical root, recorded planning source, and repository.
 	const inherited = group || workspace ? undefined : inheritedPlanning(currentRoot);
 	const root = group?.run.root ?? inherited?.root ?? currentRoot;
 	const source = group ? (group.run.planningSource ?? "committed") : (inherited?.source ?? planningSource(root));
-	if (workspace && !options.repo) {
+	if (workspace && !repoFlag) {
 		throw new Error("workspace spawn requires --repo <immediate-child>");
 	}
-	if (!workspace && options.repo) {
+	if (!workspace && repoFlag) {
 		throw new Error("--repo is available only from a non-Git workspace coordinator");
 	}
 	let repository = currentRoot;
 	if (workspace) {
-		repository = workspaceRepository(root, options.repo ?? "");
+		repository = workspaceRepository(root, repoFlag ?? "");
 	} else if (group) {
 		repository = root;
 	}
-	const repo = options.repo ?? inherited?.repo;
-	let task = options.task;
-	if (loaded.raw) {
-		task = loaded.text;
-	} else if (workspace) {
-		task = workspaceTask(options.task, root, options.repo ?? "");
+	return { workspace, currentRoot, root, source, repository, repo: repoFlag ?? inherited?.repo };
+}
+async function spawnTaskText(
+	loaded: SpawnTask,
+	repoFlag: string | undefined,
+	place: SpawnPlace,
+	group: SpawnGroup | undefined,
+): Promise<{ task: string; privatePacket: string }> {
+	const { root, source } = place;
+	let task = loaded.text;
+	if (!loaded.raw && place.workspace) {
+		task = workspaceTask(loaded.text, root, repoFlag ?? "");
 	}
 	// Private planning: check every pointer now, before a job record or worktree exists.
 	let privatePacket = "";
@@ -224,6 +312,12 @@ async function spawnJob(
 			privatePacket = `Ticket: ${ticket}\nBrief: ${brief}\nApproach note: ${note}`;
 		}
 	}
+	return { task, privatePacket };
+}
+/** Plans the worktree, claims the member slot, writes the job record, creates the worktree, then starts the job. */
+async function recordSpawnedJob(launch: SpawnLaunch): Promise<void> {
+	const { options, group, place, task } = launch;
+	const { root, repository, source } = place;
 	const role = options.review ? "reviewer" : (group?.role ?? options.role ?? "worker");
 	const pinnedBase = options.base ? resolveCommit(repository, options.base, "--base") : undefined;
 	const pinnedHead = options.head ? resolveCommit(repository, options.head, "--head") : undefined;
@@ -241,7 +335,7 @@ async function spawnJob(
 		branch,
 		review: options.review,
 		jobsRoot,
-		...(repo ? { repo } : {}),
+		...(place.repo ? { repo: place.repo } : {}),
 		...(options.branch ? { requestedBranch: options.branch } : {}),
 	});
 	if (pinnedHead && branchCommit(repository, branch) !== pinnedHead) {
@@ -249,13 +343,27 @@ async function spawnJob(
 	}
 	const baseCommit = plan.kind === "add-new" ? spawnBaseCommit(repository) : branchCommit(repository, branch);
 	if (source === "committed") {
-		for (const { path } of ticketPointers(task)) {
-			if (path.startsWith("spec/") && !commitHasFile(repository, baseCommit, path)) {
-				throw new Error(`ticket ${path} is missing from the base commit`);
-			}
-		}
+		assertTicketsAtBase(repository, baseCommit, task);
 	}
 	const member = group ? await claimMember(group.run, group.team, group.role, id) : undefined;
+	await noteRunningJobs(jobsRoot, options.label);
+	const jobDir = `${jobsRoot}/${id}`;
+	const candidate = options.review ? branchCommit(repository, branch) : undefined;
+	const base = pinnedBase ?? baseCommit;
+	const taskBody = await jobTaskBody(launch, candidate, member);
+	await publishSpawnedJob(launch, { jobDir, id, taskBody, branch, worktree: plan.path, base, role, member, candidate });
+	const worktree = await createJobWorktree(launch, jobDir, plan);
+	await launchSpawnedJob(launch, { jobDir, id, root, worktree, preamble, role, memberDeadline: member?.deadline });
+}
+function assertTicketsAtBase(repository: string, baseCommit: string, task: string): void {
+	for (const { path } of ticketPointers(task)) {
+		if (path.startsWith("spec/") && !commitHasFile(repository, baseCommit, path)) {
+			throw new Error(`ticket ${path} is missing from the base commit`);
+		}
+	}
+}
+/** Says how many jobs already run, and warns about a bare feature-number label or a label a live job holds. */
+async function noteRunningJobs(jobsRoot: string, label: string): Promise<void> {
 	let running = 0;
 	let held = false;
 	for (const entry of await readdir(jobsRoot, { withFileTypes: true })) {
@@ -263,25 +371,29 @@ async function spawnJob(
 			continue;
 		}
 		running += 1;
-		if ((await text(`${jobsRoot}/${entry.name}/label`)) === options.label) {
+		if ((await text(`${jobsRoot}/${entry.name}/label`)) === label) {
 			held = true;
 		}
 	}
 	if (running > 0) {
 		console.log(`note: ${running} job${running === 1 ? "" : "s"} already running; starting another`);
 	}
-	if (/^F\d{3,}$/i.test(options.label)) {
+	if (/^F\d{3,}$/i.test(label)) {
 		console.log("warning: label is only a feature number");
 	}
 	if (held) {
 		console.log("warning: a live job already holds this label");
 	}
-	const jobDir = `${jobsRoot}/${id}`;
-	const candidate = options.review ? branchCommit(repository, branch) : undefined;
-	const base = pinnedBase ?? baseCommit;
+}
+async function jobTaskBody(
+	launch: SpawnLaunch,
+	candidate: string | undefined,
+	member: GroupMember | undefined,
+): Promise<string | Uint8Array> {
+	const { task, loaded, group, place } = launch;
 	// Private planning may rewrite ticket pointers, so its task is the checked text, not the raw bytes.
 	let taskBody: string | Uint8Array = `${task.trim()}\n`;
-	if (loaded.raw && source === "committed") {
+	if (loaded.raw && place.source === "committed") {
 		taskBody = loaded.bytes;
 	} else if (candidate) {
 		taskBody = `${task.trim()}\n\nCandidate commit: ${candidate}.\n`;
@@ -289,24 +401,29 @@ async function spawnJob(
 	if (group && member) {
 		const guidance = await readFile(`${PACKAGE_ROOT}/templates/group-member.md`, "utf8");
 		const approach =
-			privatePacket ||
-			`Approach note:\n${await readFile(`${root}/${group.run.feature}/group/teams/${group.team}.md`, "utf8")}`;
-		taskBody = `${guidance}\nCanonical root: ${root}\nGroup: ${group.run.id}\nTeam: ${group.team}\nFeature: ${group.run.feature}\n${memberRoute(group.run, group.team)}\n${approach}\n\n${taskBody}`;
+			launch.privatePacket ||
+			`Approach note:\n${await readFile(`${place.root}/${group.run.feature}/group/teams/${group.team}.md`, "utf8")}`;
+		taskBody = `${guidance}\nCanonical root: ${place.root}\nGroup: ${group.run.id}\nTeam: ${group.team}\nFeature: ${group.run.feature}\n${memberRoute(group.run, group.team)}\n${approach}\n\n${taskBody}`;
 	}
-	const finishConfig = finishWebhookEnv(root, cwd);
-	await publishJob(jobDir, {
-		task: taskBody,
-		label: options.label,
-		branch,
-		worktree: plan.path,
-		base,
-		role,
-		engine,
-		extensions,
-		planningSource: source,
-		finishAuthor: captureFinishAuthor(cwd, loaded.text, Boolean(workspace)),
-		...(repo ? { repo } : {}),
-		...(hosted ? { agentName: hostedAgentName(id) } : {}),
+	return taskBody;
+}
+async function publishSpawnedJob(launch: SpawnLaunch, record: SpawnRecord): Promise<void> {
+	const { cwd, group, place, notificationSession, coordinatorTab, coordinatorPane } = launch;
+	const { member, candidate } = record;
+	const finishConfig = finishWebhookEnv(place.root, cwd);
+	await publishJob(record.jobDir, {
+		task: record.taskBody,
+		label: launch.options.label,
+		branch: record.branch,
+		worktree: record.worktree,
+		base: record.base,
+		role: record.role,
+		engine: launch.profile.id,
+		extensions: launch.extensions,
+		planningSource: place.source,
+		finishAuthor: captureFinishAuthor(cwd, launch.loaded.text, Boolean(place.workspace)),
+		...(place.repo ? { repo: place.repo } : {}),
+		...(launch.hosted ? { agentName: hostedAgentName(record.id) } : {}),
 		...(!group && notificationSession ? { notificationSession } : {}),
 		...(coordinatorTab ? { originTab: coordinatorTab } : {}),
 		...(coordinatorPane ? { originPane: coordinatorPane } : {}),
@@ -314,51 +431,67 @@ async function spawnJob(
 		...(candidate ? { candidate } : {}),
 		...(finishConfig ? { finishConfig } : {}),
 	});
-	let worktree: string;
+}
+/** Creates the worktree once the record is visible. On failure a group job is failed and any other record removed. */
+async function createJobWorktree(launch: SpawnLaunch, jobDir: string, plan: WorktreePlan): Promise<string> {
+	const { place } = launch;
 	try {
-		worktree = executeWorktree(repository, plan);
-		await pruneFinishedWorktrees(root, [worktree, currentRoot]).catch(() => {});
-		await runPrepare(jobDir, worktree, parsed.prepare ?? process.env.LIMEN_PREPARE?.trim());
+		const worktree = executeWorktree(place.repository, plan);
+		await pruneFinishedWorktrees(place.root, [worktree, place.currentRoot]).catch(() => {});
+		await runPrepare(jobDir, worktree, launch.options.prepare ?? process.env.LIMEN_PREPARE?.trim());
+		return worktree;
 	} catch (error) {
-		if (group) {
+		if (launch.group) {
 			await finalizeJob(jobDir, "failed", `group launch failed: ${String(error)}`);
 		} else {
 			await rm(jobDir, { recursive: true, force: true });
 		}
 		throw error;
 	}
-	const versions = capturedVersions(profile).then((text) =>
-		writeFile(`${jobDir}/versions`, text, { flag: "wx", flush: true }),
+}
+/** Marks the job running, then starts it in a Herdr pane or as a detached wrapper. */
+async function launchSpawnedJob(launch: SpawnLaunch, job: SpawnedJob): Promise<void> {
+	const versions = capturedVersions(launch.profile).then((text) =>
+		writeFile(`${job.jobDir}/versions`, text, { flag: "wx", flush: true }),
 	);
-	await atomicWrite(`${jobDir}/state`, "running\n");
-	if (group) {
-		await syncLifecycle(group.run, "skip");
+	await atomicWrite(`${job.jobDir}/state`, "running\n");
+	if (launch.group) {
+		await syncLifecycle(launch.group.run, "skip");
 	}
-	if (hosted) {
-		await startHosted({
-			jobDir,
-			id,
-			label: options.label,
-			root,
-			worktree,
-			preamble,
-			taskFile: `${jobDir}/task.md`,
-			role,
-			...(model ? { model } : {}),
-			...(options.provider ? { provider: options.provider } : {}),
-			...(options.thinking ? { thinking: options.thinking } : {}),
-		});
-		await versions.catch(() => {});
-		console.log(`started ${options.label} (hosted)`);
-		console.log(id);
+	if (launch.hosted) {
+		await startHostedJob(launch, job, versions);
 		return;
 	}
-	await openWatchTab({ jobDir, label: options.label, cwd: root, logPath: `${jobDir}/log`, role });
+	await startDetachedJob(launch, job, versions);
+}
+async function startHostedJob(launch: SpawnLaunch, job: SpawnedJob, versions: Promise<void>): Promise<void> {
+	const { options, model } = launch;
+	await startHosted({
+		jobDir: job.jobDir,
+		id: job.id,
+		label: options.label,
+		root: job.root,
+		worktree: job.worktree,
+		preamble: job.preamble,
+		taskFile: `${job.jobDir}/task.md`,
+		role: job.role,
+		...(model ? { model } : {}),
+		...(options.provider ? { provider: options.provider } : {}),
+		...(options.thinking ? { thinking: options.thinking } : {}),
+	});
+	await versions.catch(() => {});
+	console.log(`started ${options.label} (hosted)`);
+	console.log(job.id);
+}
+async function startDetachedJob(launch: SpawnLaunch, job: SpawnedJob, versions: Promise<void>): Promise<void> {
+	const { options, model, group } = launch;
+	const { jobDir, id, root } = job;
+	await openWatchTab({ jobDir, label: options.label, cwd: root, logPath: `${jobDir}/log`, role: job.role });
 	const environment: Record<string, string> = {
 		LIMEN_JOB_DIR: jobDir,
-		LIMEN_WORKTREE: worktree,
+		LIMEN_WORKTREE: job.worktree,
 		LIMEN_TASK_FILE: `${jobDir}/task.md`,
-		LIMEN_PREAMBLE: preamble,
+		LIMEN_PREAMBLE: job.preamble,
 		LIMEN_JOB_ID: id,
 		LIMEN_LABEL: options.label,
 		LIMEN_CONTEXT_ROOT: root,
@@ -366,7 +499,7 @@ async function spawnJob(
 	if (group) {
 		environment.LIMEN_GROUP_ID = group.run.id;
 		environment.LIMEN_TEAM_ID = group.team;
-		environment.LIMEN_TIMEOUT_MS = String(Math.max(1, (member?.deadline ?? group.run.deadline) - Date.now()));
+		environment.LIMEN_TIMEOUT_MS = String(Math.max(1, (job.memberDeadline ?? group.run.deadline) - Date.now()));
 	}
 	environment.LIMEN_PROVIDER = options.provider ?? "";
 	environment.LIMEN_THINKING = options.thinking ?? "";
