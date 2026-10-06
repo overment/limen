@@ -93,7 +93,6 @@ On `main` at `76a2f6d`: 48 functions over the complexity limit and 22 over the l
 | Function | Complexity | Lines | Split owner |
 | --- | ---: | ---: | --- |
 | `src/commands/spawn.ts` `spawnJob` | 130 | 230 | Team 2 after Team 4 |
-| `src/commands/github.ts` `githubCommand` | 117 | 168 | Team 2 |
 | `src/commands/continue.ts` `continueJob` | 109 | 205 | Team 2 after Team 4 |
 | `src/commands/spawn.ts` `parseSpawnArgs` | 96 | 104 | Team 4 |
 | `src/picture/tickets.ts` `parseTicket` | 68 | 156 | — |
@@ -128,7 +127,6 @@ On `main` at `76a2f6d`: 48 functions over the complexity limit and 22 over the l
 | `src/runtime/engine.ts` `prepareSkillConfig` | 34 | — | — |
 | `picture/viewer/viewer.js` `crumbs` | 33 | — | — |
 | `hook/group-peer.ts` `message_end` handler | 31 | — | — |
-| `src/commands/github.ts` `startGithubJob` | 31 | — | Team 2 |
 | `src/integrations/herdr.ts` `locateHostedAgent` | 31 | — | — |
 | `src/picture/frontmatter.ts` `parseBlock` | 31 | — | — |
 | `hook/wake.ts` `finishSweep` | 30 | — | — |
