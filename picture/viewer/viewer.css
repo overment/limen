@@ -111,11 +111,6 @@ code,
 	overflow: hidden;
 	text-overflow: ellipsis;
 }
-.pin .lab small {
-	font-weight: 500;
-	color: var(--mute);
-	font-size: 12px;
-}
 .pin .txt {
 	display: -webkit-box;
 	font-size: 14px;
@@ -200,9 +195,6 @@ code,
 }
 .atlas h1 a {
 	text-decoration: none;
-}
-.atlas h1 a:hover {
-	text-decoration: underline;
 }
 .atlas .gloss {
 	margin: 0;
@@ -596,6 +588,11 @@ svg.base.dim .wire {
 	align-items: center;
 	margin: var(--sp-4) 0 var(--sp-2);
 }
+.erow small {
+	display: block;
+	color: var(--mute);
+	font-size: 12.5px;
+}
 .tabs {
 	display: flex;
 	gap: 2px;
@@ -839,6 +836,14 @@ svg.base.dim .wire {
 	margin-left: var(--sp-2);
 	font-size: 12px;
 }
+.notes ul {
+	margin: var(--sp-2) 0 0;
+	padding-left: var(--sp-5);
+}
+.notes li {
+	margin-bottom: var(--sp-1);
+	word-break: break-word;
+}
 .blk p,
 .blk.md li {
 	margin: 0 0 var(--sp-2);
@@ -928,10 +933,10 @@ svg.base.dim .wire {
 	font-size: 12.5px;
 	margin: 0 var(--sp-1);
 }
-.erow small {
-	display: block;
+.pin .lab small {
+	font-weight: 500;
 	color: var(--mute);
-	font-size: 12.5px;
+	font-size: 12px;
 }
 .evl {
 	display: flex;
@@ -1086,6 +1091,9 @@ svg.base.dim .wire {
 .inl a:hover {
 	border-color: var(--ink2);
 }
+.atlas h1 a:hover {
+	text-decoration: underline;
+}
 .empty {
 	color: var(--mute);
 	font-size: 14px;
@@ -1103,14 +1111,6 @@ svg.base.dim .wire {
 }
 .notes summary {
 	cursor: pointer;
-}
-.notes ul {
-	margin: var(--sp-2) 0 0;
-	padding-left: var(--sp-5);
-}
-.notes li {
-	margin-bottom: var(--sp-1);
-	word-break: break-word;
 }
 .noscript {
 	padding: var(--sp-6);
