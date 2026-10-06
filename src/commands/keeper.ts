@@ -3,11 +3,11 @@ import { existsSync } from "node:fs";
 import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { parseArgs } from "node:util";
 import { readRun } from "../job/group-cabinet.ts";
 import { resolveJob } from "../job/lookup.ts";
 import { branchCommit, branchExists, commitHasFile, limenRoot, workspaceRepository } from "../project/git.ts";
 import { ownerAlive } from "../runtime/reap.ts";
+import { parseFlags } from "./flags.ts";
 import { landTicketCheck, TICKET_PATH } from "./land.ts";
 import { spawnCommand } from "./spawn.ts";
 
@@ -123,8 +123,10 @@ export async function keeperCommand(args: readonly string[], cwd: string): Promi
 }
 
 function parseKeeperArgs(args: readonly string[]): KeeperOptions {
-	rejectBadFlags(args);
-	const { values, positionals } = parseArgs({ args: [...args], options: FLAGS, allowPositionals: true });
+	const { values, positionals } = parseFlags(args, FLAGS, {
+		unknown: (word) => `unknown keeper option ${word}`,
+		missing: (flag) => `${flag} requires a value`,
+	});
 	const [ticket, ...extra] = positionals;
 	if (!ticket || extra.length > 0) {
 		throw new Error("keeper requires exactly one <ticket-path>");
@@ -149,29 +151,6 @@ function parseKeeperArgs(args: readonly string[]): KeeperOptions {
 		...(values.candidate ? { candidate: values.candidate } : {}),
 		...(values.group ? { group: values.group } : {}),
 	};
-}
-
-// parseArgs words its own errors. This first pass keeps keeper's messages.
-function rejectBadFlags(args: readonly string[]): void {
-	const { tokens } = parseArgs({
-		args: [...args],
-		options: FLAGS,
-		allowPositionals: true,
-		strict: false,
-		tokens: true,
-	});
-	for (const token of tokens) {
-		if (token.kind !== "option") {
-			continue;
-		}
-		if (!Object.hasOwn(FLAGS, token.name)) {
-			throw new Error(`unknown keeper option ${token.rawName}`);
-		}
-		// Without strict mode, parseArgs takes the next flag as the value: `--job --candidate x`.
-		if (!token.value || (!token.inlineValue && token.value.startsWith("-"))) {
-			throw new Error(`${token.rawName} requires a value`);
-		}
-	}
 }
 
 /** The jobs the keeper reads. A group's keeper reads every member; the lead names the group, not each member. */
