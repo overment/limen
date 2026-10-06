@@ -168,6 +168,7 @@ async function queueEvent(run: GroupRun, event: GroupEvent): Promise<void> {
 	}
 }
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: split pending: group event filter
 async function eligibleEvents(identity: GroupIdentity, now: number) {
 	const ancestry = new Set<string>([identity.recipient]);
 	let parent = identity.member?.parent;

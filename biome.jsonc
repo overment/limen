@@ -11,7 +11,7 @@
 		// Wide lines hide a second idea at the end of the first. Long string literals stay wide; the formatter does not split them.
 		"lineWidth": 120
 	},
-	// No preset. Each rule is named here with the reason it exists. A rule joins this list with its existing sites fixed.
+	// No preset. Each rule is named here with the reason it exists. A rule joins this list with its existing sites fixed, or each one suppressed with its reason.
 	"linter": {
 		"enabled": true,
 		// Feature folders keep human evidence, such as saved HTML pages. Lint only the code that ships.
@@ -20,7 +20,17 @@
 			"preset": "none",
 			"complexity": {
 				// `message?.role !== "user"` reads in one pass; `!message || message.role !== "user"` makes the reader join two terms.
-				"useOptionalChain": "error"
+				"useOptionalChain": "error",
+				// A function the reader cannot hold at once. Split it into named steps. 25 is the low end of the 25 to 40 range Adam set.
+				// Each function over the limit carries a `biome-ignore` with its reason; search for `biome-ignore lint/complexity` to list them.
+				"noExcessiveCognitiveComplexity": { "level": "error", "options": { "maxAllowedComplexity": 25 } },
+				// A function longer than one screen. Most functions over 70 lines, blank lines not counted, are also over the complexity
+				// limit; at 60 the rule would also flag the keeper command, the sample of the target style. The viewer scripts wrap
+				// their module in an IIFE because `src/picture/html.ts` inlines them into a classic script, so an IIFE does not count.
+				"noExcessiveLinesPerFunction": {
+					"level": "error",
+					"options": { "maxLines": 70, "skipBlankLines": true, "skipIifes": true }
+				}
 			},
 			"correctness": {
 				// tsc already rejects unused names in TypeScript; these two cover the viewer JavaScript and the bin scripts.

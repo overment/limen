@@ -84,6 +84,7 @@ export function parseFinishReceipt(line: string): FinishReceipt | undefined {
 		return;
 	}
 }
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: split pending: finish webhook receipt check
 export async function inspectFinishWebhook(jobDir: string): Promise<string> {
 	const configured = Boolean(await textFile(`${jobDir}/finish-webhook-env`));
 	const lines = [

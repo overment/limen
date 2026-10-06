@@ -104,6 +104,7 @@ function github(receipts: unknown[] = []) {
 	];
 }
 
+// biome-ignore lint/complexity/noExcessiveLinesPerFunction: split pending: one end-to-end doorbell scenario
 test("S10: only an authorized request rings the doorbell, the App replies once each way and never approves", async (context) => {
 	const p = await plant();
 	context.after(p.cleanup);

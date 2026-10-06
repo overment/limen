@@ -200,6 +200,7 @@
 		return notes.length === (j.steps ?? []).length ? notes : [];
 	}
 
+	// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: split pending: work layer renderer
 	function renderWork(w) {
 		const touchNote =
 			w.touchSource === "map"

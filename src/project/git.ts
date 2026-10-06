@@ -62,6 +62,7 @@ export function branchExists(cwd: string, branch: string): boolean {
  * processes per repository however many branches. Missing branches are absent: nothing to land.
  * Upstream patches are read from HEAD since the oldest unlanded commit; a cherry-pick is committed later.
  */
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: split pending: unlanded branch check
 export function unlandedBranches(cwd: string, branches: Iterable<string>): ReadonlySet<string> {
 	const wanted = new Set(branches);
 	const tips = new Map<string, string[]>();

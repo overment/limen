@@ -175,6 +175,7 @@ function renderList(list: ListBlock): string {
 }
 
 /** Inline markdown → HTML. Text is escaped; only generated tags survive. */
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: split pending: inline Markdown renderer
 export function renderInline(text: string): string {
 	const src = String(text).replace(/[\uE000\uE001]/g, "");
 	const slots: string[] = [];

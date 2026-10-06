@@ -85,6 +85,7 @@ export async function saveJson(path: string, value: unknown): Promise<void> {
 // Dead owners may be recovered; a live owner (including PID reuse) is never evicted.
 export function groupLock<T>(directory: string, operation: () => Promise<T>, mode: "skip"): Promise<T | undefined>;
 export function groupLock<T>(directory: string, operation: () => Promise<T>, mode?: "wait"): Promise<T>;
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: split pending: group cabinet lock
 export async function groupLock<T>(
 	directory: string,
 	operation: () => Promise<T>,

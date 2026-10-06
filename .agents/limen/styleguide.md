@@ -27,6 +27,7 @@
 - Optional chains for guarded reads: `message?.role !== "user"`, not `!message || message.role !== "user"`.
 - Every promise is awaited or returned. Do not pass an async function where the caller expects a plain return.
 - A `switch` over a union handles every member or has a `default`.
+- Every function holds cognitive complexity at most 25 and at most 70 lines, blank lines not counted. Split a longer function into named steps. A function still over a limit carries a `biome-ignore` comment with its reason; a new function over a limit fails the check.
 - Files that the `biome.jsonc` override lists follow the target style: no nested ternary, and cognitive complexity at most 20 per function.
 
 ## Avoid

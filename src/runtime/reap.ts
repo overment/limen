@@ -55,6 +55,7 @@ async function wrapperAlive(pid: number, born: string): Promise<boolean> {
 	const outcome = await processInfo(pid);
 	return outcome.kind === "present" ? outcome.process.born === born : outcome.kind !== "absent";
 }
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: split pending: dead job reaping
 export async function reapDeadJobs(
 	jobsRoot: string,
 	seen: Map<string, number>,

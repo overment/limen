@@ -101,6 +101,7 @@ export function preflightEngine(profile: EngineProfile, model?: string, provider
 }
 // Keep Pi's source tree untouched. Rebuild the job-local view on each launch
 // so resumed branches and newly added legacy skills get a fresh inventory.
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: split pending: job-local skill config
 export async function prepareSkillConfig(worktree: string, jobDir: string): Promise<string | undefined> {
 	const legacy = join(worktree, ".pi/skills");
 	const entries = await readdir(legacy).catch((error: NodeJS.ErrnoException) => {

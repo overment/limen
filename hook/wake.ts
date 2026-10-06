@@ -87,6 +87,7 @@ const TAB_TAIL = /(?:\s*·\s*\d+\s+(?:running|finished))+$/;
 type FinishedJob = { readonly id: string; readonly label: string; readonly state: string; readonly finishedAt: number };
 type HerdrPane = { readonly binary: string; readonly pane: string };
 
+// biome-ignore lint/complexity/noExcessiveLinesPerFunction: split pending: hook factory, handlers share its state
 export default function limenWake(pi: PiApi): void {
 	let watcher: FSWatcher | undefined;
 	let sweepTimer: NodeJS.Timeout | undefined;
@@ -454,6 +455,8 @@ export default function limenWake(pi: PiApi): void {
 		}
 		return routed;
 	};
+	// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: split pending: wake advisory delivery
+	// biome-ignore lint/complexity/noExcessiveLinesPerFunction: same split as the line above
 	const sendAdvisory = (jobs: string, id: string, delivery: "own" | "fallback"): boolean => {
 		const fallback = delivery === "fallback";
 		if (!session) {
@@ -570,6 +573,7 @@ export default function limenWake(pi: PiApi): void {
 		}
 		return routed;
 	};
+	// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: split pending: job observer in the wake hook
 	const observe = (jobs: string, id: string) => {
 		if (existsSync(join(jobs, id, "group"))) {
 			return;
@@ -652,6 +656,7 @@ export default function limenWake(pi: PiApi): void {
 		sweeping = true;
 		void finishSweep(jobsDir);
 	};
+	// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: split pending: finish sweep in the wake hook
 	const finishSweep = async (jobs: string) => {
 		const generation = sessionGeneration;
 		injectedThisSweep = false;

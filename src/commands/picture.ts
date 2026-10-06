@@ -20,6 +20,7 @@ const TABLES: Record<"build" | "tick" | "on" | "off" | "status", ParseArgsOption
 	status: {},
 };
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: split pending: picture subcommand dispatch
 export async function pictureCommand(args: readonly string[], cwd: string): Promise<void> {
 	const [mode, ...options] = args;
 	if (mode !== "build" && mode !== "tick" && mode !== "watch") {

@@ -12,6 +12,7 @@ import { launchHostedSupervisor } from "./wrapper.ts";
 
 /** A populated directory is published atomically. Retire only the observed unique entry:
  * competing stale-claim removers cannot unlink a replacement owner's entry. */
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: split pending: job recovery claim
 export async function claimRecovery(jobDir: string): Promise<(() => Promise<void>) | undefined> {
 	const claim = `${jobDir}/recovery`;
 	const entry = `${process.pid}.${Date.now()}.${randomUUID()}`;
