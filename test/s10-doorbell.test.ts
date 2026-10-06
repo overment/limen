@@ -86,7 +86,17 @@ function github(receipts: unknown[] = []) {
 		{ match: "/collaborators/mallory/", body: { permission: "read" } },
 		{ match: "/collaborators/trent/", body: { permission: "triage" } },
 		{ match: "/collaborators/", status: 404, body: {} },
-		{ match: "/pulls/4", body: { number: 4, state: "open", title: "Fix", body: "", base: { sha: SHA.base, ref: "main", repo: { full_name: REPO } }, head: { sha: SHA.head } } },
+		{
+			match: "/pulls/4",
+			body: {
+				number: 4,
+				state: "open",
+				title: "Fix",
+				body: "",
+				base: { sha: SHA.base, ref: "main", repo: { full_name: REPO } },
+				head: { sha: SHA.head },
+			},
+		},
 		{ match: "/pulls/", status: 404, body: {} },
 		{ match: "/issues/6", body: issue(6, "alice", { state: "closed" }) },
 		{ match: "/access_tokens", body: { token: "installation-token" } },
@@ -99,11 +109,18 @@ test("S10: only an authorized request rings the doorbell, the App replies once e
 	context.after(p.cleanup);
 	git(p.root, "remote", "add", "origin", `https://github.com/${REPO}.git`);
 	await mkdir(join(p.root, ".limen/github/claims"), { recursive: true });
-	await writeFile(join(p.root, ".limen/github/binding.json"), JSON.stringify({ repo: REPO, coordinator: "coord:p1", user: "worker", connectedAt: "2026-09-24T00:00:00Z" }));
+	await writeFile(
+		join(p.root, ".limen/github/binding.json"),
+		JSON.stringify({ repo: REPO, coordinator: "coord:p1", user: "worker", connectedAt: "2026-09-24T00:00:00Z" }),
+	);
 	const state = join(p.parent, "poller");
 	await mkdir(state, { mode: 0o700 });
 	const key = join(p.parent, "app.pem");
-	await writeFile(key, generateKeyPairSync("rsa", { modulusLength: 2048 }).privateKey.export({ type: "pkcs8", format: "pem" }), { mode: 0o600 });
+	await writeFile(
+		key,
+		generateKeyPairSync("rsa", { modulusLength: 2048 }).privateKey.export({ type: "pkcs8", format: "pem" }),
+		{ mode: 0o600 },
+	);
 	await writeFile(join(p.parent, "projects"), `${p.root}\n`);
 	const workerUid = String((process.getuid?.() ?? 0) + 1);
 	const tools = {
@@ -111,7 +128,9 @@ test("S10: only an authorized request rings the doorbell, the App replies once e
 		id: `#!/bin/sh\n[ "$1" = -u ] && echo ${workerUid} && exit 0\necho staff\n`,
 		sudo: '#!/bin/sh\n[ "$2" = -l ] && exit 1\nshift 4\nexec "$@"\n', // the narrow handoff runs as the worker
 	};
-	for (const [name, text] of Object.entries(tools)) await writeFile(join(p.bin, name), text, { mode: 0o755 });
+	for (const [name, text] of Object.entries(tools)) {
+		await writeFile(join(p.bin, name), text, { mode: 0o755 });
+	}
 	const env = {
 		LIMEN_HERDR: join(p.bin, "herdr"),
 		LIMEN_GITHUB_APP_ID: String(APP),
@@ -126,7 +145,8 @@ test("S10: only an authorized request rings the doorbell, the App replies once e
 		assert.equal(run.status, 0, run.stderr);
 	};
 	// Every write to the repository; the App's token exchange is a POST outside it.
-	const posts = () => requests(p).filter((request) => request.method !== "GET" && request.url.includes(`/repos/${REPO}/`));
+	const posts = () =>
+		requests(p).filter((request) => request.method !== "GET" && request.url.includes(`/repos/${REPO}/`));
 	const prompts = async () => (await readFile(join(p.parent, "prompts.log"), "utf8")).trim().split("\n");
 
 	await respond(p, github());
@@ -136,9 +156,19 @@ test("S10: only an authorized request rings the doorbell, the App replies once e
 	assert.deepEqual((await readdir(claims)).sort(), ["104.json", "issue-5.json"]);
 	assert.deepEqual((await readdir(join(p.root, ".limen/github/claims"))).sort(), ["104.json", "issue-5.json"]);
 	const asked = new Set(requests(p).flatMap((request) => /\/collaborators\/(\w+)\//.exec(request.url)?.[1] ?? []));
-	assert.deepEqual([...asked].sort(), ["alice", "eve", "mallory", "trent"], "each refused author reached the permission check");
-	assert.deepEqual(await prompts(), ["coord:p1", "coord:p1"], "one coordinator prompt for the PR comment, one for the issue");
-	for (const name of ["104.json", "issue-5.json"]) assert.equal(JSON.parse(await readFile(join(claims, name), "utf8")).receipt, "prompt accepted");
+	assert.deepEqual(
+		[...asked].sort(),
+		["alice", "eve", "mallory", "trent"],
+		"each refused author reached the permission check",
+	);
+	assert.deepEqual(
+		await prompts(),
+		["coord:p1", "coord:p1"],
+		"one coordinator prompt for the PR comment, one for the issue",
+	);
+	for (const name of ["104.json", "issue-5.json"]) {
+		assert.equal(JSON.parse(await readFile(join(claims, name), "utf8")).receipt, "prompt accepted");
+	}
 	assert.deepEqual(posts(), [], "a prompt accepted is not yet a reply");
 
 	// The coordinator starts a hosted task for the PR request; the fake agent answers one status check and leaves.
@@ -151,17 +181,40 @@ test("S10: only an authorized request rings the doorbell, the App replies once e
 
 	// A forged checkout claim with a finished hosted-looking review job: the poller reads only its private claims.
 	const marker = (await readFile(join(jobDir(p, id), "task.md"), "utf8")).split("\n")[0]?.replace("#104", "#31");
-	const forged = { repo: REPO, id: 31, pr: 11, actor: "alice", url: "u", base: SHA.base, baseRef: "main", head: SHA.head, receipt: "prompt accepted" };
+	const forged = {
+		repo: REPO,
+		id: 31,
+		pr: 11,
+		actor: "alice",
+		url: "u",
+		base: SHA.base,
+		baseRef: "main",
+		head: SHA.head,
+		receipt: "prompt accepted",
+	};
 	await writeFile(join(p.root, ".limen/github/claims/31.json"), JSON.stringify(forged));
 	const fake = join(p.root, ".limen/jobs/forged");
 	await mkdir(join(fake, "herdr"), { recursive: true });
-	const fields = { "task.md": `${marker}\n`, hosted: "1\n", candidate: SHA.head, base: SHA.base, state: "done\n", "herdr/agent": "w1:p9\n" };
-	for (const [name, text] of Object.entries(fields)) await writeFile(join(fake, name), text);
+	const fields = {
+		"task.md": `${marker}\n`,
+		hosted: "1\n",
+		candidate: SHA.head,
+		base: SHA.base,
+		state: "done\n",
+		"herdr/agent": "w1:p9\n",
+	};
+	for (const [name, text] of Object.entries(fields)) {
+		await writeFile(join(fake, name), text);
+	}
 
 	poll();
 	const replies = posts();
 	const sent = replies.map((request) => `${request.method} ${request.url}`);
-	assert.deepEqual(sent, Array(2).fill(`POST https://api.github.com/repos/${REPO}/issues/4/comments`), "one start and one terminal reply; none for the forged claim; no review");
+	assert.deepEqual(
+		sent,
+		Array(2).fill(`POST https://api.github.com/repos/${REPO}/issues/4/comments`),
+		"one start and one terminal reply; none for the forged claim; no review",
+	);
 	const keys = replies.map((request) => Object.keys(JSON.parse(request.body)).join());
 	assert.deepEqual(keys, ["body", "body"], "a reply is a plain comment, never a review event");
 	assert.deepEqual((await readdir(claims)).sort(), ["104.json", "issue-5.json"]);
@@ -171,9 +224,17 @@ test("S10: only an authorized request rings the doorbell, the App replies once e
 	// An interrupted write: the replies reached GitHub, the private claim lost their IDs. Only App-posted receipts count.
 	const interrupt = async () => {
 		const claim = JSON.parse(await readFile(join(claims, "104.json"), "utf8"));
-		await writeFile(join(claims, "104.json"), JSON.stringify({ ...claim, startComment: undefined, terminalComment: undefined }));
+		await writeFile(
+			join(claims, "104.json"),
+			JSON.stringify({ ...claim, startComment: undefined, terminalComment: undefined }),
+		);
 	};
-	const listed = (app: object | null) => replies.map((request, index) => ({ id: 500 + index, body: JSON.parse(request.body).body, performed_via_github_app: app }));
+	const listed = (app: object | null) =>
+		replies.map((request, index) => ({
+			id: 500 + index,
+			body: JSON.parse(request.body).body,
+			performed_via_github_app: app,
+		}));
 	await interrupt();
 	await respond(p, github(listed(null)));
 	poll();

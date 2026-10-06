@@ -10,7 +10,14 @@ export interface Diagnostic {
 	id: string | null;
 	line: number | null;
 }
-type Report = (level: Diagnostic["level"], code: string, message: string, source?: string | null, id?: string | null, line?: number | null) => void;
+type Report = (
+	level: Diagnostic["level"],
+	code: string,
+	message: string,
+	source?: string | null,
+	id?: string | null,
+	line?: number | null,
+) => void;
 interface RecordNode {
 	id: string;
 	kind: string;
@@ -159,7 +166,15 @@ export const RELATIONS = ["depends-on", "hosts", "calls", "implements", "generat
 export const STATUSES = ["ready", "partial", "stub"];
 export const ID_PATTERN = /^[a-z][a-z0-9-]*(?:\.[a-z0-9][a-z0-9-]*)*$/;
 
-const COMMON_KEYS: Record<string, true> = { schema: true, kind: true, id: true, project: true, title: true, status: true, sources: true };
+const COMMON_KEYS: Record<string, true> = {
+	schema: true,
+	kind: true,
+	id: true,
+	project: true,
+	title: true,
+	status: true,
+	sources: true,
+};
 const NODE_KEYS: Record<string, true> = { ...COMMON_KEYS, parent: true, revision: true };
 const EDGE_KEYS: Record<string, true> = { ...COMMON_KEYS, from: true, to: true, relation: true };
 const FEATURE_KEYS: Record<string, true> = { ...COMMON_KEYS, touches: true };
@@ -199,13 +214,24 @@ export function buildModel({
 	const byId = new Map<string, RecordNode>();
 	for (const file of [...files].sort((a, b) => cmp(a.source, b.source))) {
 		const rec = readRecord(file, diag, byId);
-		if (rec) byId.set(rec.id, rec);
+		if (rec) {
+			byId.set(rec.id, rec);
+		}
 	}
 	const records = [...byId.values()];
 	if (exists) {
 		for (const r of records) {
 			for (const path of r.sources) {
-				if (!exists(path)) diag("warn", "source.missing", `source "${path}" does not exist in the project root`, r.source, r.id, r.lines.sources ?? null);
+				if (!exists(path)) {
+					diag(
+						"warn",
+						"source.missing",
+						`source "${path}" does not exist in the project root`,
+						r.source,
+						r.id,
+						r.lines.sources ?? null,
+					);
+				}
 			}
 		}
 	}
@@ -213,7 +239,9 @@ export function buildModel({
 	const plants = records.filter((r) => r.kind === "plant");
 	const plantIds = new Set(plants.map((p) => p.id));
 	const plant = plants[0] ?? null;
-	if (!plant) diag("error", "plant.missing", 'no file has "kind: plant"; the project has no root node');
+	if (!plant) {
+		diag("error", "plant.missing", 'no file has "kind: plant"; the project has no root node');
+	}
 	for (const extra of plants.slice(1)) {
 		diag(
 			"error",
@@ -229,14 +257,23 @@ export function buildModel({
 	if (projectId) {
 		for (const r of records) {
 			if (r.project && r.project !== projectId) {
-				diag("error", "node.project-mismatch", `project "${r.project}" is not "${projectId}"`, r.source, r.id, r.lines.project ?? null);
+				diag(
+					"error",
+					"node.project-mismatch",
+					`project "${r.project}" is not "${projectId}"`,
+					r.source,
+					r.id,
+					r.lines.project ?? null,
+				);
 			}
 		}
 	}
 
 	const features = records.filter((r) => r.kind === "feature");
 	const journeys = records.filter((r) => r.kind === "journey");
-	const nodes = new Map(records.filter((r) => !["plant", "edge", "feature", "journey"].includes(r.kind)).map((r) => [r.id, r]));
+	const nodes = new Map(
+		records.filter((r) => !["plant", "edge", "feature", "journey"].includes(r.kind)).map((r) => [r.id, r]),
+	);
 	resolveParents(nodes, plantIds, diag);
 	const ordered = orderNodes(nodes);
 	const edges = buildEdges(
@@ -249,7 +286,9 @@ export function buildModel({
 	);
 	const modules = new Set(records.filter((r) => r.kind === "module").map((r) => r.id));
 	const places = new Set([...modules, ...plantIds]);
-	if (tickets.length) diags.push(...checkTickets(tickets, places));
+	if (tickets.length) {
+		diags.push(...checkTickets(tickets, places));
+	}
 	const featureModels: PictureFeature[] = features.map((r) => ({
 		id: r.id,
 		title: r.title,
@@ -277,7 +316,9 @@ export function buildModel({
 	const featureById = new Map(featureModels.map((feature) => [feature.id, feature]));
 	const nodeTitles = new Map(ordered.map((node) => [node.id, node.title]));
 	const topModule = new Map<string, string>();
-	for (const node of ordered) topModule.set(node.id, node.parent ? (topModule.get(node.parent) ?? node.parent) : node.id);
+	for (const node of ordered) {
+		topModule.set(node.id, node.parent ? (topModule.get(node.parent) ?? node.parent) : node.id);
+	}
 	const work: PictureWork[] = [...tickets]
 		.sort((a, b) => cmp(a.id, b.id) || cmp(a.path, b.path))
 		.map((ticket) => {
@@ -311,12 +352,18 @@ export function buildModel({
 	};
 	for (const item of work) {
 		let scope = "";
-		if (item.touches.length === 1) scope = nodeTitles.get(item.touches[0]!) ?? plant?.title ?? "";
-		else if (item.touches.length > 1) {
+		if (item.touches.length === 1) {
+			scope = nodeTitles.get(item.touches[0]!) ?? plant?.title ?? "";
+		} else if (item.touches.length > 1) {
 			const modules = new Set(item.touches.map((id) => topModule.get(id) ?? id));
-			scope = modules.size === 1 ? (nodeTitles.get(modules.values().next().value!) ?? "") : `${item.touches.length} places in ${modules.size} modules`;
+			scope =
+				modules.size === 1
+					? (nodeTitles.get(modules.values().next().value!) ?? "")
+					: `${item.touches.length} places in ${modules.size} modules`;
 		}
-		if (item.opened) addDay(item.opened, { work: item.id, kind: "opened", text: item.title });
+		if (item.opened) {
+			addDay(item.opened, { work: item.id, kind: "opened", text: item.title });
+		}
 		if (item.landed) {
 			pins.changed.push({ work: item.id, date: item.landed, text: item.title, scope });
 			addDay(item.landed, { work: item.id, kind: "landed", text: item.title });
@@ -358,7 +405,17 @@ export function buildModel({
 					descriptionHtml: plant.bodyHtml,
 					meta: plant.meta,
 				}
-			: { id: projectId, rootId: null, revision: null, title: projectId, status: "stub", sources: [], summary: "", descriptionHtml: "", meta: {} },
+			: {
+					id: projectId,
+					rootId: null,
+					revision: null,
+					title: projectId,
+					status: "stub",
+					sources: [],
+					summary: "",
+					descriptionHtml: "",
+					meta: {},
+				},
 		nodes: ordered.map((n) => ({
 			id: n.id,
 			title: n.title,
@@ -386,14 +443,18 @@ export function buildModel({
 /** One file → record, or null when the file cannot be used (unparseable, no id, duplicate id). */
 function readRecord(file: PictureFile, diag: Report, byId: Map<string, RecordNode>): RecordNode | null {
 	const { source } = file;
-	if (!/^(nodes|edges|features|journeys)\/[^/]+\.md$/.test(source)) return null;
+	if (!/^(nodes|edges|features|journeys)\/[^/]+\.md$/.test(source)) {
+		return null;
+	}
 	const fm = parseFrontmatter(file.text);
 	const data = fm.data;
 	const guessId = typeof data.id === "string" ? data.id : null;
 	for (const error of fm.errors) {
 		diag("error", "parse.frontmatter", error.message + (fm.ok ? "" : "; file skipped"), source, guessId, error.line);
 	}
-	if (!fm.ok) return null;
+	if (!fm.ok) {
+		return null;
+	}
 
 	const at = (key: string) => fm.lines[key] ?? null;
 	const text = (key: string) => {
@@ -424,7 +485,8 @@ function readRecord(file: PictureFile, diag: Report, byId: Map<string, RecordNod
 		return null;
 	}
 	const prefix = isEdge || isOverlay ? kind : "node";
-	const missing = (key: string, tail = "") => diag("error", `${prefix}.missing-field`, `missing required field "${key}"${tail}`, source, guessId, at(key));
+	const missing = (key: string, tail = "") =>
+		diag("error", `${prefix}.missing-field`, `missing required field "${key}"${tail}`, source, guessId, at(key));
 
 	const id = text("id");
 	if (!id) {
@@ -433,16 +495,42 @@ function readRecord(file: PictureFile, diag: Report, byId: Map<string, RecordNod
 	}
 	const first = byId.get(id);
 	if (first) {
-		diag("error", "node.duplicate-id", `id "${id}" is already defined in ${first.source}; file skipped`, source, id, at("id"));
+		diag(
+			"error",
+			"node.duplicate-id",
+			`id "${id}" is already defined in ${first.source}; file skipped`,
+			source,
+			id,
+			at("id"),
+		);
 		return null;
 	}
-	if (!ID_PATTERN.test(id))
-		diag("error", "node.bad-id", `id "${id}" must start with a lowercase letter and use dot-separated letters, digits or hyphens without a leading hyphen`, source, id, at("id"));
-	if (basename(source) !== `${id}.md`) diag("error", "node.file-name", `file name must be "${id}.md"`, source, id, at("id"));
+	if (!ID_PATTERN.test(id)) {
+		diag(
+			"error",
+			"node.bad-id",
+			`id "${id}" must start with a lowercase letter and use dot-separated letters, digits or hyphens without a leading hyphen`,
+			source,
+			id,
+			at("id"),
+		);
+	}
+	if (basename(source) !== `${id}.md`) {
+		diag("error", "node.file-name", `file name must be "${id}.md"`, source, id, at("id"));
+	}
 
 	const schema = text("schema");
 	if (schema !== INPUT_SCHEMA) {
-		diag("warn", "schema.version", schema ? `schema "${schema}" is not "${INPUT_SCHEMA}"; read as ${INPUT_SCHEMA}` : `missing "schema: ${INPUT_SCHEMA}"`, source, id, at("schema"));
+		diag(
+			"warn",
+			"schema.version",
+			schema
+				? `schema "${schema}" is not "${INPUT_SCHEMA}"; read as ${INPUT_SCHEMA}`
+				: `missing "schema: ${INPUT_SCHEMA}"`,
+			source,
+			id,
+			at("schema"),
+		);
 	}
 
 	const rec: RecordNode = {
@@ -469,44 +557,93 @@ function readRecord(file: PictureFile, diag: Report, byId: Map<string, RecordNod
 		depth: 0,
 	};
 	for (const key of ["kind", "project", "title", "status"] as const) {
-		if (!rec[key]) missing(key);
+		if (!rec[key]) {
+			missing(key);
+		}
 	}
-	if (!rec.title) rec.title = id;
-	if (!rec.status) rec.status = "stub";
-	else if (!STATUSES.includes(rec.status)) {
-		diag("warn", "node.bad-status", `status "${rec.status}" is not one of ${STATUSES.join(", ")}; kept`, source, id, at("status"));
+	if (!rec.title) {
+		rec.title = id;
+	}
+	if (!rec.status) {
+		rec.status = "stub";
+	} else if (!STATUSES.includes(rec.status)) {
+		diag(
+			"warn",
+			"node.bad-status",
+			`status "${rec.status}" is not one of ${STATUSES.join(", ")}; kept`,
+			source,
+			id,
+			at("status"),
+		);
 	}
 	if (rec.kind && !KINDS.includes(rec.kind)) {
-		diag("warn", "node.unknown-kind", `kind "${rec.kind}" is not one of ${KINDS.join(", ")}; kept as a node`, source, id, at("kind"));
+		diag(
+			"warn",
+			"node.unknown-kind",
+			`kind "${rec.kind}" is not one of ${KINDS.join(", ")}; kept as a node`,
+			source,
+			id,
+			at("kind"),
+		);
 	}
 
 	const known = kindDirectory?.keys ?? NODE_KEYS;
-	for (const [k, v] of Object.entries(data)) if (!Object.hasOwn(known, k)) rec.meta[k] = v;
+	for (const [k, v] of Object.entries(data)) {
+		if (!Object.hasOwn(known, k)) {
+			rec.meta[k] = v;
+		}
+	}
 	const body = splitOwner(fm.body);
-	if (body.owner !== null) rec.meta.owner = body.owner;
+	if (body.owner !== null) {
+		rec.meta.owner = body.owner;
+	}
 	rec.bodyHtml = renderMarkdown(body.markdown);
 	rec.summary = firstSentence(body.markdown);
 
 	if (isEdge) {
-		for (const key of ["from", "to", "relation"] as const) rec[key] = text(key);
+		for (const key of ["from", "to", "relation"] as const) {
+			rec[key] = text(key);
+		}
 		const absent = (["from", "to", "relation"] as const).filter((k) => !rec[k]);
-		for (const key of absent) missing(key, "; edge dropped");
+		for (const key of absent) {
+			missing(key, "; edge dropped");
+		}
 		rec.complete = absent.length === 0;
 	} else if (isOverlay) {
 		const key = kind === "feature" ? "touches" : "steps";
-		if (!Object.hasOwn(data, key)) missing(key);
-		else rec[key] = readOverlayList(data[key], kind === "feature" ? 1 : 2, (message) => diag("error", `${kind}.bad-field`, `"${key}" ${message}`, source, id, at(key)));
+		if (!Object.hasOwn(data, key)) {
+			missing(key);
+		} else {
+			rec[key] = readOverlayList(data[key], kind === "feature" ? 1 : 2, (message) =>
+				diag("error", `${kind}.bad-field`, `"${key}" ${message}`, source, id, at(key)),
+			);
+		}
 	} else if (rec.kind === "plant") {
 		rec.parent = null;
-		if (!Object.hasOwn(data, "parent")) missing("parent");
-		else if (data.parent !== null) diag("error", "node.bad-field", '"parent" of a plant must be null', source, id, at("parent"));
+		if (!Object.hasOwn(data, "parent")) {
+			missing("parent");
+		} else if (data.parent !== null) {
+			diag("error", "node.bad-field", '"parent" of a plant must be null', source, id, at("parent"));
+		}
 		if (Object.hasOwn(data, "revision")) {
-			if (typeof data.revision === "string" && /^[0-9a-fA-F]{40}$/.test(data.revision)) rec.revision = data.revision.toLowerCase();
-			else diag("error", "plant.bad-revision", '"revision" must be a full 40-character hexadecimal commit SHA; ignored', source, id, at("revision"));
+			if (typeof data.revision === "string" && /^[0-9a-fA-F]{40}$/.test(data.revision)) {
+				rec.revision = data.revision.toLowerCase();
+			} else {
+				diag(
+					"error",
+					"plant.bad-revision",
+					'"revision" must be a full 40-character hexadecimal commit SHA; ignored',
+					source,
+					id,
+					at("revision"),
+				);
+			}
 		}
 	} else {
 		rec.parent = text("parent") || null;
-		if (!Object.hasOwn(data, "parent")) missing("parent");
+		if (!Object.hasOwn(data, "parent")) {
+			missing("parent");
+		}
 	}
 
 	return rec;
@@ -516,27 +653,37 @@ function readRecord(file: PictureFile, diag: Report, byId: Map<string, RecordNod
 function splitOwner(markdown: string): { markdown: string; owner: string | null } {
 	const lines = markdown.replace(/\r\n?/g, "\n").split("\n");
 	let last = lines.length - 1;
-	while (last >= 0 && lines[last]!.trim() === "") last--;
+	while (last >= 0 && lines[last]!.trim() === "") {
+		last--;
+	}
 	const m = last >= 0 ? OWNER_LINE.exec(lines[last]!.trim()) : null;
-	if (!m) return { markdown, owner: null };
+	if (!m) {
+		return { markdown, owner: null };
+	}
 	return { markdown: lines.slice(0, last).join("\n"), owner: m[1]! };
 }
 
 /** First sentence of the first paragraph or list item, as plain text, at most SUMMARY_MAX chars. */
 function firstSentence(markdown: string): string {
 	const block = proseBlocks(markdown)[0];
-	if (!block) return "";
+	if (!block) {
+		return "";
+	}
 	const plain = inlineText(block.text).replace(/\s+/g, " ").trim();
 	const m = /^(.+?[.!?])(?:\s|$)/.exec(plain);
 	const sentence = m ? m[1]! : plain;
-	if (sentence.length <= SUMMARY_MAX) return sentence;
+	if (sentence.length <= SUMMARY_MAX) {
+		return sentence;
+	}
 	const cut = sentence.slice(0, SUMMARY_MAX - 1);
 	const space = cut.lastIndexOf(" ");
 	return `${(space > SUMMARY_MAX / 2 ? cut.slice(0, space) : cut).trimEnd()}…`;
 }
 
 function readSources(v: unknown, warn: (message: string) => void): string[] {
-	if (v === undefined || v === null) return [];
+	if (v === undefined || v === null) {
+		return [];
+	}
 	if (!Array.isArray(v)) {
 		if (typeof v === "object") {
 			warn('"sources" must be a list of paths; ignored');
@@ -546,8 +693,11 @@ function readSources(v: unknown, warn: (message: string) => void): string[] {
 	}
 	const out: string[] = [];
 	for (const p of v) {
-		if (p !== null && typeof p === "object") warn('"sources" items must be single values; item ignored');
-		else if (scalar(p)) out.push(scalar(p));
+		if (p !== null && typeof p === "object") {
+			warn('"sources" items must be single values; item ignored');
+		} else if (scalar(p)) {
+			out.push(scalar(p));
+		}
 	}
 	return out;
 }
@@ -559,18 +709,37 @@ function readOverlayList(value: unknown, minimum: number, error: (message: strin
 	}
 	const ids: string[] = [];
 	for (const item of value) {
-		if (typeof item !== "string" || !ID_PATTERN.test(item)) error("items must be valid ids; item ignored");
-		else ids.push(item);
+		if (typeof item !== "string" || !ID_PATTERN.test(item)) {
+			error("items must be valid ids; item ignored");
+		} else {
+			ids.push(item);
+		}
 	}
-	if (ids.length < minimum) error(`must contain at least ${minimum} ${minimum === 1 ? "id" : "ids"}`);
+	if (ids.length < minimum) {
+		error(`must contain at least ${minimum} ${minimum === 1 ? "id" : "ids"}`);
+	}
 	return ids;
 }
 
-function resolveOverlayList(record: RecordNode, key: "touches" | "steps", allowed: Set<string>, diag: Report): string[] {
+function resolveOverlayList(
+	record: RecordNode,
+	key: "touches" | "steps",
+	allowed: Set<string>,
+	diag: Report,
+): string[] {
 	return record[key].filter((id) => {
-		if (allowed.has(id)) return true;
+		if (allowed.has(id)) {
+			return true;
+		}
 		const code = key === "touches" ? "feature.unknown-touch" : "journey.unknown-step";
-		diag("warn", code, `"${id}" is not a ${key === "touches" ? "module" : "place"}; entry ignored`, record.source, record.id, record.lines[key] ?? null);
+		diag(
+			"warn",
+			code,
+			`"${id}" is not a ${key === "touches" ? "module" : "place"}; entry ignored`,
+			record.source,
+			record.id,
+			record.lines[key] ?? null,
+		);
 		return false;
 	});
 }
@@ -579,10 +748,20 @@ function resolveParents(nodes: Map<string, RecordNode>, plantIds: Set<string>, d
 	const ids = [...nodes.keys()].sort(cmp);
 	for (const id of ids) {
 		const n = nodes.get(id)!;
-		if (n.parent === null) continue;
-		if (plantIds.has(n.parent)) n.parent = null;
-		else if (!nodes.has(n.parent)) {
-			diag("error", "node.unknown-parent", `parent "${n.parent}" is not a node; shown as a top-level block`, n.source, id, n.lines.parent ?? null);
+		if (n.parent === null) {
+			continue;
+		}
+		if (plantIds.has(n.parent)) {
+			n.parent = null;
+		} else if (!nodes.has(n.parent)) {
+			diag(
+				"error",
+				"node.unknown-parent",
+				`parent "${n.parent}" is not a node; shown as a top-level block`,
+				n.source,
+				id,
+				n.lines.parent ?? null,
+			);
 			n.parent = null;
 		}
 	}
@@ -604,9 +783,18 @@ function resolveParents(nodes: Map<string, RecordNode>, plantIds: Set<string>, d
 			const loop = [...cycle.slice(k), ...cycle.slice(0, k), cut].join(" -> ");
 			const n = nodes.get(cut)!;
 			n.parent = null;
-			diag("error", "node.parent-cycle", `parent chain forms a cycle (${loop}); "${cut}" is shown as a top-level block`, n.source, cut, n.lines.parent ?? null);
+			diag(
+				"error",
+				"node.parent-cycle",
+				`parent chain forms a cycle (${loop}); "${cut}" is shown as a top-level block`,
+				n.source,
+				cut,
+				n.lines.parent ?? null,
+			);
 		}
-		for (const p of path) settled.add(p);
+		for (const p of path) {
+			settled.add(p);
+		}
 	}
 }
 
@@ -614,8 +802,11 @@ function orderNodes(nodes: Map<string, RecordNode>): RecordNode[] {
 	const roots: RecordNode[] = [];
 	const kids = new Map<string, RecordNode[]>([...nodes.keys()].map((id) => [id, []]));
 	for (const n of nodes.values()) {
-		if (n.parent === null) roots.push(n);
-		else kids.get(n.parent)!.push(n);
+		if (n.parent === null) {
+			roots.push(n);
+		} else {
+			kids.get(n.parent)!.push(n);
+		}
 	}
 	const ordered: RecordNode[] = [];
 	const visit = (list: RecordNode[], depth: number): void => {
@@ -632,24 +823,54 @@ function orderNodes(nodes: Map<string, RecordNode>): RecordNode[] {
 	return ordered;
 }
 
-function buildEdges(records: RecordNode[], nodes: Map<string, RecordNode>, plantIds: Set<string>, featureIds: Set<string>, journeyIds: Set<string>, diag: Report): PictureEdge[] {
+function buildEdges(
+	records: RecordNode[],
+	nodes: Map<string, RecordNode>,
+	plantIds: Set<string>,
+	featureIds: Set<string>,
+	journeyIds: Set<string>,
+	diag: Report,
+): PictureEdge[] {
 	const edges: PictureEdge[] = [];
 	for (const edge of records) {
-		if (!edge.complete) continue;
+		if (!edge.complete) {
+			continue;
+		}
 		const at = (key: string) => edge.lines[key] ?? null;
 		const overlayEnd = (["from", "to"] as const).find((key) => featureIds.has(edge[key]) || journeyIds.has(edge[key]));
 		if (overlayEnd) {
 			const kind = featureIds.has(edge[overlayEnd]) ? "feature" : "journey";
-			diag("warn", `edge.${kind}`, `edge touches the ${kind} "${edge[overlayEnd]}"; edge dropped`, edge.source, edge.id, at(overlayEnd));
+			diag(
+				"warn",
+				`edge.${kind}`,
+				`edge touches the ${kind} "${edge[overlayEnd]}"; edge dropped`,
+				edge.source,
+				edge.id,
+				at(overlayEnd),
+			);
 			continue;
 		}
 		if (edge.relation === "contains") {
-			diag("warn", "edge.contains", 'containment comes from "parent", not from edges; edge dropped', edge.source, edge.id, at("relation"));
+			diag(
+				"warn",
+				"edge.contains",
+				'containment comes from "parent", not from edges; edge dropped',
+				edge.source,
+				edge.id,
+				at("relation"),
+			);
 			continue;
 		}
 		const plantEnd = [edge.from, edge.to].find((x) => plantIds.has(x));
 		if (plantEnd) {
-			diag("info", "edge.plant", `edge touches the plant "${plantEnd}"; edge dropped`, edge.source, edge.id, at(plantEnd === edge.from ? "from" : "to"));
+			diag(
+				"info",
+				"edge.plant",
+				`edge touches the plant "${plantEnd}"; edge dropped`,
+				edge.source,
+				edge.id,
+				at(plantEnd === edge.from ? "from" : "to"),
+			);
 			continue;
 		}
 		const dangling = (["from", "to"] as const).filter((k) => !nodes.has(edge[k]));
@@ -663,7 +884,14 @@ function buildEdges(records: RecordNode[], nodes: Map<string, RecordNode>, plant
 			continue;
 		}
 		if (!RELATIONS.includes(edge.relation)) {
-			diag("warn", "edge.unknown-relation", `relation "${edge.relation}" is not one of ${RELATIONS.join(", ")}; kept`, edge.source, edge.id, at("relation"));
+			diag(
+				"warn",
+				"edge.unknown-relation",
+				`relation "${edge.relation}" is not one of ${RELATIONS.join(", ")}; kept`,
+				edge.source,
+				edge.id,
+				at("relation"),
+			);
 		}
 		edges.push({
 			id: edge.id,
@@ -683,15 +911,28 @@ function buildEdges(records: RecordNode[], nodes: Map<string, RecordNode>, plant
 }
 
 function siblingCmp(a: RecordNode, b: RecordNode): number {
-	return (KIND_RANK[a.kind] ?? 2) - (KIND_RANK[b.kind] ?? 2) || cmp(a.title.toLowerCase(), b.title.toLowerCase()) || cmp(a.title, b.title) || cmp(a.id, b.id);
+	return (
+		(KIND_RANK[a.kind] ?? 2) - (KIND_RANK[b.kind] ?? 2) ||
+		cmp(a.title.toLowerCase(), b.title.toLowerCase()) ||
+		cmp(a.title, b.title) ||
+		cmp(a.id, b.id)
+	);
 }
 
 function diagCmp(a: Diagnostic, b: Diagnostic): number {
-	return cmp(a.source ?? "", b.source ?? "") || (a.line ?? 0) - (b.line ?? 0) || LEVEL_RANK[a.level] - LEVEL_RANK[b.level] || cmp(a.code, b.code) || cmp(a.message, b.message);
+	return (
+		cmp(a.source ?? "", b.source ?? "") ||
+		(a.line ?? 0) - (b.line ?? 0) ||
+		LEVEL_RANK[a.level] - LEVEL_RANK[b.level] ||
+		cmp(a.code, b.code) ||
+		cmp(a.message, b.message)
+	);
 }
 
 function scalar(v: unknown): string {
-	if (v === undefined || v === null) return "";
+	if (v === undefined || v === null) {
+		return "";
+	}
 	return String(v).trim();
 }
 

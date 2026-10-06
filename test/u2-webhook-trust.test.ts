@@ -18,7 +18,8 @@ const two = [
 	{ url: URL_ONE, auth: AUTH },
 	{ url: "https://finish.example.test/private-two", auth: "Bearer second-synthetic-secret" },
 ];
-const single = (url: string, auth?: string) => `LIMEN_FINISH_WEBHOOK_URL='${url}'\n${auth === undefined ? "" : `LIMEN_FINISH_WEBHOOK_AUTH='${auth}'\n`}`;
+const single = (url: string, auth?: string) =>
+	`LIMEN_FINISH_WEBHOOK_URL='${url}'\n${auth === undefined ? "" : `LIMEN_FINISH_WEBHOOK_AUTH='${auth}'\n`}`;
 const multi = (targets: unknown, map?: string) =>
 	`LIMEN_FINISH_WEBHOOK_TARGETS='${typeof targets === "string" ? targets : JSON.stringify(targets)}'\n${map === undefined ? "" : `LIMEN_FINISH_WEBHOOK_AUTHOR_TARGETS='${map}'\n`}`;
 
@@ -33,7 +34,9 @@ test("the sender sends nothing for a bad credential, destination, target list or
 	]);
 	const send = async (config: string | undefined, override?: string) => {
 		const path = join(p.parent, "webhook.env");
-		if (config !== undefined) await writeFile(path, config, { mode: 0o600 });
+		if (config !== undefined) {
+			await writeFile(path, config, { mode: 0o600 });
+		}
 		const env = { ...p.env, LIMEN_FINISH_WEBHOOK_ENV: override ?? path, LIMEN_FINISH_WEBHOOK_AUTHOR: "@alice" };
 		const before = requests(p).length;
 		const run = spawnSync(SENDER, ["F001 demo", "done", "limen/demo"], { cwd: p.root, env, encoding: "utf8" });
@@ -64,18 +67,28 @@ test("the sender sends nothing for a bad credential, destination, target list or
 		["author route listed twice", multi(two, '{"@alice":[1,1]}')],
 		["author route past the list", multi(two, '{"@alice":[3]}')],
 		["no route for this author", multi(two, "{}"), 0],
-		["env file with shell", `touch '${marker}'\nLIMEN_FINISH_WEBHOOK_URL='${URL_ONE}'\nLIMEN_FINISH_WEBHOOK_AUTH="Bearer $(touch '${marker}')"\n`],
+		[
+			"env file with shell",
+			`touch '${marker}'\nLIMEN_FINISH_WEBHOOK_URL='${URL_ONE}'\nLIMEN_FINISH_WEBHOOK_AUTH="Bearer $(touch '${marker}')"\n`,
+		],
 	];
-	for (const [name, config, status = 1] of refused) assert.deepEqual(await send(config), { status, sent: [] }, name);
+	for (const [name, config, status = 1] of refused) {
+		assert.deepEqual(await send(config), { status, sent: [] }, name);
+	}
 	assert.equal(existsSync(marker), false, "the env file is data, never a shell script");
-	for (const override of ["relative.env", join(p.parent, "missing.env"), p.parent]) assert.deepEqual(await send(undefined, override), { status: 1, sent: [] }, override);
+	for (const override of ["relative.env", join(p.parent, "missing.env"), p.parent]) {
+		assert.deepEqual(await send(undefined, override), { status: 1, sent: [] }, override);
+	}
 
 	for (const route of ["redirect", "reject", "broken"]) {
 		const failed = await send(single(`https://finish.example.test/private-${route}`, AUTH));
 		assert.deepEqual([failed.status, failed.sent.length], [1, 1], route);
 	}
 	const fanOut = await send(multi([{ ...two[0], url: "https://finish.example.test/private-reject" }, two[1]]));
-	assert.deepEqual([fanOut.status, fanOut.sent.map((request) => request.url)], [1, ["https://finish.example.test/private-reject", two[1]?.url]]);
+	assert.deepEqual(
+		[fanOut.status, fanOut.sent.map((request) => request.url)],
+		[1, ["https://finish.example.test/private-reject", two[1]?.url]],
+	);
 
 	const accepted = await send(single(URL_ONE, AUTH));
 	assert.equal(accepted.status, 0);
@@ -101,8 +114,15 @@ test("the private receipt channel drops malformed and secret-bearing sender line
 		{ ...accepted, http: "5xx" },
 		{ ...accepted, at: "synthetic-secret" },
 	].map((value) => JSON.stringify(value));
-	for (const line of [...receipts, "synthetic-secret".repeat(3000), '{"target":1,']) assert.equal(parseFinishReceipt(line), undefined, line.slice(0, 80));
+	for (const line of [...receipts, "synthetic-secret".repeat(3000), '{"target":1,']) {
+		assert.equal(parseFinishReceipt(line), undefined, line.slice(0, 80));
+	}
 	assert.equal(parseFinishSelection(JSON.stringify({ selection: "mapped @alice -> 1, 2" })), "mapped @alice -> 1, 2");
-	for (const value of [{ selection: URL_ONE }, { selection: "fan-out", token: "synthetic-secret" }, { route: "fan-out" }])
+	for (const value of [
+		{ selection: URL_ONE },
+		{ selection: "fan-out", token: "synthetic-secret" },
+		{ route: "fan-out" },
+	]) {
 		assert.equal(parseFinishSelection(JSON.stringify(value)), undefined, JSON.stringify(value));
+	}
 });

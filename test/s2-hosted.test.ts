@@ -88,12 +88,14 @@ const engineArgv = (pane: string): string[] => {
 };
 const pane = (id: string) => jobFile(p, id, "herdr/pane");
 const starts = (id: string) => jobFile(p, id, "log").match(/hosted supervisor started/g)?.length ?? 0;
-const state = () => JSON.parse(readFileSync(join(herdr, "state.json"), "utf8")) as { agents: Record<string, { status: string }> };
+const state = () =>
+	JSON.parse(readFileSync(join(herdr, "state.json"), "utf8")) as { agents: Record<string, { status: string }> };
 const saveState = async (next: unknown) => {
 	await writeFile(join(herdr, "state.tmp"), JSON.stringify(next));
 	await rename(join(herdr, "state.tmp"), join(herdr, "state.json"));
 };
-const prompts = (id: string) => named("agent", "prompt").filter((args) => args[2] === COORDINATOR && args[3]?.includes(id)).length;
+const prompts = (id: string) =>
+	named("agent", "prompt").filter((args) => args[2] === COORDINATOR && args[3]?.includes(id)).length;
 const alive = (pid: number) => {
 	try {
 		process.kill(pid, 0);
@@ -104,7 +106,12 @@ const alive = (pid: number) => {
 };
 /** Runs the CLI without blocking the event loop, so two sweeps can race. */
 const limenAsync = (args: readonly string[]) =>
-	new Promise<number>((resolve) => spawn(process.execPath, [LIMEN, ...args], { cwd: p.root, env: { ...p.env, ...env }, stdio: "ignore" }).on("exit", (code) => resolve(code ?? 1)));
+	new Promise<number>((resolve) =>
+		spawn(process.execPath, [LIMEN, ...args], { cwd: p.root, env: { ...p.env, ...env }, stdio: "ignore" }).on(
+			"exit",
+			(code) => resolve(code ?? 1),
+		),
+	);
 
 before(async () => {
 	p = await plant();
@@ -114,7 +121,13 @@ before(async () => {
 	await writeFile(join(herdr, "herdr"), herdrSource);
 	await chmod(join(herdr, "herdr"), 0o755);
 	// The caller is a coordinator pane with no Pi session: its wake travels as one Herdr prompt. Sweeps confirm at once.
-	env = { LIMEN_HERDR: join(herdr, "herdr"), HERDR_ENV: "1", HERDR_PANE_ID: COORDINATOR, HERDR_TAB_ID: "coord:t0", LIMEN_REAP_CONFIRM_MS: "1" };
+	env = {
+		LIMEN_HERDR: join(herdr, "herdr"),
+		HERDR_ENV: "1",
+		HERDR_PANE_ID: COORDINATOR,
+		HERDR_TAB_ID: "coord:t0",
+		LIMEN_REAP_CONFIRM_MS: "1",
+	};
 });
 after(() => p.cleanup());
 
@@ -132,8 +145,14 @@ test("a hosted job gets one tab, its task as @task, and finishes done with its h
 		argv.every((arg) => !arg.includes("F001 handoff") && !/[\r\n]/.test(arg)),
 		"task text must not travel as shell argv",
 	);
-	assert.ok(!argv.includes("--mode") && !argv.includes("json"), `hosted pane command has no json flag: ${JSON.stringify(argv)}`);
-	assert.equal(readFileSync(join(jobDir(p, first), "fake-task.txt"), "utf8").trim(), "say hi\nfinish F001 handoff from the hosted pane");
+	assert.ok(
+		!argv.includes("--mode") && !argv.includes("json"),
+		`hosted pane command has no json flag: ${JSON.stringify(argv)}`,
+	);
+	assert.equal(
+		readFileSync(join(jobDir(p, first), "fake-task.txt"), "utf8").trim(),
+		"say hi\nfinish F001 handoff from the hosted pane",
+	);
 	assert.equal(named("workspace", "create").length, 1);
 	assert.match(named("workspace", "create")[0]?.join(" ") ?? "", /--label repo workers/);
 	assert.equal(named("tab", "create").length, 1, "one tab for one hosted job");
@@ -164,7 +183,11 @@ test("a live OMP job stays running while Herdr reports done, then after Herdr lo
 			.slice(seen)
 			.filter((args) => args.includes(target)).length;
 	await until(herdr, () => probes() >= 4 || jobFile(p, second, "state") !== "running");
-	assert.equal(jobFile(p, second, "state"), "running", `omp still runs on ${target}; a lost agent row must not end the job`);
+	assert.equal(
+		jobFile(p, second, "state"),
+		"running",
+		`omp still runs on ${target}; a lost agent row must not end the job`,
+	);
 });
 
 test("two competing sweeps start exactly one replacement for a killed hosted supervisor (5754dad)", async () => {
@@ -175,7 +198,9 @@ test("two competing sweeps start exactly one replacement for a killed hosted sup
 	assert.ok(supervisor > 0 && jobFile(p, second, "state") === "running", "the OMP job is still supervised");
 	process.kill(supervisor, "SIGKILL");
 	// SIGKILL leaves no finalizer; the sweeps must see a dead owner, so wait for the kernel to drop the pid.
-	while (alive(supervisor)) await new Promise((resolve) => setImmediate(resolve));
+	while (alive(supervisor)) {
+		await new Promise((resolve) => setImmediate(resolve));
+	}
 	assert.deepEqual(await Promise.all([limenAsync(["jobs"]), limenAsync(["jobs"])]), [0, 0]);
 	await until(dir, () => starts(second) >= 2);
 	assert.equal(jobFile(p, second, "state"), "running");
@@ -190,12 +215,21 @@ test("hosted Pi gets literal launch flags and the selected extension; stop recor
 	const extension = join(p.parent, "selected.ts");
 	await writeFile(extension, "export default () => {};\n");
 	const flags = ["--provider", "openai-codex", "--model", "gpt-6-astra", "--thinking", "high"];
-	const third = spawnJob(p, "block\nfinish never", ["--engine", "pi", ...flags, "--extension", extension, "--label", "F001 hosted pi"], { env });
+	const third = spawnJob(
+		p,
+		"block\nfinish never",
+		["--engine", "pi", ...flags, "--extension", extension, "--label", "F001 hosted pi"],
+		{ env },
+	);
 	const dir = jobDir(p, third);
 	await until(dir, () => existsSync(join(dir, "fake-blocked-1")));
 	const argv = JSON.parse(readFileSync(join(dir, "fake-argv.json"), "utf8")) as string[];
 	assert.deepEqual(argv.slice(argv.indexOf("--provider"), argv.indexOf("--provider") + flags.length), flags);
-	assert.equal(argv.filter((value) => value === extension).length, 1, "the selected extension, once, beside the required hooks");
+	assert.equal(
+		argv.filter((value) => value === extension).length,
+		1,
+		"the selected extension, once, beside the required hooks",
+	);
 	assert.ok(argv.some((value) => value.endsWith("/hook/hosted.ts")));
 	const stopped = limen(p, ["stop", third, "enough"], { env });
 	assert.equal(stopped.status, 0, stopped.stderr);

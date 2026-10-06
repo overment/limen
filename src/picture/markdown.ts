@@ -27,13 +27,20 @@ export function proseBlocks(md: string, firstLine = 1): { text: string; line: nu
 	const out: { text: string; line: number }[] = [];
 	const visitList = (list: ListBlock): void => {
 		for (const it of list.items) {
-			if (it.text.trim()) out.push({ text: it.text, line: it.line + firstLine - 1 });
-			if (it.children) visitList(it.children);
+			if (it.text.trim()) {
+				out.push({ text: it.text, line: it.line + firstLine - 1 });
+			}
+			if (it.children) {
+				visitList(it.children);
+			}
 		}
 	};
 	for (const b of parseBlocks(md)) {
-		if (b.type === "para") out.push({ text: b.text, line: b.line + firstLine - 1 });
-		else if (b.type === "list") visitList(b);
+		if (b.type === "para") {
+			out.push({ text: b.text, line: b.line + firstLine - 1 });
+		} else if (b.type === "list") {
+			visitList(b);
+		}
 	}
 	return out;
 }
@@ -68,9 +75,13 @@ function parseBlocks(md: string): Block[] {
 		const text: string[] = [];
 		while (i < lines.length) {
 			const l = lines[i]!;
-			if (l.trim() === "" || FENCE_OPEN.test(l) || HEADING.test(l)) break;
+			if (l.trim() === "" || FENCE_OPEN.test(l) || HEADING.test(l)) {
+				break;
+			}
 			const m = LIST_ITEM.exec(l);
-			if (m && m[1]!.length <= 3 && i > start) break;
+			if (m && m[1]!.length <= 3 && i > start) {
+				break;
+			}
 			text.push(l.trim());
 			i++;
 		}
@@ -84,7 +95,9 @@ function readFence(lines: string[], i: number, fence: RegExpExecArray, blocks: B
 	const close = new RegExp(`^ {0,3}${marker[0] === "`" ? "`" : "~"}{${marker.length},}[ \\t]*$`);
 	const body: string[] = [];
 	let j = i + 1;
-	while (j < lines.length && !close.test(lines[j]!)) body.push(lines[j++]!);
+	while (j < lines.length && !close.test(lines[j]!)) {
+		body.push(lines[j++]!);
+	}
 	blocks.push({ type: "code", lang: fence[2]!.replace(/[^A-Za-z0-9_+-]/g, ""), text: body.join("\n"), line: i + 1 });
 	return j + 1;
 }
@@ -93,7 +106,13 @@ function readList(lines: string[], i: number, blocks: Block[]): number {
 	const first = LIST_ITEM.exec(lines[i]!)!;
 	const base = first[1]!.length;
 	const ordered = /\d/.test(first[2]!);
-	const list: ListBlock = { type: "list", ordered, start: ordered ? Number.parseInt(first[2]!, 10) : 1, items: [], line: i + 1 };
+	const list: ListBlock = {
+		type: "list",
+		ordered,
+		start: ordered ? Number.parseInt(first[2]!, 10) : 1,
+		items: [],
+		line: i + 1,
+	};
 	let target: ListItem | null = null; // item that receives continuation lines
 	let blank = false;
 	while (i < lines.length) {
@@ -104,10 +123,14 @@ function readList(lines: string[], i: number, blocks: Block[]): number {
 			continue;
 		}
 		const ind = /^ */.exec(line)![0].length;
-		if (FENCE_OPEN.test(line) || (ind <= base + 1 && HEADING.test(line))) break;
+		if (FENCE_OPEN.test(line) || (ind <= base + 1 && HEADING.test(line))) {
+			break;
+		}
 		const m = LIST_ITEM.exec(line);
 		if (m && m[1]!.length <= base + 1) {
-			if (/\d/.test(m[2]!) !== ordered) break;
+			if (/\d/.test(m[2]!) !== ordered) {
+				break;
+			}
 			target = { text: m[3] ?? "", line: i + 1, children: null };
 			list.items.push(target);
 		} else if (m && list.items.length > 0) {
@@ -179,7 +202,9 @@ export function renderInline(text: string): string {
 		}
 		if (c === "`") {
 			let n = 1;
-			while (src[i + n] === "`") n++;
+			while (src[i + n] === "`") {
+				n++;
+			}
 			const close = findCodeClose(src, i + n, n);
 			if (close < 0) {
 				out += put(escapeHtml(src.slice(i, i + n)));
@@ -187,7 +212,9 @@ export function renderInline(text: string): string {
 				continue;
 			}
 			let code = src.slice(i + n, close).replace(/\n/g, " ");
-			if (code.length > 2 && code.startsWith(" ") && code.endsWith(" ") && code.trim()) code = code.slice(1, -1);
+			if (code.length > 2 && code.startsWith(" ") && code.endsWith(" ") && code.trim()) {
+				code = code.slice(1, -1);
+			}
 			out += put(`<code>${escapeHtml(code)}</code>`);
 			i = close + n;
 			continue;
@@ -226,8 +253,12 @@ function findCodeClose(src: string, from: number, n: number): number {
 			continue;
 		}
 		let m = 0;
-		while (src[i + m] === "`") m++;
-		if (m === n) return i;
+		while (src[i + m] === "`") {
+			m++;
+		}
+		if (m === n) {
+			return i;
+		}
 		i += m;
 	}
 	return -1;
@@ -237,7 +268,10 @@ function findCodeClose(src: string, from: number, n: number): number {
 export function inlineText(text: string): string {
 	return renderInline(text)
 		.replace(/<[^>]*>/g, "")
-		.replace(/&(lt|gt|quot|#39|amp);/g, (_, e) => (({ lt: "<", gt: ">", quot: '"', "#39": "'", amp: "&" }) as Record<string, string>)[e]!);
+		.replace(
+			/&(lt|gt|quot|#39|amp);/g,
+			(_, e) => (({ lt: "<", gt: ">", quot: '"', "#39": "'", amp: "&" }) as Record<string, string>)[e]!,
+		);
 }
 
 function matchLink(src: string, i: number): { text: string; url: string; title: string; end: number } | null {
@@ -248,23 +282,39 @@ function matchLink(src: string, i: number): { text: string; url: string; title: 
 			j++;
 			continue;
 		}
-		if (src[j] === "[") depth++;
-		else if (src[j] === "]" && --depth === 0) break;
+		if (src[j] === "[") {
+			depth++;
+		} else if (src[j] === "]" && --depth === 0) {
+			break;
+		}
 	}
-	if (j >= src.length || src[j + 1] !== "(") return null;
+	if (j >= src.length || src[j + 1] !== "(") {
+		return null;
+	}
 	const m = /^\(([^\s()]+(?:\([^\s()]*\)[^\s()]*)*)(?:[ \t]+"([^"]*)")?\)/.exec(src.slice(j + 1));
-	if (!m) return null;
+	if (!m) {
+		return null;
+	}
 	return { text: src.slice(i + 1, j), url: m[1]!, title: m[2] ?? "", end: j + 1 + m[0].length };
 }
 
 /** http(s) URLs and relative references only; no other scheme, no `//host`, no controls. */
 export function isSafeHref(url: string): boolean {
-	if (!url || /[\x00-\x20\x7f\\]/.test(url)) return false;
-	if (/^https?:\/\/./i.test(url)) return true;
-	if (/^[A-Za-z][A-Za-z0-9+.-]*:/.test(url)) return false;
+	if (!url || /[\x00-\x20\x7f\\]/.test(url)) {
+		return false;
+	}
+	if (/^https?:\/\/./i.test(url)) {
+		return true;
+	}
+	if (/^[A-Za-z][A-Za-z0-9+.-]*:/.test(url)) {
+		return false;
+	}
 	return !url.startsWith("//");
 }
 
 export function escapeHtml(s: string): string {
-	return String(s).replace(/[&<>"']/g, (c) => (({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }) as Record<string, string>)[c]!);
+	return String(s).replace(
+		/[&<>"']/g,
+		(c) => (({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }) as Record<string, string>)[c]!,
+	);
 }

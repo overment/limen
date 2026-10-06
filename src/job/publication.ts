@@ -3,7 +3,9 @@ import { basename, dirname } from "node:path";
 import type { EngineId } from "../runtime/engine.ts";
 
 function hostedNote(deadline: number | undefined): string {
-	const limits = deadline ? `Group deadline ${new Date(deadline).toISOString()}, no tool-call cap` : "No 90-minute timeout, no tool-call cap";
+	const limits = deadline
+		? `Group deadline ${new Date(deadline).toISOString()}, no tool-call cap`
+		: "No 90-minute timeout, no tool-call cap";
 	return `Hosted job: weaker guarantees. ${limits}, no process-group containment (stop cannot kill child processes the agent started). Herdr owns the process tree. Closing the tab ends the worker.\n`;
 }
 
@@ -57,7 +59,9 @@ export async function publishJob(jobDir: string, job: NewJob): Promise<void> {
 			// The spawning process. Until spawn writes `state`, a live spawner means the job is starting, not orphaned.
 			starting: `${process.pid}\n`,
 		};
-		if (job.repo) files.repo = `${job.repo}\n`;
+		if (job.repo) {
+			files.repo = `${job.repo}\n`;
+		}
 		if (job.agentName) {
 			files.hosted = hostedNote(job.group?.deadline);
 			files["agent-name"] = `${job.agentName}\n`;
@@ -66,21 +70,41 @@ export async function publishJob(jobDir: string, job: NewJob): Promise<void> {
 			files["origin-session"] = `${job.notificationSession}\n`;
 			files[`notify/subscribers/${job.notificationSession}`] = startedAt;
 		}
-		if (job.originTab) files["origin-tab"] = `${job.originTab}\n`;
-		if (job.originPane) files["origin-pane"] = `${job.originPane}\n`;
+		if (job.originTab) {
+			files["origin-tab"] = `${job.originTab}\n`;
+		}
+		if (job.originPane) {
+			files["origin-pane"] = `${job.originPane}\n`;
+		}
 		if (job.group) {
 			files.group = `${job.group.id}\n`;
 			files.team = `${job.group.team}\n`;
 			files.deadline = `${job.group.deadline}\n`;
 		}
-		if (job.parent) files.parent = `${job.parent}\n`;
-		if (job.continueTask) files.continue = `${job.continueTask}\n`;
-		if (job.candidate) files.candidate = `${job.candidate}\n`;
-		if (job.finishAuthor) files["finish-webhook-author"] = `${job.finishAuthor}\n`;
+		if (job.parent) {
+			files.parent = `${job.parent}\n`;
+		}
+		if (job.continueTask) {
+			files.continue = `${job.continueTask}\n`;
+		}
+		if (job.candidate) {
+			files.candidate = `${job.candidate}\n`;
+		}
+		if (job.finishAuthor) {
+			files["finish-webhook-author"] = `${job.finishAuthor}\n`;
+		}
 		await mkdir(`${publishing}/notify/subscribers`, { recursive: true });
 		// Sequential writes settle before cleanup on failure; no write can outlive the hidden directory.
-		for (const [name, body] of Object.entries(files)) await writeFile(`${publishing}/${name}`, body, { flag: "wx", flush: true });
-		if (job.finishConfig) await writeFile(`${publishing}/finish-webhook-env`, `${job.finishConfig}\n`, { flag: "wx", mode: 0o600, flush: true });
+		for (const [name, body] of Object.entries(files)) {
+			await writeFile(`${publishing}/${name}`, body, { flag: "wx", flush: true });
+		}
+		if (job.finishConfig) {
+			await writeFile(`${publishing}/finish-webhook-env`, `${job.finishConfig}\n`, {
+				flag: "wx",
+				mode: 0o600,
+				flush: true,
+			});
+		}
 		if (job.session) {
 			await mkdir(`${publishing}/session`);
 			await copyFile(job.session.source, `${publishing}/session/${job.session.name}`);

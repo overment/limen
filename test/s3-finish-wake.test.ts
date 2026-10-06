@@ -9,7 +9,19 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { engineEvents, git, jobDir, jobFile, limen, type Plant, plant, release, spawnJob, until, waitJob } from "./plant.ts";
+import {
+	engineEvents,
+	git,
+	jobDir,
+	jobFile,
+	limen,
+	type Plant,
+	plant,
+	release,
+	spawnJob,
+	until,
+	waitJob,
+} from "./plant.ts";
 
 const WAKE_HOOK = fileURLToPath(new URL("../hook/wake.ts", import.meta.url));
 const ROUTE = ["--engine", "pi", "--provider", "p", "--model", "m", "--thinking", "high", "--detached"];
@@ -23,25 +35,39 @@ function coordinator(name: string, session: string, script: string): string {
 	mkdirSync(dir);
 	writeFileSync(join(dir, "task.md"), script);
 	const args = ["--session-dir", join(dir, "session"), "--extension", WAKE_HOOK, `@${join(dir, "task.md")}`];
-	sessions.push(spawn(join(p.bin, "pi"), args, { cwd: p.root, env: { ...p.env, PI_SESSION_ID: session }, stdio: "ignore" }));
+	sessions.push(
+		spawn(join(p.bin, "pi"), args, { cwd: p.root, env: { ...p.env, PI_SESSION_ID: session }, stdio: "ignore" }),
+	);
 	return dir;
 }
 /** A detached job running the fake-engine `script`, spawned from the `coord` session unless `env` says otherwise. */
-function job(script: string, label: string, flags: readonly string[] = [], env: Record<string, string> = { PI_SESSION_ID: "coord" }): string {
+function job(
+	script: string,
+	label: string,
+	flags: readonly string[] = [],
+	env: Record<string, string> = { PI_SESSION_ID: "coord" },
+): string {
 	return spawnJob(p, script, [...ROUTE, "--label", label, ...flags], { env });
 }
 /** The wakes a session received for job `id`, with their position in its event record. */
 function wakes(dir: string, id: string) {
-	return engineEvents(dir).flatMap((event, index) => (event.text?.startsWith("Limen job") && event.text.includes(id) ? [{ ...event, index }] : []));
+	return engineEvents(dir).flatMap((event, index) =>
+		event.text?.startsWith("Limen job") && event.text.includes(id) ? [{ ...event, index }] : [],
+	);
 }
 const delivered = (ids: readonly string[], session = "coord") =>
-	until(join(p.root, ".limen", "jobs"), () => ids.every((id) => existsSync(join(jobDir(p, id), "notify", "delivered", session))));
+	until(join(p.root, ".limen", "jobs"), () =>
+		ids.every((id) => existsSync(join(jobDir(p, id), "notify", "delivered", session))),
+	);
 /** Each job woke the listeners of its session exactly once, and its wake names the job's label and recorded state. */
 function wokeOnce(ids: Readonly<Record<string, string>>, listeners: readonly string[]): void {
 	for (const [name, id] of Object.entries(ids)) {
 		const [wake, ...extra] = listeners.flatMap((dir) => wakes(dir, id));
 		assert.equal(extra.length, 0, `${name} woke its session once`);
-		assert.ok(wake?.text?.includes(jobFile(p, id, "label")) && wake.text.includes(jobFile(p, id, "state")), `${name} wake names its label and state`);
+		assert.ok(
+			wake?.text?.includes(jobFile(p, id, "label")) && wake.text.includes(jobFile(p, id, "state")),
+			`${name} wake names its label and state`,
+		);
 	}
 }
 
@@ -50,13 +76,19 @@ before(async () => {
 	coord = coordinator("coord", "coord", "block\n/limen off\nblock\n/limen on\nblock\n");
 });
 after(async () => {
-	for (const session of sessions) session.kill();
+	for (const session of sessions) {
+		session.kill();
+	}
 	await p.cleanup();
 });
 
 test("a job that ends done, failed or on a provider error wakes its session once, with two listeners on that session", async () => {
 	const second = coordinator("second", "coord", "block\n");
-	const ids = { done: job("commit", "a done"), failed: job("fail 7", "a failed"), provider: job("commit\nerror", "a provider error") };
+	const ids = {
+		done: job("commit", "a done"),
+		failed: job("fail 7", "a failed"),
+		provider: job("commit\nerror", "a provider error"),
+	};
 	const states = Object.fromEntries(Object.entries(ids).map(([name, id]) => [name, waitJob(p, id)]));
 	await delivered(Object.values(ids));
 	// Every wake is recorded now. The second listener ends, so only the coord session hears the next jobs.
@@ -69,7 +101,9 @@ test("a job that ends done, failed or on a provider error wakes its session once
 	assert.equal(git(p.root, "rev-list", "--count", `main..${jobFile(p, ids.provider, "branch")}`), "1");
 	wokeOnce(ids, [coord, second]);
 	// A job with no tool calls and no commits says so; a job that committed does not.
-	const [failed = "", done = ""] = [ids.failed, ids.done].map((id) => [coord, second].flatMap((dir) => wakes(dir, id))[0]?.text);
+	const [failed = "", done = ""] = [ids.failed, ids.done].map(
+		(id) => [coord, second].flatMap((dir) => wakes(dir, id))[0]?.text,
+	);
 	assert.equal(jobFile(p, ids.failed, "tool-calls"), "0");
 	assert.match(failed, /produced nothing/);
 	assert.doesNotMatch(done, /produced nothing/);
@@ -88,8 +122,12 @@ test("stop, timeout and the tool cap each end a job once and wake its session on
 	// Each ending has one finished-at stamp. Timeout and the tool cap race the engine's own exit and log one terminal line.
 	// A stop still logs two when the engine exits at once on TERM: stop.ts's 25 ms grace races the wrapper's finalize.
 	// The planned exclusive finalize (F928) fixes it; add ids.stopped to the line count when it lands.
-	for (const [name, id] of Object.entries(ids)) assert.ok(Number.isFinite(Date.parse(jobFile(p, id, "finished-at"))), `${name} has one stamp`);
-	for (const id of [ids.timeout, ids.cap]) assert.equal(jobFile(p, id, "log").match(/\] (?:done|failed|stopped):/g)?.length, 1, id);
+	for (const [name, id] of Object.entries(ids)) {
+		assert.ok(Number.isFinite(Date.parse(jobFile(p, id, "finished-at"))), `${name} has one stamp`);
+	}
+	for (const id of [ids.timeout, ids.cap]) {
+		assert.equal(jobFile(p, id, "log").match(/\] (?:done|failed|stopped):/g)?.length, 1, id);
+	}
 	await delivered(Object.values(ids));
 	wokeOnce(ids, [coord]);
 });
@@ -98,10 +136,14 @@ test("wakes of jobs that end while muted arrive after /limen on, in one turn, ea
 	await release(coord, 1);
 	await until(coord, () => existsSync(join(coord, "fake-blocked-2")));
 	const muted = [job("say one", "m one"), job("say two", "m two")];
-	for (const id of muted) assert.equal(waitJob(p, id), "done");
+	for (const id of muted) {
+		assert.equal(waitJob(p, id), "done");
+	}
 	await release(coord, 2);
 	await delivered(muted);
-	const on = engineEvents(coord).findIndex((event) => event.event === "notify" && event.text?.startsWith("limen wake on"));
+	const on = engineEvents(coord).findIndex(
+		(event) => event.event === "notify" && event.text?.startsWith("limen wake on"),
+	);
 	assert.ok(on >= 0, "the session saw /limen on");
 	const heard = muted.map((id) => wakes(coord, id));
 	// Before 7e43d23 the batched turn confirmed only its last wake, and the first was injected again.

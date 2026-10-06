@@ -8,9 +8,13 @@ export async function planningCommand(args: readonly string[], cwd: string): Pro
 	// A job reads the setting in its canonical root, not in its own worktree.
 	const inherited = process.env.LIMEN_GROUP_ID || workspaceRoot(cwd) ? undefined : inheritedPlanning(repoRoot(cwd));
 	const root = inherited?.root ?? limenRoot(cwd);
-	if (args.length > 1) throw new Error("planning accepts committed or private, or no argument to inspect");
+	if (args.length > 1) {
+		throw new Error("planning accepts committed or private, or no argument to inspect");
+	}
 	if (args[0]) {
-		if (process.env.LIMEN_JOB === "1") throw new Error("only the project coordinator may change the planning source");
+		if (process.env.LIMEN_JOB === "1") {
+			throw new Error("only the project coordinator may change the planning source");
+		}
 		const source = parsePlanningSource(args[0]);
 		await mkdir(`${root}/.limen`, { recursive: true });
 		await atomicWrite(`${root}/.limen/planning-source`, `${source}\n`);

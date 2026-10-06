@@ -28,7 +28,9 @@ export async function claimRecovery(jobDir: string): Promise<(() => Promise<void
 					await rmdir(claim).catch(() => {});
 				};
 			} catch (error) {
-				if (!(error instanceof Error && "code" in error && ["EEXIST", "ENOTEMPTY"].includes(String(error.code)))) throw error;
+				if (!(error instanceof Error && "code" in error && ["EEXIST", "ENOTEMPTY"].includes(String(error.code)))) {
+					throw error;
+				}
 			}
 			for (const name of await readdir(claim).catch(() => [] as string[])) {
 				const [rawPid, rawTime] = name.split(".");
@@ -38,8 +40,12 @@ export async function claimRecovery(jobDir: string): Promise<(() => Promise<void
 				if (validPid && processAlive(pid)) {
 					const born = await textFile(`${claim}/${name}`);
 					const info = born ? await processInfo(pid) : undefined;
-					if (!info || info.kind === "unavailable" || (info.kind === "present" && info.process.born === born)) return;
-				} else if (!validPid && Number.isFinite(time) && Date.now() - time < 5_000) return;
+					if (!info || info.kind === "unavailable" || (info.kind === "present" && info.process.born === born)) {
+						return;
+					}
+				} else if (!validPid && Number.isFinite(time) && Date.now() - time < 5_000) {
+					return;
+				}
 				await rm(`${claim}/${name}`, { force: true });
 			}
 			await rmdir(claim).catch(() => {});
@@ -54,17 +60,25 @@ export async function recoveryTarget(jobDir: string): Promise<string | "missing"
 	const name = (await textFile(`${jobDir}/agent-name`)) || hostedAgentName(basename(jobDir));
 	const target = (await textFile(`${jobDir}/herdr/agent`)) || (await textFile(`${jobDir}/herdr/pane`)) || name;
 	const status = hostedAgentStatus(target, "fresh");
-	if (status === "unknown") return "unknown";
-	if (status !== "missing") return target;
+	if (status === "unknown") {
+		return "unknown";
+	}
+	if (status !== "missing") {
+		return target;
+	}
 	const engine = (await jobProfile(jobDir)).id;
 	const located = locateHostedAgent(target, engine, name, "fresh");
 	if (located && located !== "unknown" && located !== target) {
 		const binding = readHostedBinding(jobDir);
-		if (!binding || (await hostedBindingInPane(located, binding.pid, engine, jobDir)) !== "owned") return "unknown";
+		if (!binding || (await hostedBindingInPane(located, binding.pid, engine, jobDir)) !== "owned") {
+			return "unknown";
+		}
 	}
 	if (!located) {
 		const binding = readHostedBinding(jobDir);
-		if (binding && (await hostedIdentityObservation(binding)) !== "mismatch") return "unknown";
+		if (binding && (await hostedIdentityObservation(binding)) !== "mismatch") {
+			return "unknown";
+		}
 	}
 	return located ?? "missing";
 }
@@ -86,14 +100,21 @@ export async function recoverHostedOwner(jobDir: string): Promise<void> {
 		LIMEN_CONTEXT_ROOT: dirname(dirname(dirname(jobDir))),
 	});
 	const deadline = Date.now() + 5_000;
-	while (Date.now() < deadline && processAlive(pid) && (await textFile(`${jobDir}/state`)) === "running" && !(await ownerAlive(jobDir))) {
+	while (
+		Date.now() < deadline &&
+		processAlive(pid) &&
+		(await textFile(`${jobDir}/state`)) === "running" &&
+		!(await ownerAlive(jobDir))
+	) {
 		await new Promise((resolve) => setTimeout(resolve, 25));
 	}
 }
 
 export async function prepareRecoveredOwner(jobDir: string): Promise<(() => Promise<void>) | undefined> {
 	const release = await claimRecovery(jobDir);
-	if (!release) return;
+	if (!release) {
+		return;
+	}
 	if ((await textFile(`${jobDir}/state`)) === "running" && !(await ownerAlive(jobDir))) {
 		const target = await recoveryTarget(jobDir);
 		if (target !== "missing" && target !== "unknown" && (await textFile(`${jobDir}/state`)) === "running") {

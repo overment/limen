@@ -6,7 +6,20 @@ import { mkdir, utimes, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { after, before, test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { engineEvents, git, jobDir, jobFile, LIMEN, limen, type Plant, plant, release, spawnJob, until, waitJob } from "./plant.ts";
+import {
+	engineEvents,
+	git,
+	jobDir,
+	jobFile,
+	LIMEN,
+	limen,
+	type Plant,
+	plant,
+	release,
+	spawnJob,
+	until,
+	waitJob,
+} from "./plant.ts";
 
 const WAKE = fileURLToPath(new URL("../hook/wake.ts", import.meta.url));
 const SESSION = "s9-coordinator";
@@ -18,7 +31,10 @@ after(() => p.cleanup());
 
 /** A real `limen` child that runs concurrently with the test; `done` resolves to its exit code and output. */
 function start(args: readonly string[], options: { cwd?: string; env?: Record<string, string> } = {}) {
-	const child: ChildProcess = spawn(process.execPath, [LIMEN, ...args], { cwd: options.cwd ?? p.root, env: { ...p.env, ...options.env } });
+	const child: ChildProcess = spawn(process.execPath, [LIMEN, ...args], {
+		cwd: options.cwd ?? p.root,
+		env: { ...p.env, ...options.env },
+	});
 	let output = "";
 	child.stdout?.on("data", (chunk) => {
 		output += chunk;
@@ -26,12 +42,16 @@ function start(args: readonly string[], options: { cwd?: string; env?: Record<st
 	child.stderr?.on("data", (chunk) => {
 		output += chunk;
 	});
-	const done = new Promise<{ status: number; output: string }>((resolve) => child.on("close", (status) => resolve({ status: status ?? 1, output })));
+	const done = new Promise<{ status: number; output: string }>((resolve) =>
+		child.on("close", (status) => resolve({ status: status ?? 1, output })),
+	);
 	return { child, done };
 }
 /** Alive and not a zombie: a zombie answers kill(pid, 0) but has already exited. */
-const alive = (pid: number) => /^[^Z]/.test(spawnSync("ps", ["-o", "stat=", "-p", String(pid)], { encoding: "utf8" }).stdout.trim());
-const wakes = (dir: string, id: string) => engineEvents(dir).filter((entry) => entry.event !== "notify" && entry.text?.includes(id)).length;
+const alive = (pid: number) =>
+	/^[^Z]/.test(spawnSync("ps", ["-o", "stat=", "-p", String(pid)], { encoding: "utf8" }).stdout.trim());
+const wakes = (dir: string, id: string) =>
+	engineEvents(dir).filter((entry) => entry.event !== "notify" && entry.text?.includes(id)).length;
 
 test("prune keeps live, nested and half-published work, drops finished worktrees and leftovers; retire drops only landed jobs", async () => {
 	// A job published but still in its prepare step: no state yet, held on a FIFO past its startup grace.
@@ -67,8 +87,12 @@ test("prune keeps live, nested and half-published work, drops finished worktrees
 
 	const pruned = limen(p, ["prune"]);
 	assert.equal(pruned.status, 0, pruned.stderr);
-	for (const dropped of [jobFile(p, landed, "worktree"), jobFile(p, unmerged, "worktree"), stale, staleTree]) assert.ok(!existsSync(dropped), `prune kept ${dropped}`);
-	for (const kept of [liveTree, nestedTree, halfTree, jobDir(p, halfId), nestedDir]) assert.ok(existsSync(kept), `prune removed ${kept}`);
+	for (const dropped of [jobFile(p, landed, "worktree"), jobFile(p, unmerged, "worktree"), stale, staleTree]) {
+		assert.ok(!existsSync(dropped), `prune kept ${dropped}`);
+	}
+	for (const kept of [liveTree, nestedTree, halfTree, jobDir(p, halfId), nestedDir]) {
+		assert.ok(existsSync(kept), `prune removed ${kept}`);
+	}
 	assert.ok(git(p.root, "worktree", "list", "--porcelain").includes(`worktree ${nestedTree}\n`));
 
 	await writeFile(gate, "go\n");
@@ -108,16 +132,23 @@ test("a killed wrapper is reaped at once and a stopped job leaves no escaped chi
 	const stop = limen(p, ["stop", stopped, "s9"]);
 	assert.equal(stop.status, 0, stop.stderr);
 	assert.equal(jobFile(p, stopped, "state"), "stopped");
-	assert.ok(!alive(orphan) || jobFile(p, stopped, "cleanup").includes(`${orphan} `), `orphan ${orphan} survived stop unnamed`);
+	assert.ok(
+		!alive(orphan) || jobFile(p, stopped, "cleanup").includes(`${orphan} `),
+		`orphan ${orphan} survived stop unnamed`,
+	);
 
 	const coordinator = join(p.parent, "coordinator");
 	await mkdir(coordinator);
 	await writeFile(join(coordinator, "task.md"), "block\n");
-	const session = spawn(join(p.bin, "pi"), ["--extension", WAKE, "--session-dir", join(coordinator, "session"), `@${join(coordinator, "task.md")}`], {
-		cwd: p.root,
-		env: { ...p.env, ...env },
-		stdio: "ignore",
-	});
+	const session = spawn(
+		join(p.bin, "pi"),
+		["--extension", WAKE, "--session-dir", join(coordinator, "session"), `@${join(coordinator, "task.md")}`],
+		{
+			cwd: p.root,
+			env: { ...p.env, ...env },
+			stdio: "ignore",
+		},
+	);
 	// A later job's wake orders the count: a duplicate for either earlier job would have arrived before it.
 	const last = spawnJob(p, "say last", [], { env });
 	assert.equal(waitJob(p, last), "done");
@@ -166,9 +197,15 @@ syncBuiltinESMExports();
 	);
 	const hold = openSync(gate, "r+");
 	const env = { NODE_OPTIONS: `${p.env.NODE_OPTIONS} --import=${barrier}` };
-	const children = [...projects.map((project) => start(["workspace", "init"], { cwd: project, env })), ...Array.from({ length: 8 }, () => start(["sweep"], { env }))];
+	const children = [
+		...projects.map((project) => start(["workspace", "init"], { cwd: project, env })),
+		...Array.from({ length: 8 }, () => start(["sweep"], { env })),
+	];
 	// A child that fails before its first registry touch never reaches the barrier; count it so the wait still ends.
-	await until(ready, () => readdirSync(ready).length + children.filter(({ child }) => child.exitCode !== null).length >= children.length);
+	await until(
+		ready,
+		() => readdirSync(ready).length + children.filter(({ child }) => child.exitCode !== null).length >= children.length,
+	);
 	writeSync(hold, "x".repeat(children.length));
 	const results = await Promise.all(children.map((child) => child.done));
 	closeSync(hold);

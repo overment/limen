@@ -22,7 +22,8 @@ export type JobInput = {
 };
 export type TerminalState = "done" | "failed" | "stopped";
 export const TERMINAL_STATES: readonly TerminalState[] = ["done", "failed", "stopped"];
-export const isTerminal = (state: string): state is TerminalState => (TERMINAL_STATES as readonly string[]).includes(state);
+export const isTerminal = (state: string): state is TerminalState =>
+	(TERMINAL_STATES as readonly string[]).includes(state);
 /** A session ID that is safe as one path segment, for example under `notify/delivered/`. */
 export const SESSION_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 export type Pulse = "starting" | "think" | "tool" | "wait" | "dead";
@@ -44,7 +45,9 @@ const PHASE_LABELS = {
 	stopped: "STOPPED",
 } as const satisfies Record<Job["phase"], string>;
 export function parseJob(input: JobInput): Job {
-	if (!input.id || !input.label || !input.branch) throw new Error("job id, label, and branch must not be empty");
+	if (!input.id || !input.label || !input.branch) {
+		throw new Error("job id, label, and branch must not be empty");
+	}
 	const identity = { id: input.id, label: input.label, branch: input.branch };
 	switch (input.state) {
 		case "running": {
@@ -68,22 +71,48 @@ export function parseJob(input: JobInput): Job {
 			throw new Error(`job ${input.id} has unknown state ${JSON.stringify(input.state)}`);
 	}
 }
-export function derivePulse(input: { readonly pid?: number; readonly alive: boolean; readonly activity?: string }): Pulse {
-	if (input.pid === undefined) return "starting";
-	if (!input.alive) return "dead";
-	if (input.activity === "tool" || input.activity === "wait") return input.activity;
+export function derivePulse(input: {
+	readonly pid?: number;
+	readonly alive: boolean;
+	readonly activity?: string;
+}): Pulse {
+	if (input.pid === undefined) {
+		return "starting";
+	}
+	if (!input.alive) {
+		return "dead";
+	}
+	if (input.activity === "tool" || input.activity === "wait") {
+		return input.activity;
+	}
 	return "think";
 }
-export function resolveJobId(query: string, ids: readonly string[], labels: Readonly<Record<string, string>> = {}): string {
+export function resolveJobId(
+	query: string,
+	ids: readonly string[],
+	labels: Readonly<Record<string, string>> = {},
+): string {
 	const needle = query.trim();
-	if (!needle) throw new Error("job id required");
-	if (ids.includes(needle)) return needle;
+	if (!needle) {
+		throw new Error("job id required");
+	}
+	if (ids.includes(needle)) {
+		return needle;
+	}
 	const matches = ids.filter((id) => {
 		const label = labels[id] ?? "";
-		return label === needle || (needle.length >= 3 && (id.endsWith(needle) || id.endsWith(`-${needle}`) || label.toLowerCase().startsWith(needle.toLowerCase())));
+		return (
+			label === needle ||
+			(needle.length >= 3 &&
+				(id.endsWith(needle) || id.endsWith(`-${needle}`) || label.toLowerCase().startsWith(needle.toLowerCase())))
+		);
 	});
-	if (matches.length === 1) return matches[0] ?? needle;
-	if (matches.length === 0) throw new Error(`no job matches ${JSON.stringify(needle)}`);
+	if (matches.length === 1) {
+		return matches[0] ?? needle;
+	}
+	if (matches.length === 0) {
+		throw new Error(`no job matches ${JSON.stringify(needle)}`);
+	}
 	throw new Error(`ambiguous job ${JSON.stringify(needle)}: ${matches.join(", ")}`);
 }
 export function makeJobId(label: string): string {
@@ -100,7 +129,9 @@ export function makeJobId(label: string): string {
 export function hostedAgentName(jobId: string): string {
 	const hex = /[0-9a-f]{8}$/.exec(jobId)?.[0] ?? "";
 	const feature = /(?:^|-)(f\d{3,})(?:-|$)/i.exec(jobId)?.[1]?.toLowerCase();
-	if (feature && hex) return `limen-${feature}-${hex}`;
+	if (feature && hex) {
+		return `limen-${feature}-${hex}`;
+	}
 	const cut = jobId.slice(0, hex ? -9 : undefined).toLowerCase();
 	const dashed = cut.replace(/^\d{4}-\d{2}-\d{2}-/, "").replace(/[^a-z0-9_-]+/g, "-");
 	const slug = dashed.replace(/^[^a-z]+/, "").slice(0, 17) || "job";
@@ -108,7 +139,9 @@ export function hostedAgentName(jobId: string): string {
 }
 export function parseDuration(value: string): number {
 	const match = /^(\d+)(ms|s|m|h)$/.exec(value);
-	if (!match) throw new Error(`invalid timeout ${JSON.stringify(value)}; use 500ms, 90s, 20m, or 2h`);
+	if (!match) {
+		throw new Error(`invalid timeout ${JSON.stringify(value)}; use 500ms, 90s, 20m, or 2h`);
+	}
 	const amount = Number(match[1]);
 	const unit = match[2] as "ms" | "s" | "m" | "h";
 	const multipliers = { ms: 1, s: 1_000, m: 60_000, h: 3_600_000 } as const;
@@ -116,7 +149,9 @@ export function parseDuration(value: string): number {
 	if (!Number.isSafeInteger(amount) || amount <= 0 || !Number.isSafeInteger(milliseconds)) {
 		throw new Error("timeout must be a positive safe integer");
 	}
-	if (milliseconds > 2_147_483_647) throw new Error("timeout exceeds Node's maximum timer duration");
+	if (milliseconds > 2_147_483_647) {
+		throw new Error("timeout exceeds Node's maximum timer duration");
+	}
 	return milliseconds;
 }
 export function producedNothing(toolCalls: number | undefined, commits: string | undefined): boolean {
@@ -127,12 +162,18 @@ export function closedFeatures(root: string): ReadonlySet<string> {
 	const closed = new Set<string>();
 	for (const lane of ["done", "dropped"]) {
 		const laneDir = join(root, "spec", "features", lane);
-		if (!existsSync(laneDir)) continue;
+		if (!existsSync(laneDir)) {
+			continue;
+		}
 		for (const month of readdirSync(laneDir, { withFileTypes: true })) {
-			if (!month.isDirectory()) continue;
+			if (!month.isDirectory()) {
+				continue;
+			}
 			for (const entry of readdirSync(join(laneDir, month.name), { withFileTypes: true })) {
 				const feature = /^(F\d+)-/i.exec(entry.name)?.[1];
-				if (entry.isDirectory() && feature) closed.add(feature.toUpperCase());
+				if (entry.isDirectory() && feature) {
+					closed.add(feature.toUpperCase());
+				}
 			}
 		}
 	}
@@ -154,28 +195,52 @@ export function renderJob(job: Job, view: JobView): string {
 		`elapsed ${formatDuration(view.elapsedMs)}`,
 		`silent ${formatDuration(view.silentMs)}`,
 	];
-	if (view.pulse) facts.push(view.pulse);
-	if (view.toolCalls !== undefined) facts.push(`tools ${view.toolCalls}`);
-	if (view.producedNothing) facts.push("produced nothing (0 tool calls, no commits)");
-	if (view.lastTool) facts.push(view.lastTool);
-	if (job.phase === "running" && job.pid !== undefined) facts.push(`pid ${job.pid}${view.processAlive === false ? " (not alive)" : ""}`);
+	if (view.pulse) {
+		facts.push(view.pulse);
+	}
+	if (view.toolCalls !== undefined) {
+		facts.push(`tools ${view.toolCalls}`);
+	}
+	if (view.producedNothing) {
+		facts.push("produced nothing (0 tool calls, no commits)");
+	}
+	if (view.lastTool) {
+		facts.push(view.lastTool);
+	}
+	if (job.phase === "running" && job.pid !== undefined) {
+		facts.push(`pid ${job.pid}${view.processAlive === false ? " (not alive)" : ""}`);
+	}
 	const blocks = [facts.join(" · ")];
 	const detail = terminalDetail(job);
-	if (detail) blocks.push(`  ${detail}`);
-	if (view.diffstat) blocks.push(indent(`diff:\n${view.diffstat}`));
-	if (view.logTail) blocks.push(indent(`log:\n${view.logTail}`));
+	if (detail) {
+		blocks.push(`  ${detail}`);
+	}
+	if (view.diffstat) {
+		blocks.push(indent(`diff:\n${view.diffstat}`));
+	}
+	if (view.logTail) {
+		blocks.push(indent(`log:\n${view.logTail}`));
+	}
 	return blocks.join("\n");
 }
 function terminalDetail(job: Job): string {
-	if (job.phase === "failed") return job.error;
-	if (job.phase === "stopped") return job.reason;
+	if (job.phase === "failed") {
+		return job.error;
+	}
+	if (job.phase === "stopped") {
+		return job.reason;
+	}
 	return "";
 }
 export function formatDuration(milliseconds: number): string {
 	const seconds = Math.max(0, Math.floor(milliseconds / 1_000));
-	if (seconds < 60) return `${seconds}s`;
+	if (seconds < 60) {
+		return `${seconds}s`;
+	}
 	const minutes = Math.floor(seconds / 60);
-	if (minutes < 60) return `${minutes}m`;
+	if (minutes < 60) {
+		return `${minutes}m`;
+	}
 	return `${Math.floor(minutes / 60)}h${minutes % 60}m`;
 }
 function indent(value: string): string {

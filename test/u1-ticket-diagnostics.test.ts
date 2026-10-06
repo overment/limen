@@ -19,7 +19,8 @@ wrong-on: 2026-10-06
 ---
 # F781 · Fields
 `,
-	"active/F782-flags": "---\nopened: 2026-10-06\nneeds-adam: Decide today.\nwrong-on: 2026-10-05\n---\n# F782 · Flags\n",
+	"active/F782-flags":
+		"---\nopened: 2026-10-06\nneeds-adam: Decide today.\nwrong-on: 2026-10-05\n---\n# F782 · Flags\n",
 	"active/F783-legacy": "# F783 Legacy ticket\n",
 	"done/2026-10/F784-landed": "---\nlanded: 2026-10-06\n---\n# F784 · Landed\n",
 	"active/F785-duplicate": `---
@@ -50,7 +51,8 @@ test("each ticket fault is reported at its own file and line with a fix, and the
 	const read = await readTickets(root);
 	const diagnostics = [...read.diagnostics, ...checkTickets(read.tickets, new Set(["plant.viewer"]))];
 	const found = diagnostics.map((d) => `${d.level} ${d.code} ${d.source}:${d.line}`).sort();
-	const at = (level: string, code: string, folder: string, line: number) => `${level} ${code} spec/features/${folder}/ticket.md:${line}`;
+	const at = (level: string, code: string, folder: string, line: number) =>
+		`${level} ${code} spec/features/${folder}/ticket.md:${line}`;
 	assert.deepEqual(
 		found,
 		[
@@ -71,7 +73,9 @@ test("each ticket fault is reported at its own file and line with a fix, and the
 			at("warn", "ticket.duplicate-id", "done/2026-10/F778-older", 1),
 		].sort(),
 	);
-	for (const item of diagnostics) assert.match(item.message, /; fix: \S/);
+	for (const item of diagnostics) {
+		assert.match(item.message, /; fix: \S/);
+	}
 
 	const byId = new Map(read.tickets.map((ticket) => [ticket.id, ticket]));
 	assert.equal(byId.get("f778")?.path, "spec/features/active/F778-finish-signal/ticket.md");

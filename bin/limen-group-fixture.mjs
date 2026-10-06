@@ -6,13 +6,19 @@ import { fileURLToPath } from "node:url";
 import { initCommand } from "../src/commands/init.ts";
 
 const root = process.argv[2] && resolve(process.argv[2]);
-if (!root || process.argv.length !== 3) throw new Error("usage: node bin/limen-group-fixture.mjs /absolute/new/disposable/repository");
+if (!root || process.argv.length !== 3) {
+	throw new Error("usage: node bin/limen-group-fixture.mjs /absolute/new/disposable/repository");
+}
 const candidate = fileURLToPath(new URL("..", import.meta.url)).replace(/\/$/, "");
-if (root === candidate || root.startsWith(`${candidate}/`)) throw new Error("fixture must be outside the Limen checkout");
+if (root === candidate || root.startsWith(`${candidate}/`)) {
+	throw new Error("fixture must be outside the Limen checkout");
+}
 await mkdir(root);
 function git(...args) {
 	const result = spawnSync("git", args, { cwd: root, encoding: "utf8" });
-	if (result.status !== 0) throw new Error(result.stderr || result.error?.message || "git failed");
+	if (result.status !== 0) {
+		throw new Error(result.stderr || result.error?.message || "git failed");
+	}
 	return result.stdout.trim();
 }
 git("init", "-b", "main");
@@ -23,7 +29,17 @@ process.env.LIMEN_HOME = root;
 await initCommand([], root);
 const feature = "spec/features/active/F001-job-summary";
 const files = {
-	"package.json": JSON.stringify({ name: "limen-group-proof", private: true, type: "module", scripts: { test: "node --test test/*.test.ts" }, engines: { node: ">=24" } }, null, 2),
+	"package.json": JSON.stringify(
+		{
+			name: "limen-group-proof",
+			private: true,
+			type: "module",
+			scripts: { test: "node --test test/*.test.ts" },
+			engines: { node: ">=24" },
+		},
+		null,
+		2,
+	),
 	".gitignore": "/.limen/\n",
 	"README.md":
 		"# Disposable job-summary collaboration proof\n\nNo remote, finish webhook, or autonomous landing. Implement the committed ticket; src/summary.ts intentionally does not exist yet.\n",

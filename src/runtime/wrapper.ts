@@ -3,7 +3,13 @@ import { appendFile, readFile, rm } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { jobMembership } from "../job/group-cabinet.ts";
 import { appendLimenLog, atomicWrite, finalizeJob, isFailedStopReason, writeHandshake } from "../job/record.ts";
-import { containEscapedDescendants, discoverEscapedDescendants, type JobProcess, processInfo, signalProcessGroup } from "./contain.ts";
+import {
+	containEscapedDescendants,
+	discoverEscapedDescendants,
+	type JobProcess,
+	processInfo,
+	signalProcessGroup,
+} from "./contain.ts";
 import { argvFor, engineBinary, jobProfile, prepareSkillConfig } from "./engine.ts";
 import { observeToolStall, ownedToolDescendants, type ToolStallWatch, toolStallMs } from "./stalled-tool.ts";
 import { createStreamParser, type StreamEvent } from "./stream.ts";
@@ -32,7 +38,9 @@ async function launchDetached(environment: Readonly<Record<string, string>>): Pr
 		child.once("spawn", resolve);
 		child.once("error", reject);
 	});
-	if (!child.pid) throw new Error("could not start the detached job wrapper");
+	if (!child.pid) {
+		throw new Error("could not start the detached job wrapper");
+	}
 	child.unref();
 	return child.pid;
 }
@@ -44,12 +52,17 @@ export async function runInternalJob(): Promise<void> {
 	const jobId = requiredEnvironment("LIMEN_JOB_ID");
 	const label = process.env.LIMEN_LABEL || jobId;
 	const membership = await jobMembership(jobDir);
-	if (membership && (membership.run.stopped || Date.now() >= (membership.member?.deadline ?? membership.run.deadline))) {
+	if (
+		membership &&
+		(membership.run.stopped || Date.now() >= (membership.member?.deadline ?? membership.run.deadline))
+	) {
 		await finalizeJob(jobDir, "failed", "group deadline or stop before engine launch");
 		return;
 	}
 	const configuredTimeout = process.env.LIMEN_TIMEOUT_MS ? Number(process.env.LIMEN_TIMEOUT_MS) : DEFAULT_TIMEOUT_MS;
-	const timeoutMs = membership ? Math.max(1, Math.min(configuredTimeout, (membership.member?.deadline ?? membership.run.deadline) - Date.now())) : configuredTimeout;
+	const timeoutMs = membership
+		? Math.max(1, Math.min(configuredTimeout, (membership.member?.deadline ?? membership.run.deadline) - Date.now()))
+		: configuredTimeout;
 	const preamble = await readFile(preambleFile, "utf8");
 	let confirmedToolStall = false;
 	let stopRequested = false;
@@ -60,11 +73,15 @@ export async function runInternalJob(): Promise<void> {
 	let pending = Promise.resolve();
 	process.on("SIGTERM", () => {
 		stopRequested = true;
-		if (!confirmedToolStall) shutdownDeadline ??= Date.now() + STOP_GRACE_MS - 500;
+		if (!confirmedToolStall) {
+			shutdownDeadline ??= Date.now() + STOP_GRACE_MS - 500;
+		}
 	});
 	let exhaustionTermination = Promise.resolve();
 	const exhaust = (reason: string, captured?: readonly JobProcess[]) => {
-		if (exhausted || stopRequested) return;
+		if (exhausted || stopRequested) {
+			return;
+		}
 		confirmedToolStall = Boolean(captured);
 		exhausted = reason;
 		exhaustionTermination = (async () => {
@@ -72,10 +89,13 @@ export async function runInternalJob(): Promise<void> {
 			// includes in-group descendants, not only children that escaped the wrapper group.
 			const descendants = captured ?? (await discoverEscapedDescendants(jobDir, process.pid, "during exhaustion"));
 			await appendLimenLog(jobDir, `${reason}; sending TERM`).catch(() => {});
-			if (!captured) shutdownDeadline = Date.now() + STOP_GRACE_MS - 500;
+			if (!captured) {
+				shutdownDeadline = Date.now() + STOP_GRACE_MS - 500;
+			}
 			signalProcessGroup(process.pid, "SIGTERM");
-			if (captured) await containEscapedDescendants(jobDir, descendants, "after stalled tool");
-			else {
+			if (captured) {
+				await containEscapedDescendants(jobDir, descendants, "after stalled tool");
+			} else {
 				graceTimer = setTimeout(() => signalProcessGroup(process.pid, "SIGKILL"), STOP_GRACE_MS);
 				graceTimer.unref();
 				void containEscapedDescendants(jobDir, descendants, "after exhaustion").catch(() => {});
@@ -100,7 +120,9 @@ export async function runInternalJob(): Promise<void> {
 		...(process.env.LIMEN_PROVIDER ? { provider: process.env.LIMEN_PROVIDER } : {}),
 		...(process.env.LIMEN_MODEL ? { model: process.env.LIMEN_MODEL } : {}),
 		...(process.env.LIMEN_THINKING ? { thinking: process.env.LIMEN_THINKING } : {}),
-		...(process.env.LIMEN_CONTINUE === "1" ? { continueValue: (await readFile(taskFile, "utf8")).trim() } : { taskFile }),
+		...(process.env.LIMEN_CONTINUE === "1"
+			? { continueValue: (await readFile(taskFile, "utf8")).trim() }
+			: { taskFile }),
 	});
 	const childEnvironment: NodeJS.ProcessEnv = {
 		...process.env,
@@ -110,12 +132,21 @@ export async function runInternalJob(): Promise<void> {
 	};
 	const privateEnvironment =
 		"LIMEN_INTERNAL_RUN LIMEN_JOB_DIR LIMEN_WORKTREE LIMEN_TASK_FILE LIMEN_PREAMBLE LIMEN_TIMEOUT_MS LIMEN_MODEL LIMEN_PROVIDER LIMEN_THINKING LIMEN_LABEL PI_SESSION_ID PI_SESSION_FILE PI_PROVIDER PI_MODEL PI_REASONING_LEVEL";
-	for (const name of privateEnvironment.split(" ")) delete childEnvironment[name];
+	for (const name of privateEnvironment.split(" ")) {
+		delete childEnvironment[name];
+	}
 	// A detached job must not inherit the coordinator's Herdr pane.
-	for (const name of Object.keys(childEnvironment)) if (name.startsWith("HERDR_")) delete childEnvironment[name];
+	for (const name of Object.keys(childEnvironment)) {
+		if (name.startsWith("HERDR_")) {
+			delete childEnvironment[name];
+		}
+	}
 	const parser = createStreamParser();
 	const seen = { activity: "", assistant: "", stop: "", tool: "", progress: 0 };
-	const failLog = (error: unknown) => appendLimenLog(jobDir, `log write failed: ${error instanceof Error ? error.message : String(error)}`).catch(() => {});
+	const failLog = (error: unknown) =>
+		appendLimenLog(jobDir, `log write failed: ${error instanceof Error ? error.message : String(error)}`).catch(
+			() => {},
+		);
 	const apply = (events: readonly StreamEvent[]) => {
 		pending = pending
 			.then(() =>
@@ -124,7 +155,9 @@ export async function runInternalJob(): Promise<void> {
 					events,
 					() => {
 						tools += 1;
-						if (tools >= toolCallCap()) exhaust(`tool-call cap reached after ${tools} calls`);
+						if (tools >= toolCallCap()) {
+							exhaust(`tool-call cap reached after ${tools} calls`);
+						}
 						return tools;
 					},
 					seen,
@@ -158,14 +191,18 @@ export async function runInternalJob(): Promise<void> {
 	let observing = false;
 	let ownershipWarning = false;
 	const warnUncertain = async (detail: string) => {
-		if (ownershipWarning) return;
+		if (ownershipWarning) {
+			return;
+		}
 		ownershipWarning = true;
 		const line = `tool stall observation uncertain: ${detail}`;
 		await atomicWrite(`${jobDir}/advisory`, `${line}\n`);
 		await appendLimenLog(jobDir, line);
 	};
 	const clearUncertain = async () => {
-		if (!ownershipWarning) return;
+		if (!ownershipWarning) {
+			return;
+		}
 		ownershipWarning = false;
 		await rm(`${jobDir}/advisory`, { force: true });
 	};
@@ -203,12 +240,22 @@ export async function runInternalJob(): Promise<void> {
 			await warnUncertain("child ownership changed before termination");
 			return;
 		}
-		if (seen.activity !== "tool" || (await observeToolStall(stallWatch, pid, `${tools}:${seen.tool}:${seen.progress}`)) !== "stalled") return;
+		if (
+			seen.activity !== "tool" ||
+			(await observeToolStall(stallWatch, pid, `${tools}:${seen.tool}:${seen.progress}`)) !== "stalled"
+		) {
+			return;
+		}
 		await clearUncertain();
-		exhaust(`stalled tool ${seen.tool}: ${stallWatch.previous?.children.length ? "CPU-idle child" : "child exited"} for ${Math.round(toolStallMs() / 1000)}s`, descendants);
+		exhaust(
+			`stalled tool ${seen.tool}: ${stallWatch.previous?.children.length ? "CPU-idle child" : "child exited"} for ${Math.round(toolStallMs() / 1000)}s`,
+			descendants,
+		);
 	};
 	const checkStall = () => {
-		if (observing || exhausted || stopRequested || !enginePid) return;
+		if (observing || exhausted || stopRequested || !enginePid) {
+			return;
+		}
 		if (seen.activity !== "tool") {
 			void clearUncertain();
 			return;
@@ -225,7 +272,9 @@ export async function runInternalJob(): Promise<void> {
 	const result = await outcome;
 	clearTimeout(timeout);
 	clearInterval(stallTimer);
-	if (graceTimer) clearTimeout(graceTimer);
+	if (graceTimer) {
+		clearTimeout(graceTimer);
+	}
 	apply(parser.flush());
 	await pending;
 	if (seen.stop) {
@@ -236,16 +285,23 @@ export async function runInternalJob(): Promise<void> {
 		await exhaustionTermination;
 	} else if (stopRequested || result.signal === "SIGTERM" || result.signal === "SIGKILL") {
 		await finalizeJob(jobDir, "stopped", "process group interrupted", shutdownDeadline);
-	} else if (result.error) await finalizeJob(jobDir, "failed", result.error.message);
-	else if (result.code === 0) {
-		if (seen.assistant) await atomicWrite(`${jobDir}/result`, `${seen.assistant}\n`).catch(() => {});
+	} else if (result.error) {
+		await finalizeJob(jobDir, "failed", result.error.message);
+	} else if (result.code === 0) {
+		if (seen.assistant) {
+			await atomicWrite(`${jobDir}/result`, `${seen.assistant}\n`).catch(() => {});
+		}
 		const failedReason = isFailedStopReason(seen.stop) ? seen.stop : "";
 		await finalizeJob(jobDir, failedReason ? "failed" : "done", failedReason || `${profile.id} exited 0`);
-	} else await finalizeJob(jobDir, "failed", `worker exited with code ${result.code ?? "unknown"}`);
+	} else {
+		await finalizeJob(jobDir, "failed", `worker exited with code ${result.code ?? "unknown"}`);
+	}
 }
 export async function failInternalJob(error: unknown): Promise<void> {
 	const jobDir = process.env.LIMEN_JOB_DIR;
-	if (!jobDir) return;
+	if (!jobDir) {
+		return;
+	}
 	await finalizeJob(jobDir, "failed", error instanceof Error ? error.message : String(error));
 }
 async function recordEvents(
@@ -271,7 +327,9 @@ async function recordEvents(
 		} else if (event.kind === "assistant") {
 			seen.assistant = event.text;
 			seen.stop = event.stopReason ?? "";
-			if (event.text) await appendFile(`${jobDir}/log`, `${event.text}\n`);
+			if (event.text) {
+				await appendFile(`${jobDir}/log`, `${event.text}\n`);
+			}
 		} else {
 			seen.progress += 1;
 			await appendFile(`${jobDir}/log`, `${event.line}\n`);
@@ -280,6 +338,8 @@ async function recordEvents(
 }
 function requiredEnvironment(name: string): string {
 	const value = process.env[name];
-	if (!value) throw new Error(`internal job wrapper is missing ${name}`);
+	if (!value) {
+		throw new Error(`internal job wrapper is missing ${name}`);
+	}
 	return value;
 }

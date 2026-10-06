@@ -6,7 +6,19 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { mkdir, realpath, rm, symlink, utimes, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
-import { git, jobDir, jobFile, limen, type Plant, plant, release, repository, spawnJob, TICKET, waitJob } from "./plant.ts";
+import {
+	git,
+	jobDir,
+	jobFile,
+	limen,
+	type Plant,
+	plant,
+	release,
+	repository,
+	spawnJob,
+	TICKET,
+	waitJob,
+} from "./plant.ts";
 
 let p: Plant;
 before(async () => {
@@ -15,9 +27,14 @@ before(async () => {
 after(() => p.cleanup());
 
 const json = (path: string) => JSON.parse(readFileSync(path, "utf8"));
-const extensionsOf = (argv: readonly string[]) => argv.flatMap((value, index) => (value === "--extension" ? [argv[index + 1] ?? ""] : []));
+const extensionsOf = (argv: readonly string[]) =>
+	argv.flatMap((value, index) => (value === "--extension" ? [argv[index + 1] ?? ""] : []));
 // What a half-made job would leave: a job dir, a worktree, a branch.
-const traces = () => [readdirSync(join(p.root, ".limen/jobs")), git(p.root, "worktree", "list", "--porcelain"), git(p.root, "branch", "--list")];
+const traces = () => [
+	readdirSync(join(p.root, ".limen/jobs")),
+	git(p.root, "worktree", "list", "--porcelain"),
+	git(p.root, "branch", "--list"),
+];
 
 test("each spawn refusal exits 1, names its cause and leaves no job, worktree or branch", async (context) => {
 	const draft = "spec/features/active/F002-draft/ticket.md";
@@ -45,7 +62,12 @@ test("each spawn refusal exits 1, names its cause and leaves no job, worktree or
 test("a detached job runs in its own worktree from the base with the exact task and a clean engine environment", async () => {
 	const base = git(p.root, "rev-parse", "HEAD");
 	const task = `block\ncommit\nsay all done\n\nTicket: ${TICKET}  \n\t'quoted' $HOME \`tick\`\n`;
-	const caller = { PI_SESSION_ID: "coord", PI_SESSION_FILE: join(p.parent, "coord.jsonl"), HERDR_ENV: "1", HERDR_PANE_ID: "p1" };
+	const caller = {
+		PI_SESSION_ID: "coord",
+		PI_SESSION_FILE: join(p.parent, "coord.jsonl"),
+		HERDR_ENV: "1",
+		HERDR_PANE_ID: "p1",
+	};
 	const id = spawnJob(p, task, ["--detached", "--label", "F001 demo"], { env: caller });
 	const dir = jobDir(p, id);
 	const tree = jobFile(p, id, "worktree");
@@ -57,7 +79,9 @@ test("a detached job runs in its own worktree from the base with the exact task 
 	const index = join(git(tree, "rev-parse", "--absolute-git-dir"), "index");
 	await utimes(join(tree, "README.md"), new Date(0), new Date(0));
 	const bytes = readFileSync(index);
-	for (const read of [["jobs"], ["status"], ["jobs", id]]) assert.equal(limen(p, read).status, 0, read.join(" "));
+	for (const read of [["jobs"], ["status"], ["jobs", id]]) {
+		assert.equal(limen(p, read).status, 0, read.join(" "));
+	}
 	assert.deepEqual(readFileSync(index), bytes);
 	assert.equal(existsSync(`${index}.lock`), false);
 
@@ -92,7 +116,16 @@ test("a workspace job works in one child repository and loads a selected Pi exte
 	const extension = join(p.parent, "selected.ts");
 	await writeFile(extension, "export default () => {};\n");
 	await symlink(extension, join(p.parent, "alias.ts"));
-	const flags = ["--repo", "api", "--engine", "pi", "--extension", extension, "--extension", join(p.parent, "alias.ts")];
+	const flags = [
+		"--repo",
+		"api",
+		"--engine",
+		"pi",
+		"--extension",
+		extension,
+		"--extension",
+		join(p.parent, "alias.ts"),
+	];
 	const id = spawnJob(p, "commit", flags, { cwd: workspace });
 	assert.equal(waitJob(p, id, { cwd: workspace }), "done");
 	const dir = join(workspace, ".limen/jobs", id);

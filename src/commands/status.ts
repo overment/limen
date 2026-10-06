@@ -16,19 +16,36 @@ const text = (path: string) =>
 		() => "",
 	);
 
-type Agent = { pane_id?: string; tab_id?: string; cwd?: string; agent_status?: string; interactive_ready?: boolean; name?: string };
+type Agent = {
+	pane_id?: string;
+	tab_id?: string;
+	cwd?: string;
+	agent_status?: string;
+	interactive_ready?: boolean;
+	name?: string;
+};
 type Tab = { tab_id?: string; label?: string; number?: number; agent_status?: string };
 
-type Finished = { readonly id: string; readonly label: string; readonly state: string; readonly branch: string; readonly repo: string };
+type Finished = {
+	readonly id: string;
+	readonly label: string;
+	readonly state: string;
+	readonly branch: string;
+	readonly repo: string;
+};
 
 export async function statusCommand(args: readonly string[], cwd: string): Promise<void> {
 	const all = args[0] === "--all";
-	if (args.length > (all ? 1 : 0)) throw new Error("status accepts no arguments or --all");
+	if (args.length > (all ? 1 : 0)) {
+		throw new Error("status accepts no arguments or --all");
+	}
 	const root = existsSync(`${resolve(cwd)}/.limen/jobs`) ? resolve(cwd) : limenRoot(cwd);
 	const jobsRoot = `${root}/.limen/jobs`;
 	await confirmDeadJobs(jobsRoot);
 	const entries = await readdir(jobsRoot, { withFileTypes: true }).catch((error: unknown) => {
-		if (typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT") return [];
+		if (typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT") {
+			return [];
+		}
 		throw error;
 	});
 	const ids = entries
@@ -48,18 +65,40 @@ export async function statusCommand(args: readonly string[], cwd: string): Promi
 	let lastOrigin = "";
 	for (const id of ids) {
 		const dir = `${jobsRoot}/${id}`;
-		const [state = "", label = "", branch = "", repo = "", pane, tab, worktree, origin, started = "", ended = ""] = await Promise.all(
-			["state", "label", "branch", "repo", "herdr/agent", "herdr/tab", "worktree", "origin-tab", "started-at", "finished-at"].map((name) =>
-				name === "state" ? shownState(dir) : text(`${dir}/${name}`),
-			),
-		);
-		if (pane) workerPanes.add(pane);
-		if (tab) workerPanes.add(tab);
-		if (worktree) worktrees.add(worktree);
-		if (origin && state === "running") originTabs.add(origin);
-		if (origin) lastOrigin = origin;
+		const [state = "", label = "", branch = "", repo = "", pane, tab, worktree, origin, started = "", ended = ""] =
+			await Promise.all(
+				[
+					"state",
+					"label",
+					"branch",
+					"repo",
+					"herdr/agent",
+					"herdr/tab",
+					"worktree",
+					"origin-tab",
+					"started-at",
+					"finished-at",
+				].map((name) => (name === "state" ? shownState(dir) : text(`${dir}/${name}`))),
+			);
+		if (pane) {
+			workerPanes.add(pane);
+		}
+		if (tab) {
+			workerPanes.add(tab);
+		}
+		if (worktree) {
+			worktrees.add(worktree);
+		}
+		if (origin && state === "running") {
+			originTabs.add(origin);
+		}
+		if (origin) {
+			lastOrigin = origin;
+		}
 		if (state === "running") {
-			if (branch) runningBranches.add(`${repo}:${branch}`);
+			if (branch) {
+				runningBranches.add(`${repo}:${branch}`);
+			}
 			const { record } = await renderJobDirectory(root, jobsRoot, id, "row");
 			const minutes = Date.parse(started) ? `${Math.max(0, Math.floor((now - Date.parse(started)) / 60_000))}m` : "";
 			const note = record.advisory ?? "";
@@ -68,24 +107,47 @@ export async function statusCommand(args: readonly string[], cwd: string): Promi
 				? `invalid: ${record.invalid}`
 				: [
 						record.pulse === "dead" ? "dead" : (record.pulse ?? "unknown activity"),
-						record.silentMs !== undefined && record.silentMs >= 90_000 ? `silent ${Math.floor(record.silentMs / 60_000)}m` : "",
+						record.silentMs !== undefined && record.silentMs >= 90_000
+							? `silent ${Math.floor(record.silentMs / 60_000)}m`
+							: "",
 						note.startsWith(kind) ? note : `${kind}: ${note}`,
 					]
 						.filter(Boolean)
 						.join(" · ");
-			running.push([`  ${record.job?.label ?? (label || id)} (${id})`, tab, minutes, attention, record.lastTool ?? "", repo ? `repo ${repo}` : ""].filter(Boolean).join(" · "));
+			running.push(
+				[
+					`  ${record.job?.label ?? (label || id)} (${id})`,
+					tab,
+					minutes,
+					attention,
+					record.lastTool ?? "",
+					repo ? `repo ${repo}` : "",
+				]
+					.filter(Boolean)
+					.join(" · "),
+			);
 			continue;
 		}
 		let group: GroupIdentity | undefined;
 		if (isTerminal(state)) {
 			try {
 				group = await jobMembership(dir);
-				if (group && (group.run.root !== root || typeof group.run.feature !== "string" || !group.run.feature.trim() || typeof group.run.closed !== "boolean")) group = undefined;
+				if (
+					group &&
+					(group.run.root !== root ||
+						typeof group.run.feature !== "string" ||
+						!group.run.feature.trim() ||
+						typeof group.run.closed !== "boolean")
+				) {
+					group = undefined;
+				}
 			} catch {
 				// Unreadable membership must not hide a recoverable branch.
 				group = undefined;
 			}
-			if (group?.run.closed) continue;
+			if (group?.run.closed) {
+				continue;
+			}
 		}
 		const finishedAt =
 			Date.parse(ended) ||
@@ -109,10 +171,17 @@ export async function statusCommand(args: readonly string[], cwd: string): Promi
 			}
 			continue;
 		}
-		if (branch) finished.set(`${repo}:${branch}`, { id, label: label || id, state, branch, repo });
+		if (branch) {
+			finished.set(`${repo}:${branch}`, { id, label: label || id, state, branch, repo });
+		}
 	}
-	if (!originTabs.size && lastOrigin) originTabs.add(lastOrigin);
-	const ready = [...groups].map(([id, group]) => `  group ${group.feature}: ${group.branches.size} member branches; the lead decides (limen group status ${id})`);
+	if (!originTabs.size && lastOrigin) {
+		originTabs.add(lastOrigin);
+	}
+	const ready = [...groups].map(
+		([id, group]) =>
+			`  group ${group.feature}: ${group.branches.size} member branches; the lead decides (limen group status ${id})`,
+	);
 	const decide: string[] = [];
 	const byRepo = Map.groupBy(
 		[...finished].filter(([key]) => !runningBranches.has(key)).map(([, job]) => job),
@@ -131,7 +200,9 @@ export async function statusCommand(args: readonly string[], cwd: string): Promi
 			continue;
 		}
 		for (const job of jobs) {
-			if (!unlanded.has(job.branch)) continue;
+			if (!unlanded.has(job.branch)) {
+				continue;
+			}
 			const line = `  ${job.label} (${job.id}) · ${job.state === "done" ? "" : `${job.state} · `}${job.branch}${repo ? ` · repo ${repo}` : ""}`;
 			(job.state === "done" ? ready : decide).push(line);
 		}
@@ -154,18 +225,38 @@ export async function statusCommand(args: readonly string[], cwd: string): Promi
 	);
 }
 
-function coordinatorLines(root: string, workspace: boolean, workers: ReadonlySet<string>, worktrees: ReadonlySet<string>, origins: ReadonlySet<string>): string[] {
+function coordinatorLines(
+	root: string,
+	workspace: boolean,
+	workers: ReadonlySet<string>,
+	worktrees: ReadonlySet<string>,
+	origins: ReadonlySet<string>,
+): string[] {
 	const bin = herdrBinary();
-	if (!bin) return ["  unknown (Herdr unavailable)"];
+	if (!bin) {
+		return ["  unknown (Herdr unavailable)"];
+	}
 	const result = spawnSync(bin, ["agent", "list"], { encoding: "utf8", timeout: 5_000 });
-	if (result.error || result.status !== 0) return recordedOriginLines(bin, origins, workers);
+	if (result.error || result.status !== 0) {
+		return recordedOriginLines(bin, origins, workers);
+	}
 	try {
 		const payload = JSON.parse(result.stdout) as { result?: { agents?: Agent[] }; agents?: Agent[] };
 		const agents = payload.result?.agents ?? payload.agents;
-		if (!Array.isArray(agents)) return recordedOriginLines(bin, origins, workers);
+		if (!Array.isArray(agents)) {
+			return recordedOriginLines(bin, origins, workers);
+		}
 		const plant = realpathSync(root);
 		const relevant = agents.filter((agent) => {
-			if (!agent.cwd || !agent.tab_id || workers.has(agent.pane_id ?? "") || workers.has(agent.tab_id) || worktrees.has(agent.cwd)) return false;
+			if (
+				!agent.cwd ||
+				!agent.tab_id ||
+				workers.has(agent.pane_id ?? "") ||
+				workers.has(agent.tab_id) ||
+				worktrees.has(agent.cwd)
+			) {
+				return false;
+			}
 			let path: string;
 			try {
 				path = relative(plant, realpathSync(agent.cwd));
@@ -174,7 +265,9 @@ function coordinatorLines(root: string, workspace: boolean, workers: ReadonlySet
 			}
 			return path === "" || (workspace && path !== ".." && !path.startsWith("../") && !path.startsWith(".limen"));
 		});
-		if (!relevant.length) return ["  none found (not proof of an idle plant)"];
+		if (!relevant.length) {
+			return ["  none found (not proof of an idle plant)"];
+		}
 		const tabs = listTabs(bin, []);
 		return relevant.map((agent) => {
 			const tab = tabs?.find((candidate) => candidate.tab_id === agent.tab_id);
@@ -195,7 +288,9 @@ function recordedOriginLines(bin: string, origins: ReadonlySet<string>, workers:
 	const spaces = new Set([...origins].map((tab) => tab.split(":")[0]).filter((space): space is string => !!space));
 	for (const workspace of spaces) {
 		for (const tab of listTabs(bin, ["--workspace", workspace]) ?? []) {
-			if (tab.tab_id && origins.has(tab.tab_id) && !workers.has(tab.tab_id)) lines.push(`  ${tabLabel(tab) ?? "unlabeled tab"} · ${tab.agent_status ?? "unknown"} · ${tab.tab_id}`);
+			if (tab.tab_id && origins.has(tab.tab_id) && !workers.has(tab.tab_id)) {
+				lines.push(`  ${tabLabel(tab) ?? "unlabeled tab"} · ${tab.agent_status ?? "unknown"} · ${tab.tab_id}`);
+			}
 		}
 	}
 	return lines.length
@@ -211,7 +306,9 @@ function tabLabel(tab: Tab): string | undefined {
 
 function listTabs(bin: string, args: readonly string[]): readonly Tab[] | undefined {
 	const result = spawnSync(bin, ["tab", "list", ...args], { encoding: "utf8", timeout: 2_000 });
-	if (result.error || result.status !== 0) return undefined;
+	if (result.error || result.status !== 0) {
+		return undefined;
+	}
 	try {
 		const tabs = (JSON.parse(result.stdout) as { result?: { tabs?: Tab[] } }).result?.tabs;
 		return Array.isArray(tabs) ? tabs : undefined;

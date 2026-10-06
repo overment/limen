@@ -8,12 +8,20 @@ import { herdrBinary } from "../integrations/herdr.ts";
 const PACKAGE_ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const home = () => process.env.LIMEN_HOME || homedir();
 export const projectsFile = () => join(home(), ".limen", "projects");
-export const registeredProjects = () => [...new Set((fs.existsSync(projectsFile()) ? fs.readFileSync(projectsFile(), "utf8") : "").split(/\r?\n/).filter(Boolean))];
-export function updateRegisteredProjects(update: (projects: readonly string[]) => readonly string[]): readonly string[] {
+export const registeredProjects = () => [
+	...new Set(
+		(fs.existsSync(projectsFile()) ? fs.readFileSync(projectsFile(), "utf8") : "").split(/\r?\n/).filter(Boolean),
+	),
+];
+export function updateRegisteredProjects(
+	update: (projects: readonly string[]) => readonly string[],
+): readonly string[] {
 	return withRegistryLock(() => {
 		const before = registeredProjects(),
 			after = [...new Set(update(before))];
-		if (before.length === after.length && before.every((project, index) => project === after[index])) return before;
+		if (before.length === after.length && before.every((project, index) => project === after[index])) {
+			return before;
+		}
 		const path = projectsFile(),
 			temporary = `${path}.${process.pid}.${Date.now()}.tmp`;
 		try {
@@ -31,16 +39,32 @@ export async function registerProject(root: string): Promise<void> {
 }
 export async function showSeatNotification(title: string, body: string): Promise<boolean> {
 	const herdr = herdrBinary();
-	if (herdr && (await run(herdr, ["notification", "show", title, "--body", body, "--sound", "request"]))) return true;
-	return run("/usr/bin/osascript", ["-e", "on run argv", "-e", "display notification (item 2 of argv) with title (item 1 of argv)", "-e", "end run", "--", title, body]);
+	if (herdr && (await run(herdr, ["notification", "show", title, "--body", body, "--sound", "request"]))) {
+		return true;
+	}
+	return run("/usr/bin/osascript", [
+		"-e",
+		"on run argv",
+		"-e",
+		"display notification (item 2 of argv) with title (item 1 of argv)",
+		"-e",
+		"end run",
+		"--",
+		title,
+		body,
+	]);
 }
 export async function installSeatSweep(): Promise<void> {
 	const path = join(home(), "Library", "LaunchAgents", "limen-sweep.plist");
-	const values = [process.execPath, join(PACKAGE_ROOT, "bin", "limen"), "sweep"].map((value) => `<string>${xml(value)}</string>`).join("");
+	const values = [process.execPath, join(PACKAGE_ROOT, "bin", "limen"), "sweep"]
+		.map((value) => `<string>${xml(value)}</string>`)
+		.join("");
 	const plist = `<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n<plist version="1.0"><dict><key>Label</key><string>works.earendil.limen-sweep</string><key>ProgramArguments</key><array>${values}</array><key>StartInterval</key><integer>60</integer></dict></plist>\n`;
 	fs.mkdirSync(dirname(path), { recursive: true });
 	fs.writeFileSync(path, plist);
-	console.log(`wrote ${path}\nnode ${process.execPath}\nlimen ${join(PACKAGE_ROOT, "bin", "limen")}\nMoving this checkout requires running limen sweep --install again.`);
+	console.log(
+		`wrote ${path}\nnode ${process.execPath}\nlimen ${join(PACKAGE_ROOT, "bin", "limen")}\nMoving this checkout requires running limen sweep --install again.`,
+	);
 }
 export async function uninstallSeatSweep(): Promise<void> {
 	const path = join(home(), "Library", "LaunchAgents", "limen-sweep.plist");
@@ -59,9 +83,15 @@ function withRegistryLock<T>(action: () => T): T {
 			fs.writeFileSync(join(lock, "owner"), `${process.pid}\n`);
 			break;
 		} catch (error) {
-			if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
-			if (removeAbandonedLock(lock, reclaimer)) continue;
-			if (Date.now() >= deadline) throw new Error(`timed out locking ${path}`);
+			if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
+				throw error;
+			}
+			if (removeAbandonedLock(lock, reclaimer)) {
+				continue;
+			}
+			if (Date.now() >= deadline) {
+				throw new Error(`timed out locking ${path}`);
+			}
 			Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10);
 		}
 	}
@@ -72,7 +102,9 @@ function withRegistryLock<T>(action: () => T): T {
 		try {
 			fs.renameSync(lock, released);
 		} catch (error) {
-			if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+			if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+				throw error;
+			}
 		}
 		fs.rmSync(released, { recursive: true, force: true, maxRetries: 10, retryDelay: 10 });
 	}
@@ -88,29 +120,41 @@ function removeAbandonedLock(lock: string, reclaimer: string): boolean {
 				process.kill(owner, 0);
 				return false;
 			} catch (error) {
-				if ((error as NodeJS.ErrnoException).code !== "ESRCH") return false;
+				if ((error as NodeJS.ErrnoException).code !== "ESRCH") {
+					return false;
+				}
 			}
-		} else if (Date.now() - identity.mtimeMs < 5_000) return false;
+		} else if (Date.now() - identity.mtimeMs < 5_000) {
+			return false;
+		}
 		const claimPath = `${lock}.reclaimer.${identity.dev}.${identity.ino}`;
 		try {
 			fs.writeFileSync(claimPath, reclaimer, { flag: "wx" });
 			claim = claimPath;
 		} catch (error) {
-			if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+			if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
+				throw error;
+			}
 			return false;
 		}
 		const claimedIdentity = fs.statSync(lock),
 			claimedOwner = fs.existsSync(join(lock, "owner")) ? fs.readFileSync(join(lock, "owner"), "utf8").trim() : "";
-		if (claimedIdentity.dev !== identity.dev || claimedIdentity.ino !== identity.ino || claimedOwner !== ownerText) return false;
+		if (claimedIdentity.dev !== identity.dev || claimedIdentity.ino !== identity.ino || claimedOwner !== ownerText) {
+			return false;
+		}
 		const abandoned = `${lock}.abandoned.${reclaimer}`;
 		fs.renameSync(lock, abandoned);
 		fs.rmSync(abandoned, { recursive: true, force: true, maxRetries: 10, retryDelay: 10 });
 		return true;
 	} catch (error) {
-		if ((error as NodeJS.ErrnoException).code === "ENOENT") return true;
+		if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+			return true;
+		}
 		throw error;
 	} finally {
-		if (claim) fs.rmSync(claim, { force: true });
+		if (claim) {
+			fs.rmSync(claim, { force: true });
+		}
 	}
 }
 function run(command: string, args: readonly string[]): Promise<boolean> {

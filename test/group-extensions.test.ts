@@ -10,7 +10,19 @@ import { git, jobDir, LIMEN, limen, plant, type RunOptions, TICKET, waitJob } fr
 
 const lead = { PI_SESSION_ID: "extension-lead" };
 const route = ["--engine", "pi", "--provider", "fixture", "--model", "fixture", "--thinking", "high"];
-const settings = ["--teams", "2", "--workers-per-team", "3", "--timeout", "30m", "--worker-timeout", "20m", ...route, "--worker-thinking", "high"];
+const settings = [
+	"--teams",
+	"2",
+	"--workers-per-team",
+	"3",
+	"--timeout",
+	"30m",
+	"--worker-timeout",
+	"20m",
+	...route,
+	"--worker-thinking",
+	"high",
+];
 // Exercise the hosted supervisor and its real launch argv without a GUI or provider.
 const herdr = `#!/usr/bin/env node
 const fs = require('node:fs');
@@ -37,7 +49,9 @@ async function fixture(hosted = false) {
 	const p = await plant();
 	const feature = dirname(TICKET);
 	await mkdir(join(p.root, feature, "group/teams"), { recursive: true });
-	for (const path of ["group/brief.md", "group/teams/team-1.md", "group/teams/team-2.md"]) await writeFile(join(p.root, feature, path), `# ${path}\n`);
+	for (const path of ["group/brief.md", "group/teams/team-1.md", "group/teams/team-2.md"]) {
+		await writeFile(join(p.root, feature, path), `# ${path}\n`);
+	}
 	git(p.root, "add", "-A");
 	git(p.root, "commit", "-q", "-m", "group packet");
 	await mkdir(join(p.root, ".limen/group-leads"), { recursive: true });
@@ -46,12 +60,17 @@ async function fixture(hosted = false) {
 	await mkdir(extensions);
 	const common = join(extensions, "common.ts"),
 		privatePath = join(extensions, "private = entry.ts");
-	for (const path of [common, privatePath]) await writeFile(path, "export default () => {};\n");
+	for (const path of [common, privatePath]) {
+		await writeFile(path, "export default () => {};\n");
+	}
 	await symlink(common, join(extensions, "alias.ts"));
 	await writeFile(join(p.parent, "herdr"), herdr, { mode: 0o755 });
-	const env = hosted ? { ...lead, HERDR_ENV: "1", LIMEN_HERDR: join(p.parent, "herdr"), GROUP_FAKE_PI: join(p.bin, "pi") } : lead;
+	const env = hosted
+		? { ...lead, HERDR_ENV: "1", LIMEN_HERDR: join(p.parent, "herdr"), GROUP_FAKE_PI: join(p.bin, "pi") }
+		: lead;
 	const mode = hosted ? "--tab" : "--detached";
-	const run = (args: readonly string[], options: RunOptions = {}) => limen(p, args, { ...options, env: { ...env, ...options.env } });
+	const run = (args: readonly string[], options: RunOptions = {}) =>
+		limen(p, args, { ...options, env: { ...env, ...options.env } });
 	const start = (...extra: string[]) => run(["group", "start", feature, ...settings, mode, ...extra]);
 	const member = (run: GroupRun, team: string) => ({
 		LIMEN_JOB: "1",
@@ -60,7 +79,8 @@ async function fixture(hosted = false) {
 		LIMEN_GROUP_ID: run.id,
 		LIMEN_TEAM_ID: team,
 	});
-	const launch = (group: GroupRun, team: string, ...extra: string[]) => run(["spawn", "candidate", ...route, mode, ...extra], { env: member(group, team) });
+	const launch = (group: GroupRun, team: string, ...extra: string[]) =>
+		run(["spawn", "candidate", ...route, mode, ...extra], { env: member(group, team) });
 	const resume = (id: string, ...extra: string[]) => run(["continue", id, "follow-up", ...route, mode, ...extra]);
 	const checkJob = async (id: string, selected: string[]) => {
 		assert.equal(waitJob(p, id), "done");
@@ -69,7 +89,9 @@ async function fixture(hosted = false) {
 		assert.ok(argv.includes("--no-extensions"));
 		const loaded = argv.flatMap((arg, index) => (arg === "--extension" ? [argv[index + 1]] : []));
 		assert.equal(new Set(loaded).size, loaded.length);
-		for (const hook of ["steering", "communication", "group-peer"]) assert.equal(loaded.filter((path) => path?.endsWith(`/hook/${hook}.ts`)).length, 1);
+		for (const hook of ["steering", "communication", "group-peer"]) {
+			assert.equal(loaded.filter((path) => path?.endsWith(`/hook/${hook}.ts`)).length, 1);
+		}
 		assert.equal(
 			loaded.some((path) => path?.endsWith("/hook/hosted.ts")),
 			hosted,
@@ -83,7 +105,7 @@ async function fixture(hosted = false) {
 }
 const lastLine = (stdout: string) => stdout.trim().split("\n").at(-1) ?? "";
 
-for (const hosted of [false, true])
+for (const hosted of [false, true]) {
 	test(`${hosted ? "hosted" : "detached"} Pi teams keep common and private selections through workers, reviews and continuation`, async (context) => {
 		const f = await fixture(hosted);
 		context.after(f.cleanup);
@@ -107,7 +129,11 @@ for (const hosted of [false, true])
 			assert.equal(refused.status, 1);
 			assert.match(refused.stderr, /recorded team extensions/);
 			const before = (await readRun(f.root, run.id)).members.length;
-			const child = f.launch(run, coordinator.team, ...(coordinator.team === "team-1" ? expected.flatMap((path) => ["--extension", path]) : []));
+			const child = f.launch(
+				run,
+				coordinator.team,
+				...(coordinator.team === "team-1" ? expected.flatMap((path) => ["--extension", path]) : []),
+			);
 			assert.equal(child.status, 0, child.stderr);
 			const id = lastLine(child.stdout);
 			await f.checkJob(id, expected);
@@ -136,6 +162,7 @@ for (const hosted of [false, true])
 			assert.match(f.resume(coordinator.id).stderr, /coordinator continuation/);
 		}
 	});
+}
 
 test("invalid group selections never activate or consume jobs, including later teams and OMP", async (context) => {
 	const f = await fixture();
@@ -152,7 +179,15 @@ test("invalid group selections never activate or consume jobs, including later t
 		const result = f.start("--extension", f.common, ...extra);
 		assert.equal(result.status, 1, result.stderr);
 	}
-	const omp = f.run(["group", "start", f.feature, ...settings.map((arg) => (arg === "pi" ? "omp" : arg)), f.mode, "--team-extension", `team-2=${f.common}`]);
+	const omp = f.run([
+		"group",
+		"start",
+		f.feature,
+		...settings.map((arg) => (arg === "pi" ? "omp" : arg)),
+		f.mode,
+		"--team-extension",
+		`team-2=${f.common}`,
+	]);
 	assert.match(omp.stderr, /supported only for Pi/);
 	assert.deepEqual(await readdir(join(f.root, ".limen/groups")).catch(() => []), []);
 	assert.deepEqual(await readdir(join(f.root, ".limen/jobs")).catch(() => []), []);
@@ -164,11 +199,15 @@ test("concurrent and repeated starts keep the original selections, even after a 
 	context.after(f.cleanup);
 	const start = (path: string) =>
 		new Promise<string>((resolve, reject) => {
-			const child = spawn(process.execPath, [LIMEN, "group", "start", f.feature, ...settings, f.mode, "--team-extension", `team-2=${path}`], {
-				cwd: f.root,
-				env: { ...f.env, ...lead },
-				stdio: ["ignore", "pipe", "pipe"],
-			});
+			const child = spawn(
+				process.execPath,
+				[LIMEN, "group", "start", f.feature, ...settings, f.mode, "--team-extension", `team-2=${path}`],
+				{
+					cwd: f.root,
+					env: { ...f.env, ...lead },
+					stdio: ["ignore", "pipe", "pipe"],
+				},
+			);
 			let output = "",
 				errors = "";
 			child.stdout.on("data", (data) => {
@@ -185,7 +224,9 @@ test("concurrent and repeated starts keep the original selections, even after a 
 	const run = await readRun(f.root, ids[0] ?? "");
 	assert.equal(run.members.length, 2);
 	assert.deepEqual(run.teamExtensions?.["team-1"], []);
-	for (const member of run.members) await f.checkJob(member.id, run.teamExtensions?.[member.team] ?? []);
+	for (const member of run.members) {
+		await f.checkJob(member.id, run.teamExtensions?.[member.team] ?? []);
+	}
 	const original = await readFile(join(groupPath(run), "run.json"), "utf8");
 	await rm(f.common);
 	await rm(f.privatePath);
@@ -205,7 +246,9 @@ test("malformed new maps fail closed; legacy groups keep explicit spawn and pare
 	const started = f.start();
 	assert.equal(started.status, 0, started.stderr);
 	const run = await readRun(f.root, lastLine(started.stdout));
-	for (const member of run.members) await f.checkJob(member.id, []);
+	for (const member of run.members) {
+		await f.checkJob(member.id, []);
+	}
 	assert.match(f.launch(run, "team-1", "--extension", f.common).stderr, /recorded team extensions/);
 	assert.equal((await readRun(f.root, run.id)).members.length, 2);
 	for (const map of [null, [], {}, { "team-1": [], "team-2": ["relative.ts"] }, { "team-1": [], "team-2": "bad" }]) {

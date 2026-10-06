@@ -7,10 +7,14 @@ import { coordinatorWakeRoute, watches } from "./watch.ts";
 const READY_WAIT_MS = 2_000;
 
 export async function steerCommand(args: readonly string[], cwd: string): Promise<void> {
-	if (process.env.LIMEN_GROUP_ID) throw new Error("group peer messages are informational; use group publish, not owner steering");
+	if (process.env.LIMEN_GROUP_ID) {
+		throw new Error("group peer messages are informational; use group publish, not owner steering");
+	}
 	const running = args[0] === "--running";
 	const message = args.slice(1).join(" ").trim();
-	if (!message || (!running && !args[0])) throw new Error(running ? "steer requires a message" : "steer requires a job id and a message");
+	if (!message || (!running && !args[0])) {
+		throw new Error(running ? "steer requires a message" : "steer requires a job id and a message");
+	}
 	const targets = running ? await watchedRunning(cwd) : [await resolveJob(cwd, args[0] ?? "", "control")];
 	if (!targets.length) {
 		console.log("nothing was reached");
@@ -20,7 +24,9 @@ export async function steerCommand(args: readonly string[], cwd: string): Promis
 		try {
 			console.log(`steered ${target.id} · ${await deliver(target, message)}`);
 		} catch (error: unknown) {
-			if (!running) throw error;
+			if (!running) {
+				throw error;
+			}
 			console.log(`not reached ${target.id}`);
 		}
 	}
@@ -29,10 +35,16 @@ export async function steerCommand(args: readonly string[], cwd: string): Promis
 async function deliver(target: { readonly id: string; readonly jobDir: string }, message: string): Promise<string> {
 	const { id, jobDir } = target;
 	const state = (await text(`${jobDir}/state`)) || "missing";
-	if (state !== "running") throw new Error(`${id} is already ${state}; not steered`);
+	if (state !== "running") {
+		throw new Error(`${id} is already ${state}; not steered`);
+	}
 	const pid = Number(await text(`${jobDir}/pid`));
-	if (!Number.isSafeInteger(pid) || pid <= 0 || !processGroupAlive(pid)) throw new Error(`${id} is not running; not steered`);
-	if (!(await waitForReady(jobDir))) throw new Error(`steering is unavailable for ${id}; the worker extension is not loaded`);
+	if (!Number.isSafeInteger(pid) || pid <= 0 || !processGroupAlive(pid)) {
+		throw new Error(`${id} is not running; not steered`);
+	}
+	if (!(await waitForReady(jobDir))) {
+		throw new Error(`steering is unavailable for ${id}; the worker extension is not loaded`);
+	}
 	return enqueue(jobDir, message);
 }
 
@@ -41,9 +53,13 @@ async function watchedRunning(cwd: string): Promise<ReadonlyArray<{ readonly id:
 	const jobsRoot = `${limenRoot(cwd)}/.limen/jobs`;
 	const selected: Array<{ id: string; jobDir: string }> = [];
 	for (const entry of await readdir(jobsRoot, { withFileTypes: true }).catch(() => [])) {
-		if (!entry.isDirectory()) continue;
+		if (!entry.isDirectory()) {
+			continue;
+		}
 		const jobDir = `${jobsRoot}/${entry.name}`;
-		if ((await text(`${jobDir}/state`)) === "running" && (await watches(jobDir, route))) selected.push({ id: entry.name, jobDir });
+		if ((await text(`${jobDir}/state`)) === "running" && (await watches(jobDir, route))) {
+			selected.push({ id: entry.name, jobDir });
+		}
 	}
 	return selected;
 }
@@ -57,14 +73,18 @@ async function enqueue(jobDir: string, message: string): Promise<string> {
 			await writeFile(`${inbox}/${seq}`, `${message}\n`, { flag: "wx", flush: true });
 			return seq;
 		} catch (error: unknown) {
-			if (!isExist(error)) throw error;
+			if (!isExist(error)) {
+				throw error;
+			}
 		}
 	}
 	throw new Error(`steer inbox is full for ${jobDir}`);
 }
 
 async function highest(jobDir: string): Promise<number> {
-	const names = await Promise.all(["inbox", "claims", "delivered"].map((part) => readdir(`${jobDir}/steer/${part}`).catch(() => [])));
+	const names = await Promise.all(
+		["inbox", "claims", "delivered"].map((part) => readdir(`${jobDir}/steer/${part}`).catch(() => [])),
+	);
 	return names.flat().reduce((max, name) => {
 		const value = Number(name);
 		return /^\d+$/.test(name) && value > max ? value : max;
@@ -74,7 +94,9 @@ async function highest(jobDir: string): Promise<number> {
 async function waitForReady(jobDir: string): Promise<boolean> {
 	const deadline = Date.now() + READY_WAIT_MS;
 	while (Date.now() <= deadline) {
-		if (await text(`${jobDir}/steer/ready`)) return true;
+		if (await text(`${jobDir}/steer/ready`)) {
+			return true;
+		}
 		await new Promise((resolve) => setTimeout(resolve, 20));
 	}
 	return false;

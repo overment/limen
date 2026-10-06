@@ -9,7 +9,14 @@ import { git, jobDir, jobFile, limen, type Plant, plant, release, spawnJob, TICK
 
 let p: Plant;
 let main: string;
-const job: Record<"a" | "b" | "running" | "empty" | "failed" | "ticket", string> = { a: "", b: "", running: "", empty: "", failed: "", ticket: "" };
+const job: Record<"a" | "b" | "running" | "empty" | "failed" | "ticket", string> = {
+	a: "",
+	b: "",
+	running: "",
+	empty: "",
+	failed: "",
+	ticket: "",
+};
 const lines = (n: number) => "x\n".repeat(n);
 
 before(async () => {
@@ -84,10 +91,17 @@ test("an unconfirmed land, another target, a group member, a staged target and a
 	// A member of a group whose cabinet names it asks to land its own team's job: only the land rule stops it.
 	const record = jobDir(p, job.a);
 	await mkdir(join(p.root, ".limen/groups/g1"), { recursive: true });
-	await writeFile(join(p.root, ".limen/groups/g1/run.json"), JSON.stringify({ root: p.root, members: [{ id: job.a, team: "t1" }] }));
+	await writeFile(
+		join(p.root, ".limen/groups/g1/run.json"),
+		JSON.stringify({ root: p.root, members: [{ id: job.a, team: "t1" }] }),
+	);
 	await Promise.all([writeFile(join(record, "group"), "g1\n"), writeFile(join(record, "team"), "t1\n")]);
 	refused(job.a, { LIMEN_GROUP_ID: "g1", LIMEN_TEAM_ID: "t1", LIMEN_JOB_ID: job.a, LIMEN_CONTEXT_ROOT: p.root });
-	await Promise.all([rm(join(p.root, ".limen/groups"), { recursive: true }), rm(join(record, "group")), rm(join(record, "team"))]);
+	await Promise.all([
+		rm(join(p.root, ".limen/groups"), { recursive: true }),
+		rm(join(record, "group")),
+		rm(join(record, "team")),
+	]);
 
 	await writeFile(join(p.root, "staged.txt"), "staged\n");
 	git(p.root, "add", "staged.txt");
@@ -106,7 +120,9 @@ test("a ticket that fails the strict check is refused with the keeper command", 
 	// The job files a ticket that touches no known place.
 	job.ticket = done("commit");
 	const ticket = TICKET.replace("F001-demo", "F002-bad");
-	await amend(job.ticket, { [ticket]: (await readFile(join(p.root, TICKET), "utf8")).replace("demo.place", "nope").replaceAll("F001", "F002") });
+	await amend(job.ticket, {
+		[ticket]: (await readFile(join(p.root, TICKET), "utf8")).replace("demo.place", "nope").replaceAll("F001", "F002"),
+	});
 	const stderr = refused(job.ticket);
 	assert.ok(stderr.includes(`${ticket}:3`), stderr);
 	assert.ok(stderr.includes(`limen keeper ${ticket} --job ${job.ticket}`), stderr);

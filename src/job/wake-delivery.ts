@@ -1,4 +1,14 @@
-import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import {
+	appendFileSync,
+	existsSync,
+	mkdirSync,
+	readdirSync,
+	readFileSync,
+	renameSync,
+	rmSync,
+	statSync,
+	writeFileSync,
+} from "node:fs";
 import { dirname, join } from "node:path";
 import { isTerminal } from "./job.ts";
 
@@ -7,11 +17,19 @@ const DEFAULT_FALLBACK_GRACE_MS = 5 * 60_000;
 export const CLAIM_STALE_MS = 30_000;
 const WAKE_ATTEMPTS = 2;
 export function deliverySettled(job: string, session: string): boolean {
-	if (!isTerminal(text(join(job, "state")))) return false;
-	if (claimSlots(job).length > 0) return false;
-	if (!routable(job)) return true;
+	if (!isTerminal(text(join(job, "state")))) {
+		return false;
+	}
+	if (claimSlots(job).length > 0) {
+		return false;
+	}
+	if (!routable(job)) {
+		return true;
+	}
 	const delivered = deliveredSlots(job);
-	if (subscribed(job, session)) return delivered.includes(session) || delivered.includes("_fallback");
+	if (subscribed(job, session)) {
+		return delivered.includes(session) || delivered.includes("_fallback");
+	}
 	return completionSlots(delivered).length > 0;
 }
 export type DeliveryCallbacks = {
@@ -21,18 +39,32 @@ export type DeliveryCallbacks = {
 	readonly accepted: (claim: string) => void;
 	readonly released: (claim: string) => void;
 };
-export function claimDelivery(job: string, slot: string, eligible: () => boolean, send: () => false | void | Promise<void>, callbacks: DeliveryCallbacks): boolean {
+export function claimDelivery(
+	job: string,
+	slot: string,
+	eligible: () => boolean,
+	send: () => false | void | Promise<void>,
+	callbacks: DeliveryCallbacks,
+): boolean {
 	const claim = join(job, "notify", "claims", slot);
 	const delivered = join(job, "notify", "delivered", slot);
-	if (unsuccessfulAttempts(claim) >= WAKE_ATTEMPTS) return false;
+	if (unsuccessfulAttempts(claim) >= WAKE_ATTEMPTS) {
+		return false;
+	}
 	mkdirSync(join(job, "notify", "claims"), { recursive: true });
 	mkdirSync(join(job, "notify", "delivered"), { recursive: true });
 	if (!callbacks.protected(claim)) {
 		const recovered = recoverClaim(claim);
-		if (recovered) callbacks.released(claim);
-		if (recovered === "blocked") callbacks.blocked();
+		if (recovered) {
+			callbacks.released(claim);
+		}
+		if (recovered === "blocked") {
+			callbacks.blocked();
+		}
 	}
-	if (existsSync(delivered) || existsSync(claim)) return false;
+	if (existsSync(delivered) || existsSync(claim)) {
+		return false;
+	}
 	try {
 		mkdirSync(claim);
 		writeFileSync(join(claim, "owner"), `${process.pid}\n${new Date().toISOString()}\n`);
@@ -57,7 +89,9 @@ export function claimDelivery(job: string, slot: string, eligible: () => boolean
 	callbacks.pending(claim, delivered);
 	const reject = () => {
 		callbacks.released(claim);
-		if (recordUnconfirmed(claim, "wake injection failed")) callbacks.blocked();
+		if (recordUnconfirmed(claim, "wake injection failed")) {
+			callbacks.blocked();
+		}
 	};
 	try {
 		const injected = send();
@@ -74,8 +108,11 @@ export function claimDelivery(job: string, slot: string, eligible: () => boolean
 			writeFileSync(join(claim, "accepted"), "1\n");
 			callbacks.accepted(claim);
 		};
-		if (injected instanceof Promise) injected.then(accept, reject);
-		else accept();
+		if (injected instanceof Promise) {
+			injected.then(accept, reject);
+		} else {
+			accept();
+		}
 		return true;
 	} catch {
 		reject();
@@ -84,12 +121,20 @@ export function claimDelivery(job: string, slot: string, eligible: () => boolean
 }
 function recoverClaim(claim: string): "released" | "blocked" | undefined {
 	try {
-		if (!existsSync(claim) || existsSync(join(claim, "blocked"))) return undefined;
-		if (Date.now() - statSync(claim).mtimeMs < CLAIM_STALE_MS) return undefined;
+		if (!existsSync(claim) || existsSync(join(claim, "blocked"))) {
+			return undefined;
+		}
+		if (Date.now() - statSync(claim).mtimeMs < CLAIM_STALE_MS) {
+			return undefined;
+		}
 		if (existsSync(join(claim, "accepted"))) {
 			const live = join(claim, "live");
-			if (text(live) !== "closed" && existsSync(live) && Date.now() - statSync(live).mtimeMs < CLAIM_STALE_MS) return undefined;
-			if (recordUnconfirmed(claim)) return "blocked";
+			if (text(live) !== "closed" && existsSync(live) && Date.now() - statSync(live).mtimeMs < CLAIM_STALE_MS) {
+				return undefined;
+			}
+			if (recordUnconfirmed(claim)) {
+				return "blocked";
+			}
 			return existsSync(claim) ? undefined : "released";
 		}
 		rmSync(claim, { recursive: true, force: true });
@@ -114,17 +159,29 @@ function unsuccessfulAttempts(claim: string): number {
 		.split("\n")
 		.reduce((sum, line) => sum + Number(line), 0);
 }
-export function recordUnconfirmed(claim: string, reason = "wake turn errored, aborted or remained unconfirmed"): boolean {
+export function recordUnconfirmed(
+	claim: string,
+	reason = "wake turn errored, aborted or remained unconfirmed",
+): boolean {
 	try {
-		if (!existsSync(claim) || existsSync(join(claim, "blocked"))) return false;
+		if (!existsSync(claim) || existsSync(join(claim, "blocked"))) {
+			return false;
+		}
 		writeFileSync(join(claim, "unsuccessful"), "1\n", { flag: "wx" });
 		const attemptsFile = attemptsPath(claim);
 		mkdirSync(dirname(attemptsFile), { recursive: true });
 		// Append atomically: competing subscribers must not overwrite each other's failure.
 		appendFileSync(attemptsFile, "1\n");
 		const attempts = unsuccessfulAttempts(claim);
-		if (attempts < WAKE_ATTEMPTS) rmSync(claim, { recursive: true, force: true });
-		else writeFileSync(join(claim, "blocked"), `automatic retries stopped after ${WAKE_ATTEMPTS} unsuccessful attempts\n`, { flag: "wx" });
+		if (attempts < WAKE_ATTEMPTS) {
+			rmSync(claim, { recursive: true, force: true });
+		} else {
+			writeFileSync(
+				join(claim, "blocked"),
+				`automatic retries stopped after ${WAKE_ATTEMPTS} unsuccessful attempts\n`,
+				{ flag: "wx" },
+			);
+		}
 		try {
 			const stopped = attempts >= WAKE_ATTEMPTS ? "; automatic retries stopped; claim retained for human recovery" : "";
 			appendFileSync(
@@ -141,9 +198,18 @@ export function recordUnconfirmed(claim: string, reason = "wake turn errored, ab
 }
 export function confirmClaim(claim: string, delivered: string): void {
 	try {
-		if (!existsSync(join(claim, "accepted")) || existsSync(join(claim, "blocked")) || unsuccessfulAttempts(claim) >= WAKE_ATTEMPTS) return;
-		if (!existsSync(delivered)) renameSync(claim, delivered);
-		else rmSync(claim, { recursive: true, force: true });
+		if (
+			!existsSync(join(claim, "accepted")) ||
+			existsSync(join(claim, "blocked")) ||
+			unsuccessfulAttempts(claim) >= WAKE_ATTEMPTS
+		) {
+			return;
+		}
+		if (!existsSync(delivered)) {
+			renameSync(claim, delivered);
+		} else {
+			rmSync(claim, { recursive: true, force: true });
+		}
 	} catch {
 		// Another coordinator confirmed or recovered it first.
 	}
@@ -166,7 +232,9 @@ export function recoverClaims(job: string, protectedClaim: (claim: string) => bo
 	let blocked = false;
 	for (const slot of claimSlots(job)) {
 		const claim = join(job, "notify", "claims", slot);
-		if (!protectedClaim(claim) && recoverClaim(claim) === "blocked") blocked = true;
+		if (!protectedClaim(claim) && recoverClaim(claim) === "blocked") {
+			blocked = true;
+		}
 	}
 	return blocked;
 }
@@ -217,7 +285,9 @@ function fallbackGraceMs(): number {
 export function sessionOwnsJobs(jobs: string, session: string): boolean {
 	try {
 		for (const id of readdirSync(jobs)) {
-			if (existsSync(join(jobs, id, "notify", "subscribers", session))) return true;
+			if (existsSync(join(jobs, id, "notify", "subscribers", session))) {
+				return true;
+			}
 		}
 	} catch {
 		// Missing jobs directory means this session owns nothing here.
@@ -228,14 +298,20 @@ function isAdvisorySlot(slot: string): boolean {
 	return slot.startsWith("_advisory.");
 }
 export function receiptFamily(slot: string): "_advisory" | "_uncertainty" | "_completion" {
-	if (isAdvisorySlot(slot)) return "_advisory";
-	if (slot.startsWith("_uncertainty.")) return "_uncertainty";
+	if (isAdvisorySlot(slot)) {
+		return "_advisory";
+	}
+	if (slot.startsWith("_uncertainty.")) {
+		return "_uncertainty";
+	}
 	return "_completion";
 }
 export function completionSlots(names: readonly string[]): string[] {
 	return names.filter((name) => receiptFamily(name) === "_completion");
 }
 function text(path: string): string {
-	if (!existsSync(path)) return "";
+	if (!existsSync(path)) {
+		return "";
+	}
 	return readFileSync(path, "utf8").trim();
 }

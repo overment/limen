@@ -5,8 +5,17 @@ import { herdrBinary, hostedForegroundPid } from "../src/integrations/herdr.ts";
 import { readHostedBinding, registerHostedBinding } from "../src/runtime/hosted-binding.ts";
 
 type PiApi = {
-	on(event: "session_start" | "session_shutdown" | "agent_settled", handler: (event: unknown, context: unknown) => void | Promise<void>): void;
-	on(event: "tool_execution_start", handler: (event: { readonly toolName?: string; readonly args?: { readonly command?: string } }, context: unknown) => void): void;
+	on(
+		event: "session_start" | "session_shutdown" | "agent_settled",
+		handler: (event: unknown, context: unknown) => void | Promise<void>,
+	): void;
+	on(
+		event: "tool_execution_start",
+		handler: (
+			event: { readonly toolName?: string; readonly args?: { readonly command?: string } },
+			context: unknown,
+		) => void,
+	): void;
 	on(event: "tool_execution_end", handler: (event: unknown, context: unknown) => void): void;
 	on(event: "turn_start" | "turn_end", handler: (event: unknown, context: unknown) => void): void;
 	registerTool?(tool: {
@@ -30,12 +39,18 @@ const METADATA_REFRESH_MS = 60_000;
 
 /** Keep `.limen/jobs/<id>/` truthful for a Herdr-hosted pi (no JSON stream). */
 export default function limenHosted(pi: PiApi): void {
-	if (process.env.LIMEN_HOSTED !== "1" || process.env.LIMEN_JOB !== "1") return;
+	if (process.env.LIMEN_HOSTED !== "1" || process.env.LIMEN_JOB !== "1") {
+		return;
+	}
 	const root = process.env.LIMEN_CONTEXT_ROOT;
 	const id = process.env.LIMEN_JOB_ID;
-	if (!root || !id) return;
+	if (!root || !id) {
+		return;
+	}
 	const jobDir = join(root, ".limen", "jobs", id);
-	if (!existsSync(jobDir)) return;
+	if (!existsSync(jobDir)) {
+		return;
+	}
 	let tools = 0;
 	let pendingTools = 0;
 	let turnTools = 0;
@@ -45,7 +60,9 @@ export default function limenHosted(pi: PiApi): void {
 	let metadata = "";
 	let metadataAt = 0;
 	const report = (release = false) => {
-		if (!herdr) return;
+		if (!herdr) {
+			return;
+		}
 		try {
 			// The supervisor owns warning metadata until it removes the advisory.
 			if (!release && existsSync(join(jobDir, "advisory"))) {
@@ -53,8 +70,12 @@ export default function limenHosted(pi: PiApi): void {
 				return;
 			}
 			const state = release ? "" : readFileSync(join(jobDir, "state"), "utf8").trim();
-			const body = ["running", "done", "failed", "stopped"].includes(state) ? `job ${state.toUpperCase()}` : "job state unknown";
-			if (!release && body === metadata && Date.now() - metadataAt < METADATA_REFRESH_MS) return;
+			const body = ["running", "done", "failed", "stopped"].includes(state)
+				? `job ${state.toUpperCase()}`
+				: "job state unknown";
+			if (!release && body === metadata && Date.now() - metadataAt < METADATA_REFRESH_MS) {
+				return;
+			}
 			metadata = body;
 			metadataAt = Date.now();
 			const change = release
@@ -72,7 +93,12 @@ export default function limenHosted(pi: PiApi): void {
 						String(METADATA_TTL_MS),
 					];
 			seq += 1;
-			execFile(herdr.binary, ["pane", "report-metadata", herdr.pane, "--source", "limen", "--seq", String(seq), ...change], { timeout: 2_000 }, () => {}).unref();
+			execFile(
+				herdr.binary,
+				["pane", "report-metadata", herdr.pane, "--source", "limen", "--seq", String(seq), ...change],
+				{ timeout: 2_000 },
+				() => {},
+			).unref();
 		} catch {
 			// Advisory. Never infer job completion from a pane settling or an unreadable record.
 		}
@@ -102,7 +128,9 @@ export default function limenHosted(pi: PiApi): void {
 		},
 		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
 			const handoff = typeof params?.handoff === "string" ? params.handoff.trim() : "";
-			if (handoff) write("result", handoff);
+			if (handoff) {
+				write("result", handoff);
+			}
 			write("session-ended", new Date().toISOString());
 			ctx.shutdown();
 			return { content: [{ type: "text", text: "done" }], details: {} };
@@ -118,7 +146,8 @@ export default function limenHosted(pi: PiApi): void {
 				pane = "";
 			}
 		}
-		const registered = hostedForegroundPid(pane, process.pid) === "present" && (await registerHostedBinding(jobDir, pane, context));
+		const registered =
+			hostedForegroundPid(pane, process.pid) === "present" && (await registerHostedBinding(jobDir, pane, context));
 		if (registered) {
 			const binding = readHostedBinding(jobDir)!;
 			write("engine-pid", String(binding.pid));
@@ -129,9 +158,13 @@ export default function limenHosted(pi: PiApi): void {
 		write("activity", "think");
 		log(`[limen ${new Date().toISOString()}] hosted reporter attached`);
 		const binary = herdrBinary();
-		if (metadataTimer) clearInterval(metadataTimer);
+		if (metadataTimer) {
+			clearInterval(metadataTimer);
+		}
 		herdr = process.env.HERDR_ENV === "1" && binary && pane ? { binary, pane } : undefined;
-		if (!herdr) return;
+		if (!herdr) {
+			return;
+		}
 		report();
 		// Refresh even through long silent turns; state changes remain the supervisor's responsibility.
 		metadataTimer = setInterval(report, 1_000);
@@ -165,13 +198,17 @@ export default function limenHosted(pi: PiApi): void {
 		log("wait");
 	});
 	pi.on("session_shutdown", () => {
-		if (metadataTimer) clearInterval(metadataTimer);
+		if (metadataTimer) {
+			clearInterval(metadataTimer);
+		}
 		metadataTimer = undefined;
 		report(true);
 		herdr = undefined;
 		write("activity", "wait");
 		// Pi also emits shutdown on reload. Only finish or actual process exit ends the job.
-		if (readHostedBinding(jobDir)?.pid === process.pid) rmSync(join(jobDir, "engine-session"), { force: true });
+		if (readHostedBinding(jobDir)?.pid === process.pid) {
+			rmSync(join(jobDir, "engine-session"), { force: true });
+		}
 		log(`[limen ${new Date().toISOString()}] hosted session shutdown`);
 	});
 }

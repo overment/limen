@@ -12,7 +12,9 @@ import { readTickets } from "./tickets.ts";
 /** With `root`, every cited source is checked against the project root and a missing path warns. */
 export async function readPicture(dir: string, root?: string): Promise<PictureModel> {
 	const dataset = await readDataset(dir);
-	if (root === undefined) return buildModel({ files: dataset.files, diagnostics: dataset.diagnostics });
+	if (root === undefined) {
+		return buildModel({ files: dataset.files, diagnostics: dataset.diagnostics });
+	}
 	const [tickets, board] = await Promise.all([readTickets(root), readBoard(root)]);
 	return buildModel({
 		files: dataset.files,
@@ -23,11 +25,19 @@ export async function readPicture(dir: string, root?: string): Promise<PictureMo
 	});
 }
 
-export async function buildPicture(dir: string, out: string, json?: string, tip?: string, root?: string): Promise<PictureModel> {
+export async function buildPicture(
+	dir: string,
+	out: string,
+	json?: string,
+	tip?: string,
+	root?: string,
+): Promise<PictureModel> {
 	const model = await readPicture(dir, root);
 	const viewer = await readViewer(fileURLToPath(new URL("../../picture/viewer/", import.meta.url)));
 	await writeAtomic(out, assembleHtml(model, viewer, tip));
-	if (json !== undefined) await writeAtomic(json, `${JSON.stringify(model, null, 2)}\n`);
+	if (json !== undefined) {
+		await writeAtomic(json, `${JSON.stringify(model, null, 2)}\n`);
+	}
 	return model;
 }
 
