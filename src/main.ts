@@ -88,7 +88,7 @@ usage:
   limen init --drop-leftovers
   limen workspace init
   limen planning [committed|private]                # inspect or persist the project planning source; default committed
-  limen group start FEATURE --teams N --workers-per-team N --timeout D --worker-timeout D --engine E --provider P --model M --thinking T --worker-thinking T [--team-model team-N=provider/model] [--detached|--tab] [--new-run]
+  limen group start FEATURE --teams N --workers-per-team N --timeout D --worker-timeout D --engine E --provider P --model M --thinking T --worker-thinking T [--team-model team-N=provider/model] [--extension PATH ...] [--team-extension team-N=PATH ...; Pi only] [--detached|--tab] [--new-run]
   limen group status [GROUP-ID] [--json]  # short roster by default; --json keeps the full record
   limen group publish [GROUP-ID] [--team team-N] "finding"  # members inherit verified membership; lead supplies ID
   limen group wait [GROUP-ID] [--timeout D]
@@ -100,7 +100,7 @@ usage:
   limen spawn --engine <engine> --provider <provider> --model <model> --thinking <level> --detached "…"  # force background worker + log-tail tab
   limen spawn --engine <engine> --provider <provider> --model <model> --thinking <level> --repo R "Implement FNNN: <outcome>. Ticket: spec/features/active/FNNN-slug/ticket.md" [--label L]
   limen spawn --engine <engine> --provider <provider> --model <model> --thinking <level> --review --detached --branch B --label L [--base SHA] [--head SHA] "Review the FNNN candidate against spec/features/active/FNNN-slug/ticket.md"
-  limen continue <id|suffix|label> "follow-up instruction" [--review] [--label L] [--engine pi|omp] [--provider P] [--model X] [--thinking T] [--tab|--detached] [--extension PATH ...; replaces inherited Pi list]
+  limen continue <id|suffix|label> "follow-up instruction" [--review] [--label L] [--engine pi|omp] [--provider P] [--model X] [--thinking T] [--tab|--detached] [--extension PATH ...; replaces ordinary Pi list, group list stays fixed]
                                   # resume a finished job in its own engine session — full context, same worktree; Herdr default is hosted
   limen steer <id|suffix|label> | --running "correction"
   limen diff <id|suffix|label>

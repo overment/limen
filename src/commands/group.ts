@@ -11,6 +11,7 @@ import { parseDuration, SESSION_ID } from "../job/job.ts";
 import { cleanWorktree, commitHasFile, headCommit, repoRoot } from "../project/git.ts";
 import { planningSource, privatePlanningFile } from "../project/planning.ts";
 import { preflightEngine, resolveSpawnEngine } from "../runtime/engine.ts";
+import { normalizeWorkerExtensions } from "../runtime/worker-extensions.ts";
 import { spawnCommand } from "./spawn.ts";
 import { stopCommand } from "./stop.ts";
 
@@ -27,10 +28,23 @@ export async function startGroup(args: readonly string[], cwd: string): Promise<
 		throw new Error("group start has no feature directory; run limen group start spec/features/active/FEATURE with the settings in docs/groups.md");
 	const flags = new Map<string, string>();
 	const teamModels: Record<string, { provider: string; model: string }> = {};
+	const extensions: string[] = [];
+	const teamSelections: Record<string, string[]> = {};
 	let newRun = false,
 		mode: GroupRun["mode"] = "auto";
 	for (let index = 1; index < args.length; index++) {
 		const flag = args[index];
+		if (flag === "--extension" || flag === "--team-extension") {
+			const value = args[++index];
+			if (!value || value.startsWith("--")) throw new Error(`${flag} requires a value`);
+			if (flag === "--extension") extensions.push(value);
+			else {
+				const selection = /^(team-[1-9]\d*)=(.+)$/.exec(value);
+				if (!selection?.[1] || !selection[2]) throw new Error("invalid --team-extension; use team-N=PATH");
+				(teamSelections[selection[1]] ??= []).push(selection[2]);
+			}
+			continue;
+		}
 		if (flag === "--team-model") {
 			const route = /^(team-[1-9]\d*)=([^/\s]+)\/(\S+)$/.exec(args[++index] ?? "");
 			if (!route?.[1] || !route[2] || !route[3])
@@ -117,7 +131,6 @@ export async function startGroup(args: readonly string[], cwd: string): Promise<
 		});
 		if (!commitHasFile(root, headCommit(root), path)) throw new Error(`group packet ${path} is not committed; run git add ${path} and commit before starting`);
 	}
-	preflightEngine(profile, model, provider);
 	const cabinet = `${root}/.limen/groups`;
 	const activated = await groupLock(cabinet, async () => {
 		const previous = (await runs(root)).filter((run) => run.feature === feature);
@@ -130,6 +143,10 @@ export async function startGroup(args: readonly string[], cwd: string): Promise<
 						`group ${prior.feature} (${prior.id}) still has a live job or no job record yet for ${member.team} ${member.role} (${member.id}); run limen group status ${prior.id}`,
 					);
 		}
+		for (const team of Object.keys(teamSelections)) if (!teams.includes(team)) throw new Error(`--team-extension names ${team}, which is not in the roster`);
+		const teamExtensions: Record<string, string[]> = {};
+		for (const team of teams) teamExtensions[team] = await normalizeWorkerExtensions([...extensions, ...(teamSelections[team] ?? [])], cwd, profile.id);
+		preflightEngine(profile, model, provider);
 		const run: GroupRun = {
 			id: randomUUID(),
 			root,
@@ -152,6 +169,7 @@ export async function startGroup(args: readonly string[], cwd: string): Promise<
 			mode,
 			members: [],
 			teamModels,
+			teamExtensions,
 		};
 		await mkdir(groupPath(run));
 		await saveJson(`${groupPath(run)}/run.json`, run);

@@ -24,3 +24,6 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run check
+        env:
+          # The GitHub poller refuses a key or state dir below a world-writable directory; Linux /tmp is one.
+          TMPDIR: ${{ runner.temp }}

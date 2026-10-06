@@ -91,7 +91,8 @@ test("launches queued behind a slow sibling wait past the old 10-second lock dea
 		entered = join(p.parent, "checkout-entered");
 	await mkdir(hooks);
 	execFileSync("mkfifo", [gate]);
-	await writeFile(join(hooks, "post-checkout"), `#!/bin/sh\nset -C\n: > '${entered}' 2>/dev/null || exit 0\ncat '${gate}' > /dev/null\n`, { mode: 0o755 });
+	// mkdir marks the first checkout atomically; dash exits on a failed `: >` under set -C instead of running `|| exit 0`.
+	await writeFile(join(hooks, "post-checkout"), `#!/bin/sh\nmkdir '${entered}' 2>/dev/null || exit 0\ncat '${gate}' > /dev/null\n`, { mode: 0o755 });
 	git(p.root, "config", "core.hooksPath", hooks);
 	const slow = run(["spawn", ...ROUTE, "block"], as(roster.coordinator1, "team-1"));
 	await until(p.parent, () => existsSync(entered));
