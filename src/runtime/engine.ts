@@ -99,9 +99,38 @@ export function preflightEngine(profile: EngineProfile, model?: string, provider
 		);
 	}
 }
+type LegacySkill = { name: string; source: string; flat: boolean };
+/** One `.pi/skills` entry as a skill; undefined when it is no skill or `.agents/skills` or `.omp/skills` has its name. */
+async function legacySkill(worktree: string, legacy: string, entry: string): Promise<LegacySkill | undefined> {
+	const source = join(legacy, entry);
+	const info = await stat(source).catch(() => undefined);
+	if (!info) {
+		return;
+	}
+	const flat = info.isFile() && entry.endsWith(".md");
+	const name = flat ? basename(entry, ".md") : entry;
+	if (!name) {
+		return;
+	}
+	if (!flat) {
+		if (!info.isDirectory()) {
+			return;
+		}
+		const skillFile = await stat(join(source, "SKILL.md")).catch(() => undefined);
+		if (!skillFile?.isFile()) {
+			return;
+		}
+	}
+	if (
+		(await stat(join(worktree, ".agents/skills", name, "SKILL.md")).catch(() => undefined))?.isFile() ||
+		(await stat(join(worktree, ".omp/skills", name, "SKILL.md")).catch(() => undefined))?.isFile()
+	) {
+		return;
+	}
+	return { name, source, flat };
+}
 // Keep Pi's source tree untouched. Rebuild the job-local view on each launch
 // so resumed branches and newly added legacy skills get a fresh inventory.
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: split pending: job-local skill config
 export async function prepareSkillConfig(worktree: string, jobDir: string): Promise<string | undefined> {
 	const legacy = join(worktree, ".pi/skills");
 	const entries = await readdir(legacy).catch((error: NodeJS.ErrnoException) => {
@@ -110,42 +139,21 @@ export async function prepareSkillConfig(worktree: string, jobDir: string): Prom
 		}
 		throw error;
 	});
-	const skills: { name: string; source: string; flat: boolean }[] = [];
+	const skills: LegacySkill[] = [];
 	for (const entry of entries) {
-		const source = join(legacy, entry);
-		const info = await stat(source).catch(() => undefined);
-		if (!info) {
-			continue;
-		}
-		const flat = info.isFile() && entry.endsWith(".md");
-		const name = flat ? basename(entry, ".md") : entry;
-		if (!name) {
-			continue;
-		}
-		if (!flat) {
-			if (!info.isDirectory()) {
-				continue;
-			}
-			const skillFile = await stat(join(source, "SKILL.md")).catch(() => undefined);
-			if (!skillFile?.isFile()) {
-				continue;
-			}
-		}
-		if (
-			(await stat(join(worktree, ".agents/skills", name, "SKILL.md")).catch(() => undefined))?.isFile() ||
-			(await stat(join(worktree, ".omp/skills", name, "SKILL.md")).catch(() => undefined))?.isFile()
-		) {
+		const skill = await legacySkill(worktree, legacy, entry);
+		if (!skill) {
 			continue;
 		}
 		// A directory skill carries its supporting files and takes priority over a flat duplicate.
-		if (skills.some((skill) => skill.name === name && !skill.flat)) {
+		if (skills.some((kept) => kept.name === skill.name && !kept.flat)) {
 			continue;
 		}
-		const index = skills.findIndex((skill) => skill.name === name);
+		const index = skills.findIndex((kept) => kept.name === skill.name);
 		if (index !== -1) {
 			skills.splice(index, 1);
 		}
-		skills.push({ name, source, flat });
+		skills.push(skill);
 	}
 	const view = join(jobDir, "skills");
 	await rm(view, { recursive: true, force: true });

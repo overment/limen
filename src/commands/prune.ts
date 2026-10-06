@@ -91,13 +91,29 @@ async function retireFinishedJobs(root: string, dryRun: boolean): Promise<readon
 	return retired;
 }
 
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: split pending: finished worktree pruning
 export async function pruneFinishedWorktrees(root: string, keep: readonly string[] = []): Promise<number> {
 	const jobsRoot = `${root}/.limen/jobs`;
 	const keepPaths = new Set<string>();
 	for (const path of keep) {
 		keepPaths.add(await resolved(path));
 	}
+	const { repositories, removed: abandoned } = await scanJobRecords(root, jobsRoot, keepPaths);
+	await keepLiveWorktrees(jobsRoot, keepPaths);
+	let removed = abandoned;
+	for (const repository of repositories) {
+		removed += await pruneRepositoryWorktrees(repository, keepPaths);
+	}
+	return removed;
+}
+/**
+ * Keeps retained group worktrees, removes a record that never got a state once its startup grace is over, and names
+ * the repositories whose worktrees the prune visits (the root when no job names one).
+ */
+async function scanJobRecords(
+	root: string,
+	jobsRoot: string,
+	keepPaths: Set<string>,
+): Promise<{ repositories: Set<string>; removed: number }> {
 	const repositories = new Set<string>();
 	let removed = 0;
 	for (const id of await jobIds(jobsRoot)) {
@@ -126,6 +142,10 @@ export async function pruneFinishedWorktrees(root: string, keep: readonly string
 	if (repositories.size === 0) {
 		repositories.add(root);
 	}
+	return { repositories, removed };
+}
+/** Keeps the worktree of every live, starting or retained group job. */
+async function keepLiveWorktrees(jobsRoot: string, keepPaths: Set<string>): Promise<void> {
 	for (const id of await jobIds(jobsRoot)) {
 		const jobDir = `${jobsRoot}/${id}`;
 		const recorded = await text(`${jobDir}/worktree`);
@@ -140,38 +160,40 @@ export async function pruneFinishedWorktrees(root: string, keep: readonly string
 			keepPaths.add(await resolved(recorded));
 		}
 	}
-	for (const repository of repositories) {
-		const worktreeRoot = await resolved(`${dirname(repository)}/.${basename(repository)}-limen-worktrees`);
-		const primary = await resolved(repository);
-		for (const worktree of listWorktrees(repository)) {
-			const path = await resolved(worktree.path);
-			if (path === primary || !path.startsWith(`${worktreeRoot}/`) || keepPaths.has(path)) {
-				continue;
-			}
-			// Nested roots belong to another checkout, whose jobs this prune cannot see.
-			if (/^\.[^/]*-limen-worktrees(?:\/|$)/.test(path.slice(worktreeRoot.length + 1))) {
-				continue;
-			}
-			try {
-				removeWorktree(repository, path);
-				removed += 1;
-			} catch {
-				// A locked checkout stays until the next prune.
-			}
+}
+/** Removes Limen worktrees no kept job holds, then leftover directories; returns how many worktrees it removed. */
+async function pruneRepositoryWorktrees(repository: string, keepPaths: ReadonlySet<string>): Promise<number> {
+	let removed = 0;
+	const worktreeRoot = await resolved(`${dirname(repository)}/.${basename(repository)}-limen-worktrees`);
+	const primary = await resolved(repository);
+	for (const worktree of listWorktrees(repository)) {
+		const path = await resolved(worktree.path);
+		if (path === primary || !path.startsWith(`${worktreeRoot}/`) || keepPaths.has(path)) {
+			continue;
 		}
-		pruneWorktrees(repository);
-		const registered = new Set(await Promise.all(listWorktrees(repository).map((worktree) => resolved(worktree.path))));
-		const leftovers = await readdir(worktreeRoot, { withFileTypes: true }).catch(() => []);
-		for (const leftover of leftovers) {
-			if (/^\..*-limen-worktrees$/.test(leftover.name)) {
-				continue;
-			}
-			const path = await resolved(resolve(worktreeRoot, leftover.name));
-			if (keepPaths.has(path) || registered.has(path)) {
-				continue;
-			}
-			await rm(path, { recursive: true, force: true });
+		// Nested roots belong to another checkout, whose jobs this prune cannot see.
+		if (/^\.[^/]*-limen-worktrees(?:\/|$)/.test(path.slice(worktreeRoot.length + 1))) {
+			continue;
 		}
+		try {
+			removeWorktree(repository, path);
+			removed += 1;
+		} catch {
+			// A locked checkout stays until the next prune.
+		}
+	}
+	pruneWorktrees(repository);
+	const registered = new Set(await Promise.all(listWorktrees(repository).map((worktree) => resolved(worktree.path))));
+	const leftovers = await readdir(worktreeRoot, { withFileTypes: true }).catch(() => []);
+	for (const leftover of leftovers) {
+		if (/^\..*-limen-worktrees$/.test(leftover.name)) {
+			continue;
+		}
+		const path = await resolved(resolve(worktreeRoot, leftover.name));
+		if (keepPaths.has(path) || registered.has(path)) {
+			continue;
+		}
+		await rm(path, { recursive: true, force: true });
 	}
 	return removed;
 }

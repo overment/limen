@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { resolveJob } from "../job/lookup.ts";
-import { readBoard } from "../picture/board.ts";
+import { type BoardEntry, readBoard } from "../picture/board.ts";
 import { readPicture } from "../picture/picture-build.ts";
 import { checkTickets, readTickets } from "../picture/tickets.ts";
 import {
@@ -20,13 +20,41 @@ import {
 } from "../project/git.ts";
 import { parseFlags } from "./flags.ts";
 
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: split pending: land command
 export async function landCommand(args: readonly string[], cwd: string): Promise<void> {
 	if (process.env.LIMEN_GROUP_ID) {
 		throw new Error("group members cannot land; the owner-facing lead owns landing");
 	}
 	const parsed = parseLandArgs(args);
-	const { id, jobDir } = await resolveJob(cwd, parsed.query, "control");
+	const { id, branch, base, repo, label } = await readDoneJob(cwd, parsed.query);
+	const root = limenRoot(cwd);
+	const repository = repo ? workspaceRepository(root, repo) : root;
+	const target = landTarget(repository, parsed.onto, branch);
+	const dirty = checkCheckoutBeside(repository, target, { id, branch, base });
+	await checkLandGates(repository, root, branch, id);
+	if (!parsed.yes && !(await confirm(`Land ${label || id} onto ${target}? [y/N] `))) {
+		throw new Error("land cancelled");
+	}
+	let output: string;
+	try {
+		output = mergeBranch(repository, branch);
+	} catch (error) {
+		// A half-done merge beside another session's files would turn its next commit into this merge.
+		if (dirty.length) {
+			abortMerge(repository);
+		}
+		throw error;
+	}
+	if (output) {
+		console.log(output);
+	}
+	console.log(`landed ${id} onto ${target}`);
+}
+/** The job's recorded branch, base, repo and label; only a done job with a branch and a base lands. */
+async function readDoneJob(
+	cwd: string,
+	query: string,
+): Promise<{ id: string; branch: string; base: string; repo: string; label: string }> {
+	const { id, jobDir } = await resolveJob(cwd, query, "control");
 	const [state, branch, base, repo, label] = await Promise.all([
 		text(`${jobDir}/state`),
 		text(`${jobDir}/branch`),
@@ -40,28 +68,40 @@ export async function landCommand(args: readonly string[], cwd: string): Promise
 	if (!branch || !base) {
 		throw new Error(`job ${id} has no recorded ${branch ? "base" : "branch"}`);
 	}
-	const root = limenRoot(cwd);
-	const repository = repo ? workspaceRepository(root, repo) : root;
+	return { id, branch, base, repo, label };
+}
+/** Land merges onto the checked-out branch, never onto the job's own branch. */
+function landTarget(repository: string, onto: string | undefined, branch: string): string {
 	const current = currentBranch(repository);
-	const target = parsed.onto ?? current;
+	const target = onto ?? current;
 	if (target !== current) {
 		throw new Error(`land merges onto the current branch (${current}); checkout ${target} first`);
 	}
 	if (target === branch) {
 		throw new Error(`already on job branch ${branch}`);
 	}
-	// Another session may be editing this checkout. Land merges beside its files and never touches them.
+	return target;
+}
+/**
+ * Another session may be editing this checkout. Land merges beside its files and never touches them: no staged
+ * change, no uncommitted file the merge would change. Returns the uncommitted paths.
+ */
+function checkCheckoutBeside(
+	repository: string,
+	target: string,
+	job: { readonly id: string; readonly branch: string; readonly base: string },
+): readonly string[] {
 	const dirty = dirtyPaths(repository);
 	if (dirty.staged.length) {
 		throw new Error(
 			`target ${target} has staged changes, and a merge would refuse or sweep them in: ${dirty.staged.join(", ")}; commit or unstage them first`,
 		);
 	}
-	const commits = commitList(repository, base, branch);
+	const commits = commitList(repository, job.base, job.branch);
 	if (!commits) {
-		throw new Error(`job ${id} has no commits to land`);
+		throw new Error(`job ${job.id} has no commits to land`);
 	}
-	const merged = dirty.paths.length ? mergePaths(repository, branch) : new Set<string>();
+	const merged = dirty.paths.length ? mergePaths(repository, job.branch) : new Set<string>();
 	const overlap = dirty.paths.filter((path) => merged.has(path));
 	if (overlap.length) {
 		throw new Error(
@@ -73,6 +113,10 @@ export async function landCommand(args: readonly string[], cwd: string): Promise
 			`land: ${dirty.paths.length} uncommitted file${dirty.paths.length === 1 ? "" : "s"} in ${repository} stay untouched; none is in this merge`,
 		);
 	}
+	return dirty.paths;
+}
+/** The strict ticket check and the test/ line cap; either one refuses the land. */
+async function checkLandGates(repository: string, root: string, branch: string, id: string): Promise<void> {
 	const gate = await landTicketCheck(repository, root, branch, "HEAD", id);
 	if (!gate.ok) {
 		throw new Error(`land refused: ${branch} has tickets that fail the strict check\n${gate.lines.join("\n")}`);
@@ -87,23 +131,6 @@ export async function landCommand(args: readonly string[], cwd: string): Promise
 	if (cap?.refuse) {
 		throw new Error(`land refused: ${cap.refuse}`);
 	}
-	if (!parsed.yes && !(await confirm(`Land ${label || id} onto ${target}? [y/N] `))) {
-		throw new Error("land cancelled");
-	}
-	let output: string;
-	try {
-		output = mergeBranch(repository, branch);
-	} catch (error) {
-		// A half-done merge beside another session's files would turn its next commit into this merge.
-		if (dirty.paths.length) {
-			abortMerge(repository);
-		}
-		throw error;
-	}
-	if (output) {
-		console.log(output);
-	}
-	console.log(`landed ${id} onto ${target}`);
 }
 
 /** The cap on `test/` lines that `spec/vision.md` names, or undefined when it names none. */
@@ -155,8 +182,6 @@ export const TICKET_PATH = /^spec\/features\/(?:[^/]+\/)*(F\d+)-[^/]+\/ticket\.m
  * The strict ticket check for tickets that `branch` adds, changes or moves against `target`, read at the branch tip.
  * `lines` is print-ready: the no-map note, warnings, errors, then the keeper command when the check refuses.
  */
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: split pending: ticket check before landing
-// biome-ignore lint/complexity/noExcessiveLinesPerFunction: same split as the line above
 export async function landTicketCheck(
 	repository: string,
 	root: string,
@@ -164,82 +189,17 @@ export async function landTicketCheck(
 	target = "HEAD",
 	job = "<id>",
 ): Promise<{ readonly ok: boolean; readonly tickets: readonly string[]; readonly lines: readonly string[] }> {
-	const changed = new Map<string, string>();
-	for (const row of gitText(repository, ["diff", "--name-status", "-M", `${target}...${branch}`]).split("\n")) {
-		const [status = "", ...paths] = row.split("\t");
-		const path = paths.at(-1) ?? "";
-		if (/^[AMR]/.test(status) && TICKET_PATH.test(path)) {
-			changed.set(path, status[0] ?? "");
-		}
-	}
+	const changed = changedTickets(repository, branch, target);
 	const tickets = [...changed.keys()];
 	if (tickets.length === 0) {
 		return { ok: true, tickets, lines: [] };
 	}
 	const lines: string[] = [];
-	const map = `${root}/.limen/picture`;
-	let placeIds: ReadonlySet<string> | undefined;
-	if (existsSync(map)) {
-		const model = await readPicture(map);
-		placeIds = new Set([
-			...model.nodes.filter((node) => node.kind === "module").map((node) => node.id),
-			...(model.project.rootId ? [model.project.rootId] : []),
-		]);
-		const codes = new Map(tickets.map((path) => [TICKET_PATH.exec(path)?.[1] ?? "", path]));
-		for (const record of [...model.nodes, ...model.edges, ...model.features, ...model.journeys]) {
-			for (const source of record.sources) {
-				const current = codes.get(/\/(F\d+)-/.exec(source)?.[1] ?? "");
-				if (current && !gitOk(repository, ["cat-file", "-e", `${branch}:${source.replace(/\/$/, "")}`])) {
-					const at =
-						(await readFile(join(map, record.source), "utf8")).split("\n").findIndex((line) => line.includes(source)) +
-						1;
-					lines.push(
-						`warn ${map}/${record.source}:${at || 1}: source "${source}" does not exist at ${branch}; fix: change it to ${current}`,
-					);
-				}
-			}
-		}
-	} else {
-		lines.push(`land: no picture map at ${map}; touches place ids not checked`);
-	}
+	const placeIds = await checkPictureSources(repository, root, branch, tickets, lines);
 	const tip = await mkdtemp(join(tmpdir(), "limen-land-"));
 	try {
-		const archive = execFileSync("git", ["archive", branch, "--", ":(glob)spec/features/**/ticket.md"], {
-			cwd: repository,
-			maxBuffer: 256 * 1024 * 1024,
-		});
-		execFileSync("tar", ["-x", "-C", tip], { input: archive });
-		const board = spawnSync("git", ["show", `${branch}:spec/build.md`], {
-			cwd: repository,
-			maxBuffer: 64 * 1024 * 1024,
-		});
-		if (board.status === 0) {
-			await writeFile(join(tip, "spec/build.md"), board.stdout);
-		}
-		// A branch with no board at its tip gets no board warnings.
-		const entries = board.status === 0 ? await readBoard(tip) : undefined;
-		for (const path of tickets) {
-			const lane = path.split("/")[2];
-			const folder = path.split("/").at(-2) ?? "";
-			const code = TICKET_PATH.exec(path)?.[1] ?? "";
-			const want =
-				lane === "active"
-					? { state: "ACTIVE", line: `- \`${folder}\` (🟠 ACTIVE): <one clause> under ## NOW` }
-					: lane === "done"
-						? { state: "PROVEN", line: `- \`${folder}\` (🟢 PROVEN): <one clause> under ## PROVEN` }
-						: undefined;
-			if (!want || !entries) {
-				continue;
-			}
-			const entry = entries.get(code.toLowerCase());
-			if (!entry) {
-				lines.push(`warn spec/build.md: no board line for ${code}; fix: add ${want.line}`);
-			} else if (entry.state !== want.state) {
-				lines.push(
-					`warn spec/build.md:${entry.line}: ${code} is ${entry.state} on the board but its folder is in ${lane}; fix: mark it ${want.state} in the ${lane === "active" ? "NOW" : "PROVEN"} section`,
-				);
-			}
-		}
+		const entries = await extractTicketsAtTip(repository, branch, tip);
+		checkBoardLines(tickets, entries, lines);
 		const read = await readTickets(tip);
 		const diagnostics = [...read.diagnostics, ...(placeIds ? checkTickets(read.tickets, placeIds) : [])].filter(
 			(d) => d.source !== null && changed.has(d.source),
@@ -247,20 +207,9 @@ export async function landTicketCheck(
 		const failing = diagnostics.filter((d) => d.level === "error");
 		const errors = failing.map((d) => `error ${d.source}:${d.line ?? 1}: ${d.message}`);
 		let bad = failing[0]?.source ?? undefined;
-		const all = gitText(repository, ["ls-tree", "-r", "--name-only", branch, "--", "spec/features"]).split("\n");
-		for (const [path, status] of changed) {
-			if (status !== "A") {
-				continue;
-			}
-			const code = TICKET_PATH.exec(path)?.[1];
-			const other = all.find((candidate) => candidate !== path && TICKET_PATH.exec(candidate)?.[1] === code);
-			if (!other) {
-				continue;
-			}
-			errors.push(
-				`error ${path}:1: ${code} is also used by ${other}; fix: move this ticket to a free F number (limen ticket new picks one)`,
-			);
-			bad ??= path;
+		for (const duplicate of duplicateTicketErrors(repository, branch, changed)) {
+			errors.push(duplicate.error);
+			bad ??= duplicate.path;
 		}
 		for (const d of diagnostics) {
 			if (d.level === "warn") {
@@ -279,6 +228,128 @@ export async function landTicketCheck(
 	} finally {
 		await rm(tip, { recursive: true, force: true });
 	}
+}
+/** Ticket paths the branch adds, changes or moves against the target, with the first letter of their Git status. */
+function changedTickets(repository: string, branch: string, target: string): Map<string, string> {
+	const changed = new Map<string, string>();
+	for (const row of gitText(repository, ["diff", "--name-status", "-M", `${target}...${branch}`]).split("\n")) {
+		const [status = "", ...paths] = row.split("\t");
+		const path = paths.at(-1) ?? "";
+		if (/^[AMR]/.test(status) && TICKET_PATH.test(path)) {
+			changed.set(path, status[0] ?? "");
+		}
+	}
+	return changed;
+}
+/**
+ * Warns about picture sources that name a changed ticket's feature but do not exist at the branch. Returns the place
+ * ids tickets may touch, or undefined when the project has no picture map.
+ */
+async function checkPictureSources(
+	repository: string,
+	root: string,
+	branch: string,
+	tickets: readonly string[],
+	lines: string[],
+): Promise<ReadonlySet<string> | undefined> {
+	const map = `${root}/.limen/picture`;
+	if (!existsSync(map)) {
+		lines.push(`land: no picture map at ${map}; touches place ids not checked`);
+		return;
+	}
+	const model = await readPicture(map);
+	const placeIds = new Set([
+		...model.nodes.filter((node) => node.kind === "module").map((node) => node.id),
+		...(model.project.rootId ? [model.project.rootId] : []),
+	]);
+	const codes = new Map(tickets.map((path) => [TICKET_PATH.exec(path)?.[1] ?? "", path]));
+	for (const record of [...model.nodes, ...model.edges, ...model.features, ...model.journeys]) {
+		for (const source of record.sources) {
+			const current = codes.get(/\/(F\d+)-/.exec(source)?.[1] ?? "");
+			if (current && !gitOk(repository, ["cat-file", "-e", `${branch}:${source.replace(/\/$/, "")}`])) {
+				const at =
+					(await readFile(join(map, record.source), "utf8")).split("\n").findIndex((line) => line.includes(source)) + 1;
+				lines.push(
+					`warn ${map}/${record.source}:${at || 1}: source "${source}" does not exist at ${branch}; fix: change it to ${current}`,
+				);
+			}
+		}
+	}
+	return placeIds;
+}
+/** Writes the branch's tickets and board into `tip`; returns the board entries, undefined when it has no board. */
+async function extractTicketsAtTip(
+	repository: string,
+	branch: string,
+	tip: string,
+): Promise<Map<string, BoardEntry> | undefined> {
+	const archive = execFileSync("git", ["archive", branch, "--", ":(glob)spec/features/**/ticket.md"], {
+		cwd: repository,
+		maxBuffer: 256 * 1024 * 1024,
+	});
+	execFileSync("tar", ["-x", "-C", tip], { input: archive });
+	const board = spawnSync("git", ["show", `${branch}:spec/build.md`], {
+		cwd: repository,
+		maxBuffer: 64 * 1024 * 1024,
+	});
+	if (board.status === 0) {
+		await writeFile(join(tip, "spec/build.md"), board.stdout);
+	}
+	// A branch with no board at its tip gets no board warnings.
+	return board.status === 0 ? await readBoard(tip) : undefined;
+}
+/** Warns when an active or done ticket has no board line, or a board state that does not match its lane. */
+function checkBoardLines(
+	tickets: readonly string[],
+	entries: ReadonlyMap<string, BoardEntry> | undefined,
+	lines: string[],
+): void {
+	for (const path of tickets) {
+		const lane = path.split("/")[2];
+		const folder = path.split("/").at(-2) ?? "";
+		const code = TICKET_PATH.exec(path)?.[1] ?? "";
+		const want =
+			lane === "active"
+				? { state: "ACTIVE", line: `- \`${folder}\` (🟠 ACTIVE): <one clause> under ## NOW` }
+				: lane === "done"
+					? { state: "PROVEN", line: `- \`${folder}\` (🟢 PROVEN): <one clause> under ## PROVEN` }
+					: undefined;
+		if (!want || !entries) {
+			continue;
+		}
+		const entry = entries.get(code.toLowerCase());
+		if (!entry) {
+			lines.push(`warn spec/build.md: no board line for ${code}; fix: add ${want.line}`);
+		} else if (entry.state !== want.state) {
+			lines.push(
+				`warn spec/build.md:${entry.line}: ${code} is ${entry.state} on the board but its folder is in ${lane}; fix: mark it ${want.state} in the ${lane === "active" ? "NOW" : "PROVEN"} section`,
+			);
+		}
+	}
+}
+/** An added ticket whose F number another ticket at the branch already uses. */
+function duplicateTicketErrors(
+	repository: string,
+	branch: string,
+	changed: ReadonlyMap<string, string>,
+): { readonly path: string; readonly error: string }[] {
+	const duplicates: { readonly path: string; readonly error: string }[] = [];
+	const all = gitText(repository, ["ls-tree", "-r", "--name-only", branch, "--", "spec/features"]).split("\n");
+	for (const [path, status] of changed) {
+		if (status !== "A") {
+			continue;
+		}
+		const code = TICKET_PATH.exec(path)?.[1];
+		const other = all.find((candidate) => candidate !== path && TICKET_PATH.exec(candidate)?.[1] === code);
+		if (!other) {
+			continue;
+		}
+		duplicates.push({
+			path,
+			error: `error ${path}:1: ${code} is also used by ${other}; fix: move this ticket to a free F number (limen ticket new picks one)`,
+		});
+	}
+	return duplicates;
 }
 
 function gitText(cwd: string, args: readonly string[]): string {

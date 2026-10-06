@@ -41,7 +41,6 @@ export async function sweepCommand(args: readonly string[], _cwd: string): Promi
 	);
 	await Promise.all(living.map(sweepProject));
 }
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: split pending: project sweep
 async function sweepProject(root: string): Promise<void> {
 	const jobs = join(root, ".limen", "jobs");
 	const threshold = positive("LIMEN_SEAT_RING_MS", 5 * 60_000);
@@ -58,73 +57,75 @@ async function sweepProject(root: string): Promise<void> {
 			continue;
 		}
 		const job = join(jobs, entry.name);
-		const statePath = join(job, "state");
-		const state = text(statePath);
-		const delivered = fs.existsSync(join(job, "notify", "delivered"))
-			? fs.readdirSync(join(job, "notify", "delivered"))
-			: [];
-		const heard = new Set(delivered.map(receiptFamily));
-		const running = state === "running";
-		const advisoryText = running ? text(join(job, "advisory")) : "";
-		const uncertainty = running && !advisoryText ? readHostedUncertainty(job) : undefined;
-		let since: number;
-		let event: string;
-		let headline: string;
-		if (uncertainty) {
-			if (Date.now() - uncertainty.since < HOSTED_UNCERTAINTY_MS) {
-				continue;
-			}
-			if (heard.has("_uncertainty") || !metadata(join(job, "ownership-uncertainty"))) {
-				continue;
-			}
-			since = uncertainty.since;
-			event = `_uncertainty.${since}`;
-			headline = " · ownership";
-		} else if (running) {
-			if (heard.has("_advisory")) {
-				continue;
-			}
-			const stamp = metadata(join(job, "advisory"));
-			if (!stamp) {
-				continue;
-			}
-			since = stamp.mtimeMs;
-			event = `_advisory.${since}.${stamp.birthtimeMs}`;
-			headline = ` · ${noteKind(advisoryText)}`;
-		} else if (isTerminal(state)) {
-			if (heard.has("_completion")) {
-				continue;
-			}
-			since = Math.max(modified(join(job, "finished-at")), modified(statePath));
-			event = `_terminal.${state}.${since}`;
-			headline = ` is ${state}`;
-		} else {
+		const due = seatEvent(job);
+		if (!due?.since || Date.now() - due.since < threshold || !claimSeatEvent(job, due)) {
 			continue;
-		}
-		if (!since || Date.now() - since < threshold) {
-			continue;
-		}
-		const seat = join(job, "notify", "seat");
-		const markers = fs.existsSync(seat) ? fs.readdirSync(seat) : [];
-		if (markers.some((name) => name === event || (/^\d+$/.test(name) && Number(name) >= since))) {
-			continue;
-		}
-		// Claim before transport: a concurrent sweep or ambiguous failure must not replay this event.
-		fs.mkdirSync(seat, { recursive: true });
-		try {
-			fs.writeFileSync(join(seat, event), `${new Date().toISOString()}\n`, { flag: "wx" });
-		} catch (error) {
-			if ((error as NodeJS.ErrnoException).code === "EEXIST") {
-				continue;
-			}
-			throw error;
 		}
 		const label = text(join(job, "label")) || entry.name;
-		const title = `limen: ${label}${headline}`;
+		const title = `limen: ${label}${due.headline}`;
 		if (!(await showSeatNotification(title, `job ${entry.name} · ${root}`))) {
 			console.error(`seat notification failed for ${entry.name}; event recorded to avoid an ambiguous retry`);
 		}
 	}
+}
+type SeatEvent = { readonly since: number; readonly event: string; readonly headline: string };
+/** What the seat has not heard about a job yet: hosted ownership uncertainty, an advisory, or its terminal state. */
+function seatEvent(job: string): SeatEvent | undefined {
+	const statePath = join(job, "state");
+	const state = text(statePath);
+	const delivered = fs.existsSync(join(job, "notify", "delivered"))
+		? fs.readdirSync(join(job, "notify", "delivered"))
+		: [];
+	const heard = new Set(delivered.map(receiptFamily));
+	const running = state === "running";
+	const advisoryText = running ? text(join(job, "advisory")) : "";
+	const uncertainty = running && !advisoryText ? readHostedUncertainty(job) : undefined;
+	if (uncertainty) {
+		if (Date.now() - uncertainty.since < HOSTED_UNCERTAINTY_MS) {
+			return;
+		}
+		if (heard.has("_uncertainty") || !metadata(join(job, "ownership-uncertainty"))) {
+			return;
+		}
+		return { since: uncertainty.since, event: `_uncertainty.${uncertainty.since}`, headline: " · ownership" };
+	}
+	if (running) {
+		if (heard.has("_advisory")) {
+			return;
+		}
+		const stamp = metadata(join(job, "advisory"));
+		if (!stamp) {
+			return;
+		}
+		return {
+			since: stamp.mtimeMs,
+			event: `_advisory.${stamp.mtimeMs}.${stamp.birthtimeMs}`,
+			headline: ` · ${noteKind(advisoryText)}`,
+		};
+	}
+	if (!isTerminal(state) || heard.has("_completion")) {
+		return;
+	}
+	const since = Math.max(modified(join(job, "finished-at")), modified(statePath));
+	return { since, event: `_terminal.${state}.${since}`, headline: ` is ${state}` };
+}
+/** Claim before transport: a concurrent sweep or ambiguous failure must not replay this event. False when claimed already. */
+function claimSeatEvent(job: string, { since, event }: SeatEvent): boolean {
+	const seat = join(job, "notify", "seat");
+	const markers = fs.existsSync(seat) ? fs.readdirSync(seat) : [];
+	if (markers.some((name) => name === event || (/^\d+$/.test(name) && Number(name) >= since))) {
+		return false;
+	}
+	fs.mkdirSync(seat, { recursive: true });
+	try {
+		fs.writeFileSync(join(seat, event), `${new Date().toISOString()}\n`, { flag: "wx" });
+	} catch (error) {
+		if ((error as NodeJS.ErrnoException).code === "EEXIST") {
+			return false;
+		}
+		throw error;
+	}
+	return true;
 }
 const positive = (name: string, fallback: number) =>
 	Number.isFinite(Number(process.env[name])) && Number(process.env[name]) > 0 ? Number(process.env[name]) : fallback;
