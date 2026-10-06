@@ -44,6 +44,8 @@ async function launchDetached(environment: Readonly<Record<string, string>>): Pr
 	child.unref();
 	return child.pid;
 }
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: split pending: internal job runner
+// biome-ignore lint/complexity/noExcessiveLinesPerFunction: same split as the line above
 export async function runInternalJob(): Promise<void> {
 	const jobDir = requiredEnvironment("LIMEN_JOB_DIR");
 	const worktree = requiredEnvironment("LIMEN_WORKTREE");

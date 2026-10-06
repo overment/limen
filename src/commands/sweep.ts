@@ -41,6 +41,7 @@ export async function sweepCommand(args: readonly string[], _cwd: string): Promi
 	);
 	await Promise.all(living.map(sweepProject));
 }
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: split pending: project sweep
 async function sweepProject(root: string): Promise<void> {
 	const jobs = join(root, ".limen", "jobs");
 	const threshold = positive("LIMEN_SEAT_RING_MS", 5 * 60_000);

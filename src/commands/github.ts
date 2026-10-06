@@ -71,6 +71,8 @@ export async function ensureGithubCoordinator(root: string): Promise<GithubBindi
 	return binding; // Herdr done is an idle, interactive agent, not a dead pane.
 }
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: split pending: github subcommand dispatch
+// biome-ignore lint/complexity/noExcessiveLinesPerFunction: same split as the line above
 export async function githubCommand(args: readonly string[], cwd: string): Promise<void> {
 	const [mode, ...rest] = args;
 	if (mode === "poll") {
@@ -332,6 +334,7 @@ function git(root: string, args: string[]): string {
 	return result.stdout.trim();
 }
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: split pending: GitHub claim checks and job start
 export async function startGithubJob(
 	root: string,
 	claim: GithubClaim,

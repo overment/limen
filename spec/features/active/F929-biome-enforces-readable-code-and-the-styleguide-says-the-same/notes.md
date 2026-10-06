@@ -79,3 +79,74 @@ Lines still wider than 120 columns (tab as two): `src` 206, `hook` 14, `test` 66
 - `src/commands/init.ts`: compares the single word with `--drop-leftovers`. Same reason as sweep: one exact word, one message.
 - `src/main.ts`: the dispatch scans the words before `--` for `--help` or `-h`, for every command, without knowing its flags. `parseFlags` needs the command's table, throws on flags it does not know, and treats `-h` as a positional.
 - `src/commands/ticket.ts` `ticketCheck`: not a flag loop; it takes one branch name and rejects any word that starts with `-`. `parseFlags` would accept `-x` as a branch name.
+
+## Complexity exemptions
+
+`biome.jsonc` holds every function to cognitive complexity 25 (`complexity/noExcessiveCognitiveComplexity`) and 70 lines, blank lines and IIFEs not counted (`complexity/noExcessiveLinesPerFunction`). Each function below carries a `biome-ignore` comment for each limit it breaks, with its reason; no file or path is exempt, so a new function over a limit fails `npx biome check`. Each later candidate removes rows.
+
+Why 25: it is the low end of the 25 to 40 range Adam set. On `main` at `a34d21d`, of 977 functions, 78 were over 20, 51 over 25, 44 over 30 and 26 over 40. The keeper override stays at 20.
+
+Why 70 lines: on `main` at `a34d21d` the line limit flagged 58 functions at 50, 41 at 60, 26 at 70 and 24 at 80. At 70, 21 of the 26 were also over the complexity limit; the five others are three hook factories whose handlers share closure state, the coordinator signal factory, and one end-to-end test. At 60 it flagged eight more functions under the complexity limit, among them the keeper command's 63-line `keeperCommand`, the sample of the target style. `skipIifes` is on because the viewer scripts wrap their module in an IIFE (`src/picture/html.ts` inlines them into a classic script); without it, a whole viewer script counts as one function (`layers.js` as 506 lines).
+
+On `main` at `76a2f6d`: 48 functions over the complexity limit and 22 over the line limit, 53 functions in all. "Split owner" follows the group brief: Team 2 splits its own files, and the rest of `spawn.ts`, `continue.ts` and `group.ts` after Team 4 releases them; Team 4 moves the flag loops of `spawn.ts`, `continue.ts` and `group.ts` to `parseArgs`. "—" means no F929 team owns the split.
+
+| Function | Complexity | Lines | Split owner |
+| --- | ---: | ---: | --- |
+| `src/commands/spawn.ts` `spawnJob` | 130 | 230 | Team 2 after Team 4 |
+| `src/commands/github.ts` `githubCommand` | 117 | 168 | Team 2 |
+| `src/commands/continue.ts` `continueJob` | 109 | 205 | Team 2 after Team 4 |
+| `src/commands/spawn.ts` `parseSpawnArgs` | 96 | 104 | Team 4 |
+| `src/runtime/supervisor.ts` `runHostedSupervisor` | 79 | 126 | Team 2 |
+| `src/picture/tickets.ts` `parseTicket` | 68 | 156 | — |
+| `picture/viewer/viewer.js` `lighting` | 67 | 72 | — |
+| `src/picture/picture-model.ts` `readRecord` | 65 | 162 | — |
+| `src/commands/group.ts` `runGroupCommand` | 62 | 121 | Team 2 after Team 4 |
+| `src/picture/picture-model.ts` `buildModel` | 58 | 198 | — |
+| `src/commands/land.ts` `landTicketCheck` | 56 | 91 | — |
+| `src/commands/github-doctor.ts` `githubDoctor` | 52 | 227 | — |
+| `src/integrations/github-poller.ts` `request` | 52 | — | — |
+| `src/commands/prune.ts` `pruneFinishedWorktrees` | 51 | — | — |
+| `src/commands/group.ts` `startGroup` | 50 | 170 | Team 2 after Team 4 |
+| `picture/viewer/viewer.js` `model.work` map callback | 49 | — | — |
+| `picture/viewer/viewer.js` `drawWires` | 48 | — | — |
+| `src/commands/sweep.ts` `sweepProject` | 45 | — | — |
+| `src/job/group-cabinet.ts` `groupLock` | 45 | — | — |
+| `src/runtime/reap.ts` `reapDeadJobs` | 44 | — | — |
+| `picture/viewer/viewer.js` `adapt` | 43 | 211 | — |
+| `src/integrations/github-poller.ts` `reconcile` | 43 | 114 | — |
+| `src/integrations/finish-receipt.ts` `inspectFinishWebhook` | 40 | — | — |
+| `src/commands/continue.ts` `parseContinueArgs` | 39 | — | Team 4 |
+| `src/picture/frontmatter.ts` `parseFrontmatter` | 39 | — | — |
+| `picture/viewer/layers.js` `renderWork` | 38 | — | — |
+| `hook/wake.ts` `observe` | 37 | — | — |
+| `src/picture/markdown.ts` `renderInline` | 36 | — | — |
+| `src/runtime/wrapper.ts` `runInternalJob` | 35 | 204 | — |
+| `hook/wake.ts` `sendAdvisory` | 35 | 94 | — |
+| `src/commands/group.ts` `parseGroupStartArgs` | 35 | — | Team 4 |
+| `src/project/git.ts` `unlandedBranches` | 35 | — | — |
+| `picture/viewer/viewer.js` `parse` | 34 | — | — |
+| `src/picture/frontmatter.ts` `parseInlineList` | 34 | — | — |
+| `src/runtime/engine.ts` `prepareSkillConfig` | 34 | — | — |
+| `src/runtime/supervisor.ts` `noteHostedIdle` | 34 | — | Team 2 |
+| `picture/viewer/viewer.js` `crumbs` | 33 | — | — |
+| `hook/group-peer.ts` `message_end` handler | 31 | — | — |
+| `src/commands/github.ts` `startGithubJob` | 31 | — | Team 2 |
+| `src/integrations/herdr.ts` `locateHostedAgent` | 31 | — | — |
+| `src/picture/frontmatter.ts` `parseBlock` | 31 | — | — |
+| `hook/wake.ts` `finishSweep` | 30 | — | — |
+| `src/commands/picture.ts` `pictureCommand` | 30 | — | — |
+| `src/runtime/recovery.ts` `claimRecovery` | 30 | — | — |
+| `picture/viewer/viewer.js` `work.sort` comparator | 29 | — | — |
+| `src/commands/land.ts` `landCommand` | 29 | — | — |
+| `src/runtime/supervisor.ts` `startHostedAgent` | 27 | — | Team 2 |
+| `src/job/group-events.ts` `eligibleEvents` | 26 | — | — |
+| `hook/wake.ts` `limenWake` | — | 618 | — |
+| `src/integrations/coordinator-signal.ts` `coordinatorSignals` | — | 172 | — |
+| `hook/group-peer.ts` `groupPeer` | — | 156 | — |
+| `hook/hosted.ts` `limenHosted` | — | 130 | — |
+| `test/s10-doorbell.test.ts` S10 doorbell test body | — | 119 | — |
+
+## Flag loops kept (team 2)
+
+- `src/commands/status.ts` `parseStatusArgs` accepts no argument or a lone `--all` and has one message; a `parseFlags` table and rules would replace one comparison.
+- `src/commands/jobs.ts` `parseJobsArgs` accepts `--label <prefix>` only as exactly two arguments, or one bare job id, suffix or label, or one of `--running`, `--active`, `--all`; `parseFlags` would also accept `--label=<prefix>` and other orders.

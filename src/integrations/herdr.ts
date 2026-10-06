@@ -195,6 +195,7 @@ export function hostedTerminalReason(
 }
 
 /** Live target for a hosted job whose recorded target stopped resolving cleanly: the agent found under a moved pane ID, or an unclassifiable but present process on the recorded pane. Undefined means genuinely gone. With read "fresh", returns "unknown" when Herdr cannot tell. */
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: split pending: hosted agent pane lookup
 export function locateHostedAgent(
 	target: string,
 	engine: EngineId,

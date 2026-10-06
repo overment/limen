@@ -119,6 +119,8 @@ function aclAllows(path: string, poller: string, permission: "r" | "x", uid: num
 }
 
 // This inspects metadata and access only. Never read or print the App key, poller env, or sudo output.
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: split pending: github doctor checks
+// biome-ignore lint/complexity/noExcessiveLinesPerFunction: same split as the line above
 export async function githubDoctor(root: string, seat: Seat = seatDefaults()): Promise<void> {
 	let failures = 0;
 	const report = (ok: boolean, label: string, fix: string) => {

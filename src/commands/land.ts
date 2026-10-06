@@ -20,6 +20,7 @@ import {
 } from "../project/git.ts";
 import { parseFlags } from "./flags.ts";
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: split pending: land command
 export async function landCommand(args: readonly string[], cwd: string): Promise<void> {
 	if (process.env.LIMEN_GROUP_ID) {
 		throw new Error("group members cannot land; the owner-facing lead owns landing");
@@ -154,6 +155,8 @@ export const TICKET_PATH = /^spec\/features\/(?:[^/]+\/)*(F\d+)-[^/]+\/ticket\.m
  * The strict ticket check for tickets that `branch` adds, changes or moves against `target`, read at the branch tip.
  * `lines` is print-ready: the no-map note, warnings, errors, then the keeper command when the check refuses.
  */
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: split pending: ticket check before landing
+// biome-ignore lint/complexity/noExcessiveLinesPerFunction: same split as the line above
 export async function landTicketCheck(
 	repository: string,
 	root: string,

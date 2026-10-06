@@ -41,6 +41,7 @@ type PiApi = {
 };
 
 /** Peer data stays in tool/custom messages. Never use owner steering for group delivery. */
+// biome-ignore lint/complexity/noExcessiveLinesPerFunction: split pending: hook factory, handlers share its state
 export default function groupPeer(pi: PiApi): void {
 	let leadRoot: string | undefined;
 	let leadSession: string | undefined;
@@ -204,6 +205,7 @@ export default function groupPeer(pi: PiApi): void {
 			}
 		}
 	});
+	// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: split pending: group peer message handler
 	pi.on("message_end", async (event, context) => {
 		if (event.message.role === "toolResult" || event.message.role === "custom") {
 			const text =

@@ -106,6 +106,8 @@ export async function spawnCommand(
 	}
 	await spawnJob(args, cwd);
 }
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: split pending: job spawn command
+// biome-ignore lint/complexity/noExcessiveLinesPerFunction: same split as the line above
 async function spawnJob(
 	args: readonly string[],
 	cwd: string,
@@ -508,6 +510,8 @@ function claimsOwnerFacingLead(role: string | undefined): string | undefined {
 	}
 }
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: split pending: flag loop moves to parseArgs
+// biome-ignore lint/complexity/noExcessiveLinesPerFunction: same split as the line above
 function parseSpawnArgs(args: readonly string[]): SpawnOptions {
 	let branch: string | undefined, repo: string | undefined, label: string | undefined, model: string | undefined;
 	let provider: string | undefined, thinking: string | undefined, base: string | undefined, head: string | undefined;

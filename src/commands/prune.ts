@@ -91,6 +91,7 @@ async function retireFinishedJobs(root: string, dryRun: boolean): Promise<readon
 	return retired;
 }
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: split pending: finished worktree pruning
 export async function pruneFinishedWorktrees(root: string, keep: readonly string[] = []): Promise<number> {
 	const jobsRoot = `${root}/.limen/jobs`;
 	const keepPaths = new Set<string>();

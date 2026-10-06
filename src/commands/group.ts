@@ -37,6 +37,7 @@ type GroupStartOptions = {
 	readonly newRun: boolean;
 	readonly mode: GroupRun["mode"];
 };
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: split pending: flag loop moves to parseArgs
 function parseGroupStartArgs(args: readonly string[]): GroupStartOptions {
 	const flags = new Map<string, string>();
 	const teamModels: Record<string, { provider: string; model: string }> = {};
@@ -117,6 +118,8 @@ function parseGroupStartArgs(args: readonly string[]): GroupStartOptions {
 	}
 	return { flags, teamModels, extensions, teamSelections, newRun, mode };
 }
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: split pending: group start command
+// biome-ignore lint/complexity/noExcessiveLinesPerFunction: same split as the line above
 export async function startGroup(args: readonly string[], cwd: string): Promise<GroupRun> {
 	if (process.env.LIMEN_GROUP_ID || process.env.LIMEN_JOB === "1") {
 		throw new Error(
@@ -368,6 +371,8 @@ export async function groupCommand(args: readonly string[], cwd: string): Promis
 		clearTimeout(cap);
 	}
 }
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: split pending: group subcommand dispatch
+// biome-ignore lint/complexity/noExcessiveLinesPerFunction: same split as the line above
 async function runGroupCommand(args: readonly string[], cwd: string): Promise<void> {
 	const [command, ...rest] = args;
 	if (!command || !["start", "status", "publish", "wait", "stop", "close"].includes(command)) {

@@ -233,6 +233,8 @@ export async function reconcileGithubClaim(
 	await reconcile(root, state, claim, token);
 }
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: split pending: GitHub claim reconcile
+// biome-ignore lint/complexity/noExcessiveLinesPerFunction: same split as the line above
 async function reconcile(root: string, state: string, claim: GithubClaim, token: string): Promise<void> {
 	const found = await matchedGithubJob(root, claim);
 	if (claim.receipt === "resolved") {
@@ -470,6 +472,7 @@ async function acceptIssue(
 	);
 }
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: split pending: GitHub API request
 async function request(
 	root: string,
 	state: string,

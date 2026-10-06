@@ -38,6 +38,7 @@ const METADATA_TTL_MS = 180_000;
 const METADATA_REFRESH_MS = 60_000;
 
 /** Keep `.limen/jobs/<id>/` truthful for a Herdr-hosted pi (no JSON stream). */
+// biome-ignore lint/complexity/noExcessiveLinesPerFunction: split pending: hook factory, handlers share its state
 export default function limenHosted(pi: PiApi): void {
 	if (process.env.LIMEN_HOSTED !== "1" || process.env.LIMEN_JOB !== "1") {
 		return;

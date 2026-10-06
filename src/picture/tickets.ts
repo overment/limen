@@ -111,6 +111,8 @@ async function directories(path: string): Promise<string[]> {
 		.sort();
 }
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: split pending: ticket parser
+// biome-ignore lint/complexity/noExcessiveLinesPerFunction: same split as the line above
 function parseTicket(
 	text: string,
 	path: string,

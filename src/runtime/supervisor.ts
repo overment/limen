@@ -61,6 +61,8 @@ function hostedStartMs(): number {
 	const raw = Number(process.env.LIMEN_HOSTED_START_MS);
 	return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_HOSTED_START_MS;
 }
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: split pending: hosted supervisor loop
+// biome-ignore lint/complexity/noExcessiveLinesPerFunction: same split as the line above
 export async function runHostedSupervisor(): Promise<void> {
 	const jobDir = requiredEnvironment("LIMEN_JOB_DIR");
 	let interrupted = false;
@@ -223,6 +225,7 @@ export async function runHostedSupervisor(): Promise<void> {
 	await finalizeJob(jobDir, requestedTerminal(halt), halt);
 }
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: split pending: hosted agent start and retry
 async function startHostedAgent(jobDir: string): Promise<string | undefined> {
 	const stopped = () => existsSync(`${jobDir}/stop-requested`);
 	const requestedBeforeStart = await textFile(`${jobDir}/stop-requested`);
@@ -304,6 +307,7 @@ async function startHostedAgent(jobDir: string): Promise<string | undefined> {
 	}
 }
 /** Publish a stall while the hosted session stays open. Re-arm only after the agent works again. */
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: split pending: hosted idle checks
 export async function noteHostedIdle(
 	jobDir: string,
 	status: HostedAgentStatus,

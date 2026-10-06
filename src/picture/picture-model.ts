@@ -190,6 +190,8 @@ const SUMMARY_MAX = 200;
 const LEVEL_RANK = { error: 0, warn: 1, info: 2 };
 const KIND_RANK: Record<string, number> = { module: 0 };
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: split pending: picture model builder
+// biome-ignore lint/complexity/noExcessiveLinesPerFunction: same split as the line above
 export function buildModel({
 	files,
 	diagnostics = [],
@@ -444,6 +446,8 @@ export function buildModel({
 }
 
 /** One file → record, or null when the file cannot be used (unparseable, no id, duplicate id). */
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: split pending: picture record reader
+// biome-ignore lint/complexity/noExcessiveLinesPerFunction: same split as the line above
 function readRecord(file: PictureFile, diag: Report, byId: Map<string, RecordNode>): RecordNode | null {
 	const { source } = file;
 	if (!/^(nodes|edges|features|journeys)\/[^/]+\.md$/.test(source)) {

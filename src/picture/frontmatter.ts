@@ -33,6 +33,7 @@ export interface Frontmatter {
  *   `ok` is false when no frontmatter block exists; `data` is then empty.
  *   `lines` maps `key`, `key.<index>` and `key.<index>.<subkey>` to 1-based file lines.
  */
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: split pending: front matter parser
 export function parseFrontmatter(text: string): Frontmatter {
 	const src = String(text)
 		.replace(/^\uFEFF/, "")
@@ -128,6 +129,7 @@ function fail(src: string, message: string): Frontmatter {
 	return { ok: false, data: {}, lines: {}, body: src, bodyLine: 1, errors: [{ line: 1, message }] };
 }
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: split pending: front matter block parser
 function parseBlock(
 	block: [number, string][],
 	key: string,
@@ -320,6 +322,7 @@ function readQuoted(s: string, start: number): QuotedResult {
 	return bad("unterminated quoted string");
 }
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: split pending: inline list scanner
 function parseInlineList(s: string): ScalarResult {
 	const items: unknown[] = [];
 	let i = 1;

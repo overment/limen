@@ -86,6 +86,7 @@ export function turnSignal(turn: CoordinatorTurn): CoordinatorSignal | undefined
  * sweep can find its process exit later, when no code runs in the dead process. `askMs` is how long an `ask` waits
  * before it counts as blocked.
  */
+// biome-ignore lint/complexity/noExcessiveLinesPerFunction: split pending: factory, handlers share its state
 export function coordinatorSignals(askMs = 60_000) {
 	let dir: string | undefined;
 	let root = "";

@@ -61,6 +61,7 @@ type ContinueOptions = {
 	readonly query: string;
 	readonly instruction: string;
 };
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: split pending: flag loop moves to parseArgs
 function parseContinueArgs(args: readonly string[]): ContinueOptions {
 	let review = false;
 	let tab = false;
@@ -122,6 +123,8 @@ function parseContinueArgs(args: readonly string[]): ContinueOptions {
 	}
 	return { review, tab, detached, label, model, provider, thinking, engine, selected, query, instruction };
 }
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: split pending: job continue command
+// biome-ignore lint/complexity/noExcessiveLinesPerFunction: same split as the line above
 async function continueJob(args: readonly string[], cwd: string, locked = false): Promise<void> {
 	const { review, tab, detached, label, model, provider, thinking, engine, selected, query, instruction } =
 		parseContinueArgs(args);
