@@ -28,7 +28,7 @@ import {
 } from "../job/record.ts";
 import { noteKind } from "../job/view.ts";
 import { cleanWorktree } from "../project/git.ts";
-import { argvFor, jobProfile, prepareSkillConfig } from "./engine.ts";
+import { argvFor, type EngineId, type EngineProfile, jobProfile, prepareSkillConfig } from "./engine.ts";
 import {
 	hostedBindingInPane,
 	hostedBindingSupported,
@@ -61,8 +61,15 @@ function hostedStartMs(): number {
 	const raw = Number(process.env.LIMEN_HOSTED_START_MS);
 	return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_HOSTED_START_MS;
 }
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: split pending: hosted supervisor loop
-// biome-ignore lint/complexity/noExcessiveLinesPerFunction: same split as the line above
+/** What the watch loop carries between samples of one hosted agent. */
+type HostedWatch = {
+	target: string;
+	missingStreak: number;
+	unknownStreak: number;
+	unknownAliveNoted: boolean;
+	readonly idle: HostedIdleWatch;
+	readonly toolWatch: ToolStallWatch;
+};
 export async function runHostedSupervisor(): Promise<void> {
 	const jobDir = requiredEnvironment("LIMEN_JOB_DIR");
 	let interrupted = false;
@@ -70,46 +77,25 @@ export async function runHostedSupervisor(): Promise<void> {
 		interrupted = true;
 	});
 	const recovering = process.env.LIMEN_HOSTED_RECOVER === "1";
-	const release = recovering ? await prepareRecoveredOwner(jobDir) : undefined;
-	if (recovering && !release) {
+	if (!(await claimHostedJob(jobDir, recovering))) {
 		return;
 	}
-	if ((await textFile(`${jobDir}/state`)) !== "running") {
-		await release?.();
+	const target = await hostedTarget(jobDir, recovering);
+	if (target === undefined) {
 		return;
-	}
-	await rm(`${jobDir}/born`, { force: true });
-	await writeHandshake(jobDir);
-	await release?.();
-	await appendLimenLog(
-		jobDir,
-		"hosted supervisor started (no outer timeout or tool-call cap; quiet-tool observation never signals processes)",
-	);
-	let target = process.env.LIMEN_HOSTED_TARGET?.trim() ?? "";
-	if (!recovering && process.env.LIMEN_HOSTED_START === "1") {
-		try {
-			const started = await startHostedAgent(jobDir);
-			if (!started) {
-				return;
-			}
-			target = started;
-		} catch (error) {
-			const message = error instanceof Error ? error.message : String(error);
-			await finalizeJob(jobDir, "failed", `hosted start failed: ${message}`);
-			return;
-		}
-	} else if (!target) {
-		target = requiredEnvironment("LIMEN_HOSTED_TARGET");
 	}
 	const requestedBeforeWatch = await textFile(`${jobDir}/stop-requested`);
 	if (requestedBeforeWatch) {
 		stopHostedAgent(target);
 	}
-	let missingStreak = 0;
-	let unknownStreak = 0;
-	let unknownAliveNoted = false;
-	const idle: HostedIdleWatch = { leftWorkingAt: undefined, armed: true };
-	const toolWatch: ToolStallWatch = { tool: "", born: "", started: 0 };
+	const watch: HostedWatch = {
+		target,
+		missingStreak: 0,
+		unknownStreak: 0,
+		unknownAliveNoted: false,
+		idle: { leftWorkingAt: undefined, armed: true },
+		toolWatch: { tool: "", born: "", started: 0 },
+	};
 	const engine = (await jobProfile(jobDir)).id;
 	// An engine or platform that never binds has no ownership to lose; a standing note there would hide real blocked or errored jobs.
 	const bindable = hostedBindingSupported(engine);
@@ -121,102 +107,75 @@ export async function runHostedSupervisor(): Promise<void> {
 		await noteHostedUncertainty(jobDir, bindable, undefined, since);
 		await clearHostedAdvisory(jobDir);
 	}
-	while (!interrupted) {
-		if ((await textFile(`${jobDir}/state`)) !== "running") {
+	await watchHostedAgent(jobDir, watch, engine, bindable, () => interrupted);
+}
+/** Takes the job as its owner: a recovered owner first, then the handshake. False when the job is not ours to watch. */
+async function claimHostedJob(jobDir: string, recovering: boolean): Promise<boolean> {
+	const release = recovering ? await prepareRecoveredOwner(jobDir) : undefined;
+	if (recovering && !release) {
+		return false;
+	}
+	if ((await textFile(`${jobDir}/state`)) !== "running") {
+		await release?.();
+		return false;
+	}
+	await rm(`${jobDir}/born`, { force: true });
+	await writeHandshake(jobDir);
+	await release?.();
+	await appendLimenLog(
+		jobDir,
+		"hosted supervisor started (no outer timeout or tool-call cap; quiet-tool observation never signals processes)",
+	);
+	return true;
+}
+/** The Herdr agent to watch: started here, or handed over by the spawner. Undefined when the start already finalized the job. */
+async function hostedTarget(jobDir: string, recovering: boolean): Promise<string | undefined> {
+	const target = process.env.LIMEN_HOSTED_TARGET?.trim() ?? "";
+	if (recovering || process.env.LIMEN_HOSTED_START !== "1") {
+		return target || requiredEnvironment("LIMEN_HOSTED_TARGET");
+	}
+	try {
+		return await startHostedAgent(jobDir);
+	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error);
+		await finalizeJob(jobDir, "failed", `hosted start failed: ${message}`);
+		return undefined;
+	}
+}
+/** Samples the agent once a second until the job ends, then finalizes it. */
+async function watchHostedAgent(
+	jobDir: string,
+	watch: HostedWatch,
+	engine: EngineId,
+	bindable: boolean,
+	interrupted: () => boolean,
+): Promise<void> {
+	while (!interrupted()) {
+		if ((await textFile(`${jobDir}/state`)) !== "running" || (await stopForGroup(jobDir, watch.target))) {
 			return;
 		}
-		const membership = await jobMembership(jobDir);
-		if (
-			membership &&
-			(membership.run.stopped || Date.now() >= (membership.member?.deadline ?? membership.run.deadline))
-		) {
-			stopHostedAgent(target);
-			await atomicWrite(`${jobDir}/stop-requested`, "group deadline or stop\n");
-			await writeHostedResult(jobDir);
-			await finalizeJob(jobDir, "failed", "group deadline or stop");
-			return;
-		}
-		if (membership) {
-			await syncLifecycle(membership.run, "skip");
-		}
-		const status = hostedAgentStatus(target);
+		const status = hostedAgentStatus(watch.target);
 		const sessionEnded = Boolean(await textFile(`${jobDir}/session-ended`));
-		// Herdr idle/done = unseen background tab, not job completion.
-		if (status === "missing") {
-			missingStreak += 1;
-		} else if (status === "unknown") {
-			unknownStreak += 1;
-		} else {
-			missingStreak = 0;
-			unknownStreak = 0;
-			unknownAliveNoted = false;
-		}
+		countHostedStatus(watch, status);
 		// A moved pane or degraded Herdr must neither stall finalize forever nor kill a live worker.
-		if ((missingStreak > 0 || unknownStreak >= HOSTED_UNKNOWN_SAMPLES) && !sessionEnded) {
-			const located = locateHostedAgent(target, engine, process.env.LIMEN_AGENT_NAME?.trim() ?? "");
-			if (located) {
-				if (located !== target) {
-					const binding = readHostedBinding(jobDir);
-					if (!binding || (await hostedBindingInPane(located, binding.pid, engine, jobDir)) !== "owned") {
-						await noteHostedUncertainty(jobDir, true, undefined);
-						await delay(1_000);
-						continue;
-					}
-					await atomicWrite(`${jobDir}/herdr/agent`, `${located}\n`);
-					await atomicWrite(`${jobDir}/herdr/pane`, `${located}\n`);
-					await appendLimenLog(jobDir, `hosted agent relocated ${target} -> ${located}`);
-					target = located;
-				} else if (status === "unknown" && !unknownAliveNoted) {
-					unknownAliveNoted = true;
-					await appendLimenLog(
-						jobDir,
-						`herdr cannot classify the hosted agent (${HOSTED_UNKNOWN_SAMPLES} samples); the recorded pane still runs ${engine}`,
-					);
-				}
-				missingStreak = 0;
-				unknownStreak = 0;
-			} else if (unknownStreak >= HOSTED_UNKNOWN_SAMPLES) {
-				// The probe confirms gone despite unclassifiable status; let the missing window decide.
-				missingStreak += 1;
-				unknownStreak = 0;
-			}
+		if (
+			(watch.missingStreak > 0 || watch.unknownStreak >= HOSTED_UNKNOWN_SAMPLES) &&
+			!sessionEnded &&
+			!(await followHostedAgent(jobDir, watch, status, engine))
+		) {
+			await delay(1_000);
+			continue;
 		}
-		const bound = missingStreak >= 3 ? readHostedBinding(jobDir) : undefined;
-		const boundAlive = bound && (await hostedIdentityObservation(bound)) !== "mismatch";
-		let reason: string | undefined = sessionEnded
-			? hostedTerminalReason(status, true)
-			: missingStreak >= 3 && !boundAlive
-				? hostedTerminalReason(status, false)
-				: undefined;
+		let reason = await sessionEndReason(jobDir, watch, status, sessionEnded);
 		const activity = await textFile(`${jobDir}/activity`);
-		if (Date.now() - (toolWatch.lastSampleAt ?? 0) >= 3_000) {
-			toolWatch.lastSampleAt = Date.now();
-			const binding = readHostedBinding(jobDir);
-			const owned = Boolean(binding && (await hostedEngineOwned(target, binding.pid, engine, jobDir)));
-			let child: boolean | undefined;
-			if (owned && binding && activity === "tool") {
-				const tool = `${await textFile(`${jobDir}/tool-calls`)}:${await textFile(`${jobDir}/tool-detail`)}`;
-				child = (await observeToolStall(toolWatch, binding.pid, tool)) === "uncertain";
-			} else {
-				toolWatch.tool = "";
-				toolWatch.previous = undefined;
-			}
-			// Think/tool transitions do not prove that an unavailable child observation recovered.
-			await noteHostedUncertainty(jobDir, bindable && !owned, child);
+		if (Date.now() - (watch.toolWatch.lastSampleAt ?? 0) >= 3_000) {
+			await sampleToolStall(jobDir, watch, engine, bindable, activity);
 		}
 		if (!reason) {
-			reason = await noteHostedIdle(jobDir, status, idle);
+			reason = await noteHostedIdle(jobDir, status, watch.idle);
 		}
 		if (reason) {
-			const requested = await textFile(`${jobDir}/stop-requested`);
-			await writeHostedResult(jobDir);
-			const stopReason = requested ? "" : await textFile(`${jobDir}/stop-reason`);
-			const failedReason = isFailedStopReason(stopReason) ? stopReason : "";
-			await finalizeJob(
-				jobDir,
-				requested ? requestedTerminal(requested) : failedReason ? "failed" : "done",
-				requested || failedReason || reason,
-			);
+			await finishHostedJob(jobDir, reason);
 			return;
 		}
 		await delay(1_000);
@@ -224,10 +183,126 @@ export async function runHostedSupervisor(): Promise<void> {
 	const halt = (await textFile(`${jobDir}/stop-requested`)) || "hosted supervisor interrupted";
 	await finalizeJob(jobDir, requestedTerminal(halt), halt);
 }
+/** Stops the agent and fails the job when its group was stopped or passed its deadline. True when it did. */
+async function stopForGroup(jobDir: string, target: string): Promise<boolean> {
+	const membership = await jobMembership(jobDir);
+	if (
+		membership &&
+		(membership.run.stopped || Date.now() >= (membership.member?.deadline ?? membership.run.deadline))
+	) {
+		stopHostedAgent(target);
+		await atomicWrite(`${jobDir}/stop-requested`, "group deadline or stop\n");
+		await writeHostedResult(jobDir);
+		await finalizeJob(jobDir, "failed", "group deadline or stop");
+		return true;
+	}
+	if (membership) {
+		await syncLifecycle(membership.run, "skip");
+	}
+	return false;
+}
+function countHostedStatus(watch: HostedWatch, status: HostedAgentStatus): void {
+	// Herdr idle/done = unseen background tab, not job completion.
+	if (status === "missing") {
+		watch.missingStreak += 1;
+		return;
+	}
+	if (status === "unknown") {
+		watch.unknownStreak += 1;
+		return;
+	}
+	watch.missingStreak = 0;
+	watch.unknownStreak = 0;
+	watch.unknownAliveNoted = false;
+}
+/** Finds the agent again after Herdr lost or could not classify it. False when a new pane's ownership is uncertain. */
+async function followHostedAgent(
+	jobDir: string,
+	watch: HostedWatch,
+	status: HostedAgentStatus,
+	engine: EngineId,
+): Promise<boolean> {
+	const located = locateHostedAgent(watch.target, engine, process.env.LIMEN_AGENT_NAME?.trim() ?? "");
+	if (!located) {
+		if (watch.unknownStreak >= HOSTED_UNKNOWN_SAMPLES) {
+			// The probe confirms gone despite unclassifiable status; let the missing window decide.
+			watch.missingStreak += 1;
+			watch.unknownStreak = 0;
+		}
+		return true;
+	}
+	if (located !== watch.target) {
+		const binding = readHostedBinding(jobDir);
+		if (!binding || (await hostedBindingInPane(located, binding.pid, engine, jobDir)) !== "owned") {
+			await noteHostedUncertainty(jobDir, true, undefined);
+			return false;
+		}
+		await atomicWrite(`${jobDir}/herdr/agent`, `${located}\n`);
+		await atomicWrite(`${jobDir}/herdr/pane`, `${located}\n`);
+		await appendLimenLog(jobDir, `hosted agent relocated ${watch.target} -> ${located}`);
+		watch.target = located;
+	} else if (status === "unknown" && !watch.unknownAliveNoted) {
+		watch.unknownAliveNoted = true;
+		await appendLimenLog(
+			jobDir,
+			`herdr cannot classify the hosted agent (${HOSTED_UNKNOWN_SAMPLES} samples); the recorded pane still runs ${engine}`,
+		);
+	}
+	watch.missingStreak = 0;
+	watch.unknownStreak = 0;
+	return true;
+}
+/** Why the session is over: it said so, or the agent stayed missing and its bound process is gone. */
+async function sessionEndReason(
+	jobDir: string,
+	watch: HostedWatch,
+	status: HostedAgentStatus,
+	sessionEnded: boolean,
+): Promise<string | undefined> {
+	const bound = watch.missingStreak >= 3 ? readHostedBinding(jobDir) : undefined;
+	const boundAlive = bound && (await hostedIdentityObservation(bound)) !== "mismatch";
+	if (sessionEnded) {
+		return hostedTerminalReason(status, true);
+	}
+	return watch.missingStreak >= 3 && !boundAlive ? hostedTerminalReason(status, false) : undefined;
+}
+/** Checks at most every 3 s whether the engine still owns the pane and whether a running tool went quiet. */
+async function sampleToolStall(
+	jobDir: string,
+	watch: HostedWatch,
+	engine: EngineId,
+	bindable: boolean,
+	activity: string,
+): Promise<void> {
+	const { toolWatch } = watch;
+	toolWatch.lastSampleAt = Date.now();
+	const binding = readHostedBinding(jobDir);
+	const owned = Boolean(binding && (await hostedEngineOwned(watch.target, binding.pid, engine, jobDir)));
+	let child: boolean | undefined;
+	if (owned && binding && activity === "tool") {
+		const tool = `${await textFile(`${jobDir}/tool-calls`)}:${await textFile(`${jobDir}/tool-detail`)}`;
+		child = (await observeToolStall(toolWatch, binding.pid, tool)) === "uncertain";
+	} else {
+		toolWatch.tool = "";
+		toolWatch.previous = undefined;
+	}
+	// Think/tool transitions do not prove that an unavailable child observation recovered.
+	await noteHostedUncertainty(jobDir, bindable && !owned, child);
+}
+/** Finalizes the job: a requested stop wins, then a failed stop reason, then done. */
+async function finishHostedJob(jobDir: string, reason: string): Promise<void> {
+	const requested = await textFile(`${jobDir}/stop-requested`);
+	await writeHostedResult(jobDir);
+	const stopReason = requested ? "" : await textFile(`${jobDir}/stop-reason`);
+	const failedReason = isFailedStopReason(stopReason) ? stopReason : "";
+	await finalizeJob(
+		jobDir,
+		requested ? requestedTerminal(requested) : failedReason ? "failed" : "done",
+		requested || failedReason || reason,
+	);
+}
 
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: split pending: hosted agent start and retry
 async function startHostedAgent(jobDir: string): Promise<string | undefined> {
-	const stopped = () => existsSync(`${jobDir}/stop-requested`);
 	const requestedBeforeStart = await textFile(`${jobDir}/stop-requested`);
 	if (requestedBeforeStart) {
 		await finalizeJob(jobDir, requestedTerminal(requestedBeforeStart), requestedBeforeStart);
@@ -243,6 +318,31 @@ async function startHostedAgent(jobDir: string): Promise<string | undefined> {
 		return;
 	}
 	const place: HerdrPlace = { workspace, tab, pane, mode: "hosted" };
+	const launch = await hostedEngineLaunch(jobDir);
+	if (!launch) {
+		return;
+	}
+	const { profile, args } = launch;
+	try {
+		await prepareHostedLaunch(jobDir, pane, profile.id, hostedLaunchParent(pane));
+		const target = startHostedPi({
+			place,
+			name: requiredEnvironment("LIMEN_AGENT_NAME"),
+			kind: profile.herdrKind,
+			args,
+			timeoutMs: hostedStartMs(),
+			...(coordinatorTab ? { coordinatorTab } : {}),
+			stopped: () => existsSync(`${jobDir}/stop-requested`),
+			log: (line) => void appendLimenLog(jobDir, line).catch(() => {}),
+		});
+		await writeFile(`${jobDir}/herdr/agent`, `${target}\n`);
+		return target;
+	} catch (error) {
+		return await settleFailedStart(jobDir, error, pane, profile.id);
+	}
+}
+/** The engine profile and argv for the hosted pane. Undefined when the group stopped first; the job is then failed. */
+async function hostedEngineLaunch(jobDir: string): Promise<{ profile: EngineProfile; args: string[] } | undefined> {
 	const taskFile = requiredEnvironment("LIMEN_TASK_FILE");
 	const continueFile = process.env.LIMEN_CONTINUE_FILE?.trim();
 	const profile = await jobProfile(jobDir);
@@ -273,41 +373,32 @@ async function startHostedAgent(jobDir: string): Promise<string | undefined> {
 		...(process.env.LIMEN_THINKING ? { thinking: process.env.LIMEN_THINKING } : {}),
 		...(continueFile ? { continueValue: `@${continueFile}` } : { taskFile }),
 	});
-	try {
-		await prepareHostedLaunch(jobDir, pane, profile.id, hostedLaunchParent(pane));
-		const target = startHostedPi({
-			place,
-			name: requiredEnvironment("LIMEN_AGENT_NAME"),
-			kind: profile.herdrKind,
-			args,
-			timeoutMs: hostedStartMs(),
-			...(coordinatorTab ? { coordinatorTab } : {}),
-			stopped,
-			log: (line) => void appendLimenLog(jobDir, line).catch(() => {}),
-		});
-		await writeFile(`${jobDir}/herdr/agent`, `${target}\n`);
-		return target;
-	} catch (error) {
-		const requested = await textFile(`${jobDir}/stop-requested`);
-		if (requested) {
-			const stoppedBeforeAgent =
-				typeof error === "object" && error !== null && "code" in error && error.code === "hosted_start_stopped";
-			const live = stoppedBeforeAgent ? undefined : locateHostedAgent(pane, profile.id);
-			if (live) {
-				await writeFile(`${jobDir}/herdr/agent`, `${live}\n`);
-				stopHostedAgent(live);
-				return live;
-			}
-			await finalizeJob(jobDir, requestedTerminal(requested), requested);
-			return;
-		}
+	return { profile, args };
+}
+/** After a failed start: a requested stop still stops an agent that came up; anything else fails the job. */
+async function settleFailedStart(
+	jobDir: string,
+	error: unknown,
+	pane: string,
+	engine: EngineId,
+): Promise<string | undefined> {
+	const requested = await textFile(`${jobDir}/stop-requested`);
+	if (!requested) {
 		const message = error instanceof Error ? error.message : String(error);
 		await finalizeJob(jobDir, "failed", `hosted start failed: ${message}`);
 		return;
 	}
+	const stoppedBeforeAgent =
+		typeof error === "object" && error !== null && "code" in error && error.code === "hosted_start_stopped";
+	const live = stoppedBeforeAgent ? undefined : locateHostedAgent(pane, engine);
+	if (live) {
+		await writeFile(`${jobDir}/herdr/agent`, `${live}\n`);
+		stopHostedAgent(live);
+		return live;
+	}
+	await finalizeJob(jobDir, requestedTerminal(requested), requested);
 }
 /** Publish a stall while the hosted session stays open. Re-arm only after the agent works again. */
-// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: split pending: hosted idle checks
 export async function noteHostedIdle(
 	jobDir: string,
 	status: HostedAgentStatus,
@@ -357,37 +448,49 @@ export async function noteHostedIdle(
 	const duration =
 		elapsed < 60_000 ? `${Math.max(1, Math.round(elapsed / 1000))}s` : `${Math.round(elapsed / 60_000)}m`;
 	if (watch.armed) {
-		const line = errored
-			? `errored: last turn failed with ${stop}, session still open`
-			: status === "blocked"
-				? `blocked after ${count} tool calls, session still open`
-				: `idle ${duration} after ${count} tool calls, session still open`;
-		await writeHostedResult(jobDir);
-		await recordCommits(jobDir).catch(() => {});
-		// A recovered supervisor re-arms on a stall it already reported; the same kind of standing note is not a new event.
-		const before = await textFile(`${jobDir}/advisory`);
-		await atomicWrite(`${jobDir}/advisory`, `${line}\n`);
-		watch.armed = false;
-		await appendLimenLog(jobDir, `advisory: ${line}`).catch(() => {});
-		if (!before || noteKind(before) !== noteKind(line)) {
-			void deliverJobStall(jobDir, line).catch(() => {});
-		}
+		await publishHostedStall(jobDir, watch, stallLine(errored, stop, status, count, duration));
 	}
+	await ringHostedStall(jobDir, watch, now, duration);
+}
+function stallLine(errored: boolean, stop: string, status: HostedAgentStatus, count: number, duration: string): string {
+	if (errored) {
+		return `errored: last turn failed with ${stop}, session still open`;
+	}
+	return status === "blocked"
+		? `blocked after ${count} tool calls, session still open`
+		: `idle ${duration} after ${count} tool calls, session still open`;
+}
+/** Writes the result, commits and standing advisory once per stall; a new kind of stall also goes to the finish webhook. */
+async function publishHostedStall(jobDir: string, watch: HostedIdleWatch, line: string): Promise<void> {
+	await writeHostedResult(jobDir);
+	await recordCommits(jobDir).catch(() => {});
+	// A recovered supervisor re-arms on a stall it already reported; the same kind of standing note is not a new event.
+	const before = await textFile(`${jobDir}/advisory`);
+	await atomicWrite(`${jobDir}/advisory`, `${line}\n`);
+	watch.armed = false;
+	await appendLimenLog(jobDir, `advisory: ${line}`).catch(() => {});
+	if (!before || noteKind(before) !== noteKind(line)) {
+		void deliverJobStall(jobDir, line).catch(() => {});
+	}
+}
+/** Shows the stall in the pane; rings the coordinator again only after the re-ring interval and before a wake landed. */
+async function ringHostedStall(jobDir: string, watch: HostedIdleWatch, now: number, duration: string): Promise<void> {
 	const pane = await textFile(`${jobDir}/herdr/pane`);
-	if (pane) {
-		const delivered = (await readdir(`${jobDir}/notify/delivered`).catch(() => [] as string[])).some((name) =>
-			name.startsWith("_advisory."),
-		);
-		const ring = !delivered && (watch.lastRingAt === undefined || now - watch.lastRingAt >= stallReringMs());
-		reportHostedStall({
-			pane,
-			label: (await textFile(`${jobDir}/label`)) || jobDir.split("/").at(-1) || "hosted worker",
-			duration,
-			notify: ring,
-		});
-		if (ring) {
-			watch.lastRingAt = now;
-		}
+	if (!pane) {
+		return;
+	}
+	const delivered = (await readdir(`${jobDir}/notify/delivered`).catch(() => [] as string[])).some((name) =>
+		name.startsWith("_advisory."),
+	);
+	const ring = !delivered && (watch.lastRingAt === undefined || now - watch.lastRingAt >= stallReringMs());
+	reportHostedStall({
+		pane,
+		label: (await textFile(`${jobDir}/label`)) || jobDir.split("/").at(-1) || "hosted worker",
+		duration,
+		notify: ring,
+	});
+	if (ring) {
+		watch.lastRingAt = now;
 	}
 }
 async function clearHostedAdvisory(jobDir: string): Promise<void> {
