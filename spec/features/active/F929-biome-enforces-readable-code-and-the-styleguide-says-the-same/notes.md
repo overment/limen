@@ -71,3 +71,11 @@ Lines still wider than 120 columns (tab as two): `src` 206, `hook` 14, `test` 66
 - Flag loops: `src/commands/spawn.ts` (17 flag compares), `continue.ts` (10), `group.ts` (6), `keeper.ts` (4), `jobs.ts` (3), and one or two in `land.ts`, `picture.ts`, `sweep.ts`, `ticket.ts`, `init.ts`, `linear.ts`, `status.ts`, `steer.ts`, `src/main.ts`.
 - `CONTRIBUTING.md:35` held the old rule: "The linter preset stays `none` except `nursery.noFloatingPromises`. Do not enable a style pack."
 - `picture/viewer/*.js` is inlined into a classic `<script>` by `src/picture/html.ts:44`. Its `"use strict"` lines are not redundant there, although Biome reads the files as modules.
+
+## Flag loops kept (team 1)
+
+- `src/commands/steer.ts`: compares `args[0]` with `--running`; every later word is free message text. `parseFlags` would read message words such as `--force` as flags and reject them, and would reject a job id that starts with `--`.
+- `src/commands/sweep.ts`: compares the single word with `--install` or `--uninstall`. `parseFlags` needs a repeated rule and a separate both-flags check to keep "sweep accepts no arguments, --install, or --uninstall" for `--install --uninstall`; three plain `if`s read better.
+- `src/commands/init.ts`: compares the single word with `--drop-leftovers`. Same reason as sweep: one exact word, one message.
+- `src/main.ts`: the dispatch scans the words before `--` for `--help` or `-h`, for every command, without knowing its flags. `parseFlags` needs the command's table, throws on flags it does not know, and treats `-h` as a positional.
+- `src/commands/ticket.ts` `ticketCheck`: not a flag loop; it takes one branch name and rejects any word that starts with `-`. `parseFlags` would accept `-x` as a branch name.
