@@ -80,6 +80,18 @@
 					}
 				}
 			}
+		},
+		{
+			// `src/picture/html.ts` inlines these files into a classic `<script>`, not a module, so their "use strict" is
+			// needed although Biome reads them as modules.
+			"includes": ["picture/viewer/*.js"],
+			"linter": {
+				"rules": {
+					"suspicious": {
+						"noRedundantUseStrict": "off"
+					}
+				}
+			}
 		}
 	],
 	"assist": {
