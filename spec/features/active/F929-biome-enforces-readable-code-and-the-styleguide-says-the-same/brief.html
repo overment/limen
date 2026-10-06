@@ -38,7 +38,7 @@ li { margin: 3px 0; }
 <body>
 <main>
 <h1>Limen code quality: what Biome checks now, and what waits on you</h1>
-<p class="sub">Feature F929 · checks ran at <code>398d1b9</code> · 6 October 2026 · Biome 2.5.8 · measurements at main <code>19b0175</code></p>
+<p class="sub">Feature F929 · checks ran at <code>421ed26</code> (this work merged with main <code>8bacea1</code>) · 6 October 2026 · Biome 2.5.8 · measurements at <code>19b0175</code>, reformat numbers after merging main <code>8bacea1</code></p>
 
 <div class="card">
 <h3 style="margin-top:0">The answer</h3>
@@ -167,7 +167,8 @@ function parseKeeperArgs(args: readonly string[]): KeeperOptions {
 
 <h2><span class="chip ok">4 · Checked</span> Evidence</h2>
 <ul>
-<li><code>npm run check</code> at <code>398d1b9</code>: tsc pass, Biome pass, tests 63 of 63 in 59 s.</li>
+<li><code>npm run check</code> at <code>398d1b9</code>: tsc pass, Biome pass, tests 63 of 63 in 59 s. Again at <code>421ed26</code>, after the merge with main: tests 68 of 68 in 91 s.</li>
+<li>After merging main <code>8bacea1</code> (group extensions, PR #9): the new <code>noAssignInExpressions</code> rule caught a fresh <code>(teamSelections[team] ??= []).push(path)</code> in <code>src/commands/group.ts:44</code>. Fixed.</li>
 <li><code>limen ticket check</code>: pass (one warning: the board has no F929 line yet; workers do not edit the board).</li>
 <li><code>limen picture build --strict</code>: exit 0.</li>
 <li>Rule probe on a scratch copy: each pattern below fails <code>biome check</code>.
@@ -202,8 +203,8 @@ function parseKeeperArgs(args: readonly string[]): KeeperOptions {
 
 <h2><span class="chip wait">6 · Waiting on you</span> Biome rules proposed, not landed</h2>
 <table><thead><tr><th>Rule</th><th>Cost today</th><th></th></tr></thead><tbody>
-<tr><td>formatter lineWidth 180 → 120</td><td>92 of 101 files reformat. <code>src/</code> 11,660 → 13,726 lines. Lines over 120 columns: 759 → 208 (the rest are long strings and comments; the formatter does not split them).</td><td><span class="chip wait">Pick 1</span></td></tr>
-<tr><td>style/useBlockStatements</td><td>1,699 hits in 94 files. One autofix pass (<code>--unsafe</code>). With width 120: <code>src/</code> → 15,933 lines, <code>test/</code> 2,417 → 2,951 (cap 3,500).</td><td><span class="chip wait">Pick 1</span></td></tr>
+<tr><td>formatter lineWidth 180 → 120</td><td>About 90 files reformat. <code>src/</code> 11,787 → 13,843 lines. Lines over 120 columns: 759 → 208 (the rest are long strings and comments; the formatter does not split them).</td><td><span class="chip wait">Pick 1</span></td></tr>
+<tr><td>style/useBlockStatements</td><td>1,699 hits in 94 files. One autofix pass (<code>--unsafe</code>). With width 120: <code>src/</code> → 16,028 lines; <code>test/</code> 2,648 → 3,225 (cap 3,500).</td><td><span class="chip wait">Pick 1</span></td></tr>
 <tr><td>style/noNestedTernary</td><td>43 hits in 15 files. Hand fixes. The styleguide scan already specified this work (F773, spec 36).</td><td><span class="chip wait">Pick 1</span></td></tr>
 <tr><td>complexity/noExcessiveCognitiveComplexity (max 20)</td><td>80 functions over 20. Worst: <code>continue.ts:21</code> 139, <code>spawn.ts:84</code> 127, <code>github.ts:58</code> 117, <code>status.ts:24</code> 112. Needs real refactors, so it can only start as a per-file list.</td><td><span class="chip wait">Pick 2</span></td></tr>
 <tr><td>Biome <code>recommended</code> preset</td><td>87 hits on this branch (107 before the fixes above): 65 non-null <code>!</code> in picture code, 9 viewer CSS order, 13 small ones. Two of the 13 are false: the viewer's <code>"use strict"</code> is needed, because <code>src/picture/html.ts:44</code> inlines it as a classic script. One is real: a <code>throw</code> inside <code>finally</code> at <code>seat.ts:75</code>.</td><td><span class="chip wait">Pick 3</span></td></tr>
@@ -217,9 +218,10 @@ function parseKeeperArgs(args: readonly string[]): KeeperOptions {
 <h2><span class="chip wait">7 · Your picks</span></h2>
 <div class="card pick"><b>Pick 1 · Reformat the whole tree to the target style?</b>
 <ul><li>What: <code>lineWidth</code> 120 and braces on every body, in one mechanical commit, then nested ternaries by hand.</li>
-<li>Cost: about +4,300 lines in <code>src/</code>; <code>test/</code> uses 534 of its 1,083 free lines under the 3,500 cap. Every open job branch must rebase or merge after it.</li>
+<li>Cost: <code>src/</code> grows 11,787 → 16,028 lines (+36%). Every open job branch must rebase or merge after it.</li>
+<li><code>test/</code> would grow 2,648 → 3,225 and leave only 275 lines under the 3,500 cap, with no new test. So the pick keeps <code>test/</code> at today's format.</li>
 <li>Brace rule has no "single-line guard" option in Biome 2.5.8: it is all or nothing. <code>if (!value) continue;</code> becomes three lines.</li>
-<li><b>My pick: yes, both, at a quiet moment with no open job branches</b>, and add the commit to <code>.git-blame-ignore-revs</code>. The fallback is width 120 alone (+18% lines, no braces).</li></ul></div>
+<li><b>My pick: yes, both, for <code>src/</code>, <code>hook/</code>, <code>bin/</code> and <code>picture/</code>, at a quiet moment with no open job branches</b>, and add the commit to <code>.git-blame-ignore-revs</code>. The fallback is width 120 alone (+17% lines, no braces).</li></ul></div>
 <div class="card pick"><b>Pick 2 · Complexity limit for all code?</b>
 <ul><li>What: cognitive complexity at most 20 per function. 80 functions are over it today; they cannot be fixed mechanically.</li>
 <li><b>My pick: yes, as a ratchet.</b> The rule binds every file; the files that hold today's offenders are listed in the override, and a file leaves the list when its functions are split.</li></ul></div>
@@ -234,7 +236,7 @@ function parseKeeperArgs(args: readonly string[]): KeeperOptions {
 
 <h3>Styleguide draft if you pick yes</h3>
 <ul>
-<li>Pick 1 and 2 → "Checked by Biome": replace the override bullet with "All code: lines at most 120 columns, braces on every <code>if</code>, <code>for</code> and <code>else</code> body, no nested ternary, cognitive complexity at most 20 per function. Files in the <code>biome.jsonc</code> complexity list are older code; split a function before you add to it."</li>
+<li>Pick 1 and 2 → "Checked by Biome": replace the override bullet with "All code outside <code>test/</code>: lines at most 120 columns, braces on every <code>if</code>, <code>for</code> and <code>else</code> body, no nested ternary, cognitive complexity at most 20 per function. Files in the <code>biome.jsonc</code> complexity list are older code; split a function before you add to it."</li>
 <li>Pick 3 → "Avoid": "Style packs. Biome's <code>recommended</code> preset is on; any other rule is named in <code>biome.jsonc</code> with its reason."</li>
 <li>Pick 4 → "Prefer":
   <ul><li>"Parse command flags with <code>node:util</code> <code>parseArgs</code>: one options table per command, cross-flag rules as early returns after it."</li>

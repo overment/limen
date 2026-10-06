@@ -54,6 +54,10 @@ File line counts (newline count) for the whole reformat:
 
 `useBlockStatements` has no options in Biome 2.5.8. It flags every brace-less `if`, also `if (!value) continue;`. Its fix is marked unsafe, so it runs only with `biome lint --write --unsafe`. The `test/` line cap (3,500) holds at both widths.
 
+After merging main `8bacea1` (group extensions, which adds `test/group-extensions.test.ts`): now `src` 11,787, `hook` 1,617, `test` 2,648, `picture` 3,178. Width 120: 13,843, 1,843, 3,120, 3,378. Width 120 and braces: 16,028, 2,219, 3,225, 3,635. A reformat of `test/` would leave 275 lines under the cap with no new test.
+
+Biome's unsafe `useOptionalChain` fix rewrote `!identity?.member || identity.member.role !== "coordinator"` in `src/job/group-cabinet.ts:213` to `identity.member?.role !== "coordinator"`, which throws when the job has no group. tsc caught it. Run the typecheck after every `--unsafe` pass.
+
 ## Seams
 
 - Flag loops: `src/commands/spawn.ts` (17 flag compares), `continue.ts` (10), `group.ts` (6), `keeper.ts` (4), `jobs.ts` (3), and one or two in `land.ts`, `picture.ts`, `sweep.ts`, `ticket.ts`, `init.ts`, `linear.ts`, `status.ts`, `steer.ts`, `src/main.ts`.
