@@ -1,0 +1,64 @@
+{
+	"$schema": "https://biomejs.dev/schemas/2.5.8/schema.json",
+	"vcs": {
+		"enabled": true,
+		"clientKind": "git",
+		"useIgnoreFile": true
+	},
+	"formatter": {
+		"enabled": true,
+		"indentStyle": "tab",
+		"lineWidth": 180
+	},
+	// No preset. Each rule is named here with the reason it exists. A rule joins this list with its existing sites fixed.
+	"linter": {
+		"enabled": true,
+		// Feature folders keep human evidence, such as saved HTML pages. Lint only the code that ships.
+		"includes": ["**", "!spec/**"],
+		"rules": {
+			"preset": "none",
+			"complexity": {
+				// `message?.role !== "user"` reads in one pass; `!message || message.role !== "user"` makes the reader join two terms.
+				"useOptionalChain": "error"
+			},
+			"correctness": {
+				// tsc already rejects unused names in TypeScript; these two cover the viewer JavaScript and the bin scripts.
+				"noUnusedVariables": "error",
+				"noUnusedImports": "error"
+			},
+			"style": {
+				// `else` after `return`, `throw`, `break` or `continue` only adds nesting. Write the early return and stop.
+				"noUselessElse": "error",
+				// `if (a) { if (b) ... }` with nothing else in the outer block is one condition: `if (a && b)`.
+				"useCollapsedIf": "error",
+				// `else { if (...) }` is `else if (...)`.
+				"useCollapsedElseIf": "error"
+			},
+			"suspicious": {
+				// A side effect hidden inside an expression, such as `String((seq += 1))`. Put the assignment on its own line.
+				"noAssignInExpressions": "error"
+			},
+			// Nursery rules can be renamed or promoted in a Biome minor release. The lockfile pins Biome; recheck this group when it moves.
+			"nursery": {
+				// A promise nobody awaits loses its error and its order.
+				"noFloatingPromises": "error",
+				// An async function passed where the caller expects a plain return, or a promise used as a condition.
+				"noMisusedPromises": "error",
+				// `await` on a value that is not a promise is a mistake about what the call returns.
+				"useAwaitThenable": "error",
+				// A `switch` over a union names every member or has a `default`. A new job state then fails the check where it is not handled.
+				"useExhaustiveSwitchCases": "error"
+			}
+		}
+	},
+	"assist": {
+		"actions": {
+			"source": {
+				"organizeImports": "on"
+			}
+		}
+	},
+	"files": {
+		"includes": ["**", "!!node_modules", "!!package-lock.json"]
+	}
+}

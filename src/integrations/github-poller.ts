@@ -293,7 +293,7 @@ async function accept(root: string, state: string, binding: GithubBinding, comme
 	const pull = await found<Pull>(`/repos/${binding.repo}/pulls/${pr}`, token);
 	const issue = pull ? undefined : await found<Issue>(`/repos/${binding.repo}/issues/${pr}`, token);
 	const thread = pull ?? issue;
-	if (!thread || thread.state !== "open" || thread.number !== pr) return;
+	if (thread?.state !== "open" || thread.number !== pr) return;
 	if (pull) {
 		if (!sameRepo(pull.base.repo.full_name, binding.repo)) return;
 		if (!/^[0-9a-f]{40}$/.test(pull.head.sha) || !/^[0-9a-f]{40}$/.test(pull.base.sha) || !/^[\w./-]+$/.test(pull.base.ref)) throw new Error("GitHub returned invalid PR refs");

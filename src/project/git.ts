@@ -149,7 +149,7 @@ export function headCommit(cwd: string): string {
 export function resolveCommit(cwd: string, ref: string, option: string): string {
 	if (/^[0-9a-f]{40}$/.test(ref)) return ref;
 	const result = ref.startsWith("-") ? undefined : git(cwd, ["rev-parse", "--verify", "--quiet", `${ref}^{commit}`]);
-	if (!result || result.status !== 0) throw new Error(`${option} ${JSON.stringify(ref)} names no commit in ${cwd}`);
+	if (result?.status !== 0) throw new Error(`${option} ${JSON.stringify(ref)} names no commit in ${cwd}`);
 	return result.stdout.trim();
 }
 export const NO_COMMIT = "this repository has no commit yet; commit once, then spawn.";
@@ -242,7 +242,10 @@ function git(cwd: string, args: readonly string[], input?: string): GitResult {
 	if (miss(result.error)) result = run(gitBin || "git");
 	if (miss(result.error) && !gitBin) {
 		const fallback = ["/usr/bin/git", "/usr/local/bin/git", "/opt/homebrew/bin/git"].find((path) => existsSync(path));
-		if (fallback) result = run((gitBin = fallback));
+		if (fallback) {
+			gitBin = fallback;
+			result = run(fallback);
+		}
 	} else if (!gitBin && !result.error) gitBin = "git";
 	if (result.error) throw miss(result.error) ? new Error("git is not on PATH") : result.error;
 	return { stdout: result.stdout ?? "", stderr: result.stderr ?? "", status: result.status ?? 1 };

@@ -199,7 +199,7 @@ export async function runInternalJob(): Promise<void> {
 			return;
 		}
 		const descendants = await ownedToolDescendants(process.pid, owner.process.born);
-		if (!descendants || !descendants.some((member) => member.pid === pid) || descendants.length < 2) {
+		if (!descendants?.some((member) => member.pid === pid) || descendants.length < 2) {
 			await warnUncertain("child ownership changed before termination");
 			return;
 		}

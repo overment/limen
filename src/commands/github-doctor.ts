@@ -70,7 +70,7 @@ async function rootOwnedRelease(root: string): Promise<boolean> {
 			if (dir === root && (name === ".git" || name === "node_modules")) continue;
 			const path = join(dir, name);
 			const entry = await lstat(path).catch(() => undefined);
-			if (!entry || entry.uid !== 0 || (entry.mode & 0o022) !== 0 || entry.isSymbolicLink()) return false;
+			if (entry?.uid !== 0 || (entry.mode & 0o022) !== 0 || entry.isSymbolicLink()) return false;
 			if (entry.isDirectory()) pending.push(path);
 		}
 	}

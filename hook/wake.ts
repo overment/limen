@@ -137,10 +137,12 @@ export default function limenWake(pi: PiApi): void {
 		const change = body
 			? ["--title", title, "--display-agent", agent, "--token", `limen=${label}`, "--state-label", `idle=${label}`, "--state-label", `done=${label}`]
 			: ["--clear-title", "--display-agent", "Limen coordinator", "--clear-token", "limen", "--clear-state-labels"];
-		herdrCall(["pane", "report-metadata", herdr.pane, "--source", "limen", "--seq", String((herdrSeq += 1)), ...change, "--ttl-ms", String(METADATA_TTL_MS)]);
+		herdrSeq += 1;
+		herdrCall(["pane", "report-metadata", herdr.pane, "--source", "limen", "--seq", String(herdrSeq), ...change, "--ttl-ms", String(METADATA_TTL_MS)]);
 	};
 	const releaseHerdr = () => {
 		if (!herdr) return;
+		herdrSeq += 1;
 		herdrCall([
 			"pane",
 			"report-metadata",
@@ -148,7 +150,7 @@ export default function limenWake(pi: PiApi): void {
 			"--source",
 			"limen",
 			"--seq",
-			String((herdrSeq += 1)),
+			String(herdrSeq),
 			"--clear-title",
 			"--clear-display-agent",
 			"--clear-token",
@@ -570,7 +572,7 @@ export default function limenWake(pi: PiApi): void {
 	});
 	pi.on("message_start", (event) => {
 		const message = eventMessage(event);
-		if (!message || message.role !== "user") return;
+		if (message?.role !== "user") return;
 		// Every Limen wake opens with "Limen job"; any other user message is the owner's turn and resets the title's finished count.
 		if (!message.content.startsWith("Limen job ")) ownerTurnAt = Date.now();
 		const pending = [...pendingDeliveries.values()].find((candidate) => !candidate.entered && candidate.message === message.content);
@@ -580,7 +582,7 @@ export default function limenWake(pi: PiApi): void {
 	});
 	pi.on("message_end", (event) => {
 		const message = eventMessage(event);
-		if (!message || message.role !== "assistant") return;
+		if (message?.role !== "assistant") return;
 		coordinator.messageEnd(message.stopReason);
 		const failed = message.stopReason === "error" || message.stopReason === "aborted";
 		for (const claim of activeDeliveries) {

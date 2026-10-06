@@ -210,7 +210,7 @@ export async function memberLive(root: string, member: GroupMember): Promise<boo
 }
 export async function ownsLiveChildren(jobDir: string): Promise<boolean> {
 	const identity = await jobMembership(jobDir);
-	if (!identity?.member || identity.member.role !== "coordinator") return false;
+	if (identity?.member?.role !== "coordinator") return false;
 	for (const member of identity.run.members) if (member.team === identity.member.team && member.role === "worker" && (await memberLive(identity.run.root, member))) return true;
 	return false;
 }
