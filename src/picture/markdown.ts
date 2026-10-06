@@ -293,6 +293,7 @@ function matchLink(src: string, i: number): { text: string; url: string; title: 
 
 /** http(s) URLs and relative references only; no other scheme, no `//host`, no controls. */
 export function isSafeHref(url: string): boolean {
+	// biome-ignore lint/suspicious/noControlCharactersInRegex: an href with a control character is unsafe; rejecting it is the point.
 	if (!url || /[\x00-\x20\x7f\\]/.test(url)) {
 		return false;
 	}

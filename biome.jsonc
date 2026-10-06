@@ -11,15 +11,19 @@
 		// Wide lines hide a second idea at the end of the first. Long string literals stay wide; the formatter does not split them.
 		"lineWidth": 120
 	},
-	// No preset. Each rule is named here with the reason it exists. A rule joins this list with its existing sites fixed, or each one suppressed with its reason.
+	// Biome's recommended rules, plus the rules named below. A named rule adds what the preset lacks: a rule the preset leaves
+	// out, or a preset warning raised to an error. A rule turned off names its reason and only the files it is true for.
 	"linter": {
 		"enabled": true,
 		// Feature folders keep human evidence, such as saved HTML pages. Lint only the code that ships.
 		"includes": ["**", "!spec/**"],
 		"rules": {
-			"preset": "none",
+			// The recommended rules catch real mistakes (non-null assertions, unsafe `finally`, control characters in a regex)
+			// that no named rule here covers. `npm run check` runs with `--error-on-warnings`, so a preset warning fails it too.
+			"preset": "recommended",
 			"complexity": {
-				// `message?.role !== "user"` reads in one pass; `!message || message.role !== "user"` makes the reader join two terms.
+				// A preset warning, raised. `message?.role !== "user"` reads in one pass; `!message || message.role !== "user"` makes
+				// the reader join two terms.
 				"useOptionalChain": "error",
 				// A function the reader cannot hold at once. Split it into named steps. 25 is the low end of the 25 to 40 range Adam set.
 				// Each function over the limit carries a `biome-ignore` with its reason; search for `biome-ignore lint/complexity` to list them.
@@ -33,7 +37,8 @@
 				}
 			},
 			"correctness": {
-				// tsc already rejects unused names in TypeScript; these two cover the viewer JavaScript and the bin scripts.
+				// Preset warnings, raised. tsc already rejects unused names in TypeScript; these two cover the viewer JavaScript and
+				// the bin scripts.
 				"noUnusedVariables": "error",
 				"noUnusedImports": "error"
 			},
@@ -46,10 +51,6 @@
 				"useCollapsedIf": "error",
 				// `else { if (...) }` is `else if (...)`.
 				"useCollapsedElseIf": "error"
-			},
-			"suspicious": {
-				// A side effect hidden inside an expression, such as `String((seq += 1))`. Put the assignment on its own line.
-				"noAssignInExpressions": "error"
 			},
 			// Nursery rules can be renamed or promoted in a Biome minor release. The lockfile pins Biome; recheck this group when it moves.
 			"nursery": {
