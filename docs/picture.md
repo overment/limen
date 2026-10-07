@@ -16,6 +16,8 @@ The picture shows the plant atlas beside a quiet column of work and dated decisi
 
 Module titles and place names wrap instead of cutting off. Place labels keep their work counts beside the name. Hover a place for its full name and description; open it for sources and connections.
 
+Maps with more than seven top-level modules open with only selected connections, so the overview does not cover their names. **Show all module connections**, above the map, restores the module-pair overview; smaller maps show it by default. Arrows show direction. Count badges summarize module-pair connections where a badge fits without covering a card or another count; the reading column always lists the exact connections. Hover or focus a listed connection to trace its wire. Dashed journey paths show step order, not code connections; badges keep the ordered step numbers. A dotted route crosses a card when no clear gutter route exists; the connection stays visible instead of disappearing.
+
 Select a feature or journey to reveal its `touches` or `steps`, including places inside different modules. Only named places light; nested places keep their parent captions.
 
 Follow a journey through its ordered steps, including repeated visits and stops at the whole project. The URL preserves a selected place, work item, or day on reload. The map never uses Git history to guess places.
