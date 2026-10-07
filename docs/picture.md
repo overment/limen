@@ -20,6 +20,8 @@ Select a feature or journey to reveal its `touches` or `steps`, including places
 
 Follow a journey through its ordered steps, including repeated visits and stops at the whole project. The URL preserves a selected place, work item, or day on reload. The map never uses Git history to guess places.
 
+Module cards and band places wrap into rows with a minimum readable width. On a wide window, the atlas stays beside the reading column. Its heading, selection line, and legend stay visible while the map scrolls. Selecting a place, module, work item, or journey step brings the focused or first lit place into the map viewport without moving the selected row in the reading column. Narrow windows keep the atlas above the reading column.
+
 Pins, places, modules, work, journeys, and days open larger as layers over the page. An item opened inside a layer stacks one more layer. The trail above the layers names each one and jumps to any of them. Esc and browser Back close the top layer; the Left and Right arrow keys move the top layer to the previous or next item of the same kind. The URL holds the whole stack, so a reload or a shared link opens the same layers.
 
 **Map features are not the live work list.** They show where specified features cross the code, not their state. The board (`spec/build.md`) owns feature state. The live picture also reads tickets and the board to show current work.

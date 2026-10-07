@@ -567,9 +567,7 @@
 				: `<div data-row="${row}">${modCard(m, "floor")}</div>`;
 		return (
 			(entry ? wide(entry, 0) : "") +
-			(mids.length
-				? `<div class="midrow" data-row="1" style="--mids:${mids.length}">${mids.map((m) => modCard(m, "")).join("")}</div>`
-				: "") +
+			(mids.length ? `<div class="midrow" data-row="1">${mids.map((m) => modCard(m, "")).join("")}</div>` : "") +
 			(floor ? wide(floor, 2) : "")
 		);
 	}
@@ -723,6 +721,29 @@
 		}
 		atlas.dataset.wires = JSON.stringify([...uniq.values()]);
 		drawWires();
+		revealAtlas(L.focus || L.mfocus);
+	}
+
+	function revealAtlas(focus) {
+		const viewport = document.getElementById("atlasMap");
+		if (viewport.scrollHeight <= viewport.clientHeight) {
+			return;
+		}
+		const target =
+			(focus && stage.querySelector(`[data-place="${CSS.escape(focus)}"],[data-mod="${CSS.escape(focus)}"]`)) ||
+			stage.querySelector(".place.lit");
+		if (!target) {
+			return;
+		}
+		/* Scroll only the map. The reading column keeps its navigation anchor. */
+		const view = viewport.getBoundingClientRect();
+		const box = target.getBoundingClientRect();
+		const pad = parseFloat(getComputedStyle(viewport).scrollPaddingTop);
+		if (box.top < view.top + pad || box.height > view.height - 2 * pad) {
+			viewport.scrollTop += box.top - view.top - pad;
+		} else if (box.bottom > view.bottom - pad) {
+			viewport.scrollTop += box.bottom - view.bottom + pad;
+		}
 	}
 
 	/* Wires: measured from the live layout, so they follow resizes. */

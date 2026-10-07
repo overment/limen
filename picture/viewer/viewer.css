@@ -165,14 +165,26 @@ code,
 	position: sticky;
 	top: calc(var(--head) + var(--sp-4));
 	height: calc(100vh - var(--head) - var(--sp-8));
-	min-height: 600px;
+	min-height: 0;
 	background: var(--sheet);
 	border: 1px solid var(--line);
 	border-radius: var(--r-3);
 	display: flex;
 	flex-direction: column;
 	padding: var(--sp-4) var(--sp-5) var(--sp-3);
+	overflow: hidden;
+}
+.atlas-head,
+.lightline,
+.legend {
+	flex: none;
+}
+.atlas-map {
+	flex: 1;
+	min-height: 0;
 	overflow: auto;
+	scroll-padding: var(--sp-3);
+	margin-top: var(--sp-2);
 }
 .eyebrow {
 	font-size: 11.5px;
@@ -258,13 +270,14 @@ code,
 	font-size: 13px;
 }
 .stage {
+	--card-width: 240px;
 	position: relative;
-	flex: 1;
+	min-height: 100%;
 	display: grid;
-	grid-template-rows: auto auto auto;
+	grid-template-columns: minmax(0, 1fr);
 	row-gap: var(--sp-12);
-	align-content: center;
-	/* Small vertical padding leaves slack, so a lit (bold) place that wraps does not make the atlas scroll. */
+	align-content: start;
+	/* Leave room around focused chips and journey badges. */
 	padding: var(--sp-2) var(--sp-1);
 }
 .stage svg {
@@ -290,11 +303,13 @@ code,
 }
 .midrow {
 	display: grid;
-	grid-template-columns: repeat(var(--mids, 4), minmax(0, 1fr));
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--card-width)), 1fr));
 	gap: var(--sp-6);
+	align-items: start;
 	position: relative;
 }
 .mod {
+	min-width: 0;
 	padding: var(--sp-3) var(--sp-2) var(--sp-3) var(--sp-4);
 	display: flex;
 	flex-direction: column;
@@ -319,25 +334,21 @@ code,
 	color: var(--mute);
 }
 .mod .places {
+	min-width: 0;
 	display: grid;
 	gap: var(--sp-1);
 }
 .mod.floor {
-	flex-direction: row;
-	align-items: center;
+	flex-direction: column;
+	align-items: stretch;
 	gap: var(--sp-4);
 	padding: var(--sp-3);
-}
-.mod.floor .fhead {
-	width: 230px;
-	flex: none;
 }
 .mod.floor p {
 	margin: 0;
 }
 .mod.floor .places {
-	flex: 1;
-	grid-template-columns: 1fr 1fr;
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--card-width)), 1fr));
 	gap: var(--sp-2);
 }
 .band {
@@ -1137,6 +1148,9 @@ svg.base.dim .wire {
 		height: auto;
 		min-height: 0;
 	}
+	.atlas-map {
+		overflow: visible;
+	}
 	.brand {
 		display: none;
 	}
@@ -1163,9 +1177,6 @@ svg.base.dim .wire {
 	}
 	.main {
 		padding: var(--sp-4) var(--sp-4) var(--sp-12);
-	}
-	.midrow {
-		grid-template-columns: 1fr 1fr;
 	}
 	.crumbs {
 		top: 0;
