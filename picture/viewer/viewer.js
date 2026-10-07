@@ -548,10 +548,11 @@
 	function chip(id, band) {
 		const p = P[id];
 		const n = (workAt[id] || []).length;
+		const label = p.gloss ? `${p.title}\n${p.gloss}` : p.title;
 		const inner = band
 			? `<span class="nm"><b>${esc(p.title)}</b><span>${esc(M[id].gloss)}</span></span>`
 			: `<span class="nm">${esc(p.title)}</span>`;
-		return `<a class="place" data-place="${esc(id)}" href="#place/${esc(id)}" title="${esc(p.gloss)}">${p.status === "partial" ? '<i class="pd" aria-label="only partly described"></i>' : ""}${inner}<span class="ct" aria-label="${plural(n, "work item")}">${n || ""}</span></a>`;
+		return `<a class="place" data-place="${esc(id)}" href="#place/${esc(id)}" title="${esc(label)}">${p.status === "partial" ? '<i class="pd" aria-label="only partly described"></i>' : ""}${inner}<span class="ct" aria-label="${plural(n, "work item")}">${n || ""}</span></a>`;
 	}
 	function modCard(m, cls) {
 		return `<div class="mod ${cls}" data-mod="${esc(m.id)}"><div class="fhead"><div class="mod-head"><a href="#module/${esc(m.id)}" title="Open module">${esc(m.title)}</a></div><p>${esc(m.gloss)}</p></div><div class="places">${m.places.map((id) => chip(id)).join("")}</div></div>`;
