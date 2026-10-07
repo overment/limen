@@ -19,16 +19,22 @@
       <div class="facts" id="facts"></div>
     </div>
     <div class="lightline" id="lightline" role="status"></div>
-    <div class="stage" id="stage">
-      <svg class="base" id="base" aria-hidden="true"></svg>
-      <svg class="over" id="over" aria-hidden="true"></svg>
-    </div>
+    <button type="button" id="wireOverview" aria-pressed="false">Show all module connections</button>
+    <section class="atlas-map" id="atlasMap" aria-label="Plant map">
+      <div class="stage" id="stage">
+        <svg class="base" id="base" aria-hidden="true"></svg>
+        <svg class="over" id="over" aria-hidden="true"></svg>
+      </div>
+    </section>
     <div class="legend">
-      <span><i class="k-wire"></i>line between modules · number = connections between their places</span>
-      <span><i class="k-lit"></i>lit: a place the open work, journey, or day touches</span>
+      <span title="Hover or focus a connection in the reading column to trace it"><i class="k-wire"></i>code connection, arrow shows direction</span>
+      <span>number = connections between two modules</span>
+      <span><i class="k-journey"></i>journey step order, not code</span>
+      <span><i class="k-crossing"></i>route crosses a card</span>
+      <span><i class="k-lit"></i>lit: touched by the selection</span>
       <span><i class="k-focus"></i>place you opened</span>
-      <span><i class="k-pd"></i>only partly described in the map</span>
-      <span><i class="k-n">3</i>work items that touch the place</span>
+      <span><i class="k-pd"></i>partly described</span>
+      <span><i class="k-n">3</i>work items on the place</span>
     </div>
   </section>
   <section class="read" id="read" aria-label="Work, journeys, days, and places"></section>
