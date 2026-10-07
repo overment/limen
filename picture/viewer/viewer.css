@@ -277,8 +277,8 @@ code,
 	grid-template-columns: minmax(0, 1fr);
 	row-gap: var(--sp-12);
 	align-content: start;
-	/* Leave room around focused chips and journey badges. */
-	padding: var(--sp-2) var(--sp-1);
+	/* Leave room around focused chips and journey badges, and for the outer wire rail (card edge + 5px). */
+	padding: var(--sp-2);
 }
 .stage svg {
 	position: absolute;
