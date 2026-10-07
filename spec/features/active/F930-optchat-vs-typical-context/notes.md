@@ -13,7 +13,19 @@
   - Team 2 · comparison visuals and Team 3 · cohesion and gaps: lead task subagents (Opus).
 - No group exists, so `limen group publish` and group close do not apply. Interfaces live in `contract.md` (one owner per file part).
 - Teams preview by private export plus `browser-check` with their own `BROWSER_CHECK_SESSION`, so no team runs `svx stop` on another team's daemon.
+- Timing: Team 1 (Sol) wrote contract v1 and a truth review in about 10 minutes. Team 3 took 11.5 minutes and Team 2 took 19 minutes. Both followed v1 and closed the review findings assigned to them.
 
 ## Check warnings at ticket time
 
 - `limen ticket check`: no board line for F930 in `spec/build.md` (the lead does not edit the board); no `touches` (the product is outside the plant map).
+
+## Lead integration
+
+- The lead retuned the `versus` rows (contract v1.1) and shortened the stats zoom label. `team-3-notes.md` still quotes the old stats label.
+- Lead checks on the final export (`optchat.html`, byte-identical to `~/Downloads/optchat-vs-typical.html`), all on the hidden screen:
+  - Shots opened at 1440 px (hero, stats, section 01 animated, chart, table, coda). Shots opened at 900 px with reduced motion (section 01, chart, table). No overlap or clipping.
+  - Reduced motion (CDP media emulation): the hero log stays at 1,024 and the comparison at 1,081 messages over 5 s.
+  - Dark scheme (emulated): the article stays white (`rgb(255, 255, 255)`). Only the root scrollbar turns dark.
+  - Radius audit: `6px` ×13 and `50%` ×1. SVG `rx` is `6` only. Hue audit: 21° (the orange `--pending`) is the only hue.
+  - Console on a fresh load with scrolling: no errors, warnings or exceptions. The page loads nothing from the network.
+- The lab `HANDOFF.md` Part 1 now records the F930 structure, labels and the gaps that remain.
