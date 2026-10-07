@@ -17,6 +17,7 @@
 
 ## Open questions
 
-- The two omissions (pauses over 5 minutes, OptChat's compactor outside the KB) are stated under the 01 "input per turn" figure, not in any head lead. Decide whether 04 needs them too.
-- HANDOFF.md Part 1 rows for 01 and 04 describe Team 2's figures as seen at 16:40; check them against the shipped figures.
-- The 900 px label overlaps in 01 "input per turn" and the 04 "assumed window" label overflow that I found: Team 2 reports them fixed. I have not checked the fix with a new shot.
+- The 01 "input per turn" note and the 04 figure note both state the two omissions: pauses over 5 minutes are not modeled, and OptChat's compactor is outside the KB. No head lead states them.
+- HANDOFF.md Part 1 rows for 01 and 04 match the integrated figures from the final export.
+- At 900 px, two small label collisions remain in Team 2 figures: a bar crosses the "1,000 KB" axis label in the typical "input per turn" chart, and the "80k" and "100k chars" ticks in 04 touch. HANDOFF known gap 3 lists them.
+- Emulation checks (reduced motion, dark scheme) used a held CDP session: `/tmp/f931-team3-cdp.mjs`. The session must stay attached while `shot` runs, or Chrome drops the emulation.
