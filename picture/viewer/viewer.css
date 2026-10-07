@@ -545,6 +545,18 @@ svg.base.dim {
 	stroke-width: 1.6;
 	opacity: 0.4;
 }
+.wire.journey {
+	stroke: var(--ink);
+	stroke-width: 1.8;
+	stroke-dasharray: 5 4;
+	opacity: 0.7;
+}
+.legend .k-journey {
+	width: 20px;
+	height: 0;
+	border-top: 1.8px dashed var(--ink);
+	vertical-align: 3px;
+}
 .wire.hot {
 	stroke-width: 3;
 	opacity: 1;

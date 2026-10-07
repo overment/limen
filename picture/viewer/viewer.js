@@ -664,11 +664,12 @@
 				L.badges[s.place] ??= [];
 				L.badges[s.place].push(i + 1);
 			});
+			/* Journey hops show ordered steps, not graph connections. */
 			for (let i = 1; i < j.steps.length; i++) {
 				const a = j.steps[i - 1].place;
 				const b = j.steps[i].place;
 				if (a && b && a !== b) {
-					L.wires.push({ e: { from: a, to: b, k: i }, cls: "sel" });
+					L.wires.push({ e: { from: a, to: b, k: i + 1 }, cls: "journey" });
 				}
 			}
 			if (r.step) {
@@ -717,7 +718,14 @@
 		ll.innerHTML = `<i class="sw"></i><span>${L.text}</span>${r.view !== "plant" ? `<a href="#plant/${tabOf(r)}">Clear selection</a>` : ""}`;
 		const uniq = new Map();
 		for (const x of L.wires) {
-			uniq.set(`${x.e.from}|${x.e.to}`, [x.e.from, x.e.to, x.cls]); /* one wire per direction; focus ink wins */
+			const key = `${x.cls === "journey" ? "journey|" : ""}${x.e.from}|${x.e.to}`;
+			const prior = uniq.get(key);
+			if (prior && x.cls === "journey") {
+				prior[3].push(x.e.k);
+			} else {
+				/* One code wire per direction; journey repeats retain their step numbers. */
+				uniq.set(key, [x.e.from, x.e.to, x.cls, x.cls === "journey" ? [x.e.k] : []]);
+			}
 		}
 		atlas.dataset.wires = JSON.stringify([...uniq.values()]);
 		drawWires();
@@ -776,6 +784,17 @@
 		const a = box(el);
 		const card = el.closest(".mod,.band") || el;
 		const m = box(card);
+		if (!el.matches(".place") && (a.b < toward.t || toward.b < a.t)) {
+			const down = a.y < toward.y;
+			const x = Math.max(a.l + 8, Math.min(a.r - 8, toward.x));
+			return {
+				card,
+				tip: [x, down ? a.b + 2 : a.t - 2],
+				exit: [x, down ? a.b + 5 : a.t - 5],
+				top: m.t - 5,
+				bottom: m.b + 5,
+			};
+		}
 		const places = box(el.closest(".places") || card);
 		const left = el.matches(".place") ? a.x < places.x : toward.x < a.x;
 		const y = Math.max(a.t + 4, Math.min(a.b - 4, a.y + jit));
@@ -826,6 +845,9 @@
 		consider([a.exit, [sx, ty], b.exit]);
 		for (const y of [a.top, a.bottom, b.top, b.bottom]) {
 			consider([a.exit, [sx, y], [tx, y], b.exit]);
+		}
+		if (best && cost === Math.abs(tx - sx) + Math.abs(ty - sy)) {
+			return path([a.tip, ...best, b.tip]);
 		}
 		/* A shared outside rail connects packed rows without crossing a card. */
 		const rails = new Set([sx, tx, ...cards.flatMap((c) => [c.l - 5, c.r + 5])]);
@@ -891,39 +913,28 @@
 		labels.push(at);
 		return `<circle class="wcount" cx="${at.x}" cy="${at.y}" r="9"/><text class="wnum" x="${at.x}" y="${at.y}">${count}</text>`;
 	}
-	function drawWires() {
-		const cards = [...stage.querySelectorAll(".mod,.band")].map((el) => ({ el, ...box(el) }));
-		const baseSvg = document.getElementById("base");
-		const overSvg = document.getElementById("over");
-		const width = Math.max(stage.clientWidth, ...cards.map((c) => c.r + 5));
-		const height = Math.max(stage.clientHeight, ...cards.map((c) => c.b + 5));
-		for (const svg of [baseSvg, overSvg]) {
-			svg.style.width = `${width}px`;
-			svg.style.height = `${height}px`;
-		}
-		let base = DEFS;
+	function baseWires(svg, cards) {
+		let html = DEFS;
 		const labels = [];
-		if (document.getElementById("wireOverview").getAttribute("aria-pressed") === "true") {
-			for (const p of modulePairs()) {
-				const A = anchorEl(p.a, true);
-				const B = anchorEl(p.b, true);
-				if (!A || !B) {
-					continue;
-				}
-				const d = wireRoute(A, B, cards);
-				if (!d) {
-					continue;
-				}
-				base += `<path class="wire" data-from="${esc(p.a)}" data-to="${esc(p.b)}" d="${d}" ${p.fw ? 'marker-end="url(#mg)"' : ""} ${p.bw ? 'marker-start="url(#mg)"' : ""}><title>${esc(M[p.a].title)} ↔ ${esc(M[p.b].title)}: ${plural(p.fw + p.bw, "connection")}</title></path>`;
-				base += wireCount(baseSvg, d, p.fw + p.bw, cards, labels);
+		for (const p of modulePairs()) {
+			const A = anchorEl(p.a, true);
+			const B = anchorEl(p.b, true);
+			if (!A || !B) {
+				continue;
 			}
+			const d = wireRoute(A, B, cards);
+			if (!d) {
+				continue;
+			}
+			html += `<path class="wire" data-from="${esc(p.a)}" data-to="${esc(p.b)}" d="${d}" ${p.fw ? 'marker-end="url(#mg)"' : ""} ${p.bw ? 'marker-start="url(#mg)"' : ""}><title>${esc(M[p.a].title)} ↔ ${esc(M[p.b].title)}: ${plural(p.fw + p.bw, "connection")}</title></path>`;
+			html += wireCount(svg, d, p.fw + p.bw, cards, labels);
 		}
-		baseSvg.innerHTML = base;
-		const wires = JSON.parse(document.getElementById("atlas").dataset.wires || "[]");
-		baseSvg.classList.toggle("dim", Boolean(wires.length || stage.classList.contains("lens")));
-		let over = DEFS;
+		return html;
+	}
+	function selectedWires(wires, cards) {
+		let html = DEFS;
 		const seen = new Map();
-		for (const [f, t, cls] of wires) {
+		for (const [f, t, cls, steps] of wires) {
 			const A = anchorEl(f);
 			const B = anchorEl(t);
 			if (!A || !B) {
@@ -934,10 +945,27 @@
 			seen.set(key, n + 1);
 			const d = wireRoute(A, B, cards, n % 2 ? 3 : 0);
 			if (d) {
-				over += `<path class="wire ${cls}" data-from="${esc(f)}" data-to="${esc(t)}" d="${d}" marker-end="url(#m${cls === "ink" ? "k" : "t"})"/>`;
+				const step = cls === "journey" ? ` data-steps="${steps.join(",")}"` : "";
+				html += `<path class="wire ${cls}" data-from="${esc(f)}" data-to="${esc(t)}"${step} d="${d}" marker-end="url(#m${cls === "sel" ? "t" : "k"})"/>`;
 			}
 		}
-		overSvg.innerHTML = over;
+		return html;
+	}
+	function drawWires() {
+		const cards = [...stage.querySelectorAll(".mod,.band")].map((el) => ({ el, ...box(el) }));
+		const baseSvg = document.getElementById("base");
+		const overSvg = document.getElementById("over");
+		const width = Math.max(stage.clientWidth, ...cards.map((c) => c.r + 5));
+		const height = Math.max(stage.clientHeight, ...cards.map((c) => c.b + 5));
+		for (const svg of [baseSvg, overSvg]) {
+			svg.style.width = `${width}px`;
+			svg.style.height = `${height}px`;
+		}
+		const overview = document.getElementById("wireOverview").getAttribute("aria-pressed") === "true";
+		baseSvg.innerHTML = overview ? baseWires(baseSvg, cards) : DEFS;
+		const wires = JSON.parse(document.getElementById("atlas").dataset.wires || "[]");
+		baseSvg.classList.toggle("dim", Boolean(wires.length || stage.classList.contains("lens")));
+		overSvg.innerHTML = selectedWires(wires, cards);
 		overSvg.classList.remove("highlight");
 	}
 
@@ -1385,11 +1413,7 @@
 		return top ? parse(`#${top.kind}/${top.id}`) : route;
 	}
 
-	function init() {
-		RAW = JSON.parse(document.getElementById("archmap-data").textContent);
-		use(adapt(RAW));
-		stage = document.getElementById("stage");
-		buildAtlas();
+	function initWireOverview() {
 		const overview = document.getElementById("wireOverview");
 		/* More than seven modules cannot share a scannable all-pairs overview. */
 		overview.setAttribute("aria-pressed", String(D.modules.length <= 7));
@@ -1397,6 +1421,28 @@
 			overview.setAttribute("aria-pressed", String(overview.getAttribute("aria-pressed") !== "true"));
 			drawWires();
 		});
+	}
+	function focusWire(target) {
+		for (const x of document.querySelectorAll("#over .wire.hot")) {
+			x.classList.remove("hot");
+		}
+		const er = target?.closest("#read [data-wire]");
+		let hot = null;
+		if (er) {
+			const [f, t] = er.dataset.wire.split("|");
+			hot = document.querySelector(`#over .wire[data-from="${CSS.escape(f)}"][data-to="${CSS.escape(t)}"]`);
+			hot?.classList.add("hot");
+		}
+		document.getElementById("over").classList.toggle("highlight", !!hot);
+	}
+	function init() {
+		RAW = JSON.parse(document.getElementById("archmap-data").textContent);
+		use(adapt(RAW));
+		stage = document.getElementById("stage");
+		buildAtlas();
+		initWireOverview();
+		document.addEventListener("focusin", (e) => focusWire(e.target));
+		document.addEventListener("focusout", (e) => focusWire(e.relatedTarget));
 		document.addEventListener(
 			"click",
 			(e) => {
@@ -1462,17 +1508,7 @@
 			if (h?.dataset.hover) {
 				stage.querySelector(`.place[data-place="${CSS.escape(h.dataset.hover)}"]`)?.classList.add("hov");
 			}
-			for (const x of document.querySelectorAll("#over .wire.hot")) {
-				x.classList.remove("hot");
-			}
-			const er = e.target.closest("#read [data-wire]");
-			let hot = null;
-			if (er) {
-				const [f, t] = er.dataset.wire.split("|");
-				hot = document.querySelector(`#over .wire[data-from="${CSS.escape(f)}"][data-to="${CSS.escape(t)}"]`);
-				hot?.classList.add("hot");
-			}
-			document.getElementById("over").classList.toggle("highlight", !!hot);
+			focusWire(e.target);
 		});
 		go();
 		new ResizeObserver(() => drawWires()).observe(stage);
