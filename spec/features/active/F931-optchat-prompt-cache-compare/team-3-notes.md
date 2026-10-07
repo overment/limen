@@ -19,4 +19,4 @@
 
 - The two omissions (pauses over 5 minutes, OptChat's compactor outside the KB) are stated under the 01 "input per turn" figure, not in any head lead. Decide whether 04 needs them too.
 - HANDOFF.md Part 1 rows for 01 and 04 describe Team 2's figures as seen at 16:40; check them against the shipped figures.
-- At 900 px the 01 "input per turn" right labels overlap ("paid in full" over "… KB in total"), and the 04 "assumed window: 400 KB" label runs past the content edge (Team 2 figures).
+- The 900 px label overlaps in 01 "input per turn" and the 04 "assumed window" label overflow that I found: Team 2 reports them fixed. I have not checked the fix with a new shot.

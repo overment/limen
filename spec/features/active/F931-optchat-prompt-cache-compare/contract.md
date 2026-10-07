@@ -1,6 +1,6 @@
 # F931 prompt-cache contract
 
-Version: v1. Team 1 (cache truth) owns every revision. Each revision raises the version and adds one line under "Changes". Teams 2 and 3 follow the newest version and re-read this file before they finish. A team that needs a change asks Team 1; it does not fork the words.
+Version: v1.1. Team 1 (cache truth) owns every revision. Each revision raises the version and adds one line under "Changes". Teams 2 and 3 follow the newest version and re-read this file before they finish. A team that needs a change asks Team 1; it does not fork the words.
 
 Product: `~/overment/lab/optchat-explainer/` (not a Git repository). Spec text: its `HANDOFF.md` Part 2 (cite section numbers). The comparison words, marks and number labels from the earlier comparison work stay in force: `spec/features/active/F930-optchat-vs-typical-context/contract.md` (v1.1).
 
@@ -31,7 +31,7 @@ Both strategies use the prompt cache. A typical thread reads its growing prefix 
 | side | what stays cached | what breaks the cache | what is paid in full |
 |---|---|---|---|
 | Typical | Each request reads the growing thread it already sent from cache. | Compaction replaces that thread with a short summary; a long pause may also expire an entry. | Each new message or tool step, and the new summary after compaction; the growing prefix is still read on every request. |
-| OptChat | Fixed tools and instructions, much of the view, and the previous step within a turn stay cached. | A changed view tail crosses a view mark, or an entry expires during a pause. | The changed view tail and new message each turn, each step's new part, and extra cheap-model compactor calls that this KB chart does not size. |
+| OptChat | Fixed tools and instructions, often the view up to a cache mark, and the previous step within a turn stay cached. | A changed view tail crosses a view mark, or an entry expires during a pause. | The changed view tail and new message each turn, each step's new part, and extra cheap-model compactor calls that this KB chart does not size. |
 
 ## Chart and request examples
 
@@ -72,19 +72,20 @@ UI label export: `CACHE_LABELS` in `lib/cache.js`.
 - Constants: `FIXED`, `LINE`, `BUDGET`, `MARKS`, `CACHE_LABELS`.
 - These names stay stable. Team 1 may add fields and exports; it tells Teams 2 and 3 in "Changes".
 
-## Where the cache shows (lead plan; Teams 2 and 3 refine)
+## Where the cache shows (as integrated)
 
-1. Section 01: show per-turn **main-agent** input from both sides. Typical compaction gets a mark, and its request KB can be shown separately; the first normal request after compaction has a black summary segment. OptChat has a changing black band; neither series establishes a general cost winner.
-2. Section 04: two request stacks on one scale, selected by `examples(run)`, with the cache marks. Label the typical compaction stack a separate call. Explain that OptChat's cheap-model compactor is real but not sized in these main-agent KB.
-3. Section 03 memory simulator: after a turn, the view lines the next turn reads from cache and the changed tail, from the real fold.
-4. Section 02 loop and detail: the view and call nodes say what is cached.
-5. Hero: only if it stays quiet, the view row shows the cache marks.
-6. Versus: one "Prompt cache?" row in plain words that match the series.
+1. Section 01: the context-size chart labels the typical area "read from cache", puts a black summary block under each hatched drop, and labels the flat OptChat line "changed tail paid". Under it, `lib/Turns.svelte` draws per-turn **main-agent** input for both sides on one scale from `perTurn(run)`, with compaction calls as separate hatched ticks and running totals.
+2. Section 04: `lib/Request.svelte` draws the `examples(run)` records to scale on the 400 KB axis, with the cache marks. The OptChat view is drawn at `BUDGET` because the drawn run's view is full (512 lines after the 20,000-message fold).
+3. Section 03 memory simulator: after a turn, a grey bar marks each view line the next call reads from cache and a black bar marks the changed tail, from the real fold; the readout counts lines, not bytes.
+4. Section 02 loop and detail: the call, view and compactor nodes say what is cached.
+5. Hero and stats: unchanged. Cache marks on 32 drawn hero lines would suggest a scale the drawing does not have.
+6. Versus: the "Prompt cache?" row.
+7. Section 04 title: "Both reuse a cached start. Each pays for what changed."
 
 ## Ownership (one writer per file part)
 
 - Team 1: this file, `lib/cache.js`, `lib/compare.js`, the `versus` array in `lib/data.js`.
-- Team 2: `lib/Compare.svelte`, `lib/Versus.svelte`, `lib/Request.svelte`, `columns` and `requests` in `lib/data.js`, the figure tags under sections 01 and 04 in `optchat.svx`.
+- Team 2: `lib/Compare.svelte`, `lib/Versus.svelte`, `lib/Request.svelte`, `lib/Turns.svelte`, `lib/run.js` (the one shared seeded run), the figure tags under sections 01 and 04 in `optchat.svx`. `columns` and `requests` are gone from `lib/data.js`.
 - Team 3: `lib/Hero.svelte`, `lib/Stats.svelte`, `lib/Loop.svelte`, `lib/Detail.svelte`, `lib/Memory.svelte`, `lib/memory.svelte.js`, `lib/Head.svelte`, `lib/theme.css`, the rest of `lib/data.js`, all prose in `optchat.svx` (header, section heads, rules table, coda), `HANDOFF.md` Part 1.
 - `lib/fold.js`: nobody changes it (the hero, the comparison and the cache model share it). Ask the lead.
 - Lead: the final export to `optchat.html` and `~/Downloads/optchat-cache-compare.html`.
@@ -94,3 +95,4 @@ UI label export: `CACHE_LABELS` in `lib/cache.js`.
 
 - v0: lead seed. Model, seed result, truth questions, marks, labels, interface, ownership.
 - v1: separated compaction input from main-agent totals; moved typical compaction to a request boundary, fixed labels and truth answers, and added `examples(run)` plus separate `compactCached`/`compactPaid` fields.
+- v1.1 (lead, at integration): OptChat keeps "often the view up to a cache mark" cached (no view mark matches in 93 of 240 seeded turns); recorded the 04 title, the integrated placements, `Turns.svelte` and `run.js`.
