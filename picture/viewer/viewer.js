@@ -689,7 +689,7 @@
 			L.mode = "on";
 		}
 		if (r.view === "plant") {
-			L.text = `Nothing selected. All ${plural(D.modules.length, "module")} and their connections are in view. Pick work to light its places.`;
+			L.text = `${plural(D.edges.length, "connection")} link these ${plural(D.modules.length, "module")}. Select a place or module to trace them, or show all module connections.`;
 		}
 		return L;
 	}
@@ -750,123 +750,93 @@
 	function box(el) {
 		const s = stage.getBoundingClientRect();
 		const b = el.getBoundingClientRect();
-		return {
-			l: b.left - s.left,
-			t: b.top - s.top,
-			r: b.right - s.left,
-			b: b.bottom - s.top,
-			w: b.width,
-			h: b.height,
-			x: b.left - s.left + b.width / 2,
-			y: b.top - s.top + b.height / 2,
-		};
+		const l = b.left - s.left + stage.scrollLeft;
+		const t = b.top - s.top + stage.scrollTop;
+		return { l, t, r: l + b.width, b: t + b.height, w: b.width, h: b.height, x: l + b.width / 2, y: t + b.height / 2 };
 	}
-	const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-	function path(a, b, jit = 0, same = false) {
-		const dx = b.x - a.x;
-		const dy = b.y - a.y;
-		const hsep = a.r < b.l - 6 || b.r < a.l - 6;
-		if (same && !hsep) {
-			/* stacked in one module: bow out to the right */
-			const k = 16 + Math.abs(dy) / 5;
-			return `M${a.r} ${a.y + jit}C${a.r + k} ${a.y + jit} ${b.r + k} ${b.y + jit} ${b.r} ${b.y + jit}`;
-		}
-		if (hsep && Math.abs(dx) >= Math.abs(dy) * 0.9) {
-			/* side by side */
-			const right = dx > 0;
-			const x1 = right ? a.r : a.l;
-			const x2 = right ? b.l : b.r;
-			const k = (x2 - x1) / 2;
-			return `M${x1} ${a.y + jit}C${x1 + k} ${a.y + jit} ${x2 - k} ${b.y + jit} ${x2} ${b.y + jit}`;
-		}
-		let x1 = a.x;
-		let x2 = b.x; /* above and below: a wide box meets a narrow one straight */
-		if (a.w > b.w * 1.5) {
-			x1 = clamp(b.x, a.l + 14, a.r - 14);
-		} else if (b.w > a.w * 1.5) {
-			x2 = clamp(a.x, b.l + 14, b.r - 14);
-		}
-		x1 += jit;
-		x2 += jit;
-		const y1 = dy > 0 ? a.b : a.t;
-		const y2 = dy > 0 ? b.t : b.b;
-		const k = (y2 - y1) / 2;
-		return `M${x1} ${y1}C${x1} ${y1 + k} ${x2} ${y2 - k} ${x2} ${y2}`;
-	}
-	function anchorEl(id) {
-		return (
-			stage.querySelector(`.place[data-place="${CSS.escape(id)}"]`) ||
-			stage.querySelector(`[data-mod="${CSS.escape(id)}"]`)
-		);
-	}
-	const layerOf = (el) => +el.closest("[data-row]").dataset.row;
-	const gapX = (jit) => {
-		const g = stage.querySelectorAll(".midrow .mod");
-		return g.length > 1 ? (box(g[0]).r + box(g[1]).l) / 2 + jit : null;
-	};
-	function poly(pts) {
-		/* polyline with small rounded corners */
-		let d = `M${pts[0][0]} ${pts[0][1]}`;
-		for (let i = 1; i < pts.length - 1; i++) {
-			const [px, py] = pts[i - 1];
-			const [x, y] = pts[i];
-			const [nx, ny] = pts[i + 1];
-			const r = Math.min(7, Math.hypot(x - px, y - py) / 2, Math.hypot(nx - x, ny - y) / 2);
+	function path(pts) {
+		/* Rounded orthogonal paths stay in the measured gutters. */
+		const clean = pts.filter((p, i) => !i || p[0] !== pts[i - 1][0] || p[1] !== pts[i - 1][1]);
+		let d = `M${clean[0][0]} ${clean[0][1]}`;
+		for (let i = 1; i < clean.length - 1; i++) {
+			const [px, py] = clean[i - 1];
+			const [x, y] = clean[i];
+			const [nx, ny] = clean[i + 1];
+			const r = Math.min(3, Math.hypot(x - px, y - py) / 2, Math.hypot(nx - x, ny - y) / 2);
 			d += `L${x - Math.sign(x - px) * r} ${y - Math.sign(y - py) * r}Q${x} ${y} ${x + Math.sign(nx - x) * r} ${y + Math.sign(ny - y) * r}`;
 		}
-		const [lx, ly] = pts[pts.length - 1];
-		return `${d}L${lx} ${ly}`;
+		const [x, y] = clean[clean.length - 1];
+		return `${d}L${x} ${y}`;
 	}
-	function wireRoute(A, B, jit, same) {
-		/* Between layers, a wire runs down the left rail of its middle module, so it never crosses a module title. */
-		const la = layerOf(A);
-		const lb = layerOf(B);
-		if (la === lb) {
-			return path(box(A), box(B), jit, same);
-		}
-		const down = la < lb;
-		const [U, V] = down ? [A, B] : [B, A];
-		const u = box(U);
-		const v = box(V);
-		let pts;
-		if (layerOf(U) === 1) {
-			const m = box(U.closest(".mod"));
-			const rx = m.l + 5 + jit;
-			const gy = m.b + 22;
-			const tx = clamp(rx, v.l + 14, v.r - 14);
-			pts = [
-				[u.l, u.y],
-				[rx, u.y],
-				[rx, gy],
-				[tx, gy],
-				[tx, v.t],
-			];
-		} else if (layerOf(V) === 1) {
-			const m = box(V.closest(".mod"));
-			const rx = m.l + 5 + jit;
-			pts = [
-				[rx, u.b],
-				[rx, v.y],
-				[v.l, v.y],
-			];
-		} else {
-			const gx = gapX(jit);
-			if (gx === null) {
-				return path(u, v, jit);
+	function anchorEl(id, module = false) {
+		const card = stage.querySelector(`[data-mod="${CSS.escape(id)}"]`);
+		return module ? card : stage.querySelector(`.place[data-place="${CSS.escape(id)}"]`) || card;
+	}
+	function wirePort(el, toward, jit) {
+		const a = box(el);
+		const card = el.closest(".mod,.band") || el;
+		const m = box(card);
+		const places = box(el.closest(".places") || card);
+		const left = el.matches(".place") ? a.x < places.x : toward.x < a.x;
+		const y = Math.max(a.t + 4, Math.min(a.b - 4, a.y + jit));
+		return {
+			card,
+			tip: [left ? a.l - 2 : a.r + 2, y],
+			exit: [left ? a.l - 5 : a.r + 5, y],
+			top: m.t - 5,
+			bottom: m.b + 5,
+		};
+	}
+	function clearWire(pts, cards) {
+		for (let i = 1; i < pts.length; i++) {
+			const [x, y] = pts[i - 1];
+			const [u, v] = pts[i];
+			if (
+				cards.some((c) =>
+					x === u
+						? x > c.l && x < c.r && Math.max(y, v) > c.t && Math.min(y, v) < c.b
+						: y > c.t && y < c.b && Math.max(x, u) > c.l && Math.min(x, u) < c.r,
+				)
+			) {
+				return false;
 			}
-			const gy = v.t - 22;
-			const tx = clamp(gx, v.l + 14, v.r - 14);
-			pts = [
-				[gx, u.b],
-				[gx, gy],
-				[tx, gy],
-				[tx, v.t],
-			];
 		}
-		if (!down) {
-			pts.reverse();
+		return true;
+	}
+	function wireRoute(A, B, cards, jit = 0) {
+		const a = wirePort(A, box(B), jit);
+		const b = wirePort(B, box(A), jit);
+		const own = new Set([a.card, b.card]);
+		const blockers = [
+			...cards.filter((c) => !own.has(c.el)),
+			...[...own].flatMap((el) => [...el.querySelectorAll(".fhead,.place")].map(box)),
+		];
+		const [sx, sy] = a.exit;
+		const [tx, ty] = b.exit;
+		let best = null;
+		let cost = Infinity;
+		const consider = (pts) => {
+			const length = pts.slice(1).reduce((n, p, i) => n + Math.abs(p[0] - pts[i][0]) + Math.abs(p[1] - pts[i][1]), 0);
+			if (length < cost && clearWire(pts, blockers)) {
+				best = pts;
+				cost = length;
+			}
+		};
+		consider([a.exit, [tx, sy], b.exit]);
+		consider([a.exit, [sx, ty], b.exit]);
+		for (const y of [a.top, a.bottom, b.top, b.bottom]) {
+			consider([a.exit, [sx, y], [tx, y], b.exit]);
 		}
-		return poly(pts);
+		/* A shared outside rail connects packed rows without crossing a card. */
+		const rails = new Set([sx, tx, ...cards.flatMap((c) => [c.l - 5, c.r + 5])]);
+		for (const x of rails) {
+			for (const ay of [a.top, a.bottom]) {
+				for (const by of [b.top, b.bottom]) {
+					consider([a.exit, [sx, ay], [x, ay], [x, by], [tx, by], b.exit]);
+				}
+			}
+		}
+		return best ? path([a.tip, ...best, b.tip]) : null;
 	}
 	const DEFS = `<defs>${[
 		["g", "#868b92"],
@@ -878,10 +848,8 @@
 				`<marker id="m${n}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1L9 5L0 9z" fill="${c}"/></marker>`,
 		)
 		.join("")}</defs>`;
-	// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: split pending: wire drawing
-	function drawWires() {
-		/* Base: one wire per module pair, with a count of place-level links. */
-		const pairs = {};
+	function modulePairs() {
+		const pairs = new Map();
 		for (const e of D.edges) {
 			const a = modOf(e.from);
 			const b = modOf(e.to);
@@ -889,67 +857,72 @@
 				continue;
 			}
 			const [lo, hi] = [a, b].sort();
-			const k = `${lo}|${hi}`;
-			pairs[k] ??= { a: lo, b: hi, fw: 0, bw: 0 };
+			const key = `${lo}|${hi}`;
+			const p = pairs.get(key) || { a: lo, b: hi, fw: 0, bw: 0 };
 			if (a === lo) {
-				pairs[k].fw++;
+				p.fw++;
 			} else {
-				pairs[k].bw++;
+				p.bw++;
+			}
+			pairs.set(key, p);
+		}
+		return [...pairs.values()];
+	}
+	function wireCount(svg, d, count, cards, labels) {
+		const tmp = document.createElementNS("http://www.w3.org/2000/svg", "path");
+		tmp.setAttribute("d", d);
+		svg.appendChild(tmp);
+		const length = tmp.getTotalLength();
+		let at = null;
+		const samples = Array.from({ length: Math.ceil(length / 12) }, (_, i) => i * 12);
+		samples.sort((a, b) => Math.abs(a - length / 2) - Math.abs(b - length / 2));
+		for (const distance of samples) {
+			const p = tmp.getPointAtLength(distance);
+			const clear = cards.every((c) => p.x + 10 < c.l || p.x - 10 > c.r || p.y + 10 < c.t || p.y - 10 > c.b);
+			if (clear && labels.every((q) => Math.hypot(p.x - q.x, p.y - q.y) > 22)) {
+				at = p;
+				break;
 			}
 		}
-		const order = D.modules.map((m) => m.id);
+		tmp.remove();
+		if (!at) {
+			return "";
+		}
+		labels.push(at);
+		return `<circle class="wcount" cx="${at.x}" cy="${at.y}" r="9"/><text class="wnum" x="${at.x}" y="${at.y}">${count}</text>`;
+	}
+	function drawWires() {
+		const cards = [...stage.querySelectorAll(".mod,.band")].map((el) => ({ el, ...box(el) }));
 		const baseSvg = document.getElementById("base");
+		const overSvg = document.getElementById("over");
+		const width = Math.max(stage.clientWidth, ...cards.map((c) => c.r + 5));
+		const height = Math.max(stage.clientHeight, ...cards.map((c) => c.b + 5));
+		for (const svg of [baseSvg, overSvg]) {
+			svg.style.width = `${width}px`;
+			svg.style.height = `${height}px`;
+		}
 		let base = DEFS;
-		for (const p of Object.values(pairs)) {
-			const A = anchorEl(p.a);
-			const B = anchorEl(p.b);
-			const a = box(A);
-			const b = box(B);
-			let fw = p.fw;
-			let bw = p.bw;
-			let d;
-			let at = (L) => L / 2;
-			const sameRow = layerOf(A) === layerOf(B);
-			const ia = order.indexOf(p.a);
-			const ib = order.indexOf(p.b);
-			const gx = gapX(0);
-			if (sameRow && Math.abs(ia - ib) > 1) {
-				/* skip a neighbour: dip below the row */
-				const L = a.x < b.x ? a : b;
-				const R = a.x < b.x ? b : a;
-				const x1 = L.l + L.w * 0.78;
-				const x2 = R.l + R.w * 0.22;
-				const y = L.b;
-				d = `M${x1} ${y}C${x1} ${y + 34} ${x2} ${y + 34} ${x2} ${y}`;
-				at = (L) => L * 0.2;
-				if (L !== a) {
-					[fw, bw] = [bw, fw];
+		const labels = [];
+		if (document.getElementById("wireOverview").getAttribute("aria-pressed") === "true") {
+			for (const p of modulePairs()) {
+				const A = anchorEl(p.a, true);
+				const B = anchorEl(p.b, true);
+				if (!A || !B) {
+					continue;
 				}
-			} else if (Math.abs(layerOf(A) - layerOf(B)) === 2 && gx !== null) {
-				/* entry to floor: pass through the first gap of the middle row */
-				const T = a.y < b.y ? a : b;
-				const F = a.y < b.y ? b : a;
-				d = `M${gx} ${T.b}L${gx} ${F.t}`;
-				at = () => 22;
-				if (T !== a) {
-					[fw, bw] = [bw, fw];
+				const d = wireRoute(A, B, cards);
+				if (!d) {
+					continue;
 				}
-			} else {
-				d = path(a, b);
+				base += `<path class="wire" data-from="${esc(p.a)}" data-to="${esc(p.b)}" d="${d}" ${p.fw ? 'marker-end="url(#mg)"' : ""} ${p.bw ? 'marker-start="url(#mg)"' : ""}><title>${esc(M[p.a].title)} ↔ ${esc(M[p.b].title)}: ${plural(p.fw + p.bw, "connection")}</title></path>`;
+				base += wireCount(baseSvg, d, p.fw + p.bw, cards, labels);
 			}
-			base += `<path class="wire" d="${d}" ${fw ? 'marker-end="url(#mg)"' : ""} ${bw ? 'marker-start="url(#mg)"' : ""}><title>${esc(M[p.a].title)} ↔ ${esc(M[p.b].title)}: ${plural(fw + bw, "connection")}</title></path>`;
-			const tmp = document.createElementNS("http://www.w3.org/2000/svg", "path");
-			tmp.setAttribute("d", d);
-			baseSvg.appendChild(tmp);
-			const pt = tmp.getPointAtLength(at(tmp.getTotalLength()));
-			tmp.remove();
-			base += `<circle class="wcount" cx="${pt.x}" cy="${pt.y}" r="9"/><text class="wnum" x="${pt.x}" y="${pt.y}">${fw + bw}</text>`;
 		}
 		baseSvg.innerHTML = base;
 		const wires = JSON.parse(document.getElementById("atlas").dataset.wires || "[]");
 		baseSvg.classList.toggle("dim", Boolean(wires.length || stage.classList.contains("lens")));
 		let over = DEFS;
-		const seen = {};
+		const seen = new Map();
 		for (const [f, t, cls] of wires) {
 			const A = anchorEl(f);
 			const B = anchorEl(t);
@@ -957,11 +930,15 @@
 				continue;
 			}
 			const key = [f, t].sort().join("|");
-			seen[key] = (seen[key] || 0) + 1;
-			const n = seen[key];
-			over += `<path class="wire ${cls}" data-from="${esc(f)}" data-to="${esc(t)}" d="${wireRoute(A, B, [0, 4, -4, 8][n - 1] || 0, !!(P[f] && P[t] && modOf(f) === modOf(t)))}" marker-end="url(#m${cls === "ink" ? "k" : "t"})"/>`;
+			const n = seen.get(key) || 0;
+			seen.set(key, n + 1);
+			const d = wireRoute(A, B, cards, n % 2 ? 3 : 0);
+			if (d) {
+				over += `<path class="wire ${cls}" data-from="${esc(f)}" data-to="${esc(t)}" d="${d}" marker-end="url(#m${cls === "ink" ? "k" : "t"})"/>`;
+			}
 		}
-		document.getElementById("over").innerHTML = over;
+		overSvg.innerHTML = over;
+		overSvg.classList.remove("highlight");
 	}
 
 	/* Reading column */
@@ -1413,6 +1390,13 @@
 		use(adapt(RAW));
 		stage = document.getElementById("stage");
 		buildAtlas();
+		const overview = document.getElementById("wireOverview");
+		/* More than seven modules cannot share a scannable all-pairs overview. */
+		overview.setAttribute("aria-pressed", String(D.modules.length <= 7));
+		overview.addEventListener("click", () => {
+			overview.setAttribute("aria-pressed", String(overview.getAttribute("aria-pressed") !== "true"));
+			drawWires();
+		});
 		document.addEventListener(
 			"click",
 			(e) => {
@@ -1482,12 +1466,13 @@
 				x.classList.remove("hot");
 			}
 			const er = e.target.closest("#read [data-wire]");
+			let hot = null;
 			if (er) {
 				const [f, t] = er.dataset.wire.split("|");
-				document
-					.querySelector(`#over .wire[data-from="${CSS.escape(f)}"][data-to="${CSS.escape(t)}"]`)
-					?.classList.add("hot");
+				hot = document.querySelector(`#over .wire[data-from="${CSS.escape(f)}"][data-to="${CSS.escape(t)}"]`);
+				hot?.classList.add("hot");
 			}
+			document.getElementById("over").classList.toggle("highlight", !!hot);
 		});
 		go();
 		new ResizeObserver(() => drawWires()).observe(stage);

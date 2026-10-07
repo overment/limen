@@ -520,9 +520,9 @@ code,
 	stroke: var(--wire);
 	stroke-width: 1.4;
 }
-/* Dim the lines, not their counts, so every number stays readable. */
-svg.base.dim .wire {
-	opacity: 0.35;
+/* The overview yields to the selected connections, including its count badges. */
+svg.base.dim {
+	opacity: 0.15;
 }
 .wcount {
 	fill: #fff;
@@ -538,16 +538,35 @@ svg.base.dim .wire {
 .wire.sel {
 	stroke: var(--teal);
 	stroke-width: 1.8;
-	opacity: 0.85;
+	opacity: 0.4;
 }
 .wire.ink {
 	stroke: var(--ink);
 	stroke-width: 1.6;
-	opacity: 0.8;
+	opacity: 0.4;
 }
 .wire.hot {
 	stroke-width: 3;
 	opacity: 1;
+}
+#over.highlight .wire:not(.hot) {
+	opacity: 0.08;
+}
+#wireOverview {
+	font: inherit;
+	color: var(--mute);
+	background: var(--card);
+	border: 1px solid var(--line);
+	border-radius: var(--r-1);
+	padding: var(--sp-1) var(--sp-2);
+	align-self: flex-start;
+	margin: var(--sp-2) 0;
+	cursor: pointer;
+}
+#wireOverview[aria-pressed="true"] {
+	color: var(--teal);
+	background: var(--teal-bg);
+	border-color: var(--teal);
 }
 
 /* Reading column */
