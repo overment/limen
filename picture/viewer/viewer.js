@@ -784,15 +784,19 @@
 		const a = box(el);
 		const card = el.closest(".mod,.band") || el;
 		const m = box(card);
+		/* Tip sits on the box edge; exit clears the arrowhead so heads ride the approach stub, not the shared rail. */
+		const tipOut = 0;
+		const exitOut = 14;
+		const railOut = 16;
 		if (!el.matches(".place") && (a.b < toward.t || toward.b < a.t)) {
 			const down = a.y < toward.y;
 			const x = Math.max(a.l + 8, Math.min(a.r - 8, toward.x));
 			return {
 				card,
-				tip: [x, down ? a.b + 2 : a.t - 2],
-				exit: [x, down ? a.b + 5 : a.t - 5],
-				top: m.t - 5,
-				bottom: m.b + 5,
+				tip: [x, down ? a.b + tipOut : a.t - tipOut],
+				exit: [x, down ? a.b + exitOut : a.t - exitOut],
+				top: m.t - railOut,
+				bottom: m.b + railOut,
 			};
 		}
 		const places = box(el.closest(".places") || card);
@@ -800,10 +804,10 @@
 		const y = Math.max(a.t + 4, Math.min(a.b - 4, a.y + jit));
 		return {
 			card,
-			tip: [left ? a.l - 2 : a.r + 2, y],
-			exit: [left ? a.l - 5 : a.r + 5, y],
-			top: m.t - 5,
-			bottom: m.b + 5,
+			tip: [left ? a.l - tipOut : a.r + tipOut, y],
+			exit: [left ? a.l - exitOut : a.r + exitOut, y],
+			top: m.t - railOut,
+			bottom: m.b + railOut,
 		};
 	}
 	function clearWire(pts, cards) {
@@ -850,7 +854,7 @@
 			return { d: path([a.tip, ...best, b.tip]), crossing: false };
 		}
 		/* A shared outside rail connects packed rows without crossing a card. */
-		const rails = new Set([sx, tx, ...cards.flatMap((c) => [c.l - 5, c.r + 5])]);
+		const rails = new Set([sx, tx, ...cards.flatMap((c) => [c.l - 16, c.r + 16])]);
 		for (const x of rails) {
 			for (const ay of [a.top, a.bottom]) {
 				for (const by of [b.top, b.bottom]) {
@@ -869,7 +873,7 @@
 	]
 		.map(
 			([n, c]) =>
-				`<marker id="m${n}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 1L9 5L0 9z" fill="${c}"/></marker>`,
+				`<marker id="m${n}" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 1L9 5L0 9z" fill="${c}"/></marker>`,
 		)
 		.join("")}</defs>`;
 	function modulePairs() {
@@ -957,8 +961,8 @@
 		const cards = [...stage.querySelectorAll(".mod,.band")].map((el) => ({ el, ...box(el) }));
 		const baseSvg = document.getElementById("base");
 		const overSvg = document.getElementById("over");
-		const width = Math.max(stage.clientWidth, ...cards.map((c) => c.r + 5));
-		const height = Math.max(stage.clientHeight, ...cards.map((c) => c.b + 5));
+		const width = Math.max(stage.clientWidth, ...cards.map((c) => c.r + 16));
+		const height = Math.max(stage.clientHeight, ...cards.map((c) => c.b + 16));
 		for (const svg of [baseSvg, overSvg]) {
 			svg.style.width = `${width}px`;
 			svg.style.height = `${height}px`;
