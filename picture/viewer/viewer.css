@@ -538,12 +538,12 @@ svg.base.dim {
 .wire.sel {
 	stroke: var(--teal);
 	stroke-width: 1.8;
-	opacity: 0.4;
+	opacity: 0.65;
 }
 .wire.ink {
 	stroke: var(--ink);
 	stroke-width: 1.6;
-	opacity: 0.4;
+	opacity: 0.65;
 }
 .wire.journey {
 	stroke: var(--ink);
@@ -555,6 +555,15 @@ svg.base.dim {
 	width: 20px;
 	height: 0;
 	border-top: 1.8px dashed var(--ink);
+	vertical-align: 3px;
+}
+.wire.crossing {
+	stroke-dasharray: 1 3;
+}
+.legend .k-crossing {
+	width: 20px;
+	height: 0;
+	border-top: 1.8px dotted var(--wire);
 	vertical-align: 3px;
 }
 .wire.hot {

@@ -847,7 +847,7 @@
 			consider([a.exit, [sx, y], [tx, y], b.exit]);
 		}
 		if (best && cost === Math.abs(tx - sx) + Math.abs(ty - sy)) {
-			return path([a.tip, ...best, b.tip]);
+			return { d: path([a.tip, ...best, b.tip]), crossing: false };
 		}
 		/* A shared outside rail connects packed rows without crossing a card. */
 		const rails = new Set([sx, tx, ...cards.flatMap((c) => [c.l - 5, c.r + 5])]);
@@ -858,7 +858,9 @@
 				}
 			}
 		}
-		return best ? path([a.tip, ...best, b.tip]) : null;
+		/* Keep the connection visible when a map has no clear gutter route. */
+		const pts = best || [a.exit, [tx, sy], b.exit];
+		return { d: path([a.tip, ...pts, b.tip]), crossing: !best };
 	}
 	const DEFS = `<defs>${[
 		["g", "#868b92"],
@@ -922,11 +924,9 @@
 			if (!A || !B) {
 				continue;
 			}
-			const d = wireRoute(A, B, cards);
-			if (!d) {
-				continue;
-			}
-			html += `<path class="wire" data-from="${esc(p.a)}" data-to="${esc(p.b)}" d="${d}" ${p.fw ? 'marker-end="url(#mg)"' : ""} ${p.bw ? 'marker-start="url(#mg)"' : ""}><title>${esc(M[p.a].title)} ↔ ${esc(M[p.b].title)}: ${plural(p.fw + p.bw, "connection")}</title></path>`;
+			const { d, crossing } = wireRoute(A, B, cards);
+			const note = crossing ? "Route crosses a card. " : "";
+			html += `<path class="wire${crossing ? " crossing" : ""}" data-from="${esc(p.a)}" data-to="${esc(p.b)}" d="${d}" ${p.fw ? 'marker-end="url(#mg)"' : ""} ${p.bw ? 'marker-start="url(#mg)"' : ""}><title>${note}${esc(M[p.a].title)} ↔ ${esc(M[p.b].title)}: ${plural(p.fw + p.bw, "connection")}</title></path>`;
 			html += wireCount(svg, d, p.fw + p.bw, cards, labels);
 		}
 		return html;
@@ -943,11 +943,13 @@
 			const key = [f, t].sort().join("|");
 			const n = seen.get(key) || 0;
 			seen.set(key, n + 1);
-			const d = wireRoute(A, B, cards, n % 2 ? 3 : 0);
-			if (d) {
-				const step = cls === "journey" ? ` data-steps="${steps.join(",")}"` : "";
-				html += `<path class="wire ${cls}" data-from="${esc(f)}" data-to="${esc(t)}"${step} d="${d}" marker-end="url(#m${cls === "sel" ? "t" : "k"})"/>`;
-			}
+			const { d, crossing } = wireRoute(A, B, cards, n % 2 ? 3 : 0);
+			const step = cls === "journey" ? ` data-steps="${steps.join(",")}"` : "";
+			const description = cls === "journey" ? "ordered steps" : "exact connection";
+			const note = crossing
+				? `<title>Route crosses a card; read the ${description} in the reading column.</title>`
+				: "";
+			html += `<path class="wire ${cls}${crossing ? " crossing" : ""}" data-from="${esc(f)}" data-to="${esc(t)}"${step} d="${d}" marker-end="url(#m${cls === "sel" ? "t" : "k"})">${note}</path>`;
 		}
 		return html;
 	}
@@ -1426,7 +1428,7 @@
 		for (const x of document.querySelectorAll("#over .wire.hot")) {
 			x.classList.remove("hot");
 		}
-		const er = target?.closest("#read [data-wire]");
+		const er = document.activeElement?.closest("#read [data-wire]") || target?.closest("#read [data-wire]");
 		let hot = null;
 		if (er) {
 			const [f, t] = er.dataset.wire.split("|");
