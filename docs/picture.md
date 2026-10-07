@@ -14,6 +14,8 @@ The architecture map is a local file. `limen picture build` makes it from a Mark
 
 The picture shows the plant atlas beside a quiet column of work and dated decisions. Select a place to read its sources, connections, and the features and journeys that name it.
 
+Module titles and place names wrap instead of cutting off. Place labels keep their work counts beside the name. Hover a place for its full name and description; open it for sources and connections.
+
 Select a feature or journey to reveal its `touches` or `steps`, including places inside different modules. Only named places light; nested places keep their parent captions.
 
 Follow a journey through its ordered steps, including repeated visits and stops at the whole project. The URL preserves a selected place, work item, or day on reload. The map never uses Git history to guess places.

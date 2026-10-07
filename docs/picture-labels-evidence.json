@@ -1,0 +1,35 @@
+{
+  "feature": "Readable picture map labels (Alice F947, team 2)",
+  "branch": "f947/team-2",
+  "base": "85d924e",
+  "scope": "Complete module/place names, text hierarchy, wrapping, and chip hover descriptions. No dataset edits.",
+  "evidenceRoot": "/Users/overment/playground/alice-app/alice/tmp/evidence/F947/labels",
+  "headlessOnly": true,
+  "checks": {
+    "typescript": "npx tsc --noEmit passed",
+    "biome": "npx biome check --error-on-warnings picture src/picture passed, 13 files",
+    "aliceBuild": "94 places, 171 edges; only existing ticket diagnostics",
+    "apiBuild": "13 places, 22 edges; only existing ticket diagnostics",
+    "apiLabelSmoke": "12 displayed places and 4 modules; no overflowing chips, clipped labels, overlapping chips, or page errors at 1600/1280/1000px. Chip click and route reload passed."
+  },
+  "baseline": {
+    "artifact": "baseline.json",
+    "at1600": { "overflowingChips": 51, "clippedLabels": 13, "overlappingPairs": 8 },
+    "at1280": { "overflowingChips": 51, "clippedLabels": 22, "overlappingPairs": 39 },
+    "at1000": { "overflowingChips": 51, "clippedLabels": 19, "overlappingPairs": 29 }
+  },
+  "labelOnlyCandidate": {
+    "artifact": "typography.json",
+    "at1600": { "overflowingChips": 0, "clippedLabels": 0, "overlappingPairs": 0 },
+    "at1280": { "overflowingChips": 0, "clippedLabels": 10, "overlappingPairs": 0 },
+    "at1000": { "overflowingChips": 0, "clippedLabels": 0, "overlappingPairs": 0 },
+    "limitation": "The old 11-column layout still makes names unreadable at narrow widths; team 1 packing must be integrated before accepting the whole Alice atlas."
+  },
+  "glossDecision": {
+    "artifact": "gloss-exact-240px.json",
+    "measurement": "At fixed 240px outer card width, custody and deployment glosses occupy 3 lines. Other middle-module glosses occupy 1 or 2 lines.",
+    "decision": "Keep complete glosses. A three-line clamp does not reduce current Alice card height."
+  },
+  "notRun": ["Real-window hidden-vscreen proof (team 4 owner)", "Full npm test (lead integration owner)"],
+  "integrationEvidence": null
+}
