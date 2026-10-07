@@ -690,7 +690,7 @@
 			L.mode = "on";
 		}
 		if (r.view === "plant") {
-			L.text = `${plural(D.edges.length, "connection")} link these ${plural(D.modules.length, "module")}. Select a place or module to trace them, or show all module connections.`;
+			L.text = `${plural(D.edges.length, "connection")} link these ${plural(D.modules.length, "module")}. Select a place or module to trace its connections.`;
 		}
 		return L;
 	}
