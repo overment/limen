@@ -26,7 +26,8 @@ export async function servePicture(options: ServeOptions): Promise<{ url: string
 	const read = activityReader(options.jobsRoot);
 	const first = await read();
 	let snapshot = JSON.stringify(first);
-	let jobs = JSON.stringify(first.jobs);
+	// Everything but the clock: a snapshot goes out only when a job or a group tree changed.
+	let jobs = JSON.stringify([first.jobs, first.groups]);
 	let reading = false;
 	const clients = new Set<ServerResponse>();
 	const refresh = async () => {
@@ -37,7 +38,7 @@ export async function servePicture(options: ServeOptions): Promise<{ url: string
 		try {
 			const next = await read();
 			snapshot = JSON.stringify(next);
-			const changed = JSON.stringify(next.jobs);
+			const changed = JSON.stringify([next.jobs, next.groups]);
 			if (changed !== jobs) {
 				jobs = changed;
 				for (const client of clients) {

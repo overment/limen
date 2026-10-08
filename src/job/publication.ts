@@ -1,6 +1,7 @@
 import { copyFile, mkdir, rename, rm, writeFile } from "node:fs/promises";
 import { basename, dirname } from "node:path";
 import type { EngineId } from "../runtime/engine.ts";
+import { SESSION_ID } from "./job.ts";
 
 function hostedNote(deadline: number | undefined): string {
 	const limits = deadline
@@ -25,6 +26,7 @@ type NewJob = {
 	readonly originTab?: string;
 	readonly originPane?: string;
 	readonly group?: { readonly id: string; readonly team: string; readonly deadline: number };
+	/** The continued job: `limen continue` records it as `parent`. */
 	readonly parent?: string;
 	readonly continueTask?: string;
 	readonly candidate?: string;
@@ -83,6 +85,12 @@ export async function publishJob(jobDir: string, job: NewJob): Promise<void> {
 		}
 		if (job.parent) {
 			files.parent = `${job.parent}\n`;
+		}
+		// Hosted and detached jobs export their id to the agent, so a spawn or continue run by a job's agent names it.
+		// The picture nests a coordinator's workers under it by this link.
+		const spawner = process.env.LIMEN_JOB_ID?.trim();
+		if (spawner && SESSION_ID.test(spawner)) {
+			files["spawned-by"] = `${spawner}\n`;
 		}
 		if (job.continueTask) {
 			files.continue = `${job.continueTask}\n`;
