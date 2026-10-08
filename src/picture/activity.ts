@@ -106,10 +106,8 @@ function liveState(files: JobFiles, now: number): LiveState | undefined {
 	return files.activity === "wait" ? "waiting" : "working";
 }
 
+/** The current action; for a quiet or dead job, the last one it recorded. The state itself says quiet or dead. */
 function currentWords(files: JobFiles, state: LiveState): string {
-	if (state === "dead") {
-		return "not responding";
-	}
 	if (state === "starting") {
 		return "starting";
 	}
@@ -144,7 +142,9 @@ const TOOL_WORDS: Record<string, string> = {
 	finish: "finishing",
 };
 const SHELL_TOOLS: Record<string, true> = { bash: true, shell: true, exec: true };
-const CHECKS = /\b(?:test|tests|vitest|jest|mocha|pytest|tsc|typecheck|biome|eslint|lint|check)\b/;
+/** A test runner or checker as a command word, so `browser-check` or `echo test` stays a plain command. */
+const CHECKS =
+	/(?:^|[\s;&|(])(?:(?:npm|pnpm|yarn|bun)(?:\s+run)?\s+(?:test|check|lint|typecheck)|node\s+--test|(?:npx\s+)?(?:tsc|biome|eslint|vitest|jest|mocha|pytest)|(?:cargo|go)\s+test)\b/;
 
 /** Plain words for the tool a job runs now. */
 export function toolWords(tool: string, detail: string): string {
@@ -281,7 +281,10 @@ async function sessionFile(dir: string): Promise<string | undefined> {
 	return newest ? join(dir, "session", newest) : undefined;
 }
 
-/** Both engines write a `model_change` entry near the start of the session file once the first message lands. */
+/**
+ * Both engines write a `model_change` entry near the start of the session file once the first message lands:
+ * OMP as `model: "provider/id"`, Pi as `provider` and `modelId`.
+ */
 async function sessionModel(id: string, session: string | undefined, models: Map<string, string>): Promise<string> {
 	const known = models.get(id);
 	if (known !== undefined || !session) {
@@ -293,10 +296,12 @@ async function sessionModel(id: string, session: string | undefined, models: Map
 			continue;
 		}
 		try {
-			const entry = JSON.parse(line) as { type?: unknown; model?: unknown };
-			if (entry.type === "model_change" && typeof entry.model === "string") {
-				models.set(id, entry.model);
-				return entry.model;
+			const entry = JSON.parse(line) as { type?: unknown; model?: unknown; provider?: unknown; modelId?: unknown };
+			const pi = typeof entry.modelId === "string" && typeof entry.provider === "string";
+			const model = typeof entry.model === "string" ? entry.model : pi ? `${entry.provider}/${entry.modelId}` : "";
+			if (entry.type === "model_change" && model) {
+				models.set(id, model);
+				return model;
 			}
 		} catch {}
 	}

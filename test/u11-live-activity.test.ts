@@ -43,11 +43,11 @@ const seen = (over: Partial<JobFiles>) => {
 
 test("a running record reads by its owner and its last event, never as working when either is stale", () => {
 	assert.deepEqual(seen({}), ["working", "running tests and checks", "npm test"]);
-	assert.deepEqual(seen({ owner: "gone" }), ["dead", "not responding", ""]);
+	assert.deepEqual(seen({ owner: "gone" }), ["dead", "running tests and checks", ""]);
 	assert.deepEqual(seen({ owner: "none" }), ["starting", "starting", ""]);
 	assert.deepEqual(seen({ lastEventAt: NOW - QUIET_MS }), ["working", "running tests and checks", "npm test"]);
 	assert.deepEqual(seen({ lastEventAt: NOW - QUIET_MS - 1 }), ["quiet", "running tests and checks", "npm test"]);
-	assert.deepEqual(seen({ owner: "gone", lastEventAt: NOW - QUIET_MS - 1 }), ["dead", "not responding", ""]);
+	assert.deepEqual(seen({ owner: "gone", lastEventAt: NOW - QUIET_MS - 1 }), ["dead", "running tests and checks", ""]);
 	assert.deepEqual(seen({ activity: "wait" }), ["waiting", "waiting", ""]);
 	assert.deepEqual(seen({ activity: "think" }), ["working", "thinking", ""]);
 	assert.deepEqual(seen({ state: "", spawning: true }), ["starting", "starting", ""]);
@@ -69,6 +69,8 @@ test("a finished job shows its end for an hour, then leaves the page", () => {
 
 test("tool words name the kind of work in plain words", () => {
 	assert.equal(toolWords("bash", "npx biome check ."), "running tests and checks");
+	assert.equal(toolWords("bash", "cd app && npm run test -- --watch=false"), "running tests and checks");
+	assert.equal(toolWords("bash", "node ~/.agents/skills/browser-check/browser.mjs shot"), "running a command");
 	assert.equal(toolWords("bash", "git status --short"), "running a command");
 	assert.equal(toolWords("edit", ""), "editing files");
 	assert.equal(toolWords("grep", ""), "reading code");
@@ -86,19 +88,25 @@ test("the reader reads detached and hosted job folders the same way", async () =
 		}
 	};
 	const running = { state: "running\n", pid: `${process.pid}\n`, activity: "tool\n", "last-tool": "bash\n" };
+	const session = "session/2026-10-08T11-59-00Z_a.jsonl";
 	await folder("2026-10-08-f932-detached-00000001", {
 		...running,
 		engine: "pi\n",
 		log: "think\nbash npm test\n",
-		"session/2026-10-08T11-59-00Z_a.jsonl": '{"type":"session"}\n{"type":"model_change","model":"openai/gpt-6"}\n',
+		[session]: '{"type":"session"}\n{"type":"model_change","provider":"openai-codex","modelId":"gpt-6-sol"}\n',
 	});
-	await folder("2026-10-08-f932-hosted-00000002", { ...running, engine: "omp\n", "tool-detail": "git log\n" });
+	await folder("2026-10-08-f932-hosted-00000002", {
+		...running,
+		engine: "omp\n",
+		"tool-detail": "git log\n",
+		[session]: '{"type":"title"}\n{"type":"model_change","model":"pi-claude/claude-opus-5-5"}\n',
+	});
 	await folder("2026-10-08-f932-gone-00000003", { ...running, pid: `${gone}\n` });
 	const snapshot = await activityReader(jobs)();
 	const rows = snapshot.jobs.map((live) => [live.id.slice(16, -9), live.state, live.doing, live.detail, live.model]);
 	assert.deepEqual(rows.sort(), [
-		["detached", "working", "running tests and checks", "npm test", "openai/gpt-6"],
-		["gone", "dead", "not responding", "", ""],
-		["hosted", "working", "running a command", "git log", ""],
+		["detached", "working", "running tests and checks", "npm test", "openai-codex/gpt-6-sol"],
+		["gone", "dead", "running a command", "", ""],
+		["hosted", "working", "running a command", "git log", "pi-claude/claude-opus-5-5"],
 	]);
 });

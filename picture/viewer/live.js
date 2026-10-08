@@ -103,15 +103,20 @@
 		}
 		return parts.join(" · ");
 	}
+	/* The feature code links the work; the job's own label, without its F numbers, tells two jobs on one feature apart. */
 	function whatHtml(j) {
 		const [w, ...more] = worksOf(j);
 		if (!w) {
 			return `<span class="live-what">${esc(j.label || j.id)}</span>`;
 		}
 		const extra = more.length ? ` <small>+ ${more.map((x) => esc(x.code)).join(", ")}</small>` : "";
-		return `<a class="live-what" href="#work/${esc(w.id)}"><b>${esc(w.code)}</b> ${esc(w.title)}${extra}</a>`;
+		const own = String(j.label || "")
+			.replace(/\bF\d+\b/gi, " ")
+			.replace(/^[\s·:—-]+|[\s·:—-]+$/g, "")
+			.replace(/\s+/g, " ");
+		return `<a class="live-what" href="#work/${esc(w.id)}" title="${esc(`${w.code} · ${w.title}`)}"><b>${esc(w.code)}</b> ${esc(own || w.title)}${extra}</a>`;
 	}
-	/* One job line. The strip leads with the feature; a work detail leads with the job's own label. */
+	/* One job line. The strip leads with the feature code; a work detail leads with the job's own label. */
 	function lineHtml(j, inWork) {
 		const hint = [
 			j.label,
@@ -129,6 +134,10 @@
 	strip.className = "live";
 	strip.setAttribute("aria-label", "Jobs running now");
 	document.getElementById("lightline").after(strip);
+	/* Only a served page can carry place marks, so only it names them in the legend. */
+	document
+		.querySelector(".legend")
+		?.insertAdjacentHTML("beforeend", '<span><i class="k-live" aria-hidden="true"></i>a job works here now</span>');
 
 	function summary(live) {
 		const n = {};

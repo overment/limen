@@ -30,7 +30,7 @@ Adam opens the picture and sees, on each feature and on each place it touches, w
 - `limen picture serve` prints one 127.0.0.1 URL. Opening it shows the picture with a live strip.
 - A real OMP job that runs for this plant appears on its feature within about two seconds, with its engine, model, current action, and time since the last event.
 - When that job ends, the page shows it as done or failed without a reload.
-- A running job whose owner process is gone shows as stopped responding (dead), never as running.
+- A running job whose owner process is gone shows as not responding, never as running.
 - A running job with no event for more than five minutes shows as quiet, not as working.
 - The file that `limen picture build` writes makes no network request and shows no live strip.
 

@@ -42,13 +42,35 @@ Rejected or deferred:
 
 One pure function maps a job's files to one state and one plain phrase (`src/picture/activity.ts`):
 
-- `starting`: no state yet and the spawner is alive.
-- `working`: owner alive, last event within five minutes. The phrase comes from the tool: editing files, reading code, running tests and checks, running a command, running helpers, reading the web, thinking.
+- `starting`: no state yet and the spawner is alive, or state `running` with no owner pid yet.
+- `working`: owner alive, last event within five minutes. The phrase comes from the tool: editing files, reading code, running tests and checks (a test runner or checker as a command word, not any word `check`), running a command, running helpers, waiting for helpers, reading the web, planning, thinking.
 - `waiting`: activity `wait`.
-- `quiet`: owner alive, no event for more than five minutes.
-- `dead`: state `running`, owner process gone. Never shown as running.
+- `quiet`: owner alive, no event for more than five minutes. The phrase is the last action.
+- `dead`: state `running`, owner process gone. The page says "not responding" and the last action. Never shown as running.
 - `done`, `failed`, `stopped`: terminal, shown for one hour after the finish.
+
+Last event time is the newest change of `activity`, `log`, or the session file. Model: the first `model_change` entry of the session file; OMP writes `model: "provider/id"`, Pi writes `provider` and `modelId`.
+
+## Seams
+
+- Reader: `src/picture/activity.ts`. `jobActivity` is the pure mapping (tested in `test/u11-live-activity.test.ts`); `activityReader` reads the folders and caches the owner birth check, the model, and long-finished jobs.
+- Server: `src/picture/picture-serve.ts`. Page per request (`pictureHtml` in `picture-build.ts`), `/events` (SSE: `activity` on change, `ping` every 15 s), `/activity.json`. Requests with another Host header get 403, so a rebinding site cannot read job labels and commands.
+- Page: `picture/viewer/live.js` and `live.css`, inlined last by `src/picture/html.ts`. Inert unless `#archmap-data` has `data-live` and the page came over HTTP. Marks are out of the card flow, so wire routing does not move.
+- The server never reaps or changes a job. `limen jobs` runs the reaper first; the page does not, so a lost owner reads "not responding" until something else reaps it.
+
+## Live proof (2026-10-08)
+
+Server from this worktree with the plant cabinet linked (`.limen/jobs`), page on the hidden screen at 1440 px. Four real detached jobs on `openai-codex/gpt-6-sol`, two on OMP and two on Pi, each read a file, ran `sleep 30 && npx tsc --version`, wrote a scratch file, ran `sleep 45 && git log`, and ended.
+
+- Each job appeared on F932 about three seconds after spawn, with engine, model, action, and command (`live-1-omp-and-pi-running.png`).
+- The action changed from running tests and checks to running a command without a reload (`live-2-running-a-command.png`).
+- Both moved to done without a reload; the page was loaded once (`live-3-done-without-reload.png`).
+- A scratch cabinet with a dead owner pid and a nine-minute-silent live pid showed "not responding" in red and "quiet for 9 min" in amber (`live-4-not-responding-and-quiet.png`).
+- The three places F932 touches carry the mark (`live-5-place-marks.png`).
+- The built file: no strip, no marks, zero resource requests.
+- Not proven live: a hosted job in a Herdr tab. This session had no Herdr. The hosted path writes the same files, and the reader test covers a hosted folder with `tool-detail`.
 
 ## Open questions
 
 - The quiet threshold is five minutes. A long test run can cross it and show as quiet with its last action; that is honest, but Adam may want a longer limit for `bash`.
+- A hosted job waiting for Adam's input reads `waiting`, then `quiet` after five minutes. Herdr's `blocked` state could say "needs you" instead; it costs one Herdr call per hosted job.

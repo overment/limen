@@ -7,6 +7,12 @@
 	--live-amber: var(--amber);
 	--live-red: var(--red);
 }
+.legend .k-live {
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: var(--live-green);
+}
 .s-working {
 	--live-c: var(--live-green);
 }
