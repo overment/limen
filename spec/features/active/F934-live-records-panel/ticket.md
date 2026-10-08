@@ -4,6 +4,7 @@ touches:
   - limen.picture.build
   - limen.cabinet.records
 opened: 2026-10-08
+landed: 2026-10-09
 ---
 
 # F934 · A live job on the picture opens in the side panel and shows its workers and its group

@@ -1,0 +1,3 @@
+# Outcome
+
+Every live job on the served picture now answers a hover with its label, engine and model, state, last activity, and run time. A click opens it in the side panel: on its feature with its details under its line, or as a job entry on top when it names no feature. A spawn from inside a job writes `spawned-by`, so a coordinator's workers nest under it with their own states, and a `limen group` run shows its lead, teams, and workers as one tree with live counts. The coordinator view was proven with real jobs; the group view with a fixture group in the real file format, because only the owner's lead pane can start a real group. The built picture still has no live layer.
