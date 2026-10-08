@@ -51,6 +51,7 @@
 
 ## PROVEN
 
+- `F933-quiet-mark-waits-longer-during-tests` (🟢 PROVEN): the live picture marks a running job quiet after 5 min with no event, or 15 min while it runs a test or check; not responding is unchanged; the legend states the rule (Adam picked B).
 - `F771-omp-claude-bridge-follows-upstream` (🟢 PROVEN): OMP pi-claude bridge is now upstream pi-claude-bridge v0.9.1 plus OMP commits; Limen argv unchanged; dated backup kept. Merge `59dc42f`.
 - `F772-seat-guide-from-live-cold-run` (🟢 PROVEN): seat guide encodes the nine limen-test cold-run snags, with a phase map and who/where labels; pins unchanged; docs only. Merge `a5d858e`.
 - `F770-omp-coordinator-counts-as-live` (🟢 PROVEN): a warm OMP coordinator counts as live when Herdr omits `interactive_ready`; explicit false stays not live; one rule for ensure, poller, and doctor. Landed `abf1e84`; focused tests 19/19.
