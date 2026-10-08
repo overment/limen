@@ -25,6 +25,18 @@ export async function readPicture(dir: string, root?: string): Promise<PictureMo
 	});
 }
 
+/** The page and its model. `live` is the event stream path that `limen picture serve` gives the page. */
+export async function pictureHtml(
+	dir: string,
+	root?: string,
+	tip?: string,
+	live?: string,
+): Promise<{ model: PictureModel; html: string }> {
+	const model = await readPicture(dir, root);
+	const viewer = await readViewer(fileURLToPath(new URL("../../picture/viewer/", import.meta.url)));
+	return { model, html: assembleHtml(model, viewer, tip, live) };
+}
+
 export async function buildPicture(
 	dir: string,
 	out: string,
@@ -32,9 +44,8 @@ export async function buildPicture(
 	tip?: string,
 	root?: string,
 ): Promise<PictureModel> {
-	const model = await readPicture(dir, root);
-	const viewer = await readViewer(fileURLToPath(new URL("../../picture/viewer/", import.meta.url)));
-	await writeAtomic(out, assembleHtml(model, viewer, tip));
+	const { model, html } = await pictureHtml(dir, root, tip);
+	await writeAtomic(out, html);
 	if (json !== undefined) {
 		await writeAtomic(json, `${JSON.stringify(model, null, 2)}\n`);
 	}

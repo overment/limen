@@ -92,10 +92,11 @@ limen ticket-author <ticket-path>
 
 ### Map build and refresh
 
-Build the architecture map, or do one quiet refresh pass.
+Build the architecture map, serve it with live job activity, or do one quiet refresh pass.
 
 ```text
 limen picture build [--dir D] [--out F] [--json F] [--strict]
+limen picture serve [--dir D] [--port N]
 limen picture tick --engine E --provider P --model M --thinking T [--dir D] [--branch B] [--dry-run]
 ```
 
