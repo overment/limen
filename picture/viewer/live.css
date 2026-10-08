@@ -95,13 +95,16 @@
 	padding: 0;
 }
 .live > .live-list {
-	/* About five lines; more jobs scroll inside the strip, so the plant keeps its room. */
-	max-height: calc(5 * (1.35em + var(--sp-1) * 2));
+	/* About eight lines, room for a coordinator and its workers; more scroll inside the strip, so the plant keeps its room. */
+	max-height: calc(8 * (1.35em + var(--sp-1) * 2));
 	overflow-y: auto;
 }
 .live-job {
 	display: grid;
-	grid-template-columns: 10px minmax(0, 1.25fr) minmax(0, 1fr) auto;
+	/* The mark column grows with depth and the label column shrinks by as much, so every line's "now" starts at one x. */
+	grid-template-columns:
+		calc(10px + var(--d, 0) * 18px) minmax(0, calc(48% - 10px - var(--d, 0) * 18px))
+		minmax(0, 1fr) auto;
 	align-items: center;
 	gap: var(--sp-2);
 	padding: var(--sp-1) 0;
@@ -317,18 +320,232 @@ a.live-what:hover {
 	margin-bottom: var(--sp-4);
 }
 
-/* Narrow: the job line wraps to two rows, feature first, then what it does and where. */
+/* Records: every job, lead, and team line is a target; hover lights it, the selected one keeps a left rule. */
+.live-job,
+.live-grp,
+.live-team {
+	position: relative;
+	cursor: pointer;
+	border-radius: 4px;
+}
+.live-job > .live-mark,
+.live-grp > .live-mark,
+.live-team > .live-mark {
+	justify-self: end;
+}
+.live-grp,
+.live-team {
+	display: grid;
+	grid-template-columns:
+		calc(10px + var(--d, 0) * 18px) minmax(0, calc(48% - 10px - var(--d, 0) * 18px))
+		minmax(0, 1fr) auto;
+	align-items: center;
+	gap: var(--sp-2);
+	padding-top: var(--sp-1);
+	padding-bottom: var(--sp-1);
+	border-top: 1px solid var(--line2);
+	min-width: 0;
+}
+.live-grp:first-child {
+	border-top: none;
+}
+.live-job:hover,
+.live-grp:hover,
+.live-team:hover,
+.live-job:focus-visible,
+.live-grp:focus-visible,
+.live-team:focus-visible {
+	background: var(--sheet);
+	outline: none;
+}
+.live-job:hover .live-what,
+.live-grp:hover .live-what {
+	text-decoration: underline;
+	text-decoration-color: var(--line);
+}
+.live-job.sel {
+	background: color-mix(in srgb, var(--live-c) 9%, transparent);
+	box-shadow: inset 2px 0 0 var(--live-c);
+}
+/* Tree rule: a worker hangs off the line above it. */
+.live-job.kid::before,
+.live-team.kid::before {
+	content: "";
+	position: absolute;
+	left: calc(var(--d) * 18px - 13px);
+	top: -1px;
+	width: 9px;
+	height: calc(50% + 1px);
+	border-left: 1px solid var(--line);
+	border-bottom: 1px solid var(--line);
+}
+.live-job.kid,
+.live-team.kid {
+	border-top-color: transparent;
+}
+.live-team .live-what {
+	color: var(--ink2);
+	font-weight: 600;
+}
+.live-team:not([class*=" s-"]) .live-mark {
+	background: transparent;
+	box-shadow: inset 0 0 0 1.5px var(--line);
+}
+.live-team .live-now,
+.live-grp .live-now {
+	color: var(--mute);
+}
+.live-team .live-now .s-dead,
+.live-grp .live-now .s-dead {
+	color: var(--live-red);
+	font-weight: 650;
+}
+.live-kind {
+	margin-right: var(--sp-2);
+	color: var(--mute);
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+}
+.live-roll {
+	margin-right: var(--sp-2);
+	padding: 0 6px;
+	border: 1px solid var(--line2);
+	border-radius: 999px;
+	color: var(--mute);
+	font-size: 11px;
+	font-weight: 600;
+}
+.live-roll b {
+	color: var(--live-red);
+}
+.live-pin,
+.live-tag {
+	cursor: pointer;
+}
+.live-pin:hover {
+	transform: scale(1.35);
+}
+.live-tag:hover {
+	border-color: var(--live-c);
+}
+
+/* Side panel: the selected job's details under its line, or in a job entry on top of the reading column. */
+.live-card-li {
+	padding: 0 0 var(--sp-2) 0;
+	cursor: default;
+}
+.live-card {
+	margin: var(--sp-1) 0 0 18px;
+	padding: var(--sp-2) var(--sp-3);
+	border: 1px solid var(--line2);
+	border-radius: var(--r-2);
+	background: var(--card);
+	font-size: 13px;
+	line-height: 1.4;
+	container-type: inline-size;
+}
+.live-entry .live-card {
+	margin-left: 0;
+}
+.live-card dl {
+	display: grid;
+	grid-template-columns: max-content minmax(0, 1fr);
+	gap: 2px var(--sp-3);
+	margin: 0;
+}
+.live-card dt {
+	color: var(--mute);
+}
+.live-card dd {
+	margin: 0;
+	min-width: 0;
+	overflow-wrap: anywhere;
+	color: var(--ink2);
+}
+.live-card code {
+	font-size: 12px;
+	color: var(--mute);
+}
+.live-card h5 {
+	margin: var(--sp-2) 0 0;
+	font-size: 11.5px;
+	letter-spacing: 0.07em;
+	text-transform: uppercase;
+	color: var(--mute);
+}
+.live-card h5 small {
+	margin-left: var(--sp-2);
+	letter-spacing: 0;
+	text-transform: none;
+	font-weight: 500;
+}
+.live-st {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--sp-1);
+	font-weight: 600;
+	color: var(--live-c);
+}
+.live-ref {
+	color: var(--ink);
+	text-decoration: underline;
+	text-decoration-color: var(--line);
+	cursor: pointer;
+}
+
+/* Hover card: who runs the job, its state, its last activity, and how long it ran. */
+.live-tip {
+	position: fixed;
+	z-index: 50;
+	display: grid;
+	gap: 2px;
+	max-width: 360px;
+	padding: var(--sp-2) var(--sp-3);
+	border: 1px solid var(--line);
+	border-radius: var(--r-2);
+	background: var(--card);
+	box-shadow: 0 4px 16px rgb(0 0 0 / 0.12);
+	color: var(--ink2);
+	font-size: 12.5px;
+	line-height: 1.4;
+	pointer-events: none;
+}
+.live-tip[hidden] {
+	display: none;
+}
+.live-tip b {
+	color: var(--ink);
+	font-weight: 650;
+}
+.live-tip em {
+	margin-top: 2px;
+	color: var(--faint);
+	font-style: normal;
+	font-size: 11.5px;
+}
+.live-tip .live-st {
+	font-weight: 500;
+}
+
+/* Narrow, as in the side panel: the label takes the first row; what the job does and where take the second. */
 @container (max-width: 640px) {
-	.live-job {
-		grid-template-columns: 10px minmax(0, 1fr) auto;
+	.live-job,
+	.live-grp,
+	.live-team {
+		grid-template-columns: calc(10px + var(--d, 0) * 18px) minmax(0, 1fr) auto;
 		row-gap: 0;
 	}
-	.live-now {
+	.live-what {
 		grid-column: 2 / -1;
+	}
+	.live-now {
+		grid-column: 2;
 		grid-row: 2;
 	}
 	.live-meta {
 		grid-column: 3;
-		grid-row: 1;
+		grid-row: 2;
 	}
 }
