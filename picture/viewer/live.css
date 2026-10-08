@@ -1,0 +1,328 @@
+/* Live layer: present only when `limen picture serve` hands out the page. State colours, one per job state. */
+:root {
+	--live-green: #2e7d32;
+	--live-green-bg: #e8f3e8;
+	--live-blue: #5c6d82;
+	--live-grey: #8a8f97;
+	--live-amber: var(--amber);
+	--live-red: var(--red);
+}
+.s-working {
+	--live-c: var(--live-green);
+}
+.s-waiting {
+	--live-c: var(--live-blue);
+}
+.s-starting,
+.s-stopped {
+	--live-c: var(--live-grey);
+}
+.s-quiet {
+	--live-c: var(--live-amber);
+}
+.s-dead,
+.s-failed {
+	--live-c: var(--live-red);
+}
+.s-done {
+	--live-c: var(--live-green);
+}
+
+/* Strip under the light line */
+.live {
+	flex: none;
+	margin-top: var(--sp-2);
+	padding: var(--sp-2) var(--sp-3);
+	border: 1px solid var(--line2);
+	border-radius: var(--r-2);
+	background: var(--card);
+	font-size: 13px;
+	line-height: 1.35;
+	container-type: inline-size;
+}
+.live-head {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: var(--sp-1) var(--sp-3);
+	color: var(--mute);
+	font-size: 12.5px;
+}
+.live-feed {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--sp-1);
+	font-weight: 650;
+	color: var(--ink);
+}
+.live-feed i {
+	width: 7px;
+	height: 7px;
+	border-radius: 50%;
+	background: var(--live-green);
+}
+.live-feed.is-connecting i {
+	background: var(--live-grey);
+}
+.live-feed.is-lost,
+.live-feed.is-silent {
+	color: var(--live-amber);
+}
+.live-feed.is-lost i,
+.live-feed.is-silent i {
+	background: transparent;
+	box-shadow: inset 0 0 0 1.5px var(--live-amber);
+}
+.live-lost {
+	color: var(--live-amber);
+}
+.live-sum .s-dead {
+	color: var(--live-red);
+	font-weight: 650;
+}
+.live.stale .live-sum .s-dead {
+	color: inherit;
+}
+.live-list {
+	list-style: none;
+	margin: var(--sp-1) 0 0;
+	padding: 0;
+}
+.live > .live-list {
+	/* About five lines; more jobs scroll inside the strip, so the plant keeps its room. */
+	max-height: calc(5 * (1.35em + var(--sp-1) * 2));
+	overflow-y: auto;
+}
+.live-job {
+	display: grid;
+	grid-template-columns: 10px minmax(0, 1.25fr) minmax(0, 1fr) auto;
+	align-items: center;
+	gap: var(--sp-2);
+	padding: var(--sp-1) 0;
+	border-top: 1px solid var(--line2);
+	min-width: 0;
+}
+.live-job:first-child {
+	border-top: none;
+}
+.live-what,
+.live-now,
+.live-meta {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.live-what {
+	color: var(--ink);
+	text-decoration: none;
+}
+a.live-what:hover {
+	text-decoration: underline;
+}
+.live-what b {
+	font-weight: 650;
+	margin-right: var(--sp-1);
+}
+.live-what small {
+	color: var(--mute);
+}
+.live-ended {
+	margin-top: var(--sp-1);
+	border-top: 1px solid var(--line2);
+	padding-top: var(--sp-1);
+	font-size: 12.5px;
+	color: var(--mute);
+}
+.live-ended summary {
+	cursor: pointer;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.live-ended summary b {
+	font-weight: 600;
+	color: var(--ink2);
+}
+.live-ended .live-list {
+	font-size: 13px;
+}
+.live-now {
+	color: var(--ink2);
+}
+.live-detail {
+	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+	font-size: 12px;
+	color: var(--mute);
+}
+.live-word {
+	font-weight: 650;
+	color: var(--live-c);
+}
+.live-meta {
+	color: var(--faint);
+	font-size: 12px;
+	text-align: right;
+	font-variant-numeric: tabular-nums;
+}
+.s-done .live-now,
+.s-stopped .live-now {
+	color: var(--mute);
+}
+
+/* State marks: a dot per state; done is a check, stopped a square, starting and stale an empty ring. */
+.live-mark,
+.live-pin,
+.live-tag i {
+	display: block;
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: var(--live-c);
+}
+.s-starting .live-mark,
+.live-tag.s-starting i,
+.live-pin.s-starting {
+	background: transparent;
+	box-shadow: inset 0 0 0 1.5px var(--live-c);
+}
+.s-dead .live-mark,
+.live-tag.s-dead i,
+.live-pin.s-dead {
+	background: var(--card);
+	box-shadow: inset 0 0 0 2px var(--live-c);
+}
+.s-stopped .live-mark {
+	border-radius: 2px;
+}
+.s-done .live-mark {
+	width: 5px;
+	height: 9px;
+	margin-left: 2px;
+	border-radius: 0;
+	background: none;
+	border: solid var(--live-c);
+	border-width: 0 2px 2px 0;
+	transform: translateY(-1px) rotate(45deg);
+}
+
+/* Feed lost: nothing may look like it runs. */
+.live-job.stale,
+.live-blk.stale .live-job {
+	color: var(--mute);
+}
+.live-job.stale .live-now,
+.live-job.stale .live-what,
+.live-job.stale .live-word {
+	color: var(--mute);
+}
+.live-job.stale .live-mark,
+.live-tag.stale i,
+.live-pin.stale {
+	background: transparent;
+	box-shadow: inset 0 0 0 1.5px var(--live-grey);
+	animation: none;
+}
+.live-job.stale.s-done .live-mark {
+	box-shadow: none;
+	border-color: var(--live-grey);
+}
+
+/* Atlas marks sit on the card corner, outside the flow: the wire routing measures the cards. */
+.live-pin {
+	position: absolute;
+	top: -4px;
+	right: -4px;
+	z-index: 4;
+	width: 10px;
+	height: 10px;
+	outline: 2px solid var(--card);
+}
+.mod > .live-pin {
+	top: var(--sp-2);
+	right: var(--sp-2);
+}
+.live-pin.s-working {
+	animation: live-pulse 2.4s ease-in-out infinite;
+}
+@keyframes live-pulse {
+	0%,
+	100% {
+		box-shadow: 0 0 0 0 rgb(46 125 50 / 0.35);
+	}
+	50% {
+		box-shadow: 0 0 0 4px rgb(46 125 50 / 0);
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	.live-pin.s-working {
+		animation: none;
+	}
+}
+
+/* Reading column: a small tag on the work row, and the jobs at the top of an opened work. */
+.live-tag {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--sp-1);
+	margin-left: var(--sp-2);
+	padding: 0 var(--sp-2);
+	border-radius: 999px;
+	border: 1px solid var(--line2);
+	background: var(--card);
+	color: var(--live-c);
+	font-size: 11px;
+	font-weight: 650;
+	line-height: 18px;
+	vertical-align: 2px;
+	white-space: nowrap;
+}
+.live-tag i {
+	width: 7px;
+	height: 7px;
+}
+.live-tag.stale {
+	color: var(--mute);
+}
+.live-blk {
+	margin: 0 0 var(--sp-3);
+	padding: var(--sp-2) var(--sp-3);
+	border: 1px solid var(--line2);
+	border-radius: var(--r-2);
+	background: var(--sheet);
+	font-size: 13px;
+	line-height: 1.35;
+	container-type: inline-size;
+}
+.live-blk h4 {
+	margin: 0;
+	font-size: 11.5px;
+	letter-spacing: 0.07em;
+	text-transform: uppercase;
+	color: var(--mute);
+}
+.live-blk h4 small {
+	margin-left: var(--sp-2);
+	letter-spacing: 0;
+	font-weight: 500;
+	color: var(--faint);
+}
+.layer-body > .live-blk {
+	margin-bottom: var(--sp-4);
+}
+
+/* Narrow: the job line wraps to two rows, feature first, then what it does and where. */
+@container (max-width: 640px) {
+	.live-job {
+		grid-template-columns: 10px minmax(0, 1fr) auto;
+		row-gap: 0;
+	}
+	.live-now {
+		grid-column: 2 / -1;
+		grid-row: 2;
+	}
+	.live-meta {
+		grid-column: 3;
+		grid-row: 1;
+	}
+}

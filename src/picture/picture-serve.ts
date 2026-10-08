@@ -63,9 +63,10 @@ export async function servePicture(options: ServeOptions): Promise<{ url: string
 	const reader = setInterval(() => {
 		void refresh();
 	}, READ_MS);
+	// A named event, not an SSE comment: the page sees it and can tell a stalled feed from a quiet one.
 	const pinger = setInterval(() => {
 		for (const client of clients) {
-			client.write(": ping\n\n");
+			client.write(`event: ping\ndata: {"at":"${new Date().toISOString()}"}\n\n`);
 		}
 	}, PING_MS);
 	return {

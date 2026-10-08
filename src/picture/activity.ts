@@ -51,11 +51,11 @@ const RANK: Record<LiveState, number> = {
 	starting: 0,
 	working: 0,
 	waiting: 0,
-	quiet: 1,
 	dead: 1,
-	done: 2,
-	failed: 2,
-	stopped: 2,
+	quiet: 2,
+	done: 3,
+	failed: 3,
+	stopped: 3,
 };
 
 /** The page's view of one job, or nothing when the job is long finished or its record is half written. */
@@ -134,10 +134,14 @@ const TOOL_WORDS: Record<string, string> = {
 	ast_grep: "reading code",
 	task: "running helpers",
 	agent: "running helpers",
+	wait: "waiting for helpers",
 	web_search: "reading the web",
 	web_fetch: "reading the web",
 	fetch: "reading the web",
 	browser: "reading the web",
+	eval: "running code",
+	todo: "planning",
+	finish: "finishing",
 };
 const SHELL_TOOLS: Record<string, true> = { bash: true, shell: true, exec: true };
 const CHECKS = /\b(?:test|tests|vitest|jest|mocha|pytest|tsc|typecheck|biome|eslint|lint|check)\b/;
