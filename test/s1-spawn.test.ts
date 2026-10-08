@@ -67,6 +67,7 @@ test("a detached job runs in its own worktree from the base with the exact task 
 		PI_SESSION_FILE: join(p.parent, "coord.jsonl"),
 		HERDR_ENV: "1",
 		HERDR_PANE_ID: "p1",
+		LIMEN_JOB_ID: "2026-10-08-f001-coordinator-1a2b3c4d",
 	};
 	const id = spawnJob(p, task, ["--detached", "--label", "F001 demo"], { env: caller });
 	const dir = jobDir(p, id);
@@ -74,6 +75,8 @@ test("a detached job runs in its own worktree from the base with the exact task 
 	assert.notEqual(tree, p.root);
 	assert.equal(git(tree, "branch", "--show-current"), `limen/${id}`);
 	assert.equal(git(tree, "rev-parse", "HEAD"), base);
+	// The picture nests this job under the job whose agent spawned it.
+	assert.equal(jobFile(p, id, "spawned-by"), caller.LIMEN_JOB_ID);
 
 	// Plain `git status` on stale stat data rewrites the index under the worker's own `git add` (43c01cf).
 	const index = join(git(tree, "rev-parse", "--absolute-git-dir"), "index");

@@ -1,6 +1,6 @@
 // U11: what the live picture says a job does. A record that says running is never shown as working when its owner is
 // gone or it has been silent too long; finished jobs leave the page after an hour; job folders of both engines read
-// the same way.
+// the same way; a coordinator's workers and a group's teams nest as one tree.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
@@ -32,6 +32,10 @@ const job = (over: Partial<JobFiles>): JobFiles => ({
 	stopReason: "",
 	tools: 3,
 	hosted: false,
+	role: "worker",
+	spawnedBy: "",
+	group: "",
+	team: "",
 	startedAt: NOW - 60_000,
 	lastEventAt: NOW - 1_000,
 	finishedAt: undefined,
@@ -122,5 +126,62 @@ test("the reader reads detached and hosted job folders the same way", async () =
 		["detached", "working", "running tests and checks", "npm test", "openai-codex/gpt-6-sol"],
 		["gone", "dead", "running a command", "", ""],
 		["hosted", "working", "running a command", "git log", "pi-claude/claude-opus-5-5"],
+	]);
+});
+
+test("a coordinator's workers and a group's teams nest as one tree with their states counted", async () => {
+	const root = await mkdtemp(join(tmpdir(), "limen-tree-"));
+	const gone = spawnSync(process.execPath, ["-e", "process.stdout.write(String(process.pid))"]).stdout.toString();
+	const folder = async (id: string, files: Record<string, string>) => {
+		await mkdir(join(root, "jobs", id), { recursive: true });
+		for (const [name, body] of Object.entries(files)) {
+			await writeFile(join(root, "jobs", id, name), body);
+		}
+	};
+	const running = { state: "running\n", pid: `${process.pid}\n`, activity: "think\n", role: "worker\n" };
+	const member = (team: string, files: Record<string, string> = {}) => ({ ...running, group: "g1\n", team, ...files });
+	await folder("c1", member("team-1", { role: "coordinator\n" }));
+	// An older group worker records no spawn link: it goes under its team's coordinator.
+	await folder("w1", member("team-1", { activity: "wait\n" }));
+	// Its coordinator is not on the page, so it stays at the top.
+	await folder("w2", member("team-2", { pid: `${gone}\n` }));
+	await folder("boss", { ...running, role: "coordinator\n" });
+	await folder("helper", { ...running, "spawned-by": "boss\n" });
+	await folder("orphan", { ...running, "spawned-by": "2026-01-01-long-gone-00000000\n" });
+	await mkdir(join(root, "groups", "g1"), { recursive: true });
+	const roster = [
+		{ id: "w1", team: "team-1", role: "worker" },
+		{ id: "c1", team: "team-1", role: "coordinator" },
+		{ id: "c2", team: "team-2", role: "coordinator" },
+		{ id: "w2", team: "team-2", role: "worker" },
+	];
+	const run = {
+		id: "g1",
+		feature: "spec/features/active/F929-biome",
+		lead: "f929-lead-1",
+		teams: ["team-1", "team-2"],
+	};
+	await writeFile(join(root, "groups/g1/run.json"), JSON.stringify({ ...run, members: roster }));
+	const snapshot = await activityReader(join(root, "jobs"))();
+	assert.deepEqual(Object.fromEntries(snapshot.jobs.map((live) => [live.id, live.parent])), {
+		boss: null,
+		c1: null,
+		helper: "boss",
+		orphan: null,
+		w1: "c1",
+		w2: null,
+	});
+	assert.deepEqual(snapshot.groups, [
+		{
+			id: "g1",
+			work: ["f929"],
+			feature: "F929-biome",
+			lead: "f929-lead-1",
+			teams: [
+				{ name: "team-1", jobs: ["c1", "w1"], count: { working: 1, waiting: 1 } },
+				{ name: "team-2", jobs: ["w2"], count: { dead: 1 } },
+			],
+			count: { working: 1, waiting: 1, dead: 1 },
+		},
 	]);
 });
