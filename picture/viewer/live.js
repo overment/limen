@@ -293,8 +293,9 @@
 		}
 		return [];
 	}
-	/* Most urgent first, so a click on a mark or a tag opens the job that needs a look. */
-	const byRank = (list) => [...list].sort((a, b) => STATE[a.state].rank - STATE[b.state].rank);
+	/* A job that stopped responding first, then by state, so a click on a mark or a tag opens the job that needs a look. */
+	const urgency = (j) => (j.state === "dead" ? 0 : STATE[j.state].rank);
+	const byRank = (list) => [...list].sort((a, b) => urgency(a) - urgency(b));
 	const idsOf = (list) =>
 		esc(
 			byRank(list)
@@ -533,9 +534,9 @@
 			.filter(Boolean);
 		const lines = list.map(
 			(j) =>
-				`<span class="live-st s-${esc(j.state)}"><i class="live-mark" aria-hidden="true"></i>${esc(j.label || j.id)} · ${STATE[j.state]?.word} · ${engineOf(j)} · ${runHtml(j)}</span>`,
+				`<span class="live-st s-${esc(j.state)}"><i class="live-mark" aria-hidden="true"></i><span>${esc(j.label || j.id)} · ${STATE[j.state]?.word} · ${engineOf(j)} · ${runHtml(j)}</span></span>`,
 		);
-		const which = list.length > 1 ? "the most urgent" : "it";
+		const which = list.length > 1 ? "the first" : "it";
 		return `<b>${plural(list.length, "job")} here now</b>${lines.join("")}<em>Click to open ${which} in the side panel</em>`;
 	}
 	function groupTip(g) {
