@@ -12,6 +12,7 @@ import {
 	FINISHED_SHOWN_MS,
 	type JobFiles,
 	jobActivity,
+	CHECK_QUIET_MS,
 	QUIET_MS,
 	toolWords,
 } from "../src/picture/activity.ts";
@@ -45,13 +46,22 @@ test("a running record reads by its owner and its last event, never as working w
 	assert.deepEqual(seen({}), ["working", "running tests and checks", "npm test"]);
 	assert.deepEqual(seen({ owner: "gone" }), ["dead", "running tests and checks", ""]);
 	assert.deepEqual(seen({ owner: "none" }), ["starting", "starting", ""]);
-	assert.deepEqual(seen({ lastEventAt: NOW - QUIET_MS }), ["working", "running tests and checks", "npm test"]);
-	assert.deepEqual(seen({ lastEventAt: NOW - QUIET_MS - 1 }), ["quiet", "running tests and checks", "npm test"]);
-	assert.deepEqual(seen({ owner: "gone", lastEventAt: NOW - QUIET_MS - 1 }), ["dead", "running tests and checks", ""]);
+	assert.deepEqual(seen({ owner: "gone", lastEventAt: NOW - CHECK_QUIET_MS - 1 }), ["dead", "running tests and checks", ""]);
 	assert.deepEqual(seen({ activity: "wait" }), ["waiting", "waiting", ""]);
 	assert.deepEqual(seen({ activity: "think" }), ["working", "thinking", ""]);
 	assert.deepEqual(seen({ state: "", spawning: true }), ["starting", "starting", ""]);
 	assert.equal(seen({ state: "", spawning: false }), undefined);
+});
+
+test("a job turns quiet after 5 minutes without an event, or 15 while it runs a test or check", () => {
+	assert.deepEqual([QUIET_MS, CHECK_QUIET_MS], [5 * 60_000, 15 * 60_000]);
+	const state = (over: Partial<JobFiles>) => jobActivity(job(over), NOW)?.state;
+	assert.equal(state({ detail: "ls -la", lastEventAt: NOW - QUIET_MS }), "working");
+	assert.equal(state({ detail: "ls -la", lastEventAt: NOW - QUIET_MS - 1 }), "quiet");
+	assert.equal(state({ activity: "think", lastEventAt: NOW - QUIET_MS - 1 }), "quiet");
+	assert.equal(state({ detail: "npm test", lastEventAt: NOW - 6 * 60_000 }), "working");
+	assert.equal(state({ detail: "npm test", lastEventAt: NOW - CHECK_QUIET_MS }), "working");
+	assert.equal(state({ detail: "npm test", lastEventAt: NOW - CHECK_QUIET_MS - 1 }), "quiet");
 });
 
 test("a finished job shows its end for an hour, then leaves the page", () => {

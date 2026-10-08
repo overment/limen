@@ -2,8 +2,7 @@
 touches:
   - limen.picture.viewer
 opened: 2026-10-08
-needs-adam: While a job runs a long test, how long should the picture wait before it marks the job quiet? Pick A, B or C in Notes.
-needs-adam-on: 2026-10-08
+landed: 2026-10-08
 ---
 
 # F933 · The quiet mark waits longer while a job runs a long test
@@ -28,15 +27,13 @@ Adam watches the live picture while a job runs a long test or check command. Tod
 ## Acceptance
 
 - A running job that runs a test or check command, silent for six minutes, does not show as quiet.
-- A running job silent past the chosen limit shows as quiet, not as working.
+- A running job that runs a test or check command, silent for more than 15 minutes, shows as quiet.
+- Any other running job silent for more than 5 minutes shows as quiet, not as working.
 - A running job whose owner process is gone still shows as not responding.
 - The picture legend states the chosen quiet rule.
 - The file that `limen picture build` writes still shows no live strip.
 
 ## Notes
 
-- Open question for Adam. While a job runs a long test, how long should the picture wait before it marks the job quiet?
-  - A) 10 minutes for any job.
-  - B) 5 minutes, but 15 minutes while a test or check command runs.
-  - C) No quiet mark while a test runs; only "not responding" when the process dies.
-- When Adam picks, record the pick here, remove `needs-adam` and `needs-adam-on`, and set the limits in Acceptance.
+- Decision, 2026-10-08: Adam picked B. A job is quiet after 5 minutes with no event. While its current or last
+  tool is a test or check command, the limit is 15 minutes.

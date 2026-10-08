@@ -134,10 +134,14 @@
 	strip.className = "live";
 	strip.setAttribute("aria-label", "Jobs running now");
 	document.getElementById("lightline").after(strip);
-	/* Only a served page can carry place marks, so only it names them in the legend. */
+	/* Only a served page can carry place marks and the quiet rule, so only it names them in the legend. */
 	document
 		.querySelector(".legend")
-		?.insertAdjacentHTML("beforeend", '<span><i class="k-live" aria-hidden="true"></i>a job works here now</span>');
+		?.insertAdjacentHTML(
+			"beforeend",
+			'<span><i class="k-live" aria-hidden="true"></i>a job works here now</span>' +
+				"<span>quiet: no event for 5 min, or 15 min during a test or check</span>",
+		);
 
 	function summary(live) {
 		const n = {};

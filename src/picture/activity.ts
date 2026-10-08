@@ -45,6 +45,8 @@ export type JobFiles = {
 
 /** A live job with no event for this long is quiet, not working. */
 export const QUIET_MS = 5 * 60_000;
+/** A job that runs a test or check command may stay silent this long before it is quiet. */
+export const CHECK_QUIET_MS = 15 * 60_000;
 /** A finished job stays on the page this long. */
 export const FINISHED_SHOWN_MS = 60 * 60_000;
 const RANK: Record<LiveState, number> = {
@@ -100,7 +102,8 @@ function liveState(files: JobFiles, now: number): LiveState | undefined {
 	if (files.owner === "gone") {
 		return "dead";
 	}
-	if (now - files.lastEventAt > QUIET_MS) {
+	const checks = files.activity === "tool" && toolWords(files.lastTool, files.detail) === "running tests and checks";
+	if (now - files.lastEventAt > (checks ? CHECK_QUIET_MS : QUIET_MS)) {
 		return "quiet";
 	}
 	return files.activity === "wait" ? "waiting" : "working";
