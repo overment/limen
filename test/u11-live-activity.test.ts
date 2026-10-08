@@ -1,0 +1,104 @@
+// U11: what the live picture says a job does. A record that says running is never shown as working when its owner is
+// gone or it has been silent too long; finished jobs leave the page after an hour; job folders of both engines read
+// the same way.
+import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import test from "node:test";
+import {
+	activityReader,
+	FINISHED_SHOWN_MS,
+	type JobFiles,
+	jobActivity,
+	QUIET_MS,
+	toolWords,
+} from "../src/picture/activity.ts";
+
+const NOW = Date.parse("2026-10-08T12:00:00Z");
+const job = (over: Partial<JobFiles>): JobFiles => ({
+	id: "2026-10-08-f932-live-1a2b3c4d",
+	state: "running",
+	spawning: false,
+	owner: "alive",
+	label: "F932 follow-up for F780",
+	engine: "omp",
+	model: "pi-claude/claude-opus-5-5",
+	activity: "tool",
+	lastTool: "bash",
+	detail: "npm test",
+	stopReason: "",
+	tools: 3,
+	hosted: false,
+	startedAt: NOW - 60_000,
+	lastEventAt: NOW - 1_000,
+	finishedAt: undefined,
+	...over,
+});
+const seen = (over: Partial<JobFiles>) => {
+	const live = jobActivity(job(over), NOW);
+	return live && [live.state, live.doing, live.detail];
+};
+
+test("a running record reads by its owner and its last event, never as working when either is stale", () => {
+	assert.deepEqual(seen({}), ["working", "running tests and checks", "npm test"]);
+	assert.deepEqual(seen({ owner: "gone" }), ["dead", "not responding", ""]);
+	assert.deepEqual(seen({ owner: "none" }), ["starting", "starting", ""]);
+	assert.deepEqual(seen({ lastEventAt: NOW - QUIET_MS }), ["working", "running tests and checks", "npm test"]);
+	assert.deepEqual(seen({ lastEventAt: NOW - QUIET_MS - 1 }), ["quiet", "running tests and checks", "npm test"]);
+	assert.deepEqual(seen({ owner: "gone", lastEventAt: NOW - QUIET_MS - 1 }), ["dead", "not responding", ""]);
+	assert.deepEqual(seen({ activity: "wait" }), ["waiting", "waiting", ""]);
+	assert.deepEqual(seen({ activity: "think" }), ["working", "thinking", ""]);
+	assert.deepEqual(seen({ state: "", spawning: true }), ["starting", "starting", ""]);
+	assert.equal(seen({ state: "", spawning: false }), undefined);
+});
+
+test("a finished job shows its end for an hour, then leaves the page", () => {
+	const finishedAt = NOW - FINISHED_SHOWN_MS;
+	assert.deepEqual(seen({ state: "done", finishedAt }), ["done", "", ""]);
+	assert.deepEqual(seen({ state: "failed", finishedAt, stopReason: "error: overloaded" }), [
+		"failed",
+		"error: overloaded",
+		"",
+	]);
+	assert.equal(seen({ state: "stopped", finishedAt: finishedAt - 1 }), undefined);
+	assert.equal(jobActivity(job({ state: "done", finishedAt }), NOW)?.finishedAt, new Date(finishedAt).toISOString());
+	assert.deepEqual(jobActivity(job({}), NOW)?.work, ["f932", "f780"]);
+});
+
+test("tool words name the kind of work in plain words", () => {
+	assert.equal(toolWords("bash", "npx biome check ."), "running tests and checks");
+	assert.equal(toolWords("bash", "git status --short"), "running a command");
+	assert.equal(toolWords("edit", ""), "editing files");
+	assert.equal(toolWords("grep", ""), "reading code");
+	assert.equal(toolWords("task", ""), "running helpers");
+	assert.equal(toolWords("constructor", ""), "using constructor");
+});
+
+test("the reader reads detached and hosted job folders the same way", async () => {
+	const jobs = await mkdtemp(join(tmpdir(), "limen-live-"));
+	const gone = spawnSync(process.execPath, ["-e", "process.stdout.write(String(process.pid))"]).stdout.toString();
+	const folder = async (id: string, files: Record<string, string>) => {
+		await mkdir(join(jobs, id, "session"), { recursive: true });
+		for (const [name, body] of Object.entries(files)) {
+			await writeFile(join(jobs, id, name), body);
+		}
+	};
+	const running = { state: "running\n", pid: `${process.pid}\n`, activity: "tool\n", "last-tool": "bash\n" };
+	await folder("2026-10-08-f932-detached-00000001", {
+		...running,
+		engine: "pi\n",
+		log: "think\nbash npm test\n",
+		"session/2026-10-08T11-59-00Z_a.jsonl": '{"type":"session"}\n{"type":"model_change","model":"openai/gpt-6"}\n',
+	});
+	await folder("2026-10-08-f932-hosted-00000002", { ...running, engine: "omp\n", "tool-detail": "git log\n" });
+	await folder("2026-10-08-f932-gone-00000003", { ...running, pid: `${gone}\n` });
+	const snapshot = await activityReader(jobs)();
+	const rows = snapshot.jobs.map((live) => [live.id.slice(16, -9), live.state, live.doing, live.detail, live.model]);
+	assert.deepEqual(rows.sort(), [
+		["detached", "working", "running tests and checks", "npm test", "openai/gpt-6"],
+		["gone", "dead", "not responding", "", ""],
+		["hosted", "working", "running a command", "git log", ""],
+	]);
+});

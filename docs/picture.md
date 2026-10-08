@@ -44,6 +44,19 @@ The strict check exits 1 for ticket errors. It warns, but does not guess a link,
 
 Remove a Needs Adam request and its date after Adam answers. Remove a Wrong problem and its date after the fix. The pin then leaves the page.
 
+## Live job activity
+
+`limen picture serve` serves the same page on `http://127.0.0.1:4747/` (`--port` picks another port; `--dir` another dataset). It reads the job folders in `.limen/jobs/` once a second and pushes changes to the open page over Server-Sent Events. It never changes a job, and it listens only on 127.0.0.1. Ctrl-C stops it. A reload rebuilds the page from the current tickets and board.
+
+The page then shows a live strip with each job, the feature it names, and what it does now: thinking, editing files, reading code, running tests and checks, running a command, running helpers, or waiting. Each line names the engine and model and the time since the last event. The places a running job's feature touches carry a mark, and the feature's detail lists its jobs.
+
+- **Same for both engines:** OMP and Pi jobs, detached and hosted, write the same job files (`activity`, `last-tool`, `tool-calls`, `log`). The model comes from the `model_change` entry of the job's session file.
+- **Feature link:** a job belongs to each F number in its label or job id. A job that names no feature on the page appears only in the strip.
+- **Never a false running:** a job whose record says running but whose owner process is gone reads **not responding**. A job with no event for five minutes reads **quiet**, with its last action.
+- **Finished jobs:** done, failed, and stopped jobs stay for one hour after they end.
+
+The file that `limen picture build` writes has no live layer and makes no network request.
+
 ## Refresh the map
 
 The coordinator starts the first map by hand, as an interactive `--role picture` job (`--tab`). It uses `--detached` only when the interactive start fails.

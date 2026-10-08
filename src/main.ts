@@ -129,6 +129,7 @@ usage:
   limen github work <root> <claim-id> --engine E --provider P --model M --thinking T --task "…"  # hosted task for one doorbell claim
   limen github resolve <root> <claim-id> <handoff-nonce> "answer"  # explicit no-job answer for one doorbell claim
   limen picture build [--dir D] [--out F] [--json F] [--strict]  # local offline architecture map, no model call
+  limen picture serve [--dir D] [--port N]  # the same page on 127.0.0.1 (default port 4747), with live job activity
   limen picture tick [--dir D] [--branch B] [--dry-run] --engine E --provider P --model M --thinking T  # quiet one-tip pass
   limen picture watch [off | on [--branch B] [--dir D] --engine E --provider P --model M --thinking T]  # per-project, off by default: one tick when the top branch moves
 Pass a short coordinator instruction, not $(cat ticket.md). The ticket is a pointer, not the prompt.`;

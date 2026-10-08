@@ -1,19 +1,22 @@
 import { resolve } from "node:path";
 import type { ParseArgsOptionsConfig } from "node:util";
 import { buildPicture } from "../picture/picture-build.ts";
-import { headCommit, repoRoot } from "../project/git.ts";
+import { servePicture } from "../picture/picture-serve.ts";
+import { headCommit, limenRoot, repoRoot } from "../project/git.ts";
 import { firstPictureHint, pictureTick } from "../project/picture-tick.ts";
 import { pictureWatch } from "../project/picture-watch.ts";
 import { parseFlags } from "./flags.ts";
 
 const HELP =
-	"limen picture build [--dir D] [--out F] [--json F] [--strict]\nlimen picture tick [--dir D] [--branch B] [--dry-run] --engine E --provider P --model M --thinking T\nlimen picture watch [off | on [--branch B] [--dir D] --engine E --provider P --model M --thinking T]";
+	"limen picture build [--dir D] [--out F] [--json F] [--strict]\nlimen picture serve [--dir D] [--port N]\nlimen picture tick [--dir D] [--branch B] [--dry-run] --engine E --provider P --model M --thinking T\nlimen picture watch [off | on [--branch B] [--dir D] --engine E --provider P --model M --thinking T]";
+const SERVE_PORT = 4747;
 const MODEL_FLAGS = ["--engine", "--provider", "--model", "--thinking"];
 const VALUE = { type: "string" } as const;
 const SWITCH = { type: "boolean" } as const;
 const ROUTE = { dir: VALUE, branch: VALUE, engine: VALUE, provider: VALUE, model: VALUE, thinking: VALUE };
-const TABLES: Record<"build" | "tick" | "on" | "off" | "status", ParseArgsOptionsConfig> = {
+const TABLES: Record<"build" | "serve" | "tick" | "on" | "off" | "status", ParseArgsOptionsConfig> = {
 	build: { dir: VALUE, out: VALUE, json: VALUE, strict: SWITCH },
+	serve: { dir: VALUE, port: VALUE },
 	tick: { ...ROUTE, "dry-run": SWITCH },
 	on: ROUTE,
 	off: {},
@@ -23,7 +26,7 @@ const TABLES: Record<"build" | "tick" | "on" | "off" | "status", ParseArgsOption
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: split pending: picture subcommand dispatch
 export async function pictureCommand(args: readonly string[], cwd: string): Promise<void> {
 	const [mode, ...options] = args;
-	if (mode !== "build" && mode !== "tick" && mode !== "watch") {
+	if (mode !== "build" && mode !== "serve" && mode !== "tick" && mode !== "watch") {
 		throw new Error(HELP);
 	}
 	let watch: "on" | "off" | "status" | undefined;
@@ -68,6 +71,10 @@ export async function pictureCommand(args: readonly string[], cwd: string): Prom
 		await pictureTick(root, picture, values, dryRun);
 		return;
 	}
+	if (mode === "serve") {
+		await serve(cwd, root, picture, values.get("--port"));
+		return;
+	}
 	const out = resolve(cwd, values.get("--out") ?? `${picture}/map.html`);
 	const json = values.get("--json");
 	const model = await buildPicture(picture, out, json ? resolve(cwd, json) : undefined, headCommit(root), root).catch(
@@ -87,4 +94,23 @@ export async function pictureCommand(args: readonly string[], cwd: string): Prom
 	if (strict && model.diagnostics.some((d) => d.level === "error")) {
 		process.exitCode = 1;
 	}
+}
+
+async function serve(cwd: string, root: string, picture: string, port = String(SERVE_PORT)): Promise<void> {
+	if (!/^\d{1,5}$/.test(port) || Number(port) > 65_535) {
+		throw new Error(`invalid picture serve port ${JSON.stringify(port)}\n${HELP}`);
+	}
+	const served = await servePicture({
+		dir: picture,
+		root,
+		jobsRoot: `${limenRoot(cwd)}/.limen/jobs`,
+		port: Number(port),
+		tip: () => headCommit(root),
+	}).catch((error: NodeJS.ErrnoException) => {
+		if (error.code === "ENOENT" && error.path === picture) {
+			throw new Error(firstPictureHint(picture));
+		}
+		throw error;
+	});
+	console.log(`picture: serving ${served.url} with live job activity; Ctrl-C stops`);
 }
