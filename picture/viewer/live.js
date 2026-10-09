@@ -74,6 +74,12 @@
 	/* Time since an ISO moment on the server clock. */
 	const since = (iso) => length(Date.now() + offset - Date.parse(iso));
 	const age = (iso) => `<span data-live-since="${esc(iso)}">${since(iso)}</span>`;
+	/* Time to an ISO moment on the server clock: "12 min left", or "past its deadline". */
+	const until = (iso) => {
+		const ms = Date.parse(iso) - Date.now() - offset;
+		return ms > 0 ? `${length(ms)} left` : "past its deadline";
+	};
+	const left = (iso) => `<span data-live-until="${esc(iso)}">${until(iso)}</span>`;
 	const clock = (ms) =>
 		[new Date(ms).getHours(), new Date(ms).getMinutes(), new Date(ms).getSeconds()]
 			.map((n) => String(n).padStart(2, "0"))
@@ -199,7 +205,7 @@
 		const members = g.teams.flatMap((t) => t.jobs.map((id) => byId.get(id)).filter(Boolean));
 		const w = groupWork(g);
 		const title = w ? `<b>${esc(w.code)}</b> ${esc(w.title)}` : esc(g.feature);
-		const lead = `<li class="live-grp s-${best(members)}${stale ? " stale" : ""}" data-group="${esc(g.id)}" tabindex="0" style="--d:0"><i class="live-mark" aria-hidden="true"></i><span class="live-what"><span class="live-kind">Lead</span>${title}</span><span class="live-now">${countWords(g.count)}</span><span class="live-meta">${esc(g.lead)} · ${plural(g.teams.length, "team")}</span></li>`;
+		const lead = `<li class="live-grp s-${best(members)}${stale ? " stale" : ""}" data-group="${esc(g.id)}" tabindex="0" style="--d:0"><i class="live-mark" aria-hidden="true"></i><span class="live-what"><span class="live-kind">Lead</span>${title}</span><span class="live-now">${countWords(g.count)}</span><span class="live-meta">${plural(g.teams.length, "team")} · ${left(g.deadline)}</span></li>`;
 		const teams = g.teams.map((t) => {
 			const list = t.jobs.map((id) => byId.get(id)).filter(Boolean);
 			const mark = list.length ? ` s-${best(list)}` : "";
@@ -340,7 +346,7 @@
 			["Run time", `${runHtml(j)} · started ${clock(Date.parse(j.startedAt) - offset)}`],
 			["Tools", `${plural(j.tools || 0, "tool call")} · ${j.hosted ? "runs in a Herdr tab" : "not in a visible tab"}`],
 			parent ? ["Spawned by", `<span class="live-ref" data-job="${esc(parent.id)}">${esc(parent.label)}</span>`] : null,
-			g ? ["Group", `${esc(groupWork(g)?.code || g.feature)} · ${esc(j.team || "")} · lead ${esc(g.lead)}`] : null,
+			g ? ["Group", `${esc(groupWork(g)?.code || g.feature)} · ${esc(j.team || "")} · ${left(g.deadline)}`] : null,
 			["Job", `<code>${esc(j.id)}</code>`],
 		].filter(Boolean);
 		const list = rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("");
@@ -546,7 +552,7 @@
 	function groupTip(g) {
 		const w = groupWork(g);
 		const counts = countWords(g.count) || "no job on the page";
-		return `<b>Group lead ${esc(g.lead)}</b><span>${esc(w ? `${w.code} · ${w.title}` : g.feature)}</span><span>${plural(g.teams.length, "team")} · ${counts}</span><em>Click to open the feature in the side panel</em>`;
+		return `<b>Group</b><span>${esc(w ? `${w.code} · ${w.title}` : g.feature)}</span><span>${plural(g.teams.length, "team")} · ${counts} · ${until(g.deadline)}</span><em>Click to open the feature in the side panel</em>`;
 	}
 	function teamTip(name, t) {
 		const first = byId.get(t.jobs[0]);
@@ -645,6 +651,12 @@
 	function tick() {
 		for (const el of document.querySelectorAll("[data-live-since]")) {
 			const text = since(el.dataset.liveSince);
+			if (el.textContent !== text) {
+				el.textContent = text;
+			}
+		}
+		for (const el of document.querySelectorAll("[data-live-until]")) {
+			const text = until(el.dataset.liveUntil);
 			if (el.textContent !== text) {
 				el.textContent = text;
 			}

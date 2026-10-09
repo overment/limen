@@ -158,7 +158,7 @@ test("a coordinator's workers and a group's teams nest as one tree with their st
 	const run = {
 		id: "g1",
 		feature: "spec/features/active/F929-biome",
-		lead: "f929-lead-1",
+		deadline: Date.parse("2026-10-09T09:15:00Z"),
 		teams: ["team-1", "team-2"],
 	};
 	await writeFile(join(root, "groups/g1/run.json"), JSON.stringify({ ...run, members: roster }));
@@ -171,12 +171,14 @@ test("a coordinator's workers and a group's teams nest as one tree with their st
 		w1: "c1",
 		w2: null,
 	});
+	// A group worker's label names no feature; it still works on the group's feature.
+	assert.deepEqual(snapshot.jobs.find((live) => live.id === "w1")?.work, ["f929"]);
 	assert.deepEqual(snapshot.groups, [
 		{
 			id: "g1",
 			work: ["f929"],
 			feature: "F929-biome",
-			lead: "f929-lead-1",
+			deadline: "2026-10-09T09:15:00.000Z",
 			teams: [
 				{ name: "team-1", jobs: ["c1", "w1"], count: { working: 1, waiting: 1 } },
 				{ name: "team-2", jobs: ["w2"], count: { dead: 1 } },

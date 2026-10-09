@@ -95,8 +95,9 @@
 	padding: 0;
 }
 .live > .live-list {
-	/* About eight lines, room for a coordinator and its workers; more scroll inside the strip, so the plant keeps its room. */
-	max-height: calc(8 * (1.35em + var(--sp-1) * 2));
+	/* About ten lines, room for a group of two teams with two workers each; more scroll inside the strip, so the plant
+	   keeps its room. */
+	max-height: calc(10 * (1.35em + var(--sp-1) * 2));
 	overflow-y: auto;
 }
 .live-job {

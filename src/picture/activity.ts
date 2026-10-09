@@ -10,7 +10,8 @@ export type LiveState = "starting" | "working" | "waiting" | "quiet" | "dead" | 
 export type LiveJob = {
 	readonly id: string;
 	readonly label: string;
-	/** Picture work ids the label or id names, lowercase: `f932`. A label can name two features. */
+	/** Picture work ids the label or id names, lowercase: `f932`. A label can name two features. A group member also
+	 * works on its group's feature, whatever its coordinator named it. */
 	readonly work: readonly string[];
 	readonly engine: string;
 	readonly model: string;
@@ -35,11 +36,12 @@ export type LiveGroup = {
 	readonly id: string;
 	readonly work: readonly string[];
 	readonly feature: string;
-	readonly lead: string;
+	/** When the group's members must be finished, on the server clock. */
+	readonly deadline: string;
 	readonly teams: readonly LiveTeam[];
 	readonly count: StateCount;
 };
-export type GroupRecord = Pick<GroupRun, "id" | "feature" | "lead" | "teams" | "members">;
+export type GroupRecord = Pick<GroupRun, "id" | "feature" | "deadline" | "teams" | "members">;
 export type LiveSnapshot = {
 	readonly at: string;
 	readonly jobs: readonly LiveJob[];
@@ -220,11 +222,17 @@ export function activityReader(jobsRoot: string): (now?: number) => Promise<Live
 	};
 }
 
-/** Each job's parent, kept only when it is on the page. An older group worker with no spawn link goes under its team's coordinator. */
+/**
+ * Each job's parent, kept only when it is on the page. An older group worker with no spawn link goes under its team's
+ * coordinator. A group member also takes its group's feature, so a worker its coordinator labelled `team-1-worker-1`
+ * still counts on that feature.
+ */
 function linkJobs(jobs: readonly LiveJob[], runs: readonly GroupRecord[]): LiveJob[] {
 	const shown = new Set(jobs.map((job) => job.id));
 	const coordinators = new Map<string, string>();
+	const features = new Map<string, string[]>();
 	for (const run of runs) {
+		features.set(run.id, namedWork(basename(run.feature), ""));
 		for (const member of run.members) {
 			if (member.role === "coordinator" && shown.has(member.id)) {
 				coordinators.set(`${run.id}/${member.team}`, member.id);
@@ -234,7 +242,8 @@ function linkJobs(jobs: readonly LiveJob[], runs: readonly GroupRecord[]): LiveJ
 	return jobs.map((job) => {
 		const spawner = job.parent && job.parent !== job.id && shown.has(job.parent) ? job.parent : undefined;
 		const team = job.role === "coordinator" ? undefined : coordinators.get(`${job.group}/${job.team}`);
-		return { ...job, parent: spawner ?? team ?? null };
+		const work = [...new Set([...job.work, ...(features.get(job.group ?? "") ?? [])])];
+		return { ...job, work, parent: spawner ?? team ?? null };
 	});
 }
 
@@ -258,7 +267,7 @@ function groupTrees(jobs: readonly LiveJob[], runs: readonly GroupRecord[]): Liv
 				id: run.id,
 				work: namedWork(feature, ""),
 				feature,
-				lead: run.lead,
+				deadline: new Date(run.deadline).toISOString(),
 				teams,
 				count: countStates(shown.flatMap((id) => byId.get(id)?.state ?? [])),
 			},
