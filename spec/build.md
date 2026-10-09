@@ -24,7 +24,6 @@
 - **Scope lock boundary:** no second-seat GitHub proof, no new Sol model policy, no Changes-list highlight on the map.
 
 ## NOW
-- `F935-a-real-group-shows-as-one-tree-on-the-live-picture` (🟠 ACTIVE): a real 2×2 `limen group` (OMP, grok-4.7, read-only members) proves the live strip's group tree from F934; fix only what the real run shows wrong.
 - `F926-fleet-leads-start-reviews-wait-and-land-without-workarounds` (🟠 ACTIVE): a starting review lists as starting, `--head` takes a short SHA, a coordinator's wait names its command, and land merges beside another session's edits.
 - `F925-test-reset-decision` (🟠 ACTIVE): Adam gets one verdict on resetting Limen's tests to the few seams that matter; read-only group, `test/` unchanged.
 - `F783-spec-structure-and-keeper` (🟠 ACTIVE): agents get linked-ticket guidance and a spec keeper fixes ticket, board, and map links before landing.
@@ -52,6 +51,7 @@
 
 ## PROVEN
 
+- `F935-a-real-group-shows-as-one-tree-on-the-live-picture` (🟢 PROVEN): a real 2×2 `limen group` shows as one tree with counts matching `group status`; a group worker counts on its group's feature, the lead line shows time left, the strip fits nine lines. Code `6287b2f`; u11 6/6.
 - `F934-live-records-panel` (🟢 PROVEN): a live job on the picture shows a hover card and opens in the side panel; a coordinator's workers nest under it by `spawned-by`; a group shows lead, teams, and workers as one tree with live counts.
 - `F933-quiet-mark-waits-longer-during-tests` (🟢 PROVEN): the live picture marks a running job quiet after 5 min with no event, or 15 min while it runs a test or check; not responding is unchanged; the legend states the rule (Adam picked B).
 - `F771-omp-claude-bridge-follows-upstream` (🟢 PROVEN): OMP pi-claude bridge is now upstream pi-claude-bridge v0.9.1 plus OMP commits; Limen argv unchanged; dated backup kept. Merge `59dc42f`.
