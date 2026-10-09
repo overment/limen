@@ -24,6 +24,7 @@
 - **Scope lock boundary:** no second-seat GitHub proof, no new Sol model policy, no Changes-list highlight on the map.
 
 ## NOW
+- `F935-a-real-group-shows-as-one-tree-on-the-live-picture` (🟠 ACTIVE): a real 2×2 `limen group` (OMP, grok-4.7, read-only members) proves the live strip's group tree from F934; fix only what the real run shows wrong.
 - `F926-fleet-leads-start-reviews-wait-and-land-without-workarounds` (🟠 ACTIVE): a starting review lists as starting, `--head` takes a short SHA, a coordinator's wait names its command, and land merges beside another session's edits.
 - `F925-test-reset-decision` (🟠 ACTIVE): Adam gets one verdict on resetting Limen's tests to the few seams that matter; read-only group, `test/` unchanged.
 - `F783-spec-structure-and-keeper` (🟠 ACTIVE): agents get linked-ticket guidance and a spec keeper fixes ticket, board, and map links before landing.
