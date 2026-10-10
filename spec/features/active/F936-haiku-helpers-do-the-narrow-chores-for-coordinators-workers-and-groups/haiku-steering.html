@@ -1,0 +1,607 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Haiku helpers in Limen: when and how</title>
+<style>
+	:root { color-scheme: light; }
+	* { box-sizing: border-box; }
+	html { background: #fff; color: #000; }
+	body {
+		margin: 0;
+		font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif;
+		font-size: 16px;
+		line-height: 1.6;
+		-webkit-font-smoothing: antialiased;
+	}
+	main { max-width: 1040px; margin: 0 auto; padding: 96px 40px 120px; }
+	h1 { font-size: 30px; line-height: 1.2; font-weight: 600; margin: 0 0 24px; letter-spacing: -0.01em; }
+	h2 { font-size: 19px; font-weight: 600; margin: 0 0 10px; }
+	h3 { font-size: 15px; font-weight: 600; margin: 0 0 6px; }
+	p { margin: 0 0 14px; max-width: 760px; }
+	.lede { font-size: 18px; max-width: 800px; }
+	section { border-top: 1px solid #000; padding-top: 40px; margin-top: 88px; }
+	.n { display: inline-block; min-width: 28px; }
+	figure { margin: 36px 0 32px; }
+	svg { display: block; width: 100%; height: auto; overflow: visible; }
+	svg text { font-family: inherit; fill: #000; }
+	svg .h { font-size: 13.5px; font-weight: 600; }
+	svg .s { font-size: 12px; }
+	svg .k { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; }
+	svg .w { fill: #fff; }
+	svg .box { fill: #fff; stroke: #000; stroke-width: 1; vector-effect: non-scaling-stroke; }
+	svg .haiku { fill: #000; stroke: #000; stroke-width: 1; }
+	svg .new { stroke-dasharray: 4 3; }
+	svg .ln { fill: none; stroke: #000; stroke-width: 1; vector-effect: non-scaling-stroke; }
+	svg .dot { fill: #000; }
+	.legend { display: flex; flex-wrap: wrap; gap: 28px; font-size: 14px; margin: 32px 0 0; padding: 0; list-style: none; }
+	.legend li { display: flex; align-items: center; gap: 10px; }
+	.sw { display: inline-block; width: 26px; height: 14px; border: 1px solid #000; }
+	.sw.b { background: #000; }
+	.sw.d { border-style: dashed; }
+	.sw.c { width: 16px; height: 16px; border-radius: 50%; background: #000; }
+	ol.list, ul.list { padding-left: 22px; margin: 0 0 16px; max-width: 800px; }
+	ol.list li, ul.list li { margin: 0 0 6px; }
+	.cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: 36px; margin: 8px 0 18px; }
+	.cols ul { margin: 0; padding-left: 18px; font-size: 15px; }
+	.cols li { margin: 0 0 4px; }
+	code { font-family: inherit; font-size: 0.95em; }
+	sup { line-height: 0; }
+	sup a { text-decoration: none; font-size: 11px; }
+	.sources { font-size: 14px; padding-left: 22px; max-width: 900px; }
+	.sources li { margin: 0 0 8px; }
+	a { color: #000; }
+	.meta { font-size: 13px; margin-top: 64px; max-width: 800px; }
+	@media (max-width: 760px) { .cols { grid-template-columns: 1fr; } main { padding: 56px 20px; } }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+	<defs>
+		<marker id="arrow" viewBox="0 0 10 10" refX="9.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+			<path d="M0,0 L10,5 L0,10 z" fill="#000"/>
+		</marker>
+	</defs>
+</svg>
+<main>
+	<h1>Haiku helpers in Limen: when and how</h1>
+	<p class="lede">Claude Haiku 5.5 is a cheap, fast model for narrow chores. Anthropic places it on "classification, routing, extraction, and subagent tasks"<sup><a href="#s2">2</a></sup> and keeps the larger models for complex agentic coding.<sup><a href="#s1">1</a></sup> In Limen, a Haiku helper collects evidence and the lead (Opus or Sol) decides. This page shows where Limen's logic should tell an agent when to use a helper, how to use it, and when not to.</p>
+	<p>The change is small. Put the rule in the prose the lead reads when it decides, add one helper role with a fixed evidence packet, and make the completion wake tell the truth when the packet arrives. Nothing routes automatically.</p>
+	<ul class="legend">
+		<li><span class="sw b"></span>Haiku 5.5 helper</li>
+		<li><span class="sw"></span>Lead (Opus or Sol), or a part that exists</li>
+		<li><span class="sw d"></span>New or changed</li>
+		<li><span class="sw c"></span>A place for a helper</li>
+	</ul>
+
+	<section id="architecture">
+		<h2><span class="n">1</span>Where Limen decides to delegate</h2>
+		<p>Every place where a lead hands work to another model, with the hook or file that carries the decision.</p>
+		<figure><svg viewBox="0 0 1000 880" role="img" aria-label="Limen architecture with every hook and the places for a Haiku helper">
+<text class="k" x="20" y="20" text-anchor="start">Hooks: what reaches the agent</text>
+<text class="k" x="330" y="20" text-anchor="start">Lead and commands</text>
+<text class="k" x="690" y="20" text-anchor="start">Jobs</text>
+<rect class="box" x="400" y="36" width="140" height="34"/>
+<text class="h" x="470.0" y="57.5" text-anchor="middle">Adam</text>
+<path class="ln" d="M470,70 L470,100" marker-end="url(#arrow)"/>
+<rect class="box" x="330" y="100" width="280" height="60"/>
+<text class="h" x="342" y="126.0" text-anchor="start">Coordinator pane: the lead</text>
+<text class="s" x="342" y="143.0" text-anchor="start">Opus or Sol · reads spec/build.md</text>
+<path class="ln" d="M470,160 L470,214" marker-end="url(#arrow)"/>
+<circle class="dot" cx="470" cy="187" r="10"/><text class="s w" x="470" y="191" text-anchor="middle" font-weight="600">1</text>
+<rect class="box" x="330" y="214" width="280" height="60"/>
+<text class="h" x="342" y="240.0" text-anchor="start">limen spawn</text>
+<text class="s" x="342" y="257.0" text-anchor="start">src/commands/spawn.ts · role · model flags</text>
+<path class="ln" d="M470,274 L470,316" marker-end="url(#arrow)"/>
+<rect class="box" x="330" y="316" width="280" height="60"/>
+<text class="h" x="342" y="342.0" text-anchor="start">src/runtime/engine.ts</text>
+<text class="s" x="342" y="359.0" text-anchor="start">argv · Claude bridge · --config overlay</text>
+<circle class="dot" cx="588" cy="346" r="10"/><text class="s w" x="588" y="350" text-anchor="middle" font-weight="600">7</text>
+<path class="ln" d="M610,346 L690,346" marker-end="url(#arrow)"/>
+<rect class="box" x="330" y="428" width="280" height="60"/>
+<text class="h" x="342" y="454.0" text-anchor="start">Job record .limen/jobs/&lt;id&gt;</text>
+<text class="s" x="342" y="471.0" text-anchor="start">state · result · session: model, usage</text>
+<path class="ln" d="M690,458 L610,458" marker-end="url(#arrow)"/>
+<path class="ln" d="M470,488 L470,532" marker-end="url(#arrow)"/>
+<rect class="box" x="330" y="532" width="280" height="60"/>
+<text class="h" x="342" y="558.0" text-anchor="start">src/job/wake-text.ts</text>
+<text class="s" x="342" y="575.0" text-anchor="start">final message: 15 lines, 1,200 chars</text>
+<circle class="dot" cx="588" cy="562" r="10"/><text class="s w" x="588" y="566" text-anchor="middle" font-weight="600">2</text>
+<path class="ln" d="M470,592 L470,620 L145,620 L145,604" marker-end="url(#arrow)"/>
+<rect class="box" x="20" y="96" width="250" height="84"/>
+<text class="h" x="32" y="117.0" text-anchor="start">hook/communication.ts</text>
+<text class="s" x="32" y="134.0" text-anchor="start">system prompt: shop manual, register,</text>
+<text class="s" x="32" y="151.0" text-anchor="start">vision, styleguide, board NOW, NEXT</text>
+<text class="s" x="32" y="168.0" text-anchor="start">turn cue · tool_result recall</text>
+<path class="ln" d="M270,122 L330,122" marker-end="url(#arrow)"/>
+<rect class="box" x="20" y="214" width="250" height="60"/>
+<text class="h" x="32" y="240.0" text-anchor="start">hook/steering.ts</text>
+<text class="s" x="32" y="257.0" text-anchor="start">limen steer reaches a running job</text>
+<rect class="box" x="20" y="316" width="250" height="60"/>
+<text class="h" x="32" y="342.0" text-anchor="start">hook/hosted.ts</text>
+<text class="s" x="32" y="359.0" text-anchor="start">hosted pane state for Herdr</text>
+<rect class="box" x="20" y="520" width="250" height="84"/>
+<text class="h" x="32" y="541.0" text-anchor="start">Wake to the lead</text>
+<text class="s" x="32" y="558.0" text-anchor="start">Pi: hook/wake.ts</text>
+<text class="s" x="32" y="575.0" text-anchor="start">OMP: src/integrations/</text>
+<text class="s" x="32" y="592.0" text-anchor="start">coordinator-wake.ts</text>
+<path class="ln" d="M270,548 L300,548 L300,146 L330,146" marker-end="url(#arrow)"/>
+<rect class="box" x="690" y="230" width="290" height="240"/>
+<text class="h" x="702" y="254" text-anchor="start">A job in its own worktree</text>
+<text class="s" x="702" y="282" text-anchor="start">worker: the hard change</text>
+<text class="s" x="702" y="304" text-anchor="start">reviewer: review of record</text>
+<circle class="dot" cx="958" cy="300" r="10"/><text class="s w" x="958" y="304" text-anchor="middle" font-weight="600">3</text>
+<text class="s" x="702" y="326" text-anchor="start">judge: names where reports diverge</text>
+<circle class="dot" cx="958" cy="322" r="10"/><text class="s w" x="958" y="326" text-anchor="middle" font-weight="600">6</text>
+<text class="s" x="702" y="348" text-anchor="start">researcher · keeper · quality · picture</text>
+<rect class="haiku" x="702" y="370" width="266" height="86"/>
+<text class="h w" x="714" y="400.5" text-anchor="start">scout: new role</text>
+<text class="s w" x="714" y="417.5" text-anchor="start">read-only · no commits · detached</text>
+<text class="s w" x="714" y="434.5" text-anchor="start">packet: 15 lines, 1,200 chars</text>
+<text class="k" x="20" y="664" text-anchor="start">Groups</text>
+<rect class="box" x="20" y="680" width="180" height="60"/>
+<text class="h" x="32" y="706.0" text-anchor="start">limen group start</text>
+<text class="s" x="32" y="723.0" text-anchor="start">src/commands/group.ts</text>
+<path class="ln" d="M200,710 L240,710" marker-end="url(#arrow)"/>
+<rect class="box" x="240" y="680" width="210" height="60"/>
+<text class="h" x="252" y="706.0" text-anchor="start">Cabinet</text>
+<text class="s" x="252" y="723.0" text-anchor="start">.limen/groups/&lt;id&gt; · events</text>
+<circle class="dot" cx="428" cy="710" r="10"/><text class="s w" x="428" y="714" text-anchor="middle" font-weight="600">5</text>
+<path class="ln" d="M450,710 L490,710" marker-end="url(#arrow)"/>
+<rect class="box" x="490" y="680" width="220" height="60"/>
+<text class="h" x="502" y="706.0" text-anchor="start">Team coordinator</text>
+<text class="s" x="502" y="723.0" text-anchor="start">coordinator.md · hypothesis first</text>
+<path class="ln" d="M710,710 L770,710" marker-end="url(#arrow)"/>
+<circle class="dot" cx="740" cy="710" r="10"/><text class="s w" x="740" y="714" text-anchor="middle" font-weight="600">4</text>
+<rect class="box" x="770" y="680" width="210" height="60"/>
+<text class="h" x="782" y="706.0" text-anchor="start">Team workers</text>
+<text class="s" x="782" y="723.0" text-anchor="start">group-member.md</text>
+<path class="ln" d="M875,740 L875,762 L345,762 L345,740" marker-end="url(#arrow)"/>
+<text class="s" x="610" y="778" text-anchor="middle">members publish findings to the cabinet</text>
+<rect class="box" x="240" y="796" width="470" height="72"/>
+<text class="h" x="252" y="819.5" text-anchor="start">hook/group-peer.ts</text>
+<text class="s" x="252" y="836.5" text-anchor="start">delivers cabinet events · blocks the task tool and subagents</text>
+<text class="s" x="252" y="853.5" text-anchor="start">for members; the lead pane has no LIMEN_GROUP_ID</text>
+</svg></figure>
+		<ol class="list">
+			<li><b>Scout before a spawn.</b> The coordinator asks for the seam, the tests that cover it, and the unknowns. The packet goes into the worker's handoff as a lead, not a map.</li>
+			<li><b>Triage of a failed job or a failing test.</b> First failure, code path, log tail. The lead decides to resume, steer, or stop.</li>
+			<li><b>Review pre-pass.</b> Each acceptance line mapped to a diff hunk and a check with real output. It can add questions. It never clears a line.</li>
+			<li><b>Team scout in a group.</b> One per team, after the team's own hypothesis. Today <code>hook/group-peer.ts</code> blocks it.</li>
+			<li><b>Cabinet digest and candidate table for the group lead.</b> Facts per team, no ranking. The lead pane has no <code>LIMEN_GROUP_ID</code>, so this uses no team slot.</li>
+			<li><b>Judge pre-pass.</b> Claims in research reports that have no fetched source. The judge still names where the reports diverge.</li>
+			<li><b>A worker's own OMP scout.</b> Later, and only after the pilot: it needs a per-subagent model setting and the Claude bridge in the worker's job.</li>
+		</ol>
+		<p>The lead keeps every other step: hypotheses, synthesis, the hard change, landing, the review of record, the judge's verdict, the keeper, the picture, and all text Adam reads. Deterministic checks (<code>ticket check</code>, <code>picture build</code>, tests, <code>limen status</code>) need no model.</p>
+	</section>
+
+	<section id="decision">
+		<h2><span class="n">2</span>Should this chore go to a Haiku helper?</h2>
+		<p>The lead asks these questions in order. Any "no" keeps the chore with the lead. Haiku does not escalate on its own: in Anthropic's test, Haiku 5.5 called the Opus advisor on none of 198 questions.<sup><a href="#s5">5</a></sup> So the escalation checks belong to the lead, after the packet arrives.</p>
+		<figure><svg viewBox="0 0 1000 990" role="img" aria-label="Decision flow: should this chore go to a Haiku helper">
+<rect class="box" x="270" y="0" width="300" height="40"/>
+<text class="h" x="420.0" y="24.5" text-anchor="middle">A chore waits on a lead decision</text>
+<path class="ln" d="M420,40 L420,76" marker-end="url(#arrow)"/>
+<rect class="box" x="220" y="76" width="400" height="58"/>
+<text class="h" x="420.0" y="101.0" text-anchor="middle">Clear end and a checkable answer?</text>
+<text class="s" x="420.0" y="118.0" text-anchor="middle">a path and line, a first failure, an evidence table</text>
+<path class="ln" d="M620,105.0 L690,105.0"/>
+<text class="s" x="632" y="99.0" text-anchor="start">no</text>
+<path class="ln" d="M420,134 L420,162" marker-end="url(#arrow)"/>
+<text class="s" x="428" y="152" text-anchor="start">yes</text>
+<rect class="box" x="220" y="162" width="400" height="58"/>
+<text class="h" x="420.0" y="187.0" text-anchor="middle">Read-only?</text>
+<text class="s" x="420.0" y="204.0" text-anchor="middle">no edit, no commit, no land</text>
+<path class="ln" d="M620,191.0 L690,191.0"/>
+<text class="s" x="632" y="185.0" text-anchor="start">no</text>
+<path class="ln" d="M420,220 L420,248" marker-end="url(#arrow)"/>
+<text class="s" x="428" y="238" text-anchor="start">yes</text>
+<rect class="box" x="220" y="248" width="400" height="58"/>
+<text class="h" x="420.0" y="273.0" text-anchor="middle">Free of judgment?</text>
+<text class="s" x="420.0" y="290.0" text-anchor="middle">not a hypothesis, synthesis, verdict, or text for Adam</text>
+<path class="ln" d="M620,277.0 L690,277.0"/>
+<text class="s" x="632" y="271.0" text-anchor="start">no</text>
+<path class="ln" d="M420,306 L420,334" marker-end="url(#arrow)"/>
+<text class="s" x="428" y="324" text-anchor="start">yes</text>
+<rect class="box" x="220" y="334" width="400" height="58"/>
+<text class="h" x="420.0" y="359.0" text-anchor="middle">Worth a cold start?</text>
+<text class="s" x="420.0" y="376.0" text-anchor="middle">more than one grep; a helper costs 10 to 15K tokens</text>
+<path class="ln" d="M620,363.0 L690,363.0"/>
+<text class="s" x="632" y="357.0" text-anchor="start">no</text>
+<path class="ln" d="M420,392 L420,420" marker-end="url(#arrow)"/>
+<text class="s" x="428" y="410" text-anchor="start">yes</text>
+<rect class="box" x="220" y="420" width="400" height="58"/>
+<text class="h" x="420.0" y="445.0" text-anchor="middle">Input under 100K tokens?</text>
+<text class="s" x="420.0" y="462.0" text-anchor="middle">above 100K, Haiku 5.5 costs five times more</text>
+<path class="ln" d="M620,449.0 L690,449.0"/>
+<text class="s" x="632" y="443.0" text-anchor="start">no</text>
+<path class="ln" d="M420,478 L420,506" marker-end="url(#arrow)"/>
+<text class="s" x="428" y="496" text-anchor="start">yes</text>
+<rect class="box" x="220" y="506" width="400" height="58"/>
+<text class="h" x="420.0" y="531.0" text-anchor="middle">Allowed here?</text>
+<text class="s" x="420.0" y="548.0" text-anchor="middle">pilot kept it · route serves 5.5 · group slot approved</text>
+<path class="ln" d="M620,535.0 L690,535.0"/>
+<text class="s" x="632" y="529.0" text-anchor="start">no</text>
+<path class="ln" d="M420,564 L420,600" marker-end="url(#arrow)"/>
+<text class="s" x="428" y="582" text-anchor="start">yes</text>
+<path class="ln" d="M690,105.0 L690,535.0"/>
+<path class="ln" d="M690,320.0 L720,320.0" marker-end="url(#arrow)"/>
+<rect class="box" x="720" y="268.0" width="260" height="104"/>
+<text class="h" x="732" y="299.0" text-anchor="start">The lead does it</text>
+<text class="s" x="732" y="316.0" text-anchor="start">Opus or Sol: hypotheses, synthesis,</text>
+<text class="s" x="732" y="333.0" text-anchor="start">the hard change, landing, review</text>
+<text class="s" x="732" y="350.0" text-anchor="start">of record, and every text for Adam</text>
+<rect class="haiku" x="220" y="600" width="400" height="92"/>
+<text class="h w" x="420.0" y="625.0" text-anchor="middle">Haiku 5.5 helper</text>
+<text class="s w" x="420.0" y="642.0" text-anchor="middle">--role scout · thinking medium · detached</text>
+<text class="s w" x="420.0" y="659.0" text-anchor="middle">packet: Verified on line 3, at most 5 findings,</text>
+<text class="s w" x="420.0" y="676.0" text-anchor="middle">each observed or guessed; 15 lines, 1,200 chars</text>
+<path class="ln" d="M420,692 L420,730" marker-end="url(#arrow)"/>
+<rect class="box" x="220" y="730" width="400" height="58"/>
+<text class="h" x="420.0" y="755.0" text-anchor="middle">Wake: did Haiku 5.5 serve it?</text>
+<text class="s" x="420.0" y="772.0" text-anchor="middle">a mismatch line shows only when it did not</text>
+<path class="ln" d="M420,788 L420,826" marker-end="url(#arrow)"/>
+<text class="s" x="428" y="812" text-anchor="start">yes</text>
+<rect class="box" x="220" y="826" width="400" height="58"/>
+<text class="h" x="420.0" y="851.0" text-anchor="middle">Lead reads the top finding at Base</text>
+<text class="s" x="420.0" y="868.0" text-anchor="middle">true? Verified real? no step rests on a guess?</text>
+<path class="ln" d="M420,884 L420,922" marker-end="url(#arrow)"/>
+<text class="s" x="428" y="908" text-anchor="start">yes</text>
+<rect class="box" x="220" y="922" width="400" height="58"/>
+<text class="h" x="420.0" y="947.0" text-anchor="middle">Lead decides and acts</text>
+<text class="s" x="420.0" y="964.0" text-anchor="middle">the helper never lands, votes, or writes for Adam</text>
+<path class="ln" d="M620,759 L720,759" marker-end="url(#arrow)"/>
+<text class="s" x="632" y="753" text-anchor="start">no</text>
+<path class="ln" d="M620,855 L720,855" marker-end="url(#arrow)"/>
+<text class="s" x="632" y="849" text-anchor="start">no</text>
+<rect class="box" x="720" y="738" width="260" height="138"/>
+<text class="h" x="732" y="777.5" text-anchor="start">Escalate to the lead</text>
+<text class="s" x="732" y="794.5" text-anchor="start">treat the packet as guessed</text>
+<text class="s" x="732" y="811.5" text-anchor="start">or discard it; the lead does</text>
+<text class="s" x="732" y="828.5" text-anchor="start">the chore itself; no second</text>
+<text class="s" x="732" y="845.5" text-anchor="start">helper; log a pilot miss</text>
+<text class="s" x="0" y="20" text-anchor="start">Combine small chores in one</text>
+<text class="s" x="0" y="37" text-anchor="start">helper job: the cold start is</text>
+<text class="s" x="0" y="54" text-anchor="start">a fixed cost.</text>
+<text class="s" x="0" y="640" text-anchor="start">Medium is the default effort</text>
+<text class="s" x="0" y="657" text-anchor="start">for Haiku 5.5. The Verified line</text>
+<text class="s" x="0" y="674" text-anchor="start">makes a missing check visible.</text>
+</svg></figure>
+		<div class="cols">
+			<div>
+				<h3>Use a helper when</h3>
+				<ul>
+					<li>a lead decision waits on evidence</li>
+					<li>the chore is read-only with a clear end</li>
+					<li>the answer is checkable: path and line, a first failure, an evidence table</li>
+					<li>the packet removes more lead turns than its cold start costs</li>
+				</ul>
+			</div>
+			<div>
+				<h3>Do not use one when</h3>
+				<ul>
+					<li>one grep or a known file answers it</li>
+					<li>the chore is judgment or text for Adam</li>
+					<li>the pilot has not kept this chore, or the route is not proven</li>
+					<li>the caller is a group member without an approved slot</li>
+					<li>the failed job is itself a helper</li>
+				</ul>
+			</div>
+			<div>
+				<h3>Escalate to the lead when</h3>
+				<ul>
+					<li>the served model is not Haiku 5.5</li>
+					<li>the top finding is false when read</li>
+					<li><code>Verified:</code> is none, absent, or false</li>
+					<li>the next step rests on a guessed finding or an unknown</li>
+				</ul>
+				<p style="font-size:15px;margin-top:8px">The lead then does the chore itself. No second helper.</p>
+			</div>
+		</div>
+	</section>
+
+	<section id="normal">
+		<h2><span class="n">3</span>Normal mode, before and after</h2>
+		<p>One coordinator, its workers, and its reviews.</p>
+		<figure><svg viewBox="0 0 1000 290" role="img" aria-label="Normal mode before and after">
+<text class="k" x="20" y="16" text-anchor="start">Before</text>
+<rect class="box" x="20" y="28" width="140" height="80"/>
+<text class="h" x="32" y="64.0" text-anchor="start">Adam asks</text>
+<text class="s" x="32" y="81.0" text-anchor="start">for a change</text>
+<path class="ln" d="M160,68.0 L182,68.0" marker-end="url(#arrow)"/>
+<rect class="box" x="182" y="28" width="140" height="80"/>
+<text class="h" x="194" y="55.5" text-anchor="start">Lead explores</text>
+<text class="s" x="194" y="72.5" text-anchor="start">the repo in many</text>
+<text class="s" x="194" y="89.5" text-anchor="start">turns; cache grows</text>
+<path class="ln" d="M322,68.0 L344,68.0" marker-end="url(#arrow)"/>
+<rect class="box" x="344" y="28" width="140" height="80"/>
+<text class="h" x="356" y="55.5" text-anchor="start">Lead spawns</text>
+<text class="s" x="356" y="72.5" text-anchor="start">a worker; the</text>
+<text class="s" x="356" y="89.5" text-anchor="start">seam is a guess</text>
+<path class="ln" d="M484,68.0 L506,68.0" marker-end="url(#arrow)"/>
+<rect class="box" x="506" y="28" width="140" height="80"/>
+<text class="h" x="518" y="64.0" text-anchor="start">Worker explores</text>
+<text class="s" x="518" y="81.0" text-anchor="start">again, then edits</text>
+<path class="ln" d="M646,68.0 L668,68.0" marker-end="url(#arrow)"/>
+<rect class="box" x="668" y="28" width="140" height="80"/>
+<text class="h" x="680" y="55.5" text-anchor="start">Failed? The lead</text>
+<text class="s" x="680" y="72.5" text-anchor="start">reads the log;</text>
+<text class="s" x="680" y="89.5" text-anchor="start">OMP says &#x27;land&#x27;</text>
+<path class="ln" d="M808,68.0 L830,68.0" marker-end="url(#arrow)"/>
+<rect class="box" x="830" y="28" width="140" height="80"/>
+<text class="h" x="842" y="64.0" text-anchor="start">Lead reviews</text>
+<text class="s" x="842" y="81.0" text-anchor="start">and lands</text>
+<text class="k" x="20" y="166" text-anchor="start">After</text>
+<rect class="box" x="20" y="178" width="118" height="92"/>
+<text class="h" x="32" y="220.0" text-anchor="start">Adam asks</text>
+<text class="s" x="32" y="237.0" text-anchor="start">for a change</text>
+<path class="ln" d="M138,224.0 L159,224.0" marker-end="url(#arrow)"/>
+<rect class="haiku" x="159" y="178" width="118" height="92"/>
+<text class="h w" x="171" y="211.5" text-anchor="start">Haiku scout</text>
+<text class="s w" x="171" y="228.5" text-anchor="start">seam, tests,</text>
+<text class="s w" x="171" y="245.5" text-anchor="start">unknowns</text>
+<path class="ln" d="M277,224.0 L298,224.0" marker-end="url(#arrow)"/>
+<rect class="box" x="298" y="178" width="118" height="92"/>
+<text class="h" x="310" y="211.5" text-anchor="start">Wake brings</text>
+<text class="s" x="310" y="228.5" text-anchor="start">the packet;</text>
+<text class="s" x="310" y="245.5" text-anchor="start">no &#x27;land it&#x27;</text>
+<path class="ln" d="M416,224.0 L437,224.0" marker-end="url(#arrow)"/>
+<rect class="box" x="437" y="178" width="118" height="92"/>
+<text class="h" x="449" y="211.5" text-anchor="start">Lead checks</text>
+<text class="s" x="449" y="228.5" text-anchor="start">the top finding;</text>
+<text class="s" x="449" y="245.5" text-anchor="start">writes handoff</text>
+<path class="ln" d="M555,224.0 L576,224.0" marker-end="url(#arrow)"/>
+<rect class="box" x="576" y="178" width="118" height="92"/>
+<text class="h" x="588" y="211.5" text-anchor="start">Worker edits</text>
+<text class="s" x="588" y="228.5" text-anchor="start">seam given</text>
+<text class="s" x="588" y="245.5" text-anchor="start">as a lead</text>
+<path class="ln" d="M694,224.0 L715,224.0" marker-end="url(#arrow)"/>
+<rect class="haiku" x="715" y="178" width="118" height="92"/>
+<text class="h w" x="727" y="211.5" text-anchor="start">Haiku triage</text>
+<text class="s w" x="727" y="228.5" text-anchor="start">if it failed;</text>
+<text class="s w" x="727" y="245.5" text-anchor="start">pre-pass if done</text>
+<path class="ln" d="M833,224.0 L854,224.0" marker-end="url(#arrow)"/>
+<rect class="box" x="854" y="178" width="118" height="92"/>
+<text class="h" x="866" y="220.0" text-anchor="start">Lead decides</text>
+<text class="s" x="866" y="237.0" text-anchor="start">and lands</text>
+</svg></figure>
+		<p>The saving comes from fewer lead turns, not a cheaper price. A lead's cost is mostly cache reads: one Opus job (live records panel, F934) took 164 turns and read 27.3 million cached tokens. Ten fewer exploration turns at 150K context save about 1.5 million. A helper job costs a worktree, a cold start of about 10 to 15 thousand prompt tokens, and one wake round trip. On the Max plan this is quota, not money.</p>
+		<p>The packet reaches the lead whole only if it fits the wake: 15 lines <b>and</b> 1,200 characters (<code>handoffExcerpt</code> in <code>src/job/wake-text.ts</code>). The clip removes the tail first, so <code>Verified:</code> goes on line 3, not last.</p>
+	</section>
+
+	<section id="group">
+		<h2><span class="n">4</span>Group mode, before and after</h2>
+		<p>A lead pane, team coordinators, team workers, the cabinet, and the research judge.</p>
+		<figure><svg viewBox="0 0 1000 430" role="img" aria-label="Group mode before and after">
+<text class="k" x="20" y="16" text-anchor="start">Before</text>
+<rect class="box" x="20" y="28" width="140" height="80"/>
+<text class="h" x="32" y="55.5" text-anchor="start">Lead writes</text>
+<text class="s" x="32" y="72.5" text-anchor="start">brief and</text>
+<text class="s" x="32" y="89.5" text-anchor="start">team notes</text>
+<path class="ln" d="M160,68.0 L182,68.0" marker-end="url(#arrow)"/>
+<rect class="box" x="182" y="28" width="140" height="80"/>
+<text class="h" x="194" y="55.5" text-anchor="start">Coordinator</text>
+<text class="s" x="194" y="72.5" text-anchor="start">of each team</text>
+<text class="s" x="194" y="89.5" text-anchor="start">publishes hypothesis</text>
+<path class="ln" d="M322,68.0 L344,68.0" marker-end="url(#arrow)"/>
+<rect class="box" x="344" y="28" width="140" height="80"/>
+<text class="h" x="356" y="55.5" text-anchor="start">Workers explore</text>
+<text class="s" x="356" y="72.5" text-anchor="start">and build; helper</text>
+<text class="s" x="356" y="89.5" text-anchor="start">agents blocked</text>
+<path class="ln" d="M484,68.0 L506,68.0" marker-end="url(#arrow)"/>
+<rect class="box" x="506" y="28" width="140" height="80"/>
+<text class="h" x="518" y="55.5" text-anchor="start">Cabinet</text>
+<text class="s" x="518" y="72.5" text-anchor="start">8 events, 8,000</text>
+<text class="s" x="518" y="89.5" text-anchor="start">chars a message</text>
+<path class="ln" d="M646,68.0 L668,68.0" marker-end="url(#arrow)"/>
+<rect class="box" x="668" y="28" width="140" height="80"/>
+<text class="h" x="680" y="55.5" text-anchor="start">Lead reads</text>
+<text class="s" x="680" y="72.5" text-anchor="start">every event and</text>
+<text class="s" x="680" y="89.5" text-anchor="start">compares by hand</text>
+<path class="ln" d="M808,68.0 L830,68.0" marker-end="url(#arrow)"/>
+<rect class="box" x="830" y="28" width="140" height="80"/>
+<text class="h" x="842" y="55.5" text-anchor="start">Lead writes</text>
+<text class="s" x="842" y="72.5" text-anchor="start">synthesis</text>
+<text class="s" x="842" y="89.5" text-anchor="start">and lands</text>
+<text class="k" x="20" y="166" text-anchor="start">After</text>
+<rect class="box" x="20" y="178" width="118" height="92"/>
+<text class="h" x="32" y="211.5" text-anchor="start">Lead writes</text>
+<text class="s" x="32" y="228.5" text-anchor="start">brief and</text>
+<text class="s" x="32" y="245.5" text-anchor="start">team notes</text>
+<path class="ln" d="M138,224.0 L159,224.0" marker-end="url(#arrow)"/>
+<rect class="box" x="159" y="178" width="118" height="92"/>
+<text class="h" x="171" y="211.5" text-anchor="start">Coordinator</text>
+<text class="s" x="171" y="228.5" text-anchor="start">of each team:</text>
+<text class="s" x="171" y="245.5" text-anchor="start">hypothesis first</text>
+<path class="ln" d="M277,224.0 L298,224.0" marker-end="url(#arrow)"/>
+<rect class="haiku" x="298" y="178" width="118" height="92"/>
+<text class="h w" x="310" y="211.5" text-anchor="start">Team scout</text>
+<text class="s w" x="310" y="228.5" text-anchor="start">one per team;</text>
+<text class="s w" x="310" y="245.5" text-anchor="start">uses a slot</text>
+<path class="ln" d="M416,224.0 L437,224.0" marker-end="url(#arrow)"/>
+<rect class="box" x="437" y="178" width="118" height="92"/>
+<text class="h" x="449" y="211.5" text-anchor="start">Workers build</text>
+<text class="s" x="449" y="228.5" text-anchor="start">with the packet</text>
+<text class="s" x="449" y="245.5" text-anchor="start">in the handoff</text>
+<path class="ln" d="M555,224.0 L576,224.0" marker-end="url(#arrow)"/>
+<rect class="box" x="576" y="178" width="118" height="92"/>
+<text class="h" x="588" y="211.5" text-anchor="start">Cabinet</text>
+<text class="s" x="588" y="228.5" text-anchor="start">events and</text>
+<text class="s" x="588" y="245.5" text-anchor="start">findings</text>
+<path class="ln" d="M694,224.0 L715,224.0" marker-end="url(#arrow)"/>
+<rect class="haiku" x="715" y="178" width="118" height="92"/>
+<text class="h w" x="727" y="211.5" text-anchor="start">Digest and</text>
+<text class="s w" x="727" y="228.5" text-anchor="start">candidate table:</text>
+<text class="s w" x="727" y="245.5" text-anchor="start">facts, no rank</text>
+<path class="ln" d="M833,224.0 L854,224.0" marker-end="url(#arrow)"/>
+<rect class="box" x="854" y="178" width="118" height="92"/>
+<text class="h" x="866" y="211.5" text-anchor="start">Lead writes</text>
+<text class="s" x="866" y="228.5" text-anchor="start">synthesis</text>
+<text class="s" x="866" y="245.5" text-anchor="start">and lands</text>
+<text class="k" x="20" y="326" text-anchor="start">Research</text>
+<rect class="box" x="20" y="338" width="140" height="80"/>
+<text class="h" x="32" y="365.5" text-anchor="start">Two researchers</text>
+<text class="s" x="32" y="382.5" text-anchor="start">on different</text>
+<text class="s" x="32" y="399.5" text-anchor="start">models</text>
+<path class="ln" d="M160,378.0 L182,378.0" marker-end="url(#arrow)"/>
+<rect class="haiku" x="182" y="338" width="140" height="80"/>
+<text class="h w" x="194" y="365.5" text-anchor="start">Judge pre-pass</text>
+<text class="s w" x="194" y="382.5" text-anchor="start">claims without</text>
+<text class="s w" x="194" y="399.5" text-anchor="start">a fetched source</text>
+<path class="ln" d="M322,378.0 L344,378.0" marker-end="url(#arrow)"/>
+<rect class="box" x="344" y="338" width="140" height="80"/>
+<text class="h" x="356" y="365.5" text-anchor="start">Judge (lead)</text>
+<text class="s" x="356" y="382.5" text-anchor="start">names where</text>
+<text class="s" x="356" y="399.5" text-anchor="start">reports diverge</text>
+<text class="s" x="520" y="368" text-anchor="start">Team scout: needs Adam&#x27;s rule change.</text>
+<text class="s" x="520" y="386" text-anchor="start">Digest, table, and pre-pass: lead-side jobs;</text>
+<text class="s" x="520" y="404" text-anchor="start">they use no team slot.</text>
+</svg></figure>
+		<p>Each team scouts after it publishes its own hypothesis, from its own approach note. Scouts are never shared across teams, so the teams stay independent. Team workers still cannot launch helpers.</p>
+		<p>Today <code>hook/group-peer.ts</code> blocks the <code>task</code> tool and subagent spawns for every member, and <code>templates/coordinator.md</code> says there is no helper-agent launch. A team scout therefore needs Adam's rule change. The lead's digest and candidate table do not: the lead pane has no <code>LIMEN_GROUP_ID</code>, so the block does not apply to it, and its helper is outside the team allowance.</p>
+	</section>
+
+	<section id="steering">
+		<h2><span class="n">5</span>Where the steering lives</h2>
+		<p>Each signal sits where the agent reads it at the moment of choice. Numbers give the order of change.</p>
+		<figure><svg viewBox="0 0 1000 926.0" role="img" aria-label="Where the steering lives: templates, wake, flags, engine, and measures">
+<text class="h" x="20" y="18" text-anchor="start">Every coordinator call</text>
+<text class="s" x="20" y="38" text-anchor="start">system prompt</text>
+<text class="s" x="20" y="55" text-anchor="start">hook/communication.ts</text>
+<rect class="box new" x="270" y="0" width="345" height="84"/>
+<text class="h" x="282" y="21.0" text-anchor="start">5 · templates/agents.md</text>
+<text class="s" x="282" y="38.0" text-anchor="start">use, not-use, and escalate table</text>
+<text class="s" x="282" y="55.0" text-anchor="start">beside the board&#x27;s model rule</text>
+<text class="s" x="282" y="72.0" text-anchor="start">prose · after the pilot</text>
+<rect class="box new" x="635" y="0" width="345" height="84"/>
+<text class="h" x="647" y="21.0" text-anchor="start">5 · spec/build.md TRACK</text>
+<text class="s" x="647" y="38.0" text-anchor="start">the helper model as a board choice</text>
+<text class="s" x="647" y="55.0" text-anchor="start">after three pilot rows and Adam&#x27;s yes</text>
+<text class="s" x="647" y="72.0" text-anchor="start">prose</text>
+<path class="ln" d="M20,104.0 L980,104.0"/>
+<text class="h" x="20" y="142" text-anchor="start">Role prompt of a job</text>
+<text class="s" x="20" y="162" text-anchor="start">--append-system-prompt</text>
+<text class="s" x="20" y="179" text-anchor="start">engine.ts</text>
+<rect class="haiku" x="270" y="124" width="345" height="84"/>
+<text class="h w" x="282" y="145.0" text-anchor="start">2 · templates/scout.md</text>
+<text class="s w" x="282" y="162.0" text-anchor="start">one question · no edits, no commits</text>
+<text class="s w" x="282" y="179.0" text-anchor="start">packet: 15 lines, 1,200 chars</text>
+<text class="s w" x="282" y="196.0" text-anchor="start">Verified on line 3 · prose</text>
+<rect class="box new" x="635" y="124" width="345" height="84"/>
+<text class="h" x="647" y="145.0" text-anchor="start">7 · coordinator.md, group-member.md</text>
+<text class="s" x="647" y="162.0" text-anchor="start">a team scout uses one slot,</text>
+<text class="s" x="647" y="179.0" text-anchor="start">after Adam&#x27;s allowance answer</text>
+<text class="s" x="647" y="196.0" text-anchor="start">8 · worker.md: later · prose</text>
+<path class="ln" d="M20,228.0 L980,228.0"/>
+<text class="h" x="20" y="266" text-anchor="start">At the decision</text>
+<text class="s" x="20" y="286" text-anchor="start">completion wake</text>
+<text class="s" x="20" y="303" text-anchor="start">src/job/wake-text.ts</text>
+<rect class="box new" x="270" y="248" width="345" height="84"/>
+<text class="h" x="282" y="269.0" text-anchor="start">4 · served-model line</text>
+<text class="s" x="282" y="286.0" text-anchor="start">only on a known mismatch;</text>
+<text class="s" x="282" y="303.0" text-anchor="start">silent when the transcript is absent</text>
+<text class="s" x="282" y="320.0" text-anchor="start">mechanism</text>
+<rect class="box new" x="635" y="248" width="345" height="84"/>
+<text class="h" x="647" y="269.0" text-anchor="start">4 · a scout&#x27;s done wake</text>
+<text class="s" x="647" y="286.0" text-anchor="start">&#x27;Scout packet. Nothing to land.</text>
+<text class="s" x="647" y="303.0" text-anchor="start">Read the top finding at Base.&#x27;</text>
+<text class="s" x="647" y="320.0" text-anchor="start">string branch on the role file</text>
+<rect class="box new" x="270" y="348" width="345" height="84"/>
+<text class="h" x="282" y="369.0" text-anchor="start">6 · failed-job clause</text>
+<text class="s" x="282" y="386.0" text-anchor="start">&#x27;A read-only triage scout can collect</text>
+<text class="s" x="282" y="403.0" text-anchor="start">the first failure; you decide.&#x27;</text>
+<text class="s" x="282" y="420.0" text-anchor="start">after the pilot keeps triage</text>
+<rect class="box" x="635" y="348" width="345" height="84"/>
+<text class="h" x="647" y="369.0" text-anchor="start">Today: OMP wake says &#x27;land&#x27;</text>
+<text class="s" x="647" y="386.0" text-anchor="start">coordinator-wake.ts sends &#x27;before</text>
+<text class="s" x="647" y="403.0" text-anchor="start">landing&#x27; for every state; fix it</text>
+<text class="s" x="647" y="420.0" text-anchor="start">in the same slice as step 4</text>
+<path class="ln" d="M20,452.0 L980,452.0"/>
+<text class="h" x="20" y="490" text-anchor="start">At launch</text>
+<text class="s" x="20" y="510" text-anchor="start">spawn flags</text>
+<text class="s" x="20" y="527" text-anchor="start">engine and bridge</text>
+<rect class="box new" x="270" y="472" width="345" height="84"/>
+<text class="h" x="282" y="493.0" text-anchor="start">Explicit flags, every time</text>
+<text class="s" x="282" y="510.0" text-anchor="start">--role scout --detached --timeout 15m</text>
+<text class="s" x="282" y="527.0" text-anchor="start">--model pi-claude/claude-haiku-5-5</text>
+<text class="s" x="282" y="544.0" text-anchor="start">--thinking medium · no package default</text>
+<rect class="box new" x="635" y="472" width="345" height="84"/>
+<text class="h" x="647" y="493.0" text-anchor="start">1 · bridge catalog entry</text>
+<text class="s" x="647" y="510.0" text-anchor="start">claude-haiku-5-5 in the local OMP</text>
+<text class="s" x="647" y="527.0" text-anchor="start">bridge; today 5.5 silently runs 4.5</text>
+<text class="s" x="647" y="544.0" text-anchor="start">outside the repo · mechanism</text>
+<rect class="box new" x="270" y="572" width="345" height="84"/>
+<text class="h" x="282" y="593.0" text-anchor="start">8 · engine.ts overlay</text>
+<text class="s" x="282" y="610.0" text-anchor="start">task.agentModelOverrides and the</text>
+<text class="s" x="282" y="627.0" text-anchor="start">bridge for a helper route</text>
+<text class="s" x="282" y="644.0" text-anchor="start">after the pilot · mechanism</text>
+<path class="ln" d="M20,676.0 L980,676.0"/>
+<text class="h" x="20" y="714" text-anchor="start">After the run</text>
+<text class="s" x="20" y="734" text-anchor="start">limen jobs &lt;id&gt;</text>
+<text class="s" x="20" y="751" text-anchor="start">one session reader</text>
+<rect class="box new" x="270" y="696" width="345" height="84"/>
+<text class="h" x="282" y="717.0" text-anchor="start">3 · requested vs served model</text>
+<text class="s" x="282" y="734.0" text-anchor="start">requested model saved at spawn;</text>
+<text class="s" x="282" y="751.0" text-anchor="start">served model read from the session</text>
+<text class="s" x="282" y="768.0" text-anchor="start">mechanism</text>
+<rect class="box new" x="635" y="696" width="345" height="84"/>
+<text class="h" x="647" y="717.0" text-anchor="start">3 · turns and tokens</text>
+<text class="s" x="647" y="734.0" text-anchor="start">input, output, cache read, cache write</text>
+<text class="s" x="647" y="751.0" text-anchor="start">from the same reader</text>
+<text class="s" x="647" y="768.0" text-anchor="start">mechanism</text>
+<path class="ln" d="M20,800.0 L980,800.0"/>
+<text class="h" x="20" y="838" text-anchor="start">Gate today</text>
+<text class="s" x="20" y="858" text-anchor="start">hook/group-peer.ts</text>
+<rect class="box" x="270" y="820" width="345" height="84"/>
+<text class="h" x="282" y="841.0" text-anchor="start">Blocks helpers for members</text>
+<text class="s" x="282" y="858.0" text-anchor="start">task tool and subagent spawns</text>
+<text class="s" x="282" y="875.0" text-anchor="start">when LIMEN_GROUP_ID is set</text>
+<text class="s" x="282" y="892.0" text-anchor="start">the lead pane is not blocked</text>
+</svg></figure>
+		<p>Prose carries the rule because the coordinator reads <code>templates/agents.md</code> on every call (<code>hook/communication.ts</code>, <code>before_agent_start</code>). Jobs do not get that file, so a helper's rules go in its own role prompt. Mechanism is added only for facts that prose cannot know: which model answered, how many tokens it used, and wake text that is wrong today.</p>
+		<p>A signal for the moment of decision goes in the message stream (the wake), not in a conditional system-prompt line. The prompt cache is a byte-exact prefix, so a system-prompt change invalidates everything after it.<sup><a href="#s5">5</a></sup> Contradictory rules also cost accuracy,<sup><a href="#s5">5</a></sup> so the fix is to correct the wake strings that contradict the table, not to add a second rule. Claude Code steers the same way: a per-subagent <code>model</code> field and a tool allowlist. Its read-only <code>Explore</code> agent uses the main model unless a project sets <code>model: haiku</code>.<sup><a href="#s7">7</a></sup></p>
+		<h3>Order</h3>
+		<ol class="list">
+			<li>Add <code>claude-haiku-5-5</code> to the local OMP Claude bridge. Today <code>--model pi-claude/claude-haiku-5-5</code> exits 0 and runs Haiku 4.5.</li>
+			<li>Add <code>templates/scout.md</code>: one question, no edits, no commits, the packet, and the <code>Verified:</code> rule.</li>
+			<li>Save the requested model at spawn. One session reader shows the served model and the token totals in <code>limen jobs</code>.</li>
+			<li>Fix the wake: a mismatch line, and "nothing to land" for a scout. In the same slice, fix the OMP wake that says "before landing" for a failed job (<code>src/integrations/coordinator-wake.ts</code>).</li>
+			<li>Run the pilot in <code>pilot.md</code>. After it keeps a chore, add the table to <code>agents.md</code> and the helper model to the board.</li>
+			<li>If the pilot keeps triage: one clause in the failed-job wake.</li>
+			<li>After Adam's allowance answer and a real group trial: the team-scout line and the matching <code>group-peer.ts</code> rule.</li>
+			<li>After the pilot proves the route: a worker's own scout through the OMP overlay.</li>
+		</ol>
+		<p><b>Not proposed:</b> a hint at spawn from the task's shape (no pre-spawn event, and a free-text classifier is noisy), a wake-side <code>Verified:</code> parser, a reminder in group peer messages, a hint when cabinet events pile up, any conditional system-prompt line, and any automatic routing or model fallback.</p>
+	</section>
+
+	<section id="decide">
+		<h2>What Adam decides</h2>
+		<ol class="list">
+			<li><b>Approve the pilot</b> in <code>pilot.md</code>, with the bridge entry as its first step.</li>
+			<li><b>Group helpers:</b> a team scout uses one of the team's launch slots (both teams and the study recommend this), or a separate helper allowance. Either way, the "no helper agents" lines change only by Adam's decision.</li>
+			<li><b>Board model:</b> after at least three pilot rows, whether the helper model joins the board's standing models.</li>
+		</ol>
+	</section>
+
+	<section id="sources">
+		<h2>Sources</h2>
+		<ol class="sources">
+			<li id="s1">Anthropic, <a href="https://www.anthropic.com/claude-haiku-5-5">Introducing Claude Haiku 5.5</a>, 2026-10-07. "Pairs well with Opus 5.5 and Sonnet 5.5 as a subagent on coding work"; larger models "remain better choices for complex agentic coding tasks"; price steps up above 100,000 prompt tokens.</li>
+			<li id="s2">Claude Platform, <a href="https://platform.claude.com/docs/en/models/haiku-5-5/overview">Claude Haiku 5.5 overview</a> and <a href="https://platform.claude.com/docs/en/models/haiku-5-5/whats-new-haiku-5-5">What's new</a>. "Classification, routing, extraction, and subagent tasks"; effort parameter; 1M context.</li>
+			<li id="s3">Claude Platform, <a href="https://platform.claude.com/docs/en/about-claude/models/choosing-a-model">Choosing a model</a>. Haiku 5.5 default effort is medium; "Test with your actual prompts and data"; two patterns: an executor that escalates to an advisor, an orchestrator that delegates bulk work.</li>
+			<li id="s4">Claude Platform, <a href="https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices">Prompting best practices</a>. "Be specific about the desired output format and constraints"; queries at the end improve quality; models may over-delegate, so "work directly rather than delegating" for simple tasks.</li>
+			<li id="s5">Claude Platform, <a href="https://platform.claude.com/docs/en/about-claude/models/optimizing-for-cost-and-intelligence">Optimizing for cost and intelligence</a>. The cache is "a byte-exact prefix match"; contradictory rules cost accuracy; Haiku 5.5 consulted the advisor on none of 198 questions; executors under-call without a prompt.</li>
+			<li id="s6">Anthropic, <a href="https://www.anthropic.com/engineering/building-effective-agents">Building effective agents</a>, 2024. Routing easy questions to a small model; add complexity "only when it demonstrably improves outcomes".</li>
+			<li id="s7">Claude Code, <a href="https://code.claude.com/docs/en/sub-agents">Subagents</a>. Per-subagent <code>model</code> and <code>tools</code>; "control costs by routing tasks to faster, lower-cost models like Haiku"; <code>Explore</code> uses the main model unless set.</li>
+			<li id="s8">Anthropic, <a href="https://www.anthropic.com/engineering/multi-agent-research-system">How we built our multi-agent research system</a>, 2025. Each subagent needs "an objective, an output format, guidance on the tools and sources to use, and clear task boundaries"; multi-agent runs use about 15 times the tokens of chat.</li>
+			<li id="s9">Anthropic, <a href="https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents">Effective context engineering for AI agents</a>. Recall falls as context grows; a subagent returns a condensed summary.</li>
+			<li id="s10"><a href="https://arxiv.org/abs/2305.05176">FrugalGPT</a> (arXiv 2305.05176) and <a href="https://arxiv.org/abs/2310.03094">LLM cascades with mixture of thoughts</a> (arXiv 2310.03094). Cascades send easy queries to a weak model and use its uncertainty as the signal to escalate.</li>
+			<li id="s11"><a href="https://arxiv.org/abs/2406.18665">RouteLLM</a> (arXiv 2406.18665) and <a href="https://arxiv.org/abs/2310.12963">AutoMix</a> (arXiv 2310.12963). Learned routers between a strong and a weak model; self-verification of the small model "can be noisy". In Limen the router is the lead, not a classifier.</li>
+			<li id="s12">Limen, F936 folder: <code>study.md</code>, <code>pilot.md</code>, <code>group/teams/team-1-findings.md</code> (Sol), <code>group/teams/team-2-findings.md</code> (Opus), and the code they cite: <code>hook/communication.ts</code>, <code>hook/group-peer.ts</code>, <code>src/job/wake-text.ts</code>, <code>src/integrations/coordinator-wake.ts</code>, <code>src/runtime/engine.ts</code>, <code>src/commands/spawn.ts</code>.</li>
+		</ol>
+		<p class="meta">Made by a Limen group on 2026-10-10: team 1 on <code>openai-codex/gpt-6-sol</code>, team 2 on <code>pi-claude/claude-opus-5-5</code>, lead on Opus 5.5. Both teams worked read-only at commit <code>39b77b3</code> and checked each other's claims. No model, test, or pilot run backs these proposals yet. Every source above was fetched on 2026-10-10.</p>
+	</section>
+</main>
+</body>
+</html>

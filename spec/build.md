@@ -24,7 +24,7 @@
 - **Scope lock boundary:** no second-seat GitHub proof, no new Sol model policy, no Changes-list highlight on the map.
 
 ## NOW
-- `F936-haiku-helpers-do-the-narrow-chores-for-coordinators-workers-and-groups` (🟠 ACTIVE): a two-team read-only group (Sol, Opus) maps where Limen should steer narrow chores to a Haiku 5.5 helper; the lead builds one black-and-white HTML page; no code lands, the pilot waits for Adam.
+- `F936-haiku-helpers-do-the-narrow-chores-for-coordinators-workers-and-groups` (🟠 ACTIVE): the Haiku steering page is filed (`haiku-steering.html`, `notes.md`): rule in `agents.md` prose, a scout role, a truthful completion wake, no automatic routing; waits for Adam to approve the pilot and pick the team-scout allowance.
 - `F926-fleet-leads-start-reviews-wait-and-land-without-workarounds` (🟠 ACTIVE): a starting review lists as starting, `--head` takes a short SHA, a coordinator's wait names its command, and land merges beside another session's edits.
 - `F925-test-reset-decision` (🟠 ACTIVE): Adam gets one verdict on resetting Limen's tests to the few seams that matter; read-only group, `test/` unchanged.
 - `F783-spec-structure-and-keeper` (🟠 ACTIVE): agents get linked-ticket guidance and a spec keeper fixes ticket, board, and map links before landing.
