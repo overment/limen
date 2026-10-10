@@ -4,6 +4,7 @@ import { inspectFinishWebhook } from "../integrations/finish-receipt.ts";
 import { hostedAgentStatus } from "../integrations/herdr.ts";
 import { derivePulse, type Job, type Pulse, parseJob, producedNothing, renderJob } from "../job/job.ts";
 import { resolveJob } from "../job/lookup.ts";
+import { modelLine, readSessionUsage, tokenLine } from "../job/usage.ts";
 import {
 	colorWanted,
 	humanDetail,
@@ -246,6 +247,9 @@ type JobEvidence = {
 	readonly cleanup: string;
 	readonly finishWebhook: string;
 	readonly herdrWake: string;
+	/** Detail only: the served model (and the requested one when they differ) and the session token totals. */
+	readonly model: string;
+	readonly tokens: string;
 };
 /** A job directory with its task and log present, read for one view. */
 type LoadedJob = {
@@ -358,8 +362,23 @@ async function readJobEvidence(
 	const cleanup = detailed ? await text(`${jobDir}/cleanup`) : "";
 	const finishWebhook = detailed && fields.state !== "running" ? await inspectFinishWebhook(jobDir) : "";
 	const herdrWake = detailed ? await text(`${jobDir}/notify/herdr-prompt`) : "";
+	const usage = detailed ? readSessionUsage(jobDir, Date.parse(fields.started) || 0) : undefined;
+	const model = detailed ? modelLine(await text(`${jobDir}/model`), usage) : "";
+	const tokens = usage ? tokenLine(usage) : "";
 	return {
-		evidence: { warning, agent, commits, commitsStat, result, versions, cleanup, finishWebhook, herdrWake },
+		evidence: {
+			warning,
+			agent,
+			commits,
+			commitsStat,
+			result,
+			versions,
+			cleanup,
+			finishWebhook,
+			herdrWake,
+			model,
+			tokens,
+		},
 		taskStat,
 		logStat,
 	};
@@ -427,6 +446,12 @@ function jobBlocks(loaded: LoadedJob, facts: JobFacts): string[] {
 	if (fields.engine && fields.engine !== "pi") {
 		blocks.push(`  engine ${displayed(fields.engine, detailed)}`);
 	}
+	if (evidence.model) {
+		blocks.push(`  model ${evidence.model}`);
+	}
+	if (evidence.tokens) {
+		blocks.push(`  tokens ${evidence.tokens}`);
+	}
 	if (fields.hosted) {
 		blocks.push("  hosted (weaker guarantees)");
 	}
@@ -486,6 +511,8 @@ function recordedEvidence(loaded: LoadedJob, diffstat: string): Partial<JobRecor
 		...(evidence.versions ? { versions: evidence.versions } : {}),
 		...(detailed && evidence.commits ? { commits: evidence.commits } : {}),
 		...(evidence.result ? { result: evidence.result } : {}),
+		...(evidence.model ? { model: evidence.model } : {}),
+		...(evidence.tokens ? { tokens: evidence.tokens } : {}),
 		...(evidence.cleanup ? { cleanup: evidence.cleanup } : {}),
 		...(evidence.herdrWake ? { herdrWake: evidence.herdrWake } : {}),
 		...(evidence.finishWebhook ? { finishWebhook: evidence.finishWebhook } : {}),

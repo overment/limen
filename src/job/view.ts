@@ -23,6 +23,8 @@ export type JobRecord = {
 	readonly versions?: string;
 	readonly commits?: string;
 	readonly result?: string;
+	readonly model?: string;
+	readonly tokens?: string;
 	readonly cleanup?: string;
 	readonly herdrWake?: string;
 	readonly finishWebhook?: string;
@@ -128,6 +130,8 @@ export function humanDetail(record: JobRecord, paint: Paint): string {
 	put("repo", record.repo);
 	put("parent", record.parent);
 	put("candidate", record.candidate);
+	put("model", record.model);
+	put("tokens", record.tokens);
 	if (job.phase === "running") {
 		put("up", runningFacts(record, paint).join(" · "));
 		if (job.pid !== undefined) {

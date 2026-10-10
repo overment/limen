@@ -142,6 +142,7 @@ type ContinuationRecord = {
 	readonly label: string;
 	readonly role: string;
 	readonly engine: EngineId;
+	readonly model: string | undefined;
 	readonly extensions: readonly string[];
 	readonly source: PlanningSource;
 	readonly hosted: boolean;
@@ -218,6 +219,7 @@ async function continueJob(args: readonly string[], cwd: string, locked = false)
 		label: finalLabel,
 		role,
 		engine: profile.id,
+		model: chosenModel,
 		extensions,
 		source,
 		hosted,
@@ -412,6 +414,7 @@ async function publishContinuation(record: ContinuationRecord): Promise<void> {
 		role: record.role,
 		engine: record.engine,
 		extensions: record.extensions,
+		...(record.model ? { model: record.model } : {}),
 		planningSource: record.source,
 		parent: parent.id,
 		session: { source: `${parent.dir}/session/${parent.session}`, name: parent.session ?? "" },

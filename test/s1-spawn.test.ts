@@ -110,6 +110,17 @@ test("a detached job runs in its own worktree from the base with the exact task 
 	const shown = limen(p, ["jobs", id]);
 	assert.ok(shown.stdout.includes(commits[0]?.slice(0, 7) ?? "?"), shown.stdout);
 	assert.ok(shown.stdout.includes("all done"), shown.stdout);
+
+	// A served model other than the requested one shows both; a turn copied from a parent session is not counted.
+	const usage = { input: 1, output: 10, cacheRead: 100, cacheWrite: 1000 };
+	const turn = (timestamp: string, model: string) =>
+		JSON.stringify({ type: "message", timestamp, message: { role: "assistant", provider: "p", model, usage } });
+	const now = new Date().toISOString();
+	const turns = [turn("2020-01-01T00:00:00.000Z", "parent"), turn(now, "other"), turn(now, "other")];
+	await writeFile(join(dir, "session", "turns.jsonl"), `${turns.join("\n")}\n`);
+	const detail = limen(p, ["jobs", id]).stdout;
+	assert.ok(detail.includes(`model served p/other · requested ${jobFile(p, id, "model")}`), detail);
+	assert.ok(detail.includes("tokens 2 turns · input 2 · output 20 · cache read 200 · cache write 2,000"), detail);
 });
 
 test("a workspace job works in one child repository and loads a selected Pi extension once", async () => {

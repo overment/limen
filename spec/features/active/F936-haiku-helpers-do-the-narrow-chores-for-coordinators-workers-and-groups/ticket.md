@@ -5,10 +5,6 @@ touches:
   - limen.cabinet.records
   - limen.commands
 opened: 2026-10-10
-needs-adam: Approve the Haiku pilot in pilot.md, and pick whether a group helper uses a team launch slot (recommended) or a separate helper allowance.
-needs-adam-on: 2026-10-10
-wrong: "--model pi-claude/claude-haiku-5-5 exits 0 but runs Haiku 4.5, because the OMP Claude bridge catalog has no Haiku 5.5 entry."
-wrong-on: 2026-10-10
 ---
 
 # F936 · Haiku helpers do the narrow chores for coordinators, workers and groups
@@ -23,7 +19,7 @@ A coordinator, a worker, or a group lead can give a narrow chore with a clear en
 - A read-only helper role (scout) with the evidence packet and verification rule from `study.md`. The packet is the job's final message.
 - The helper model is a board choice, passed explicitly like every other role.
 - `limen jobs <id>` shows the served model and the token usage from the session transcript.
-- Group mode: a team scout before workers start, and a cabinet digest for the lead, within the allowance rule Adam picks.
+- Group mode: a team scout before workers start, which uses one of the team's launch slots, and a cabinet digest for the lead.
 
 ## Out of scope
 
@@ -40,3 +36,7 @@ A coordinator, a worker, or a group lead can give a narrow chore with a clear en
 - A scout job's final message is a packet in the `study.md` format: at most five findings, each with a path, a line or symbol, and the word observed or guessed, and a `Verified:` line.
 - A finished scout job has no commits and a clean worktree.
 - The pilot results table in `pilot.md` has rows for at least three tasks before Haiku goes into the board's standing models.
+
+## Notes
+
+- Adam decided on 2026-10-10: a team scout spawned by the team coordinator uses one team launch slot. There is no separate helper allowance.

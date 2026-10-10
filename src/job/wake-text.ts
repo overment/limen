@@ -57,15 +57,25 @@ export function completionWake(
 		? `Limen job ${JSON.stringify(label)}: ${task}\nis ${state} (${id}) on branch ${branch}${location}.`
 		: `Limen job ${JSON.stringify(label)} is ${state} (${id}) on branch ${branch}${location}.`;
 	const empty = jobProducedNothing(job);
+	const scout = state === "done" && !empty && text(join(job, "role")) === "scout";
 	const facts = empty ? "It produced nothing (0 tool calls, no commits)." : "";
-	const handoff =
-		state === "done"
-			? "Job done. Next step: land it, or name the check that still blocks landing. Done does not mean that review passed."
-			: "The job failed or stopped; inspect the failure before deciding whether to resume work.";
+	let handoff = "The job failed or stopped; inspect the failure before deciding whether to resume work.";
+	if (state === "done") {
+		handoff = scout
+			? "Scout done. Nothing to land: the final message is its evidence packet, leads and not facts."
+			: "Job done. Next step: land it, or name the check that still blocks landing. Done does not mean that review passed.";
+	}
 	let instruction =
 		"Inspect the job record, failure and log/session. Resume focused fixes and re-review if appropriate; do not treat this failure as a new-spawn or release signal. Keep the user informed; ask only when genuine product ambiguity, a scope or risk tradeoff, or an irreversible action needs a human decision.";
 	if (state === "done") {
-		instruction = `Inspect the job record, branch diff and commits, log/session, and relevant checks. Then land the work at the verified commit. If a check blocks landing, name that check and resume a focused fix. ${keeperHint(job, id)} After it lands, continue with the next item on the board. Keep the user informed; ask only when genuine product ambiguity, a scope or risk tradeoff, or an irreversible action needs a human decision.`;
+		// A route's own wording (the Herdr prompt to an OMP coordinator) replaces only the landing instruction.
+		instruction =
+			routeInstruction ??
+			`Inspect the job record, branch diff and commits, log/session, and relevant checks. Then land the work at the verified commit. If a check blocks landing, name that check and resume a focused fix. ${keeperHint(job, id)} After it lands, continue with the next item on the board. Keep the user informed; ask only when genuine product ambiguity, a scope or risk tradeoff, or an irreversible action needs a human decision.`;
+	}
+	if (scout) {
+		instruction =
+			"Read the packet's top finding once at its path before you act on it, and treat an unlabeled finding as guessed. Then decide and make the change yourself, or put the packet in a worker handoff under `Helper packet (leads, not facts):`. Keep the user informed; ask only when a genuine product decision needs them.";
 	}
 	if (empty) {
 		instruction =
@@ -75,12 +85,7 @@ export function completionWake(
 		instruction =
 			"The subscribed coordinator is busy. Do not spawn, stop, steer, or land on behalf of another coordinator unless the human asks.";
 	}
-	return joinWake(
-		lead,
-		handoffExcerpt(job),
-		[facts, handoff].filter(Boolean).join("\n\n"),
-		routeInstruction ?? instruction,
-	);
+	return joinWake(lead, handoffExcerpt(job), [facts, handoff].filter(Boolean).join("\n\n"), instruction);
 }
 /** The done-wake sentence that sends spec work to the keeper; the ticket comes from the job task's first `Ticket:` pointer (keeper follows a moved one). */
 export function keeperHint(job: string, id: string): string {

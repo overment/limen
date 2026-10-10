@@ -419,6 +419,7 @@ async function publishSpawnedJob(launch: SpawnLaunch, record: SpawnRecord): Prom
 		base: record.base,
 		role: record.role,
 		engine: launch.profile.id,
+		...(launch.model ? { model: launch.model } : {}),
 		extensions: launch.extensions,
 		planningSource: place.source,
 		finishAuthor: captureFinishAuthor(cwd, launch.loaded.text, Boolean(place.workspace)),

@@ -17,15 +17,18 @@ Put the rule in prose where the lead decides, add one helper role, and make the 
 
 Cut by both teams: a spawn-time hint from the task's shape, a wake-side `Verified:` parser, a group-peer reminder, a cabinet pile-up hint, and any conditional system-prompt line.
 
+## Decided by Adam (2026-10-10)
+
+- The pilot in `pilot.md` is approved, with Opus 5.5 as the lead in both arms.
+- A team scout uses one team launch slot. There is no separate helper allowance.
+
 ## Waiting on Adam
 
-- Approve the pilot in `pilot.md`.
-- A team scout uses one team launch slot (both teams and the study recommend this), or a separate helper allowance.
 - After three pilot rows: whether the helper model joins the board's standing models.
 
 ## Found on the way
 
-- An OMP coordinator woken through Herdr gets "before landing" for every state, also for a failed job (`src/integrations/coordinator-wake.ts:83`). Fix it in the slice for step 4.
+- Fixed: an OMP coordinator woken through Herdr got "before landing" for every state, also for a failed job. The Herdr route's text now replaces only the done-job instruction (`completionWake`, `src/job/wake-text.ts`).
 - The owner-facing lead pane has no `LIMEN_GROUP_ID`, so its digest or candidate-table helper is outside the team allowance.
 - Claude Code's `Explore` agent now uses the main model unless a project sets `model: haiku`; the brief assumed Haiku.
 
