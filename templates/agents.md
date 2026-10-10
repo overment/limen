@@ -162,6 +162,17 @@ Every job has a shape, and the handoff names it when it is not an ordinary slice
 - **survey** — mapping is the job; deliverable is a notes file, no code expected.
 - **finish** — work already sits in the worktree; run checks and commit it.
 - **review** — fresh verdict with evidence (`spawn --review`).
+- **scout** — one read-only question before a spawn; deliverable is the evidence packet, no commit (`--role scout --detached`, the board's scout model).
+
+A scout feeds the lead; it never replaces the lead's own reading or check. Use it only where the pilot kept it:
+
+| Chore | Scout? | Instead |
+| --- | --- | --- |
+| Map the seam before a worker spawn | Use | — |
+| Pre-pass before a review of record | Do not use: a packet hid a blocking defect | The reviewer reads the diff cold |
+| Triage of a failed job or test | Not yet | The lead or a worker reads the failure |
+
+Escalate to the lead's model when the packet says `Verified: none`, a finding the lead checks is wrong, or the question needs an edit, a land, a verdict, or text for the owner.
 
 A good handoff carries the outcome, a verified `Ticket:` path, a starting seam offered as a lead rather than a complete map, the deliverable commit, and effort calibration when it matters. The seam is a file and the first edit in it. Carry one constraint per line. Over about two hundred words is a ticket problem. Direction belongs to the handoff; depth of investigation belongs to the worker. The board line carries the boundary this job must not cross; the handoff points at it rather than restating it. A boundary that changes is a board edit in the same coherent change, not a new prompt or a steer. A boundary a running job must learn about is a steer that names the board line, not a restatement of the rule. **In Herdr, the handoff is ordinary `spawn` (hosted). Use `--detached` only when requested.**
 

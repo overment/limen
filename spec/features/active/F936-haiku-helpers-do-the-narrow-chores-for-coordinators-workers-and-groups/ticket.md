@@ -40,3 +40,4 @@ A coordinator, a worker, or a group lead can give a narrow chore with a clear en
 ## Notes
 
 - Adam decided on 2026-10-10: a team scout spawned by the team coordinator uses one team launch slot. There is no separate helper allowance.
+- Adam decided on 2026-10-10, after five pilot rows: Haiku 5.5 joins the board's standing models as the scout model, for the read-only scout before a spawn only. The review pre-pass is cut; failure triage is not yet kept.

@@ -21,10 +21,12 @@ Cut by both teams: a spawn-time hint from the task's shape, a wake-side `Verifie
 
 - The pilot in `pilot.md` is approved, with Opus 5.5 as the lead in both arms.
 - A team scout uses one team launch slot. There is no separate helper allowance.
+- After five pilot rows: Haiku 5.5 joins the board's standing models as the scout model (`spec/build.md` TRACK), for the scout before a spawn only. The use / do-not-use / escalate table is in `templates/agents.md`, beside the job shapes.
 
-## Waiting on Adam
+## Next
 
-- After three pilot rows: whether the helper model joins the board's standing models.
+- Run F770 and F933 again at normal load to confirm the scout's saving. If it does not hold, take the scout model off the board.
+- Packets ran over 1,200 characters in four of five jobs; the wake clips their tail.
 
 ## Found on the way
 
