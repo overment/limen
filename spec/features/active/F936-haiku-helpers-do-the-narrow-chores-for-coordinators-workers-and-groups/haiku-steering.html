@@ -165,9 +165,9 @@
 <text class="s" x="252" y="853.5" text-anchor="start">for members; the lead pane has no LIMEN_GROUP_ID</text>
 </svg></figure>
 		<ol class="list">
-			<li><b>Scout before a spawn.</b> The coordinator asks for the seam, the tests that cover it, and the unknowns. The packet goes into the worker's handoff as a lead, not a map.</li>
-			<li><b>Triage of a failed job or a failing test.</b> First failure, code path, log tail. The lead decides to resume, steer, or stop.</li>
-			<li><b>Review pre-pass.</b> Each acceptance line mapped to a diff hunk and a check with real output. It can add questions. It never clears a line.</li>
+			<li><b>Scout before a spawn.</b> The coordinator asks for the seam, the tests that cover it, and the unknowns. The packet goes into the worker's handoff as a lead, not a map. The pilot kept it on trial (<code>pilot-results.md</code>).</li>
+			<li><b>Triage of a failed job or a failing test.</b> First failure, code path, log tail. The lead decides to resume, steer, or stop. Not kept yet: the pilot run had no result in either arm.</li>
+			<li><b>Review pre-pass.</b> Cut by the pilot. With the packet, the review passed a candidate that has a known blocking defect. The lead-only review found that defect.</li>
 			<li><b>Team scout in a group.</b> One per team, after the team's own hypothesis. Today <code>hook/group-peer.ts</code> blocks it.</li>
 			<li><b>Cabinet digest and candidate table for the group lead.</b> Facts per team, no ranking. The lead pane has no <code>LIMEN_GROUP_ID</code>, so this uses no team slot.</li>
 			<li><b>Judge pre-pass.</b> Claims in research reports that have no fetched source. The judge still names where the reports diverge.</li>
@@ -357,10 +357,10 @@
 <text class="s" x="588" y="228.5" text-anchor="start">seam given</text>
 <text class="s" x="588" y="245.5" text-anchor="start">as a lead</text>
 <path class="ln" d="M694,224.0 L715,224.0" marker-end="url(#arrow)"/>
-<rect class="haiku" x="715" y="178" width="118" height="92"/>
-<text class="h w" x="727" y="211.5" text-anchor="start">Haiku triage</text>
-<text class="s w" x="727" y="228.5" text-anchor="start">if it failed;</text>
-<text class="s w" x="727" y="245.5" text-anchor="start">pre-pass if done</text>
+<rect class="box" x="715" y="178" width="118" height="92"/>
+<text class="h" x="727" y="211.5" text-anchor="start">Lead inspects</text>
+<text class="s" x="727" y="228.5" text-anchor="start">pilot cut the</text>
+<text class="s" x="727" y="245.5" text-anchor="start">Haiku pre-pass</text>
 <path class="ln" d="M833,224.0 L854,224.0" marker-end="url(#arrow)"/>
 <rect class="box" x="854" y="178" width="118" height="92"/>
 <text class="h" x="866" y="220.0" text-anchor="start">Lead decides</text>

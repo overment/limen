@@ -104,7 +104,4 @@ The pilot does not test the group helpers (team scout, cabinet digest, candidate
 
 ## Results
 
-The results are not recorded yet. Add one row for each run:
-
-| Task | Arm | Oracle | Helper s | Lead s | Total s | Lead turns | Lead tokens (in/out/read/write) | Helper tokens | Wrong findings (top?) | Verified | Retries | Manual fixes |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|
+The first run, on 2026-10-10 with Opus 5.5 as the lead in both arms, is in `pilot-results.md`: one row for each task and arm, the verdict for each chore, and what surprised.
