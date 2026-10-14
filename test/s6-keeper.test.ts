@@ -33,6 +33,16 @@ test("ticket new refuses an unknown place id before any file exists", () => {
 	assert.deepEqual(lane("planned"), before);
 });
 
+test("ticket new writes the ticket in a non-Git workspace", async () => {
+	const workspace = join(p.parent, "ticket-workspace");
+	await mkdir(workspace);
+	assert.equal(limen(p, ["workspace", "init"], { cwd: workspace }).status, 0);
+	const made = limen(p, ["ticket", "new", "probe works"], { cwd: workspace });
+	assert.equal(made.status, 0, made.stderr);
+	assert.equal(made.stdout.trim(), "spec/features/planned/F001-probe-works/ticket.md");
+	assert.match(readFileSync(join(workspace, made.stdout.trim()), "utf8"), /^# F001 · probe works$/m);
+});
+
 test("ticket check names the file, the line and a fix for each fault", async () => {
 	const tree = join(p.parent, "check");
 	git(p.root, "worktree", "add", "-q", "-b", "check", tree);

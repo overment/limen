@@ -91,7 +91,7 @@ export async function ticketCommand(args: readonly string[], cwd: string): Promi
 	if (!slug) {
 		throw new Error(HELP);
 	}
-	const root = repoRoot(cwd);
+	const root = limenRoot(cwd);
 	const plant = process.env.LIMEN_CONTEXT_ROOT ?? root;
 	if (touches.length) {
 		const local = join(root, ".limen", "picture");
