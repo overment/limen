@@ -17,6 +17,7 @@ A running thread picks up the switch only when its Pi process restarts. Not know
 
 ## Shepherd rules (Tony, Johnny)
 
+- Start every coordinator session with `LIMEN_COORDINATOR=1`, in Herdr too. After F958, a coordinator in Herdr without the switch does not register, so it gets no rule pings and sends no coordinator events.
 - One top-level T3 thread per lane is the coordinator session. Workers come only from `limen spawn` in that thread.
 - The first message to a moved lane says: run `limen watch` on each running worker of this lane, then end your turn.
 - No `limen wait`, `sleep` or polling loop in a coordinator. No `--tab` jobs from T3.
@@ -26,4 +27,4 @@ A running thread picks up the switch only when its Pi process restarts. Not know
 
 ## Open check
 
-With the launcher, T3 helper threads on Pi also get `LIMEN_COORDINATOR=1`. Check that they do not register as a second coordinator: after a helper starts, `.limen/coordinators/` in the project holds no new session for it. Read in the code at `3419a4c`, not run: registration skips a session whose agent kind is `sub` (`start` in `src/integrations/coordinator-signal.ts`). Not known: whether T3 starts its helpers that way.
+With the launcher, every T3 helper thread on Pi also gets `LIMEN_COORDINATOR=1`. After F958 the switch alone decides who counts as a coordinator, so this check matters more. Check that they do not register as a second coordinator: after a helper starts, `.limen/coordinators/` in the project holds no new session for it. Read in the code at `3419a4c`, not run: registration skips a session whose agent kind is `sub` (`start` in `src/integrations/coordinator-signal.ts`). Not known: whether T3 starts its helpers that way.

@@ -24,17 +24,18 @@ Limen's shop manual, docs and messages describe a coordinator as a coordinator s
 - The rule lines and the rule ping (F958).
 - `limen github …` and its doorbell lines: Adam said to leave them alone.
 - `--tab` jobs and "This conversation's tab", which do need Herdr.
-- Any change to who registers or how a wake travels.
+- Who registers as a coordinator (F958), and how a wake travels.
 
 ## Acceptance
 
 - Each rewritten sentence is true in the code for a coordinator without Herdr, or names Herdr as the reason it is not.
 - `grep -n "Herdr coordinator\|coordinator pane\|this pane"` over the Scope files finds only Herdr layout, `--tab` jobs, or `limen github …`.
-- The `limen status` section that lists Herdr agents names Herdr as its source.
+- `limen status` lists coordinator sessions from live registrations, which F958 limits to `LIMEN_COORDINATOR=1`. It shows the Herdr tab only when a registration has one.
 - No changed line uses "seat" for a session.
 - No changed line names the app that hosts a session.
 
 ## Notes
 
+- Decision, Adam 2026-10-30: the switch alone decides who counts as a coordinator; F958 makes registration need it.
 - Say "coordinator session". In Limen, "seat" already means the always-on host ("Seat and window", "seat-wide rule"); it never names a session.
 - Group start without Herdr has no live proof yet. Read in the code at `3419a4c`, not run: the lead is found by `PI_SESSION_ID` and the `hook/group-peer.ts` registration, not by a pane.
