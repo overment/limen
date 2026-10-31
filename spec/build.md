@@ -34,6 +34,7 @@
 
 <!-- Generated from spec/features/active/ by limen land, limen ticket done and limen board --write. Edit the tickets, not these lines. -->
 
+- `F957-first-principles-cut-of-limen-architecture-new-graph-marks-unvaluable-parts` (🟠 ACTIVE): First-principles cut of Limen architecture; the original graph marks unvaluable parts
 - `F954-a-private-assessment-combines-verified-collaboration-counts-from-both-session-stores` (🟠 ACTIVE): A private assessment combines verified collaboration counts from both session stores
 - `F952-agents-learn-adam-s-principles-from-work-and-decisions` (🟠 ACTIVE): Agents learn Adam’s principles from work and decisions; needs Adam since 2026-10-25: Answer choices 1 to 4 at the end of ~/Downloads/limen-learning-system.html (revision 3) before a pilot; no implementation or pilot is authorized.
 - `F936-haiku-helpers-do-the-narrow-chores-for-coordinators-workers-and-groups` (🟠 ACTIVE): Haiku helpers do the narrow chores for coordinators, workers and groups
@@ -65,6 +66,7 @@
 
 <!-- Generated from spec/features/done/ by limen land, limen ticket done and limen board --write. Edit the tickets, not these lines. -->
 
+- `F960-plants-that-share-a-ticket-number-series-never-hand-out-the-same-number-and-an-archived-number-never-comes-back` (🟢 PROVEN): Plants that share a ticket-number series never hand out the same number, and an archived number never comes back; landed 2026-10-31
 - `F956-one-switch-marks-what-limen-added-in-herdr-and-on-the-map` (🟢 PROVEN): One switch marks what Limen added in Herdr and on the map; landed 2026-10-25
 - `F955-coordinators-receive-every-agent-s-full-final-message` (🟢 PROVEN): Coordinators receive every agent’s full final message; landed 2026-10-25
 - `F953-a-done-job-with-open-note-checks-tells-the-coordinator-and-is-not-a-plain-done` (🟢 PROVEN): A done job with open note checks tells the coordinator and is not a plain done; landed 2026-10-24
@@ -74,7 +76,6 @@
 - `F948-every-agent-knows-it-works-inside-a-highly-capable-agent-system` (🟢 PROVEN): Every agent knows it works inside a highly capable agent system; landed 2026-10-17
 - `F947-a-coordinator-s-end-of-turn-always-sends-one-ping` (🟢 PROVEN): A coordinator's end of turn always sends one ping; landed 2026-10-17
 - `F946-a-finish-stall-or-ask-ping-is-never-lost-under-load` (🟢 PROVEN): A finish, stall or Ask ping is never lost under load; landed 2026-10-16
-- `F945-short-pi-claude-model-form-starts-the-job-instead-of-killing-it` (🟢 PROVEN): Short pi-claude model form starts the job instead of killing it; landed 2026-10-13
-- 2026-10: 58 landed. spec/features/done/2026-10/
+- 2026-10: 59 landed. spec/features/done/2026-10/
 - 2026-09: 70 landed. spec/features/done/2026-09/
 - 2026-08: 43 landed. spec/features/done/2026-08/

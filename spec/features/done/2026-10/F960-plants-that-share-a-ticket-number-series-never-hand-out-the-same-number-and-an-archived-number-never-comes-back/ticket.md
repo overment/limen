@@ -1,5 +1,6 @@
 ---
 opened: 2026-10-31
+landed: 2026-10-31
 ---
 
 # F960 · Plants that share a ticket-number series never hand out the same number, and an archived number never comes back
