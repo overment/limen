@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
+import { archiveRows } from "../project/series.ts";
 
 type JobIdentity = { readonly id: string; readonly label: string; readonly branch: string };
 export type Job = JobIdentity &
@@ -165,9 +166,9 @@ export function parseDuration(value: string): number {
 export function producedNothing(toolCalls: number | undefined, commits: string | undefined): boolean {
 	return toolCalls === 0 && commits === "";
 }
-/** Features whose folder is in spec/features/done/ or dropped/. */
+/** Features whose folder is in spec/features/done/ or dropped/, or that the archive register lists. */
 export function closedFeatures(root: string): ReadonlySet<string> {
-	const closed = new Set<string>();
+	const closed = new Set(archiveRows(root).flatMap((row) => (row.code ? [row.code] : [])));
 	for (const lane of ["done", "dropped"]) {
 		const laneDir = join(root, "spec", "features", lane);
 		if (!existsSync(laneDir)) {

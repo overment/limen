@@ -8,7 +8,7 @@ Peer results never transfer jobs, widen the ticket, or authorize landing. Answer
 
 ## Ticket contract
 
-- New ticket: `limen ticket new "what becomes true" [--lane planned|active] [--touches id,id]` writes `spec/features/<lane>/FNNN-<slug>/ticket.md` from `spec/features/_template/ticket.md`, with the next number that no lane, `limen/*` branch or job label uses (source: `limen ticket new`).
+- New ticket: `limen ticket new "what becomes true" [--lane planned|active] [--touches id,id]` writes `spec/features/<lane>/FNNN-<slug>/ticket.md` from `spec/features/_template/ticket.md`, with the next number that no lane, archive row, `limen/*` branch, job label or other plant of its series uses (source: `limen ticket new`).
 - Front matter: `opened: YYYY-MM-DD`; optional `touches` ids, paired `needs-adam`/`needs-adam-on`, paired `wrong`/`wrong-on`, `landed` only when done (source: `templates/picture/CONTRACT.md#ticket-front-matter`).
 - Place ids: the `id:` lines of the `kind: module` and `kind: plant` files in `$LIMEN_CONTEXT_ROOT/.limen/picture/nodes/`; do not guess (source: `templates/picture/CONTRACT.md#ticket-front-matter`).
 - Check: `limen ticket check` checks the tickets your branch adds or changes, as `limen land` will; `limen picture build --dir "$LIMEN_CONTEXT_ROOT/.limen/picture" --out /tmp/check.html --strict` checks every ticket. Each diagnostic names the file, the line and the fix (source: `templates/picture/CONTRACT.md#ticket-front-matter`).

@@ -674,7 +674,7 @@ export async function closeFeatureTabs(input: { readonly root: string; readonly 
 	}
 	const closedSet = closedFeatures(input.root);
 	if (!closedSet.has(feature)) {
-		throw new Error(`${feature} is not in done/ or dropped/; leftover tabs stay`);
+		throw new Error(`${feature} is not in done/, dropped/ or spec/features/archive.tsv; leftover tabs stay`);
 	}
 	const herdr = herdrBinary();
 	if (!herdr) {

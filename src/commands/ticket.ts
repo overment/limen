@@ -1,12 +1,12 @@
-import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { readFile } from "node:fs/promises";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readPicture } from "../picture/picture-build.ts";
 import { ID_PATTERN } from "../picture/picture-model.ts";
 import { currentBranch, limenRoot, repoRoot } from "../project/git.ts";
 import { closeTickets } from "../project/lanes.ts";
+import { plantSeries, readMark, seriesNext, setSeries, ticketCode, withNextTicketCode } from "../project/series.ts";
 import { parseFlags } from "./flags.ts";
 import { landTicketCheck } from "./land.ts";
 
@@ -14,54 +14,9 @@ const HELP = [
 	'limen ticket new "what becomes true" [--lane planned|active] [--touches id,id]',
 	"limen ticket check [BRANCH]  # the land gate for tickets BRANCH adds or changes against the plant branch; default: this checkout's branch",
 	"limen ticket done FNNN [FNNN ...] [--on YYYY-MM-DD]  # landed without limen land: move the active ticket to done/ with its landed date (default today); NOW and PROVEN follow",
+	"limen ticket series [NAME PLANT [PLANT ...]]  # the plants on this seat that take F numbers from one series; no arguments: this plant's series",
 ].join("\n");
 const PLACE_ID = ID_PATTERN;
-
-async function directories(path: string): Promise<string[]> {
-	const entries = await readdir(path, { withFileTypes: true }).catch((error: NodeJS.ErrnoException) => {
-		if (error.code === "ENOENT") {
-			return [];
-		}
-		throw error;
-	});
-	return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
-}
-
-async function nextFeatureNumber(root: string, plant: string): Promise<number> {
-	let highest = 0;
-	const base = join(root, "spec", "features");
-	for (const lane of ["planned", "active", "done", "dropped"]) {
-		const lanePath = join(base, lane);
-		const parents =
-			lane === "done" || lane === "dropped"
-				? (await directories(lanePath)).map((month) => join(lanePath, month))
-				: [lanePath];
-		for (const parent of parents) {
-			for (const name of await directories(parent)) {
-				const match = /^F(\d+)-/.exec(name);
-				if (match) {
-					highest = Math.max(highest, Number(match[1]));
-				}
-			}
-		}
-	}
-	// A number can live only on a branch or in a job before its folder reaches this checkout (the two F778 tickets).
-	const branches =
-		spawnSync("git", ["for-each-ref", "--format=%(refname:short)", "refs/heads/limen/"], {
-			cwd: root,
-			encoding: "utf8",
-		}).stdout ?? "";
-	const jobs = join(plant, ".limen", "jobs");
-	const labels = await Promise.all(
-		(await directories(jobs)).map(
-			async (id) => `${id}\n${await readFile(join(jobs, id, "label"), "utf8").catch(() => "")}`,
-		),
-	);
-	for (const match of `${branches}\n${labels.join("\n")}`.matchAll(/\bf(\d{3,4})\b/gi)) {
-		highest = Math.max(highest, Number(match[1]));
-	}
-	return highest + 1;
-}
 
 export async function ticketCommand(args: readonly string[], cwd: string): Promise<void> {
 	if (args[0] === "check") {
@@ -69,6 +24,9 @@ export async function ticketCommand(args: readonly string[], cwd: string): Promi
 	}
 	if (args[0] === "done") {
 		return ticketDone(args.slice(1), cwd);
+	}
+	if (args[0] === "series") {
+		return ticketSeries(args.slice(1), cwd);
 	}
 	const [mode, title, ...options] = args;
 	if (mode !== "new" || !title || title.startsWith("--") || /[\r\n]/.test(title) || !title.trim()) {
@@ -118,8 +76,6 @@ export async function ticketCommand(args: readonly string[], cwd: string): Promi
 		}
 	}
 	const base = join(root, "spec", "features");
-	const code = `F${String(await nextFeatureNumber(root, plant)).padStart(3, "0")}`;
-	const path = join("spec", "features", lane, `${code}-${slug}`, "ticket.md");
 	const now = new Date();
 	const opened = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 	const normalizedTitle = title.trim();
@@ -139,11 +95,35 @@ export async function ticketCommand(args: readonly string[], cwd: string): Promi
 	if (start < 0) {
 		throw new Error("ticket template needs an ## Outcome section");
 	}
-	const text = `---\n${touches.length ? `touches:\n${touches.map((id) => `  - ${id}\n`).join("")}` : ""}opened: ${opened}\n---\n\n# ${code} · ${normalizedTitle}\n\n${template.slice(start).replace("## Outcome\n", `## Outcome\n\n${outcome}\n`)}`;
-	await mkdir(join(root, "spec", "features", lane), { recursive: true });
-	await mkdir(join(root, "spec", "features", lane, `${code}-${slug}`));
-	await writeFile(join(root, path), text, { flag: "wx" });
+	// The folder exists before the series lock is released, so a plant that takes the next code sees this one.
+	const path = withNextTicketCode(root, plant, (code) => {
+		const path = join("spec", "features", lane, `${code}-${slug}`, "ticket.md");
+		const text = `---\n${touches.length ? `touches:\n${touches.map((id) => `  - ${id}\n`).join("")}` : ""}opened: ${opened}\n---\n\n# ${code} · ${normalizedTitle}\n\n${template.slice(start).replace("## Outcome\n", `## Outcome\n\n${outcome}\n`)}`;
+		mkdirSync(join(base, lane), { recursive: true });
+		mkdirSync(join(root, dirname(path)));
+		writeFileSync(join(root, path), text, { flag: "wx" });
+		return path;
+	});
 	console.log(path);
+}
+
+/** Names the plants of a series, or shows the series this plant takes numbers from. */
+function ticketSeries(args: readonly string[], cwd: string): void {
+	const [name, ...plants] = args;
+	if (args.some((arg) => arg.startsWith("-")) || (name !== undefined && plants.length === 0)) {
+		throw new Error(HELP);
+	}
+	const plant = process.env.LIMEN_CONTEXT_ROOT ?? repoRoot(cwd);
+	const roots = plants.map((each) => resolve(cwd, each));
+	const series = name ? setSeries(name, roots) : plantSeries(plant);
+	if (!series) {
+		console.log(`no series names ${plant}; ticket new numbers it alone`);
+		return;
+	}
+	const mark = readMark(series);
+	const plantLines = series.plants.map((each) => `plant ${each}`).join("\n");
+	console.log(`series ${series.name}\n${plantLines}\nmark ${mark ? ticketCode(mark) : "none"}`);
+	console.log(`next ${ticketCode(seriesNext(series))}`);
 }
 
 /** The close `limen land` makes, for work that landed by a hand merge or needed no code. */

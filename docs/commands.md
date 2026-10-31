@@ -103,15 +103,22 @@ After the merge, `land` also closes the active tickets the job works on: the tic
 
 ### Tickets and the board
 
-Show who first added a ticket, close a ticket whose work landed another way, and show the board.
+Show who first added a ticket, close a ticket whose work landed another way, name the plants that share F numbers, and show the board.
 
 ```text
 limen ticket-author <ticket-path>
 limen ticket done FNNN [FNNN ...] [--on YYYY-MM-DD]
+limen ticket series [NAME PLANT [PLANT ...]]
 limen board [--write]
 ```
 
-NOW and PROVEN in `spec/build.md` are generated from the feature lanes: NOW lists `active/`, PROVEN the last ten landed tickets and one count line per month folder. TRACK, NEXT, PARKED and DROPPED stay as the coordinator wrote them. `limen board` prints the board with each active ticket's running job, or its last job when none runs: failed, done but not landed, or landed. It lists running jobs that name no active ticket below NOW. `--write` rewrites NOW and PROVEN in the file.
+NOW and PROVEN in `spec/build.md` are generated from the feature lanes: NOW lists `active/`, PROVEN the last ten landed tickets and one count line per month folder. An archived done ticket counts in PROVEN by its close month, and a month line names `spec/features/archive.tsv` when the register holds some of that month's tickets. TRACK, NEXT, PARKED and DROPPED stay as the coordinator wrote them. `limen board` prints the board with each active ticket's running job, or its last job when none runs: failed, done but not landed, or landed. It lists running jobs that name no active ticket below NOW. `--write` rewrites NOW and PROVEN in the file.
+
+**Ticket numbers.** `limen ticket new` takes one more than the highest F number in use. A number is in use when one of these names it: a ticket folder in any lane (`spec/features/<lane>/` or `spec/features/<lane>/<month>/`, `cancelled/` included), a row of `spec/features/archive.tsv`, a local `limen/*` branch, or a job label.
+
+**Shared series.** Plants on one seat can share one F-number series. `limen ticket series NAME PLANT [PLANT ...]` names the plants of series NAME. It replaces the earlier list and refuses a plant that another series names. To take a plant out, name the series again without it. With no arguments, the command shows the series of this plant: its plants, `mark` (the highest number `ticket new` issued in the series) and `next` (the number `ticket new` would take now). The series is seat state in `$LIMEN_HOME/.limen/series/NAME/` (`~/.limen/series/NAME/` by default): `plants` holds one plant root per line, and `mark` holds the mark. In a plant of a series, `ticket new` holds `mark.lock` from reading the mark to writing the ticket folder. The number it takes is above the mark and above every number in use in any plant of the series, so two plants never take the same number. A plant that no series names takes numbers alone, without the mark and the lock.
+
+**Archive register.** A plant that moves closed tickets out of `spec/features/` records them in its tracked `spec/features/archive.tsv`. The first line names the tab-separated columns: `path`, `number`, `title`, `close_month`, `archive_date`, `last_commit`, `manifest_digest`; without that line, Limen reads the columns in this order. Limen reads `path`, `number`, `title` and `close_month`. `number` is `FNNN` or `NNN`. A row whose `path` ends in an `FNNN-slug` folder archives that ticket. A row with another path, such as a high-water row (`high-water`, then the highest number issued), only keeps its number in use. Every row's `number` stays in use for `ticket new`. `limen land` and `limen ticket check` refuse a new ticket whose number an archived ticket holds, or a ticket folder in another plant of the series. `limen close` treats an archived ticket as closed.
 
 ### Seat-wide rules
 

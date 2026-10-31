@@ -52,7 +52,7 @@ A trailing body line `owner: <name>`, alone on its line, is metadata, not prose.
 
 ## Ticket front matter
 
-Create tickets with `limen ticket new "what becomes true" [--lane planned|active] [--touches id,id]`. It picks an F number that no lane, `limen/*` branch or job label uses, and writes a ticket that passes `limen picture build --strict` with no edit. The lane folder is the status. The board reports it.
+Create tickets with `limen ticket new "what becomes true" [--lane planned|active] [--touches id,id]`. It picks an F number that no lane, archive row, `limen/*` branch, job label or other plant of its series uses, and writes a ticket that passes `limen picture build --strict` with no edit. The lane folder is the status. The board reports it.
 
 Example front matter, with a known map place:
 

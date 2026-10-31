@@ -19,6 +19,7 @@ import {
 	workspaceRepository,
 } from "../project/git.ts";
 import { closeTickets } from "../project/lanes.ts";
+import { takenElsewhere } from "../project/series.ts";
 import { parseFlags } from "./flags.ts";
 import { deleteLandedBranches } from "./prune.ts";
 
@@ -234,7 +235,7 @@ export async function landTicketCheck(
 		const failing = diagnostics.filter((d) => d.level === "error");
 		const errors = failing.map((d) => `error ${d.source}:${d.line ?? 1}: ${d.message}`);
 		let bad = failing[0]?.source ?? undefined;
-		for (const duplicate of duplicateTicketErrors(repository, branch, changed)) {
+		for (const duplicate of duplicateTicketErrors(repository, root, branch, changed)) {
 			errors.push(duplicate.error);
 			bad ??= duplicate.path;
 		}
@@ -312,20 +313,23 @@ function extractTicketsAtTip(repository: string, branch: string, tip: string): v
 	});
 	execFileSync("tar", ["-x", "-C", tip], { input: archive });
 }
-/** An added ticket whose F number another ticket at the branch already uses. */
+/** An added ticket whose F number another ticket at the branch, the plant's archive or its series already uses. */
 function duplicateTicketErrors(
 	repository: string,
+	root: string,
 	branch: string,
 	changed: ReadonlyMap<string, string>,
 ): { readonly path: string; readonly error: string }[] {
 	const duplicates: { readonly path: string; readonly error: string }[] = [];
 	const all = gitText(repository, ["ls-tree", "-r", "--name-only", branch, "--", "spec/features"]).split("\n");
+	const elsewhere = takenElsewhere(root);
 	for (const [path, status] of changed) {
 		if (status !== "A") {
 			continue;
 		}
-		const code = TICKET_PATH.exec(path)?.[1];
-		const other = all.find((candidate) => candidate !== path && TICKET_PATH.exec(candidate)?.[1] === code);
+		const code = TICKET_PATH.exec(path)?.[1] ?? "";
+		const other =
+			all.find((candidate) => candidate !== path && TICKET_PATH.exec(candidate)?.[1] === code) ?? elsewhere.get(code);
 		if (!other) {
 			continue;
 		}

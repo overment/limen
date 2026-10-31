@@ -1165,7 +1165,7 @@ async function jobDisplay(
 /** Finished jobs this coordinator still answers for: terminal, spawned from its tab or watched by its session, not landed, and not closed. */
 function finishedJobs(jobs: string, tab: string | undefined, session: string): FinishedJob[] {
 	const root = dirname(dirname(jobs));
-	// `limen close` and this line share one rule: a job leaves once every feature it names is in done/ or dropped/.
+	// `limen close` and this line share one rule: a job leaves once every feature it names is done, dropped or archived.
 	const closed = closedFeatures(root);
 	const candidates: Array<
 		FinishedJob & { readonly branch: string; readonly repo: string; readonly landable: boolean }

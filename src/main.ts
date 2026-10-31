@@ -137,9 +137,10 @@ usage:
   limen open <id|suffix|label>
   limen close <FNNN>
   limen ticket-author <ticket-path>                 # creation-commit author, following Git renames
-  limen ticket new "what becomes true" [--lane planned|active] [--touches id,id]  # next unused F number across lanes, limen/* branches and job labels
+  limen ticket new "what becomes true" [--lane planned|active] [--touches id,id]  # next unused F number across lanes, archive.tsv, limen/* branches, job labels and the plant's series
   limen ticket check [BRANCH]                    # land gate on demand: tickets BRANCH adds or changes; run before a hand git merge
   limen ticket done FNNN [FNNN ...]             # landed without limen land: active ticket moves to done/ with a landed date
+  limen ticket series [NAME PLANT [PLANT ...]]  # plants on this seat that share one F-number series; no arguments: this plant's series
   limen board [--write]                          # the board with NOW and PROVEN from the lanes and each ticket's jobs; --write rewrites them in spec/build.md
   limen sweep [--install|--uninstall]
   limen highlight [on|off]                       # seat-wide, off by default: ◆ marks every string Limen writes into Herdr

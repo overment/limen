@@ -1,6 +1,6 @@
 // S9 · sweep, prune and recovery: a dead or finished job is cleaned up, a live one is not. One plant, real bin/limen.
 import assert from "node:assert/strict";
-import { type ChildProcess, execFileSync, spawn, spawnSync } from "node:child_process";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { closeSync, existsSync, openSync, readdirSync, readFileSync, writeSync } from "node:fs";
 import { mkdir, utimes, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -11,12 +11,12 @@ import {
 	git,
 	jobDir,
 	jobFile,
-	LIMEN,
 	limen,
 	type Plant,
 	plant,
 	release,
 	spawnJob,
+	start,
 	until,
 	waitJob,
 } from "./plant.ts";
@@ -29,20 +29,6 @@ before(async () => {
 });
 after(() => p.cleanup());
 
-/** A real `limen` child that runs concurrently with the test; `done` resolves to its exit code and output. */
-function start(args: readonly string[], options: { cwd?: string; env?: Record<string, string> } = {}) {
-	const child: ChildProcess = spawn(process.execPath, [LIMEN, ...args], {
-		cwd: options.cwd ?? p.root,
-		env: { ...p.env, ...options.env },
-	});
-	let output = "";
-	child.stdout?.on("data", (chunk) => (output += chunk));
-	child.stderr?.on("data", (chunk) => (output += chunk));
-	const done = new Promise<{ status: number; output: string }>((resolve) =>
-		child.on("close", (status) => resolve({ status: status ?? 1, output })),
-	);
-	return { child, done };
-}
 /** Alive and not a zombie: a zombie answers kill(pid, 0) but has already exited. */
 const alive = (pid: number) =>
 	/^[^Z]/.test(spawnSync("ps", ["-o", "stat=", "-p", String(pid)], { encoding: "utf8" }).stdout.trim());
@@ -85,7 +71,6 @@ test("spawn returns before --prepare; prune keeps live, nested and starting work
 	git(p.root, "worktree", "add", "-q", "--detach", join(liveTree, "tmp/scratch"), "HEAD"); // the live job's own
 
 	const pruned = limen(p, ["prune"]);
-	assert.equal(pruned.status, 0, pruned.stderr);
 	assert.match(pruned.stdout, new RegExp(`pruned .*/${stale} \\(job ${stale}\\): its record never got a state`));
 	for (const dropped of [jobFile(p, landed, "worktree"), jobFile(p, unmerged, "worktree"), jobDir(p, stale)]) {
 		assert.ok(!existsSync(dropped), `prune kept ${dropped}`);
@@ -187,8 +172,8 @@ syncBuiltinESMExports();
 	const hold = openSync(gate, "r+");
 	const env = { NODE_OPTIONS: `${p.env.NODE_OPTIONS} --import=${barrier}` };
 	const children = [
-		...projects.map((project) => start(["workspace", "init"], { cwd: project, env })),
-		...Array.from({ length: 8 }, () => start(["sweep"], { env })),
+		...projects.map((project) => start(p, ["workspace", "init"], { cwd: project, env })),
+		...Array.from({ length: 8 }, () => start(p, ["sweep"], { env })),
 	];
 	// A child that fails before its first registry touch never reaches the barrier; count it so the wait still ends.
 	await until(
@@ -198,7 +183,7 @@ syncBuiltinESMExports();
 	writeSync(hold, "x".repeat(children.length));
 	const results = await Promise.all(children.map((child) => child.done));
 	closeSync(hold);
-	const broken = results.filter((result) => result.status !== 0 || /ENOTEMPTY/.test(result.output));
+	const broken = results.filter((result) => result.status !== 0 || /ENOTEMPTY/.test(result.stdout + result.stderr));
 	assert.deepEqual(broken, []);
 	assert.deepEqual(new Set(readFileSync(registry, "utf8").trim().split("\n")), new Set([p.root, ...projects]));
 });

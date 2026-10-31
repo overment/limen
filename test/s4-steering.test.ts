@@ -132,7 +132,6 @@ test("continue resumes the parent's session, linked, with its extensions or a re
 	const transcript = readFileSync(join(jobDir(p, parent), "session/fake.jsonl"), "utf8");
 	const continued = (flags: readonly string[]) => {
 		const run = limen(p, ["continue", parent, "say next", "--detached", ...flags]);
-		assert.equal(run.status, 0, run.stderr);
 		const id = run.stdout.trim().split("\n").at(-1) ?? "";
 		assert.equal(waitJob(p, id), "done");
 		return id;

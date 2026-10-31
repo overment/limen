@@ -1,7 +1,7 @@
 // The shared throwaway plant every scenario runs on: a temp Git repo after a real `limen init`, an environment built
 // from an allowlist, the scripted fake engine (test/fake-engine.mjs) as `pi` and `omp`, and a fetch sink that records
 // every request a Limen process makes. Scenarios wait on `limen wait`, file events and FIFOs; nothing here sleeps.
-import { execFileSync, spawnSync } from "node:child_process";
+import { type ChildProcess, execFileSync, spawn, spawnSync } from "node:child_process";
 import { existsSync, readFileSync, watch } from "node:fs";
 import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -122,6 +122,19 @@ export function limen(plant: Plant, args: readonly string[], options: RunOptions
 		throw result.error;
 	}
 	return { stdout: result.stdout, stderr: result.stderr, status: result.status ?? 1 };
+}
+
+/** Runs the real CLI beside the test and other runs; `done` resolves once it exits. */
+export function start(plant: Plant, args: readonly string[], options: RunOptions = {}) {
+	const child: ChildProcess = spawn(process.execPath, [LIMEN, ...args], {
+		cwd: options.cwd ?? plant.root,
+		env: { ...plant.env, ...options.env },
+	});
+	const run = { stdout: "", stderr: "", status: 1 };
+	child.stdout?.on("data", (chunk) => (run.stdout += chunk));
+	child.stderr?.on("data", (chunk) => (run.stderr += chunk));
+	const done = new Promise<Run>((resolve) => child.on("close", (status) => resolve({ ...run, status: status ?? 1 })));
+	return { child, done };
 }
 
 /** `limen spawn [flags] <task>`; returns the job id or throws with the CLI output. */

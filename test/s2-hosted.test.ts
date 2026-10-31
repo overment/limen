@@ -10,7 +10,7 @@ import { join } from "node:path";
 import { createInterface } from "node:readline";
 import { after, before, test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { FINAL, jobDir, jobFile, LIMEN, limen, type Plant, plant, release, spawnJob, until, waitJob } from "./plant.ts";
+import { FINAL, jobDir, jobFile, limen, type Plant, plant, release, spawnJob, start, until, waitJob } from "./plant.ts";
 
 const WAKE = fileURLToPath(new URL("../hook/wake.ts", import.meta.url));
 
@@ -96,13 +96,7 @@ const saveState = async (next: unknown) => {
 };
 const alive = (pid: number) => spawnSync("kill", ["-0", String(pid)]).status === 0;
 /** Runs the CLI without blocking the event loop, so two sweeps can race. */
-const limenAsync = (args: readonly string[]) =>
-	new Promise<number>((resolve) =>
-		spawn(process.execPath, [LIMEN, ...args], { cwd: p.root, env: { ...p.env, ...env }, stdio: "ignore" }).on(
-			"exit",
-			(code) => resolve(code ?? 1),
-		),
-	);
+const limenAsync = async (args: readonly string[]) => (await start(p, args, { env }).done).status;
 
 before(async () => {
 	p = await plant();

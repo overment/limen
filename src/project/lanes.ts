@@ -4,6 +4,7 @@ import { basename, dirname, join } from "node:path";
 import { readTickets, type TicketRecord } from "../picture/tickets.ts";
 import { commitPaths, dirtyPaths, isGitRepository } from "./git.ts";
 import { planningSource } from "./planning.ts";
+import { ARCHIVE, type ArchiveRow, archiveRows } from "./series.ts";
 
 /** PROVEN names this many landed features; every month folder keeps a count line below them. */
 const PROVEN_SHOWN = 10;
@@ -23,34 +24,52 @@ export function nowLines(tickets: readonly TicketRecord[]): string[] {
 		});
 }
 
-/** The last landed features by `landed` date (month folder when it has none), then one count line per month. */
-export function provenLines(tickets: readonly TicketRecord[]): string[] {
-	const done = tickets
-		.filter((ticket) => ticket.lane === "done")
-		.map((ticket) => ({ ticket, month: ticket.path.split("/")[3] ?? "" }))
-		.sort(
-			(a, b) =>
-				(b.ticket.landed ?? b.month).localeCompare(a.ticket.landed ?? a.month) || number(b.ticket) - number(a.ticket),
-		);
-	const months = new Map<string, number>();
-	for (const { month } of done) {
-		months.set(month, (months.get(month) ?? 0) + 1);
+/**
+ * The last landed features by `landed` date (month folder when it has none), then one count line per month. Archived
+ * done tickets count by their close month, and a month's line names the register when it holds some of them.
+ */
+export function provenLines(tickets: readonly TicketRecord[], archived: readonly ArchiveRow[]): string[] {
+	const present = new Set(tickets.map((ticket) => ticket.code));
+	const done = [
+		...tickets
+			.filter((ticket) => ticket.lane === "done")
+			.map((ticket) => ({
+				month: ticket.path.split("/")[3] ?? "",
+				date: ticket.landed,
+				number: number(ticket),
+				line: `- \`${folder(ticket)}\` (🟢 PROVEN): ${ticket.title}${ticket.landed ? `; landed ${ticket.landed}` : ""}`,
+				archived: false,
+			})),
+		...archived
+			.filter((row) => row.code && row.lane === "done" && !present.has(row.code))
+			.map((row) => ({
+				month: row.month,
+				date: null,
+				number: row.number,
+				line: `- \`${basename(row.path)}\` (🟢 PROVEN): ${row.title}`,
+				archived: true,
+			})),
+	].sort((a, b) => (b.date ?? b.month).localeCompare(a.date ?? a.month) || b.number - a.number);
+	const months = new Map<string, { count: number; folder: boolean; register: boolean }>();
+	for (const { month, archived: register } of done) {
+		const seen = months.get(month) ?? { count: 0, folder: false, register: false };
+		months.set(month, { count: seen.count + 1, folder: seen.folder || !register, register: seen.register || register });
 	}
 	return [
-		...done.slice(0, PROVEN_SHOWN).map(({ ticket }) => {
-			const landed = ticket.landed ? `; landed ${ticket.landed}` : "";
-			return `- \`${folder(ticket)}\` (🟢 PROVEN): ${ticket.title}${landed}`;
-		}),
+		...done.slice(0, PROVEN_SHOWN).map((entry) => entry.line),
 		...[...months]
 			.sort(([a], [b]) => b.localeCompare(a))
-			.map(([month, count]) => `- ${month}: ${count} landed. spec/features/done/${month}/`),
+			.map(([month, seen]) => {
+				const where = [seen.folder ? `spec/features/done/${month}/` : "", seen.register ? ARCHIVE : ""];
+				return `- ${month}: ${seen.count} landed. ${where.filter(Boolean).join(" and ")}`;
+			}),
 	];
 }
 
 /** The board text with NOW and PROVEN rebuilt from the lanes; every other line stays as written. */
-export function renderBoard(text: string, tickets: readonly TicketRecord[]): string {
+export function renderBoard(text: string, tickets: readonly TicketRecord[], archived: readonly ArchiveRow[]): string {
 	const now = nowLines(tickets);
-	const proven = provenLines(tickets);
+	const proven = provenLines(tickets, archived);
 	const board = replaceSection(
 		text,
 		"NOW",
@@ -67,7 +86,7 @@ export async function writeBoard(root: string): Promise<boolean> {
 		return false;
 	}
 	const text = await readFile(path, "utf8");
-	const next = renderBoard(text, (await readTickets(root)).tickets);
+	const next = renderBoard(text, (await readTickets(root)).tickets, archiveRows(root));
 	if (next === text) {
 		return false;
 	}

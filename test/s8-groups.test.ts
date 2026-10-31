@@ -14,12 +14,13 @@ import {
 	git,
 	jobDir,
 	jobFile,
-	LIMEN,
 	limen,
 	type Plant,
 	plant,
+	type Run,
 	release,
 	requests,
+	start,
 	TICKET,
 	until,
 	waitJob,
@@ -67,23 +68,9 @@ before(async () => {
 });
 after(() => p.cleanup());
 
-/** A real `limen` child that runs alongside others; resolves to its exit code, the last stdout line (a job or group id) and all output. */
-function run(
-	args: readonly string[],
-	env: Record<string, string> = {},
-): Promise<{ status: number; id: string; output: string }> {
-	const child = spawn(process.execPath, [LIMEN, ...args], { cwd: p.root, env: { ...p.env, ...env } });
-	const { promise, resolve } = Promise.withResolvers<{ status: number; id: string; output: string }>();
-	let stdout = "",
-		output = "";
-	child.stdout.on("data", (chunk) => {
-		stdout += chunk;
-		output += chunk;
-	});
-	child.stderr.on("data", (chunk) => (output += chunk));
-	child.on("close", (status) => resolve({ status: status ?? 1, id: stdout.trim().split("\n").at(-1) ?? "", output }));
-	return promise;
-}
+const run = (args: readonly string[], env: Record<string, string> = {}) => start(p, args, { env }).done;
+/** The last stdout line: the id of the job or group a run started. */
+const startedId = (result?: Run) => result?.stdout.trim().split("\n").at(-1) ?? "";
 const cabinet = () => join(p.root, ".limen/groups", group);
 const members = (): Array<{ id: string; team: string; role: string }> =>
 	JSON.parse(readFileSync(join(cabinet(), "run.json"), "utf8")).members;
@@ -109,10 +96,10 @@ test("a stale lead registration starts nothing; two concurrent activations by th
 		run(["group", "start", FEATURE, ...SETTINGS], LEAD),
 	]);
 	for (const result of started) {
-		assert.equal(result.status, 0, result.output);
+		assert.equal(result.status, 0, result.stderr);
 	}
-	group = started[0]?.id ?? "";
-	assert.deepEqual([started[1]?.id, ...readdirSync(join(p.root, ".limen/groups"))], [group, group]);
+	group = startedId(started[0]);
+	assert.deepEqual([startedId(started[1]), ...readdirSync(join(p.root, ".limen/groups"))], [group, group]);
 	assert.deepEqual(roles(), ["team-1 coordinator", "team-2 coordinator"]);
 	[roster.coordinator1 = "", roster.coordinator2 = ""] = members().map((member) => member.id);
 	for (const id of [roster.coordinator1, roster.coordinator2]) {
@@ -144,10 +131,10 @@ test("launches queued behind a slow sibling wait past the old 10-second lock dea
 	await writeFile(gate, "go\n");
 	const first = await slow;
 	const raced = await Promise.all(racing);
-	roster.worker1 = first.id;
-	roster.worker2 = raced.find((result) => result.status === 0)?.id ?? "";
-	assert.equal(first.status, 0, first.output);
-	assert.deepEqual(raced.map((r) => r.status).sort(), [0, 1], raced.map((r) => r.output).join("\n"));
+	roster.worker1 = startedId(first);
+	roster.worker2 = startedId(raced.find((result) => result.status === 0));
+	assert.equal(first.status, 0, first.stderr);
+	assert.deepEqual(raced.map((r) => r.status).sort(), [0, 1], raced.map((r) => r.stdout + r.stderr).join("\n"));
 	// No half-claimed slot: the roster and the job records are the same four jobs.
 	assert.deepEqual(roles(), ["team-1 coordinator", "team-2 coordinator", "team-1 worker", "team-2 worker"]);
 	assert.deepEqual(new Set(readdirSync(join(p.root, ".limen/jobs"))), new Set(members().map((member) => member.id)));
@@ -215,10 +202,9 @@ test("each recipient reads a finding once, the lead hears it as a followUp, and 
 test("a second group runs two routes through draft, critique and final, and the lead hears its result once", async () => {
 	const teams = ["--team", TEAM, "--team", "omp:fake/fake-2:low", "--rounds", "draft,critique,final"];
 	const started = await run(["group", "start", ROUNDS, ...teams], LEAD);
-	assert.equal(started.status, 0, started.output);
-	const finished = `Group ${ROUNDS} (${started.id}) finished`;
+	const finished = `Group ${ROUNDS} (${startedId(started)}) finished`;
 	await until(lead, () => delivered().some((entry) => entry.text?.includes(finished)));
-	const runFile = readFileSync(join(p.root, ".limen/groups", started.id, "run.json"), "utf8");
+	const runFile = readFileSync(join(p.root, ".limen/groups", startedId(started), "run.json"), "utf8");
 	const jobs: Array<{ id: string; team: string; round: number; parent?: string }> = JSON.parse(runFile).members;
 	// Every team continues in its own session into the critique; the final round is the first team's alone.
 	const chain = jobs.map((job) => `${job.team} ${job.round} ${jobs.findIndex((other) => other.id === job.parent)}`);

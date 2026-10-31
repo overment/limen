@@ -6,6 +6,7 @@ import { readTickets } from "../picture/tickets.ts";
 import { commitList, limenRoot, unlandedBranches, workspaceRepository } from "../project/git.ts";
 import { renderBoard, writeBoard } from "../project/lanes.ts";
 import { activeRules, ruleLine } from "../project/seat-rules.ts";
+import { archiveRows } from "../project/series.ts";
 import { shownState } from "./jobs.ts";
 
 const HELP =
@@ -41,7 +42,7 @@ export async function boardCommand(args: readonly string[], cwd: string): Promis
 		console.log(`spec/build.md: NOW and PROVEN ${changed ? "rewritten from the lanes" : "already match the lanes"}`);
 		return;
 	}
-	const board = renderBoard(text ?? "# Build\n", (await readTickets(root)).tickets);
+	const board = renderBoard(text ?? "# Build\n", (await readTickets(root)).tickets, archiveRows(root));
 	// Seat-wide rules head the printed board only; they never enter spec/build.md.
 	const rules = activeRules().map((rule) => ruleLine(rule));
 	if (rules.length) {

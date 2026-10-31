@@ -16,7 +16,7 @@ export const registeredProjects = () => [
 export function updateRegisteredProjects(
 	update: (projects: readonly string[]) => readonly string[],
 ): readonly string[] {
-	return withRegistryLock(() => {
+	return withSeatLock(projectsFile(), () => {
 		const before = registeredProjects(),
 			after = [...new Set(update(before))];
 		if (before.length === after.length && before.every((project, index) => project === after[index])) {
@@ -54,8 +54,8 @@ export async function uninstallSeatSweep(): Promise<void> {
 	fs.rmSync(path, { force: true });
 	console.log(`removed ${path}`);
 }
-function withRegistryLock<T>(action: () => T): T {
-	const path = projectsFile();
+/** Runs `action` while this process holds `<path>.lock`; a lock whose owner is gone is reclaimed. */
+export function withSeatLock<T>(path: string, action: () => T): T {
 	const lock = `${path}.lock`;
 	const reclaimer = `${process.pid}.${Date.now()}`;
 	const deadline = Date.now() + 10_000;
@@ -85,17 +85,17 @@ function withRegistryLock<T>(action: () => T): T {
 		// The action's error is the one the caller needs. A failed release must not replace it; the lock owner is
 		// this process, so the next caller reclaims the lock once this process exits.
 		try {
-			releaseRegistryLock(lock, reclaimer);
+			releaseSeatLock(lock, reclaimer);
 		} catch {
 			// The action's error follows.
 		}
 		throw error;
 	}
 	// A lock that stays in place blocks every later caller, so a failed release fails this call.
-	releaseRegistryLock(lock, reclaimer);
+	releaseSeatLock(lock, reclaimer);
 	return value;
 }
-function releaseRegistryLock(lock: string, reclaimer: string): void {
+function releaseSeatLock(lock: string, reclaimer: string): void {
 	const released = `${lock}.released.${reclaimer}`;
 	try {
 		fs.renameSync(lock, released);
