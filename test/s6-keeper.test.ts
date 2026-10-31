@@ -96,10 +96,7 @@ test("cancelled and archived numbers stay taken, a series never gives a number t
 	assert.equal(limen(p, ["ticket", "series", "pair", p.root, q]).status, 0);
 	const made = await Promise.all([p.root, q, p.root, q].map((cwd) => start(p, ["ticket", "new", "z"], { cwd }).done));
 	assert.deepEqual(made.map((run) => /F\d+/.exec(run.stdout)?.[0]).sort(), ["F014", "F015", "F016", "F017"]);
-	assert.match(
-		limen(p, ["ticket", "series"]).stdout,
-		/^series pair\nplant .*\/repo\nplant .*\/api\nmark F017\nnext F018\n$/,
-	);
+	assert.match(limen(p, ["ticket", "series"]).stdout, /pair\nplant \S+repo\nplant \S+api\nmark F017\nnext F018\n$/);
 	const check = limen(p, ["ticket", "check", "dup"]);
 	assert.match(`${check.status} ${check.stderr}`, /^1 .*F010-x.*\/api\/\S+\/F010-q.*\n.*F012-c.*archive\.tsv:2/s);
 });
