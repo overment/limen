@@ -133,8 +133,9 @@ while IFS= read -r project; do
 done < "$registry"
 
 install -o root -g wheel -m 0440 /dev/null /etc/sudoers.d/limen-github
-printf 'Defaults:%s secure_path="/usr/bin:/usr/local/bin"\n%s ALL=(%s) NOPASSWD: /opt/limen/bin/limen github ensure *\n%s ALL=(%s) NOPASSWD: /opt/limen/bin/limen github deliver *\n' \
-  "$POLLER" "$POLLER" "$WORKER" "$POLLER" "$WORKER" > /etc/sudoers.d/limen-github
+# macOS sudoers keeps the caller's HOME (env_keep); the handoff must see the worker's HOME to reach its Herdr socket.
+printf 'Defaults:%s secure_path="/usr/bin:/usr/local/bin"\nDefaults:%s always_set_home\n%s ALL=(%s) NOPASSWD: /opt/limen/bin/limen github ensure *\n%s ALL=(%s) NOPASSWD: /opt/limen/bin/limen github deliver *\n' \
+  "$POLLER" "$POLLER" "$POLLER" "$WORKER" "$POLLER" "$WORKER" > /etc/sudoers.d/limen-github
 chmod 0440 /etc/sudoers.d/limen-github
 visudo -cf /etc/sudoers.d/limen-github
 ls -led /etc/sudoers.d | grep -Eq "^ *[0-9]+: user:$WORKER allow search\$" || chmod +a "user:$WORKER allow search" /etc/sudoers.d
