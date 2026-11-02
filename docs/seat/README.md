@@ -69,6 +69,16 @@ Linux reads process identity from `/proc/<pid>/stat`. `limen stop` and process c
 
 Use the checked-in [GitHub seat setup](github-setup.sh) and [remote operator trial](../remote.md#github-doorbell-opt-in-per-project). Run the installer and adjacent units only from a root-owned checkout of the pinned release, never from the worker checkout. It installs a root-owned release and `/usr/local/bin/limen` symlink, root-owned Node 24 and Herdr binaries, a private poller key/state, narrow sudo handoff, registry ACLs, and a stopped timer. In a fresh noninteractive SSH shell, `command -v limen` must resolve to that symlink. Do not put the App PEM in a checkout or worker home. Do not run `github poll` until all doctor findings except the stopped timer are repaired, enable the timer, then rerun doctor. A second registered repository uses the same seat App/timer and its own `github connect` in its persistent coordinator.
 
+**macOS seat.** Use [github-setup-macos.sh](github-setup-macos.sh) under the same rules. Differences from Linux:
+
+- **Groups and accounts.** Groups come from Directory Services (`dscl`). A new poller account is a hidden service account below uid 500.
+- **Access.** ACL entries are `chmod +a "user:limen-github allow search|read"`, read back from `ls -le`.
+- **Node.** Node is the root-owned `/usr/local/bin/node`; `/usr/bin` is system-protected.
+- **Poller.** The poller is the launchd job `dev.limen.github` (`/Library/LaunchDaemons/dev.limen.github.plist`, `StartInterval` 60). The installer leaves it disabled and unloaded.
+- **Poller settings.** launchd has no environment file, so the poller settings sit in that root-owned plist. They hold no key bytes.
+- **Enabling it.** Enable the job with `launchctl enable system/dev.limen.github && launchctl bootstrap system /Library/LaunchDaemons/dev.limen.github.plist`.
+- **Doctor.** `limen github doctor` reads the plist with `plutil` and the job with `launchctl`.
+
 The historical Alice draft under `tmp/` is not a deployment source. Use a root-owned Node 24 binary source, not a symlink to `~overment/.nvm`; a worker-owned Node or Herdr binary is unsafe even at mode 0755. A poller can execute worker-owned code and expose its key.
 
 ## Not built
