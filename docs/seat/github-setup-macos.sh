@@ -111,7 +111,10 @@ fi
 install -o "$POLLER" -g "$POLLER" -m 0600 "$PEM_SOURCE" /etc/limen-github/app.pem
 
 # Access control entries: add each once.
-acl() { # acl RIGHTS PATH
+acl() { # acl RIGHTS PATH — only where the other class lacks the right (system folders such as /Users refuse ACLs)
+  local bit=1
+  [[ $1 == read ]] && bit=4
+  (( (8#$(stat -f %Lp "$2") & bit) != 0 )) && return 0
   ls -led "$2" | grep -Eq "^ *[0-9]+: user:$POLLER allow $1\$" || chmod +a "user:$POLLER allow $1" "$2"
 }
 registry="$worker_home/.limen/projects"
