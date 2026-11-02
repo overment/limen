@@ -24,6 +24,7 @@ import {
 	readBinding,
 } from "../integrations/github-review.ts";
 import { herdrBinary } from "../integrations/herdr.ts";
+import { groupId } from "../integrations/seat-os.ts";
 import { repoRoot } from "../project/git.ts";
 import { githubDoctor } from "./github-doctor.ts";
 import { spawnCommand } from "./spawn.ts";
@@ -316,9 +317,8 @@ async function connectDoorbell(root: string): Promise<void> {
 	if (previous && previous.repo.toLowerCase() !== repo.toLowerCase()) {
 		throw new Error("disconnect the previous GitHub binding before changing origin");
 	}
-	const group = spawnSync("getent", ["group", "limen-github"], { encoding: "utf8" });
-	const gid = Number(group.stdout?.split(":")[2]);
-	if (group.status !== 0 || !Number.isSafeInteger(gid) || !process.getgroups?.().includes(gid)) {
+	const gid = groupId("limen-github");
+	if (gid === undefined || !process.getgroups?.().includes(gid)) {
 		throw new Error("connect requires membership in the provisioned limen-github group");
 	}
 	await mkdir(join(githubDir(root), "claims"), { recursive: true, mode: 0o770 });

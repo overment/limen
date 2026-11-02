@@ -6,6 +6,14 @@ import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { bindingPath, liveCoordinator, originRepository, readBinding } from "../integrations/github-review.ts";
 import { herdrBinary } from "../integrations/herdr.ts";
+import {
+	aclAllows,
+	groupId,
+	launchdLoaded,
+	launchdServiceOk,
+	type SeatPlatform,
+	seatPlatform,
+} from "../integrations/seat-os.ts";
 
 type Seat = {
 	release: string;
@@ -20,8 +28,28 @@ type Seat = {
 	alternateNode?: string;
 	service?: string;
 	sudoers?: string;
+	platform?: SeatPlatform;
 };
-const seatDefaults = (): Seat => ({
+/** macOS: the poller is the launchd job `timer` in `service`; Node is the root-owned /usr/local/bin/node. */
+const DARWIN_SERVICE = "dev.limen.github";
+const seatDefaults = (): Seat =>
+	seatPlatform() === "darwin"
+		? {
+				release: "/opt/limen",
+				key: "/etc/limen-github/app.pem",
+				state: "/var/lib/limen-github/state",
+				registry: join(process.env.LIMEN_HOME || homedir(), ".limen/projects"),
+				timer: DARWIN_SERVICE,
+				poller: "limen-github",
+				node: "/usr/local/bin/node",
+				herdr: "/usr/local/bin/herdr",
+				cli: "/usr/local/bin/limen",
+				service: `/Library/LaunchDaemons/${DARWIN_SERVICE}.plist`,
+				sudoers: "/etc/sudoers.d/limen-github",
+				platform: "darwin",
+			}
+		: linuxSeat();
+const linuxSeat = (): Seat => ({
 	release: "/opt/limen",
 	key: "/etc/limen-github/app.pem",
 	state: "/var/lib/limen-github/state",
@@ -34,6 +62,7 @@ const seatDefaults = (): Seat => ({
 	service: "/etc/systemd/system/limen-github.service",
 	alternateNode: "/usr/local/bin/node",
 	sudoers: "/etc/sudoers.d/limen-github",
+	platform: "linux",
 });
 
 function command(bin: string, args: string[]): string | undefined {
@@ -95,29 +124,6 @@ async function rootOwnedRelease(root: string): Promise<boolean> {
 	return true;
 }
 
-function aclAllows(path: string, poller: string, permission: "r" | "x", uid: number, gid: number): boolean {
-	const entry = command("getfacl", ["-cp", path]);
-	if (!entry) {
-		return false;
-	}
-	const owner = Number(command("stat", ["-c", "%u", path]));
-	const group = Number(command("stat", ["-c", "%g", path]));
-	const rows = entry.split("\n");
-	const rights = (prefix: string) => rows.find((row) => row.startsWith(prefix))?.split(":")[2];
-	if (owner === uid) {
-		return !!rights("user::")?.includes(permission);
-	}
-	const mask = rights("mask::") ?? "rwx";
-	const named = rights(`user:${poller}:`);
-	if (named !== undefined) {
-		return named.includes(permission) && mask.includes(permission);
-	}
-	if (group === gid) {
-		return !!rights("group::")?.includes(permission) && mask.includes(permission);
-	}
-	return !!rights("other::")?.includes(permission);
-}
-
 type Report = (ok: boolean, label: string, fix: string) => void;
 /** What every later check needs: the seat, the report line writer, and the poller and worker identities. */
 type Doctor = {
@@ -172,10 +178,9 @@ function checkSeatIdentities(seat: Seat, report: Report): { pollerUid: number; g
 		"remove worker sudo/admin groups and noninteractive sudo grants as root; log in again",
 	);
 	report(pollerUid > 0, "isolated poller identity", `run docs/seat/github-setup.sh as root to create ${seat.poller}`);
-	const group = command("getent", ["group", "limen-github"]);
-	const gid = Number(group?.split(":")[2]);
+	const gid = groupId("limen-github", seat.platform ?? seatPlatform()) ?? -1;
 	report(
-		Number.isSafeInteger(gid) && gid > 0 && (process.getgroups?.() ?? []).includes(gid),
+		gid > 0 && (process.getgroups?.() ?? []).includes(gid),
 		"worker in limen-github group",
 		`add ${worker} to limen-github as root; log in again`,
 	);
@@ -211,7 +216,7 @@ async function checkRootInstall({ seat, report }: Doctor): Promise<boolean> {
 				target === join(seat.release, "bin/limen") &&
 				selected === seat.cli,
 			"root-owned Limen CLI available on PATH",
-			`as root run ln -sfnT ${seat.release}/bin/limen ${seat.cli}; keep /usr/local/bin root-owned mode 0755 and include it in the coordinator's noninteractive SSH PATH`,
+			`as root link ${seat.cli} to ${seat.release}/bin/limen (ln -sfn); keep /usr/local/bin root-owned mode 0755 and include it in the coordinator's noninteractive SSH PATH`,
 		);
 	}
 	const nodeSafe = await rootExecutable(seat.node);
@@ -230,7 +235,10 @@ async function checkRootInstall({ seat, report }: Doctor): Promise<boolean> {
 /** The poller service runs the root-owned interpreter, the sudo policy is narrow, and poller and CLI share a revision. */
 async function checkPollerService({ seat, report }: Doctor, releaseSafe: boolean): Promise<void> {
 	const service = seat.service ? await info(seat.service) : undefined;
-	const unit = seat.service && (await readFile(seat.service, "utf8").catch(() => ""));
+	const unit =
+		(seat.platform ?? seatPlatform()) === "linux" && seat.service
+			? await readFile(seat.service, "utf8").catch(() => "")
+			: "";
 	if (seat.alternateNode) {
 		const alternate = await lstat(seat.alternateNode).catch(() => undefined);
 		report(
@@ -239,22 +247,36 @@ async function checkPollerService({ seat, report }: Doctor, releaseSafe: boolean
 			`replace ${seat.alternateNode} with a root-owned Node 24 binary or remove it; never link to a worker NVM home`,
 		);
 	}
-	report(
-		!!service?.isFile() &&
-			service.uid === 0 &&
-			(service.mode & 0o022) === 0 &&
-			!!unit?.includes(`ExecStart=${seat.node} ${seat.release}/bin/limen github poll`) &&
-			unit.includes("User=limen-github") &&
-			unit.includes("Environment=PATH=/usr/bin:/usr/local/bin") &&
-			command("systemctl", ["show", "-P", "FragmentPath", "limen-github.service"]) === seat.service &&
-			command("systemctl", ["show", "-P", "DropInPaths", "limen-github.service"]) === "" &&
-			command("systemctl", ["show", "-P", "User", "limen-github.service"]) === seat.poller &&
-			(command("systemctl", ["show", "-P", "ExecStart", "limen-github.service"]) ?? "").includes(
-				`${seat.node} ${seat.release}/bin/limen github poll`,
-			),
-		"safe poller service command and PATH",
-		"install docs/seat/limen-github.service as root; use the root-owned interpreter explicitly",
-	);
+	const rootFile = !!service?.isFile() && service.uid === 0 && (service.mode & 0o022) === 0;
+	if ((seat.platform ?? seatPlatform()) === "darwin") {
+		report(
+			rootFile &&
+				!!seat.service &&
+				launchdServiceOk(seat.service, {
+					label: seat.timer,
+					user: seat.poller,
+					node: seat.node,
+					release: seat.release,
+				}),
+			"safe poller service command and PATH",
+			`install the launchd plist from docs/seat/github-setup-macos.sh as root at ${seat.service}; run ${seat.node} ${seat.release}/bin/limen github poll as ${seat.poller}`,
+		);
+	} else {
+		report(
+			rootFile &&
+				!!unit?.includes(`ExecStart=${seat.node} ${seat.release}/bin/limen github poll`) &&
+				unit.includes("User=limen-github") &&
+				unit.includes("Environment=PATH=/usr/bin:/usr/local/bin") &&
+				command("systemctl", ["show", "-P", "FragmentPath", "limen-github.service"]) === seat.service &&
+				command("systemctl", ["show", "-P", "DropInPaths", "limen-github.service"]) === "" &&
+				command("systemctl", ["show", "-P", "User", "limen-github.service"]) === seat.poller &&
+				(command("systemctl", ["show", "-P", "ExecStart", "limen-github.service"]) ?? "").includes(
+					`${seat.node} ${seat.release}/bin/limen github poll`,
+				),
+			"safe poller service command and PATH",
+			"install docs/seat/limen-github.service as root; use the root-owned interpreter explicitly",
+		);
+	}
 	const sudoers = seat.sudoers ? await info(seat.sudoers) : undefined;
 	report(
 		!!sudoers?.isFile() && sudoers.uid === 0 && (sudoers.mode & 0o777) === 0o440,
@@ -283,7 +305,7 @@ async function checkPollerSecrets({ seat, report, pollerUid, gid }: Doctor): Pro
 		pollerUid > 0 &&
 		(key.mode & 0o077) === 0 &&
 		(await safeParents(seat.key, [0, pollerUid])) &&
-		aclAllows(dirname(seat.key), seat.poller, "x", pollerUid, gid);
+		aclAllows(dirname(seat.key), seat.poller, "x", pollerUid, gid, seat.platform);
 	const workerCannotRead = await access(seat.key, constants.R_OK).then(
 		() => false,
 		() => true,
@@ -303,20 +325,30 @@ async function checkPollerSecrets({ seat, report, pollerUid, gid }: Doctor): Pro
 		"private poller state",
 		"install /var/lib/limen-github/state as poller:poller mode 0700; keep parents non-worker-writable",
 	);
-	report(
-		command("systemctl", ["is-enabled", seat.timer]) === "enabled" &&
-			command("systemctl", ["is-active", seat.timer]) === "active",
-		"enabled active GitHub timer",
-		"systemctl daemon-reload && systemctl enable --now limen-github.timer; inspect journalctl -u limen-github.service",
-	);
+	if ((seat.platform ?? seatPlatform()) === "darwin") {
+		report(
+			launchdLoaded(seat.timer),
+			"enabled active GitHub timer",
+			`launchctl enable system/${seat.timer} && launchctl bootstrap system ${seat.service}; inspect its log`,
+		);
+	} else {
+		report(
+			command("systemctl", ["is-enabled", seat.timer]) === "enabled" &&
+				command("systemctl", ["is-active", seat.timer]) === "active",
+			"enabled active GitHub timer",
+			"systemctl daemon-reload && systemctl enable --now limen-github.timer; inspect journalctl -u limen-github.service",
+		);
+	}
 }
 /** The poller can read the seat's project registry, and this project is in it. Returns the registered projects. */
 async function checkSeatRegistry({ root, seat, report, pollerUid, gid }: Doctor): Promise<string[]> {
 	const registry = await readFile(seat.registry, "utf8").catch(() => undefined);
 	let registryAccess =
-		registry !== undefined && pollerUid > 0 && aclAllows(seat.registry, seat.poller, "r", pollerUid, gid);
+		registry !== undefined &&
+		pollerUid > 0 &&
+		aclAllows(seat.registry, seat.poller, "r", pollerUid, gid, seat.platform);
 	for (let parent = dirname(seat.registry); parent !== dirname(parent); parent = dirname(parent)) {
-		registryAccess &&= aclAllows(parent, seat.poller, "x", pollerUid, gid);
+		registryAccess &&= aclAllows(parent, seat.poller, "x", pollerUid, gid, seat.platform);
 	}
 	report(
 		registryAccess,
@@ -362,12 +394,12 @@ async function checkProjectAccess(
 	}
 	let traverse = !!registryPath?.isDirectory();
 	for (let parent = project; parent !== dirname(parent); parent = dirname(parent)) {
-		traverse &&= aclAllows(parent, seat.poller, "x", pollerUid, gid);
+		traverse &&= aclAllows(parent, seat.poller, "x", pollerUid, gid, seat.platform);
 	}
-	traverse &&= aclAllows(join(project, ".limen"), seat.poller, "x", pollerUid, gid);
+	traverse &&= aclAllows(join(project, ".limen"), seat.poller, "x", pollerUid, gid, seat.platform);
 	traverse &&=
-		aclAllows(join(project, ".limen/github"), seat.poller, "x", pollerUid, gid) &&
-		aclAllows(bindingPath(project), seat.poller, "r", pollerUid, gid);
+		aclAllows(join(project, ".limen/github"), seat.poller, "x", pollerUid, gid, seat.platform) &&
+		aclAllows(bindingPath(project), seat.poller, "r", pollerUid, gid, seat.platform);
 	report(
 		!!traverse &&
 			!!limen?.isDirectory() &&
