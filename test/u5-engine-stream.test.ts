@@ -16,6 +16,8 @@ test("a pi-claude route loads Pi's installed bridge package; OMP gets it as one 
 	const slots = { jsonMode: true, jobDir: "/j", label: "l", preamble: "p", extensions: [], taskFile: "/j/task.md" };
 	const pi = argvFor(ENGINES.pi, { ...slots, provider: "pi-claude", model: "claude-opus-5-5" }).join(" ");
 	assert.ok(pi.includes(`--extension ${bridge} --provider pi-claude --model claude-opus-5-5 `), pi);
+	const named = argvFor(ENGINES.pi, { ...slots, provider: "claude-bridge", model: "claude-opus-5-5" }).join(" ");
+	assert.ok(named.includes(`--extension ${bridge} --provider claude-bridge --model claude-opus-5-5 `), named);
 	const long = argvFor(ENGINES.omp, { ...slots, model: "pi-claude/claude-opus-5-5" });
 	assert.deepEqual(argvFor(ENGINES.omp, { ...slots, provider: "pi-claude", model: "claude-opus-5-5" }), long);
 	assert.deepEqual(argvFor(ENGINES.omp, { ...slots, provider: "pi-claude", model: "pi-claude/claude-opus-5-5" }), long);

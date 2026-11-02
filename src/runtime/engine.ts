@@ -280,6 +280,8 @@ export function argvFor(profile: EngineProfile, slots: EngineArgv): string[] {
 }
 
 const BRIDGE = "pi-claude";
+// The pi-claude-bridge package registers its Pi provider as `claude-bridge` in current releases; Pi takes either name.
+const PI_BRIDGES = [BRIDGE, "claude-bridge"];
 
 // Both engines reach Claude Code through a bridge extension that serves `pi-claude/…` ids. Pi takes the provider
 // as given. OMP has no `pi-claude` provider and chooses its bridge by the model id alone, so on OMP
@@ -291,7 +293,8 @@ export function engineRoute(
 	model: string | undefined,
 ): { readonly provider: string | undefined; readonly model: string | undefined; readonly bridged: boolean } {
 	if (profile.id === "pi") {
-		return { provider, model, bridged: provider === BRIDGE || !!model?.startsWith(`${BRIDGE}/`) };
+		const bridged = PI_BRIDGES.some((name) => provider === name || !!model?.startsWith(`${name}/`));
+		return { provider, model, bridged };
 	}
 	if (profile.id !== "omp") {
 		return { provider, model, bridged: false };
