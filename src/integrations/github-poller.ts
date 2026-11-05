@@ -15,6 +15,7 @@ import {
 	matchedGithubJob,
 	originRepository,
 	readBinding,
+	readJobFile,
 } from "./github-review.ts";
 
 const API = "https://api.github.com";
@@ -255,7 +256,7 @@ async function reconcile(root: string, state: string, claim: GithubClaim, token:
 			claim.receipt?.startsWith("pending: no matching job record")
 		) {
 			const binding = await readBinding(root);
-			const outcome = await readFile(join(githubDir(root), "outcomes", `${claim.id}.json`), "utf8")
+			const outcome = await readJobFile(join(githubDir(root), "outcomes", `${claim.id}.json`))
 				.then(
 					(text) =>
 						JSON.parse(text) as { repo: string; id: number; coordinator: string; nonce: string; answer: string },
@@ -347,9 +348,10 @@ async function reconcile(root: string, state: string, claim: GithubClaim, token:
 		return;
 	}
 	const dir = join(root, ".limen/jobs", found.id);
-	const [result, log] = await Promise.all(
-		["result", "log"].map((name) => readFile(join(dir, name), "utf8").catch(() => "")),
-	);
+	const [result, log] = await Promise.all([
+		readJobFile(join(dir, "result")),
+		readJobFile(join(dir, "log"), 65_536, true),
+	]);
 	const evidence =
 		(result ?? "").trim().slice(0, 1600) ||
 		(log ?? "").trim().split("\n").slice(-10).join("\n").slice(0, 1600) ||

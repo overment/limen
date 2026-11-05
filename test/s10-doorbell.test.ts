@@ -2,7 +2,7 @@
 // sink and fake `sudo`, `id` and `herdr` on PATH. Who may start work, what the App posts, and what a restart posts again.
 import assert from "node:assert/strict";
 import { generateKeyPairSync } from "node:crypto";
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { link, mkdir, readdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { test } from "node:test";
 import { git, jobDir, LIMEN, limen, plant, requests, respond, waitJob } from "./plant.ts";
@@ -118,9 +118,7 @@ test("S10: only an authorized request rings the doorbell, the App replies once e
 		id: `#!/bin/sh\n[ "$1" = -u ] && echo ${workerUid} && exit 0\necho staff\n`,
 		sudo: '#!/bin/sh\n[ "$2" = -l ] && exit 1\nshift 4\nexec "$@"\n', // the narrow handoff runs as the worker
 	};
-	for (const [name, text] of Object.entries(tools)) {
-		await writeFile(join(p.bin, name), text, { mode: 0o755 });
-	}
+	await Promise.all(Object.entries(tools).map(([name, text]) => writeFile(join(p.bin, name), text, { mode: 0o755 })));
 	const env = {
 		LIMEN_HERDR: join(p.bin, "herdr"),
 		LIMEN_GITHUB_APP_ID: String(APP),
@@ -130,9 +128,7 @@ test("S10: only an authorized request rings the doorbell, the App replies once e
 		LIMEN_GITHUB_WORKER_UID: workerUid,
 		LIMEN_GITHUB_LIMEN_BIN: LIMEN,
 	};
-	const poll = () => {
-		assert.equal(limen(p, ["github", "poll"], { env }).status, 0);
-	};
+	const poll = () => assert.equal(limen(p, ["github", "poll"], { env }).status, 0);
 	// Every write to the repository; the App's token exchange is a POST outside it.
 	const posts = () =>
 		requests(p).filter((request) => request.method !== "GET" && request.url.includes(`/repos/${REPO}/`));
@@ -181,12 +177,15 @@ test("S10: only an authorized request rings the doorbell, the App replies once e
 		state: "done\n",
 		"herdr/agent": "w1:p9\n",
 	};
-	for (const [name, text] of Object.entries(fields)) {
-		await writeFile(join(fake, name), text);
-	}
+	await Promise.all(Object.entries(fields).map(([name, text]) => writeFile(join(fake, name), text)));
 
+	await rm(join(jobDir(p, id), "result"), { force: true });
+	await symlink(key, join(jobDir(p, id), "result"));
+	await rm(join(jobDir(p, id), "log"), { force: true });
+	await link(key, join(jobDir(p, id), "log"));
 	poll();
 	const replies = posts();
+	assert.match(JSON.parse(replies[1]?.body ?? "{}").body, /No result or check evidence recorded/);
 	const sent = replies.map((request) => `${request.method} ${request.url}`);
 	const reply = `POST https://api.github.com/repos/${REPO}/issues/4/comments`;
 	assert.deepEqual(sent, [reply, reply], "one start and one terminal reply; none for the forged claim; no review");

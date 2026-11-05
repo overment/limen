@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
-import { readdir, readFile } from "node:fs/promises";
+import { constants } from "node:fs";
+import { open, readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 
 /** The longest no-job answer that `github resolve` writes and the poller posts. */
@@ -31,6 +32,31 @@ export function originRepository(root: string, foreign = false): string {
 		throw new Error("github connect requires a github.com origin (HTTPS or SSH)");
 	}
 	return match[1] as string;
+}
+
+/**
+ * Reads a job file from the worker-owned checkout for the poller, which posts what it reads. Only a regular file with
+ * one name counts: a symlink, a second name of another file, or a pipe reads as empty. At most `limit` bytes are read,
+ * from the end when `tail` is set.
+ */
+export async function readJobFile(path: string, limit = 65_536, tail = false): Promise<string> {
+	const flags = constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK;
+	const handle = await open(path, flags).catch(() => undefined);
+	if (!handle) {
+		return "";
+	}
+	try {
+		const info = await handle.stat();
+		if (!info.isFile() || info.nlink !== 1) {
+			return "";
+		}
+		const length = Math.min(info.size, limit);
+		const buffer = Buffer.alloc(length);
+		const { bytesRead } = await handle.read(buffer, 0, length, tail ? info.size - length : 0);
+		return buffer.subarray(0, bytesRead).toString("utf8");
+	} finally {
+		await handle.close();
+	}
 }
 
 export async function readBinding(root: string): Promise<GithubBinding | undefined> {
@@ -102,7 +128,7 @@ export async function matchedGithubJob(
 		const dir = join(root, ".limen/jobs", job.name);
 		const [task, hosted, candidate, base, branch, state, role] = await Promise.all(
 			["task.md", "hosted", "candidate", "base", "branch", "state", "role"].map((name) =>
-				readFile(join(dir, name), "utf8").catch(() => ""),
+				readJobFile(join(dir, name), 4096),
 			),
 		);
 		if (!(task ?? "").startsWith(`${githubMarker(claim)}\n`)) {
@@ -120,7 +146,7 @@ export async function matchedGithubJob(
 		if (!hosted || (!isReview && !isWork)) {
 			throw new Error(`conflicting job ${job.name} for ${githubMarker(claim)}; inspect it before retrying`);
 		}
-		const agent = await readFile(join(dir, "herdr/agent"), "utf8").catch(() => "");
+		const agent = await readJobFile(join(dir, "herdr/agent"), 4096);
 		return {
 			id: job.name,
 			branch: branch?.trim() ?? "",
