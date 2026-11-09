@@ -94,6 +94,8 @@ type PiApi = {
 
 const CACHE_REFRESH_MS = 30_000;
 const SWEEP_MS = 500;
+// Jobs this session runs in another registered project are read on a slower beat: they have no watch events here.
+const FOREIGN_SWEEP_MS = 2_000;
 // A busy job writes many files a second; their watch events start at most one sweep a second, the first at once.
 const EVENT_SWEEP_MS = 1_000;
 // Each timer tick re-checks this share of settled records, so one refresh cycle takes CACHE_REFRESH_MS without a pause.
@@ -156,7 +158,12 @@ export default function limenWake(pi: PiApi): void {
 	let listing: { readonly ids: readonly string[]; readonly known: ReadonlySet<string> } | undefined;
 	// Jobs that had left the start queue before this session began; their start is old news here.
 	const startedEarlier = new Set<string>();
-	let ownsJobs: boolean | undefined;
+	// Whether this session owns a job in a jobs directory, per directory; cleared with the listing cache.
+	const ownsJobs = new Map<string, boolean>();
+	// Jobs this session owns in another registered project with nothing left to deliver. A coordinator that spawns in
+	// another project (`cd <repo> && limen spawn`) is woken from there too.
+	const foreignSettled = new Set<string>();
+	let foreignSweepAt = 0;
 	let cacheExpiresAt = 0;
 	let sweeping = false;
 	const coordinator = coordinatorSignals();
@@ -306,10 +313,12 @@ export default function limenWake(pi: PiApi): void {
 		setStatus(statusBody);
 	};
 	const sessionOwns = (jobs: string) => {
-		if (ownsJobs === undefined) {
-			ownsJobs = sessionOwnsJobs(jobs, sessionId);
+		let owns = ownsJobs.get(jobs);
+		if (owns === undefined) {
+			owns = sessionOwnsJobs(jobs, sessionId);
+			ownsJobs.set(jobs, owns);
 		}
-		return ownsJobs;
+		return owns;
 	};
 	const reopen = (id: string) => {
 		settled.delete(id);
@@ -768,6 +777,64 @@ export default function limenWake(pi: PiApi): void {
 			refreshClaim(pending.claim);
 		}
 	};
+	// A running job this coordinator's tab started, before this session began, is this session's to hear. In another
+	// project only this tab's jobs are touched: the rest belong to that project's coordinator.
+	const adoptRunning = (jobs: string, jobId: string, tab: string | undefined, own: boolean) => {
+		const job = join(jobs, jobId);
+		if (stateOf(jobs, jobId) !== "running") {
+			return;
+		}
+		if (!own && !(tab && text(join(job, "origin-tab")) === tab)) {
+			return;
+		}
+		if (!routable(job)) {
+			enrollLegacyRunning(job);
+		}
+		// A job recording origin-pane is woken through Herdr at finalize; subscribing here would wake the same coordinator twice.
+		if (tab && text(join(job, "origin-tab")) === tab && !text(join(job, "origin-pane"))) {
+			subscribeSession(job, sessionId);
+		}
+		if (subscribed(job, sessionId) && text(join(job, "pid")) && !existsSync(join(job, "queued"))) {
+			claimMarker(job, "started", sessionId);
+			startedEarlier.add(jobId);
+		}
+	};
+	// The jobs directories of the other registered projects. Their running jobs from this tab are adopted at session start.
+	const otherJobsDirs = (): readonly string[] =>
+		registeredProjects()
+			.map((root) => join(resolve(root), ".limen", "jobs"))
+			.filter((dir) => jobsDir !== undefined && dir !== resolve(jobsDir) && existsSync(dir));
+	// Of those, the directories where this session owns a job; read again on every foreign sweep, so a job spawned there
+	// a moment ago is heard on the next beat.
+	const foreignJobsDirs = (): readonly string[] => otherJobsDirs().filter((dir) => sessionOwnsJobs(dir, sessionId));
+	// Jobs this session owns in another project wake it the same way as its own: their completion would otherwise reach no
+	// one, because every coordinator watches only its own project's jobs directory. Only owned jobs are read here; the
+	// unowned fallback stays with the coordinator of that project.
+	const sweepForeign = () => {
+		if (Date.now() - foreignSweepAt < FOREIGN_SWEEP_MS) {
+			return;
+		}
+		foreignSweepAt = Date.now();
+		for (const jobs of foreignJobsDirs()) {
+			let ids: readonly string[];
+			try {
+				ids = readdirSync(jobs);
+			} catch {
+				continue;
+			}
+			for (const id of ids) {
+				const job = join(jobs, id);
+				if (foreignSettled.has(job) || !subscribed(job, sessionId)) {
+					continue;
+				}
+				if (deliveryLeft(job, sessionId) === "nothing") {
+					foreignSettled.add(job);
+					continue;
+				}
+				observe(jobs, id);
+			}
+		}
+	};
 	const stampSweep = () => {
 		if (!limenDir || Date.now() - lastSweepAt < CLAIM_STALE_MS) {
 			return;
@@ -797,7 +864,7 @@ export default function limenWake(pi: PiApi): void {
 		try {
 			// Watch events invalidate individual records; a rolling refresh recovers missed events and manual wake repair.
 			if (Date.now() >= cacheExpiresAt) {
-				ownsJobs = undefined;
+				ownsJobs.clear();
 				listing = undefined;
 				cacheExpiresAt = Date.now() + CACHE_REFRESH_MS;
 			}
@@ -828,6 +895,7 @@ export default function limenWake(pi: PiApi): void {
 				// Observing can claim or deliver, so the verdict is read again.
 				settle(jobs, id, deliveryLeft(job, sessionId));
 			}
+			sweepForeign();
 			await updateStatus(
 				jobs,
 				running.filter((id) => stateOf(jobs, id) === "running"),
@@ -876,7 +944,7 @@ export default function limenWake(pi: PiApi): void {
 			return;
 		}
 		if (!filename || !path.includes("/") || /^[^/]+\/notify(?:\/subscribers(?:\/|$)|$)/.test(path)) {
-			ownsJobs = undefined;
+			ownsJobs.clear();
 			for (const unownedId of unowned) {
 				reopen(unownedId);
 			}
@@ -924,25 +992,21 @@ export default function limenWake(pi: PiApi): void {
 		refreshTicks = 0;
 		listing = undefined;
 		startedEarlier.clear();
-		ownsJobs = undefined;
+		ownsJobs.clear();
+		foreignSettled.clear();
+		foreignSweepAt = 0;
 		cacheExpiresAt = 0;
 		herdr = herdrTarget();
 		const tab = process.env.HERDR_TAB_ID?.trim();
-		for (const jobId of readdirSync(jobs)) {
-			const job = join(jobs, jobId);
-			if (stateOf(jobs, jobId) !== "running") {
+		for (const dir of [jobs, ...otherJobsDirs()]) {
+			let ids: readonly string[];
+			try {
+				ids = readdirSync(dir);
+			} catch {
 				continue;
 			}
-			if (!routable(job)) {
-				enrollLegacyRunning(job);
-			}
-			// A job recording origin-pane is woken through Herdr at finalize; subscribing here would wake the same coordinator twice.
-			if (tab && text(join(job, "origin-tab")) === tab && !text(join(job, "origin-pane"))) {
-				subscribeSession(job, id);
-			}
-			if (subscribed(job, id) && text(join(job, "pid")) && !existsSync(join(job, "queued"))) {
-				claimMarker(job, "started", id);
-				startedEarlier.add(jobId);
+			for (const jobId of ids) {
+				adoptRunning(dir, jobId, tab, dir === jobs);
 			}
 		}
 		watcher = watch(jobs, { recursive: true }, (_event, filename) => jobsChanged(filename));
