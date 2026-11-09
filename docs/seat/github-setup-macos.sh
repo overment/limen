@@ -111,7 +111,10 @@ fi
 install -o "$POLLER" -g "$POLLER" -m 0600 "$PEM_SOURCE" /etc/limen-github/app.pem
 
 # Access control entries: add each once.
-acl() { # acl RIGHTS PATH
+acl() { # acl RIGHTS PATH — only where the other class lacks the right (system folders such as /Users refuse ACLs)
+  local bit=1
+  [[ $1 == read ]] && bit=4
+  (( (8#$(stat -f %Lp "$2") & bit) != 0 )) && return 0
   ls -led "$2" | grep -Eq "^ *[0-9]+: user:$POLLER allow $1\$" || chmod +a "user:$POLLER allow $1" "$2"
 }
 registry="$worker_home/.limen/projects"
@@ -130,8 +133,9 @@ while IFS= read -r project; do
 done < "$registry"
 
 install -o root -g wheel -m 0440 /dev/null /etc/sudoers.d/limen-github
-printf 'Defaults:%s secure_path="/usr/bin:/usr/local/bin"\n%s ALL=(%s) NOPASSWD: /opt/limen/bin/limen github ensure *\n%s ALL=(%s) NOPASSWD: /opt/limen/bin/limen github deliver *\n' \
-  "$POLLER" "$POLLER" "$WORKER" "$POLLER" "$WORKER" > /etc/sudoers.d/limen-github
+# macOS sudoers keeps the caller's HOME (env_keep); the handoff must see the worker's HOME to reach its Herdr socket.
+printf 'Defaults:%s secure_path="/usr/bin:/usr/local/bin"\nDefaults:%s always_set_home\n%s ALL=(%s) NOPASSWD: /opt/limen/bin/limen github ensure *\n%s ALL=(%s) NOPASSWD: /opt/limen/bin/limen github deliver *\n' \
+  "$POLLER" "$POLLER" "$POLLER" "$WORKER" "$POLLER" "$WORKER" > /etc/sudoers.d/limen-github
 chmod 0440 /etc/sudoers.d/limen-github
 visudo -cf /etc/sudoers.d/limen-github
 ls -led /etc/sudoers.d | grep -Eq "^ *[0-9]+: user:$WORKER allow search\$" || chmod +a "user:$WORKER allow search" /etc/sudoers.d
