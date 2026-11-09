@@ -41,10 +41,13 @@ test("each spawn refusal exits 1, names its cause and leaves no job, worktree or
 	await mkdir(join(p.root, "spec/features/active/F002-draft"));
 	context.after(() => rm(join(p.root, "spec/features/active/F002-draft"), { recursive: true }));
 	await writeFile(join(p.root, draft), "# F002 · Not committed yet\n");
+	git(p.root, "branch", "limen/earlier-job");
+	context.after(() => git(p.root, "branch", "-D", "limen/earlier-job"));
 	const clean = traces();
 	const refusals: ReadonlyArray<readonly [readonly string[], string, Record<string, string>?]> = [
 		[[`Implement F002. Ticket: ${draft}`], draft],
 		[["--role", "coordinator", "work"], "coordinator"],
+		[["Commit on limen/earlier-job at its head."], "pass --branch limen/earlier-job"],
 		[["--engine", "claude", "work"], "--engine"],
 		[["--engine", "pi", "work"], "PATH", { PATH: "/usr/bin:/bin" }],
 		[["--engine", "pi", "--extension", "npm:package", "work"], "npm:package"],

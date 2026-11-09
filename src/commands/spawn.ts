@@ -18,6 +18,8 @@ import {
 	branchCommit,
 	branchExists,
 	commitHasFile,
+	listWorktrees,
+	localBranches,
 	repoRoot,
 	resolveCommit,
 	spawnBaseCommit,
@@ -329,6 +331,9 @@ async function recordSpawnedJob(launch: SpawnLaunch): Promise<void> {
 	const worktreeRoot = `${dirname(repository)}/.${basename(repository)}-limen-worktrees`;
 	const requestedPath = `${worktreeRoot}/${id}`;
 	await mkdir(worktreeRoot, { recursive: true });
+	if (!(options.branch || group)) {
+		assertTaskNamesNoBranch(repository, task);
+	}
 	const plan = await planWorktree({
 		root: repository,
 		requestedPath,
@@ -359,6 +364,22 @@ function assertTicketsAtBase(repository: string, baseCommit: string, task: strin
 	for (const { path } of ticketPointers(task)) {
 		if (path.startsWith("spec/") && !commitHasFile(repository, baseCommit, path)) {
 			throw new Error(`ticket ${path} is missing from the base commit`);
+		}
+	}
+}
+/**
+ * A task that names an existing branch wants the job on it, which only --branch gives.
+ * The primary worktree's branch and plain-word names (`main`, `test`) are prose, not a target.
+ */
+function assertTaskNamesNoBranch(repository: string, task: string): void {
+	const primary = listWorktrees(repository)[0]?.branch;
+	for (const name of localBranches(repository)) {
+		if (name === primary || /^\w+$/.test(name)) {
+			continue;
+		}
+		const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+		if (new RegExp(`(?<![\\w./-])${escaped}(?![\\w/-]|\\.\\w)`).test(task)) {
+			throw new Error(`task names branch ${name}; pass --branch ${name} to start the job on it`);
 		}
 	}
 }

@@ -57,6 +57,12 @@ export function branchExists(cwd: string, branch: string): boolean {
 	requireGit(cwd, ["check-ref-format", "--branch", branch]);
 	return git(cwd, ["show-ref", "--verify", "--quiet", `refs/heads/${branch}`]).status === 0;
 }
+export function localBranches(cwd: string): readonly string[] {
+	return requireGit(cwd, ["for-each-ref", "--format=%(refname)", "refs/heads"])
+		.stdout.split("\n")
+		.filter(Boolean)
+		.map((ref) => ref.slice("refs/heads/".length));
+}
 /**
  * Branches with commits not in HEAD by ancestry or patch-id (`git cherry` semantics), in four Git
  * processes per repository however many branches. Missing branches are absent: nothing to land.
