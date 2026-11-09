@@ -30,6 +30,8 @@ optional local git clone             never a second .limen/
 
 Do not: SSHFS the worktrees; run a coordinator on the laptop against a different disk; copy `.limen/` between machines; `limen spawn` from a laptop clone.
 
+A laptop may still **run Pi** for a job the seat assigned. That is opt-in, off unless `~/.limen/hosts.json` exists, and it does not make the laptop a second seat: the mini keeps `.limen`, the start queue, finalization, and coordinator wakes. Setup for a MacBook Pro and a Windows laptop (WSL2): [hosts.md](hosts.md).
+
 ## Daily loop
 
 1. **Direct agents** — Tailscale up, attach with `herdr --remote you@seat-name` (optional `--session` if the seat is not the default). The coordinator runs *there*. Spawn only on the seat: `--detached` unless you are attached and intend to type. Close the window; jobs keep running. No Limen command needs the laptop awake.

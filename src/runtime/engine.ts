@@ -28,6 +28,8 @@ export type EngineArgv = {
 	readonly thinking?: string;
 	readonly continueValue?: string;
 	readonly taskFile?: string;
+	/** Set to skip the seat's bridge path. A remote host fills `__LIMEN_BRIDGE__` with its own install. */
+	readonly bridgePath?: string;
 };
 export const ENGINES: { readonly [K in EngineId]: EngineProfile } = {
 	pi: {
@@ -247,7 +249,12 @@ export function argvFor(profile: EngineProfile, slots: EngineArgv): string[] {
 	}
 	args.push("--append-system-prompt", slots.preamble);
 	const route = engineRoute(profile, slots.provider, slots.model);
-	const bridge = route.bridged ? bridgePath(profile) : undefined;
+	let bridge: string | undefined;
+	if (slots.bridgePath !== undefined) {
+		bridge = slots.bridgePath || undefined;
+	} else if (route.bridged) {
+		bridge = bridgePath(profile);
+	}
 	const named = [
 		...slots.extensions,
 		...(bridge ? [bridge] : []),
