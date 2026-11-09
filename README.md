@@ -126,6 +126,7 @@ Read these files in each `.limen/jobs/<id>/`: `note.md` (the note at the end), `
 | Code structure, features, and journeys | [Picture](docs/picture.md) |
 | Several teams on one feature | [Team groups](docs/groups.md) |
 | Remote jobs and GitHub requests | [Remote seats](docs/remote.md) |
+| Run Pi on another machine | [Host pool](docs/hosts.md) |
 | Job and coordinator event webhooks | [Finish webhooks](docs/finish-webhooks.md) |
 | Pane status and job status | [Herdr status](docs/herdr-status.md) |
 | Optional Linear mirror | [Linear](templates/linear.md) |

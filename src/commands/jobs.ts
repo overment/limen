@@ -236,6 +236,7 @@ type JobFields = {
 	readonly parent: string;
 	readonly engine: string;
 	readonly stopReason: string;
+	readonly host: string;
 };
 /** Files beside the job fields. Detail-only files stay empty in the row and human views. */
 type JobEvidence = {
@@ -328,8 +329,9 @@ async function readJobFields(jobDir: string): Promise<JobFields> {
 		parent = "",
 		engine = "",
 		stopReason = "",
+		host = "",
 	] = await Promise.all(
-		"state label branch repo pid started-at finished-at tool-calls last-tool activity hosted candidate advisory parent engine stop-reason"
+		"state label branch repo pid started-at finished-at tool-calls last-tool activity hosted candidate advisory parent engine stop-reason host"
 			.split(" ")
 			.map((field) => (field === "state" ? shownState(jobDir) : text(`${jobDir}/${field}`))),
 	);
@@ -350,6 +352,7 @@ async function readJobFields(jobDir: string): Promise<JobFields> {
 		parent,
 		engine,
 		stopReason,
+		host,
 	};
 }
 async function readJobEvidence(
@@ -465,6 +468,9 @@ function jobBlocks(loaded: LoadedJob, facts: JobFacts): string[] {
 	}
 	if (fields.engine && fields.engine !== "pi") {
 		blocks.push(`  engine ${displayed(fields.engine, detailed)}`);
+	}
+	if (fields.host) {
+		blocks.push(`  host ${displayed(fields.host, detailed)}`);
 	}
 	if (evidence.model) {
 		blocks.push(`  model ${evidence.model}`);

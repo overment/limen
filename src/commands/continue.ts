@@ -41,6 +41,7 @@ import {
 	preflightEngine,
 	resolveSpawnEngine,
 } from "../runtime/engine.ts";
+import { loadHostPool, validateRemoteLaunch } from "../runtime/hosts.ts";
 import { jobPriority, parsePriority, queuedLine } from "../runtime/start-queue.ts";
 import { normalizeWorkerExtensions, readWorkerExtensions } from "../runtime/worker-extensions.ts";
 import { launchWrapper } from "../runtime/wrapper.ts";
@@ -76,6 +77,7 @@ type ContinueOptions = {
 	readonly selected: readonly string[];
 	readonly query: string;
 	readonly instruction: string;
+	readonly host: string | undefined;
 };
 function parseContinueArgs(args: readonly string[]): ContinueOptions {
 	const { values, positionals } = parseFlags(
@@ -93,11 +95,12 @@ function parseContinueArgs(args: readonly string[]): ContinueOptions {
 			timeout: { type: "string" },
 			priority: { type: "string" },
 			extension: { type: "string", multiple: true },
+			host: { type: "string" },
 		} as const,
 		{
 			unknown: (word) => `unknown continue option ${word}`,
 			missing: (flag) => `${flag} requires a value`,
-			dashValues: ["label", "model", "provider", "thinking", "engine", "timeout", "priority"],
+			dashValues: ["label", "model", "provider", "thinking", "engine", "timeout", "priority", "host"],
 			endOfFlags: false,
 		},
 	);
@@ -130,6 +133,7 @@ function parseContinueArgs(args: readonly string[]): ContinueOptions {
 		selected: values.extension ?? [],
 		query,
 		instruction,
+		host: values.host?.trim() || undefined,
 	};
 }
 type ParentJob = {
@@ -176,6 +180,7 @@ type Continuation = {
 	readonly versions: Promise<void>;
 	readonly group: ContinuationGroup | undefined;
 	readonly timeoutMs: number | undefined;
+	readonly host: string | undefined;
 };
 /** True for a Herdr pane, false for a detached wrapper. Only --tab hosts; a group member without a mode flag keeps Herdr's pane. */
 function chooseHostedContinue(options: ContinueOptions, grouped: boolean): boolean {
@@ -209,6 +214,7 @@ async function continueJob(args: readonly string[], cwd: string, locked = false,
 	}
 	const parent = await readParentJob(root, parentId, parentDir, membership, options.engine);
 	const profile = engineProfile(parent.engine);
+	validateRemoteLaunch(loadHostPool(), options.host, remoteLaunch(options, membership !== undefined, profile.id));
 	const extensions = await continuationExtensions(parentDir, membership, options.selected, cwd, profile.id);
 	preflightEngine(profile, chosenModel, provider);
 	const source = recordedPlanningSource(parentDir);
@@ -264,9 +270,18 @@ async function continueJob(args: readonly string[], cwd: string, locked = false,
 		thinking,
 		group,
 		timeoutMs: options.timeoutMs,
+		host: options.host,
 	};
 	await launchContinuation(continuation, profile, hosted, membership?.run);
 }
+function remoteLaunch(
+	options: ContinueOptions,
+	grouped: boolean,
+	engine: string,
+): { readonly tab: boolean; readonly grouped: boolean; readonly engine: string } {
+	return { tab: options.tab, grouped, engine };
+}
+
 /** Marks the published job running, then starts it in a Herdr pane or as a detached wrapper. */
 async function launchContinuation(
 	continuation: Omit<Continuation, "versions">,
@@ -543,6 +558,7 @@ async function startDetachedContinuation(continuation: Continuation): Promise<vo
 	if (continuation.model) {
 		environment.LIMEN_MODEL = continuation.model;
 	}
+	environment.LIMEN_HOST = continuation.host ?? "";
 	let wrapperPid: number;
 	try {
 		wrapperPid = await launchWrapper(environment);

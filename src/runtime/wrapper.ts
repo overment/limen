@@ -13,6 +13,7 @@ import {
 	writeHandshake,
 } from "../job/record.ts";
 import { enqueueSteer } from "../job/steer-inbox.ts";
+import { recordStreamEvents } from "./activity-log.ts";
 import {
 	containEscapedDescendants,
 	discoverEscapedDescendants,
@@ -22,15 +23,15 @@ import {
 } from "./contain.ts";
 import { runDevinJob } from "./devin.ts";
 import { argvFor, engineBinary, jobProfile, prepareSkillConfig } from "./engine.ts";
+import { assignedHost, remoteLaunchPossible } from "./hosts.ts";
 import { setUpJob, worktreeMissing } from "./job-setup.ts";
+import { runRemoteJob } from "./remote-job.ts";
 import { observeToolStall, ownedToolDescendants, type ToolStallWatch, toolStallMs } from "./stalled-tool.ts";
 import { enterStartQueue, waitForStart } from "./start-queue.ts";
 import { createStreamParser, type StreamEvent } from "./stream.ts";
 import { readWorkerExtensions } from "./worker-extensions.ts";
 
 const STOP_GRACE_MS = 5_000;
-// Coordinators and the picture watch the job folder; a streamed delta must not rewrite the same word many times a second.
-const ACTIVITY_REFRESH_MS = 1_000;
 const HOOK = fileURLToPath(new URL("../../hook", import.meta.url));
 // A job is one short turn. These bounds stop a silent runaway from burning a session; they are not a review gate.
 const DEFAULT_TIMEOUT_MS = 90 * 60_000;
@@ -93,13 +94,25 @@ export async function runInternalJob(): Promise<void> {
 		}
 	});
 	const profile = await jobProfile(jobDir);
-	// A group member runs on its group's deadline and a Devin job runs in the cloud; both start at once.
-	const gate = !(membership || profile.id === "devin") && (await enterStartQueue(jobDir));
-	// Spawn waits for this handshake, not for the queue or setup, so it returns before prune and --prepare run.
 	// One handshake per run: a second one races the first one's `born` write and can crash the wrapper.
-	const early = Boolean(process.env.LIMEN_SETUP_KEEP || gate);
-	if (early) {
+	let shook = false;
+	const shake = async (): Promise<void> => {
+		if (shook) {
+			return;
+		}
+		shook = true;
 		await writeHandshake(jobDir);
+	};
+	// Spawn waits for this handshake, not for the queue or setup, so it returns before prune and --prepare run.
+	const mayRemote = remoteLaunchPossible(profile.id, Boolean(membership));
+	if (process.env.LIMEN_SETUP_KEEP || mayRemote) {
+		await shake();
+	}
+	const remote = mayRemote && !stop.signal.aborted ? await assignedHost(jobDir, stop.signal) : undefined;
+	// A group member runs on its group's deadline and a Devin job runs in the cloud; both start at once.
+	const gate = !(membership || profile.id === "devin" || remote) && (await enterStartQueue(jobDir));
+	if (process.env.LIMEN_SETUP_KEEP || gate) {
+		await shake();
 	}
 	if (gate && !(await waitForStart(jobDir, stop.signal))) {
 		const requested = await textFile(`${jobDir}/stop-requested`);
@@ -128,6 +141,26 @@ export async function runInternalJob(): Promise<void> {
 	const timeoutMs = membership
 		? Math.max(1, Math.min(configuredTimeout, (membership.member?.deadline ?? membership.run.deadline) - Date.now()))
 		: configuredTimeout;
+	if (remote) {
+		await runRemoteJob({
+			host: remote,
+			jobDir,
+			worktree,
+			taskFile,
+			preamble,
+			jobId,
+			label,
+			branch: await textFile(`${jobDir}/branch`),
+			timeoutMs,
+			stop: stop.signal,
+			shutdownDeadline: () => shutdownDeadline,
+			...(process.env.LIMEN_PROVIDER ? { provider: process.env.LIMEN_PROVIDER } : {}),
+			...(process.env.LIMEN_MODEL ? { model: process.env.LIMEN_MODEL } : {}),
+			...(process.env.LIMEN_THINKING ? { thinking: process.env.LIMEN_THINKING } : {}),
+			...(process.env.LIMEN_CONTINUE === "1" ? { continueTask: (await readFile(taskFile, "utf8")).trim() } : {}),
+		});
+		return;
+	}
 	if (profile.id === "devin") {
 		await runDevinJob({
 			jobDir,
@@ -198,7 +231,7 @@ export async function runInternalJob(): Promise<void> {
 	};
 	// A detached job started from a hosted pane's shell must not read itself as hosted.
 	const privateEnvironment =
-		"LIMEN_INTERNAL_RUN LIMEN_JOB_DIR LIMEN_WORKTREE LIMEN_TASK_FILE LIMEN_PREAMBLE LIMEN_TIMEOUT_MS LIMEN_MODEL LIMEN_PROVIDER LIMEN_THINKING LIMEN_LABEL LIMEN_SETUP_KEEP LIMEN_SETUP_PREPARE LIMEN_HOSTED PI_SESSION_ID PI_SESSION_FILE PI_PROVIDER PI_MODEL PI_REASONING_LEVEL";
+		"LIMEN_INTERNAL_RUN LIMEN_JOB_DIR LIMEN_WORKTREE LIMEN_TASK_FILE LIMEN_PREAMBLE LIMEN_TIMEOUT_MS LIMEN_MODEL LIMEN_PROVIDER LIMEN_THINKING LIMEN_LABEL LIMEN_SETUP_KEEP LIMEN_SETUP_PREPARE LIMEN_HOSTED LIMEN_HOST PI_SESSION_ID PI_SESSION_FILE PI_PROVIDER PI_MODEL PI_REASONING_LEVEL";
 	for (const name of privateEnvironment.split(" ")) {
 		delete childEnvironment[name];
 	}
@@ -217,7 +250,7 @@ export async function runInternalJob(): Promise<void> {
 	const apply = (events: readonly StreamEvent[]) => {
 		pending = pending
 			.then(() =>
-				recordEvents(
+				recordStreamEvents(
 					jobDir,
 					events,
 					() => {
@@ -252,7 +285,7 @@ export async function runInternalJob(): Promise<void> {
 		child.once("error", (error) => resolve({ code: null, signal: null, error }));
 		child.once("close", (code, signal) => resolve({ code, signal }));
 	});
-	if (!early) {
+	if (!shook) {
 		await writeHandshake(jobDir);
 	}
 	await atomicWrite(`${jobDir}/state`, "running\n");
@@ -391,43 +424,6 @@ export async function failInternalJob(error: unknown): Promise<void> {
 		return;
 	}
 	await finalizeJob(jobDir, "failed", error instanceof Error ? error.message : String(error));
-}
-async function recordEvents(
-	jobDir: string,
-	events: readonly StreamEvent[],
-	nextCount: () => number,
-	seen: { activity: string; activityAt: number; assistant: string; stop: string; tool: string; progress: number },
-): Promise<void> {
-	for (const event of events) {
-		if (event.kind === "tool") {
-			seen.activity = "tool";
-			seen.tool = event.detail ? `${event.name} ${event.detail}` : event.name;
-			await atomicWrite(`${jobDir}/last-tool`, `${event.name}\n`);
-			await atomicWrite(`${jobDir}/activity`, "tool\n");
-			seen.activityAt = Date.now();
-			await atomicWrite(`${jobDir}/tool-calls`, `${nextCount()}\n`);
-			await appendFile(`${jobDir}/log`, event.detail ? `${event.name} ${event.detail}\n` : `${event.name}\n`);
-		} else if (event.kind === "activity") {
-			// Every streamed delta reports activity; an unchanged one refreshes the file at most once a second.
-			if (seen.activity !== event.name || Date.now() - seen.activityAt >= ACTIVITY_REFRESH_MS) {
-				await atomicWrite(`${jobDir}/activity`, `${event.name}\n`);
-				seen.activityAt = Date.now();
-			}
-			if (seen.activity !== event.name) {
-				seen.activity = event.name;
-				await appendFile(`${jobDir}/log`, `${event.name}\n`);
-			}
-		} else if (event.kind === "assistant") {
-			seen.assistant = event.text;
-			seen.stop = event.stopReason ?? "";
-			if (event.text) {
-				await appendFile(`${jobDir}/log`, `${event.text}\n`);
-			}
-		} else {
-			seen.progress += 1;
-			await appendFile(`${jobDir}/log`, `${event.line}\n`);
-		}
-	}
 }
 function requiredEnvironment(name: string): string {
 	const value = process.env[name];

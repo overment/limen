@@ -43,6 +43,7 @@ import {
 	preflightEngine,
 	resolveSpawnEngine,
 } from "../runtime/engine.ts";
+import { loadHostPool, validateRemoteLaunch } from "../runtime/hosts.ts";
 import { liveJob } from "../runtime/reap.ts";
 import { DEFAULT_PRIORITY, parsePriority, queuedLine } from "../runtime/start-queue.ts";
 import { normalizeWorkerExtensions } from "../runtime/worker-extensions.ts";
@@ -70,6 +71,7 @@ type SpawnOptions = {
 	role?: string;
 	engine?: string;
 	extensions: string[];
+	host?: string;
 };
 const PACKAGE_ROOT = fileURLToPath(new URL("../..", import.meta.url));
 export function resolvePreamble(root: string, role: string): string {
@@ -164,6 +166,11 @@ type SpawnedJob = {
 async function spawnJob(args: readonly string[], cwd: string, group?: SpawnGroup): Promise<void> {
 	const parsed = parseSpawnArgs(args);
 	const profile = resolveSpawnEngine(parsed.engine);
+	validateRemoteLaunch(loadHostPool(), parsed.host, {
+		tab: parsed.tab,
+		grouped: group !== undefined,
+		engine: profile.id,
+	});
 	if (profile.id === "devin") {
 		preflightDevin(parsed, group !== undefined);
 	}
@@ -499,6 +506,8 @@ async function startDetachedJob(launch: SpawnLaunch, job: SpawnedJob, versions: 
 	if (options.timeoutMs) {
 		environment.LIMEN_TIMEOUT_MS = String(options.timeoutMs);
 	}
+	// Empty clears a LIMEN_HOST inherited from the spawner's shell, so only --host leaves the seat.
+	environment.LIMEN_HOST = options.host ?? "";
 	let wrapperPid: number;
 	try {
 		wrapperPid = await launchWrapper(environment);
@@ -659,6 +668,7 @@ const SPAWN_FLAGS = {
 	base: { type: "string" },
 	head: { type: "string" },
 	extension: { type: "string", multiple: true },
+	host: { type: "string" },
 } as const;
 
 function parseSpawnArgs(args: readonly string[]): SpawnOptions {
@@ -685,6 +695,7 @@ function parseSpawnArgs(args: readonly string[]): SpawnOptions {
 			"engine",
 			"base",
 			"head",
+			"host",
 		],
 	});
 	const role = values.role?.trim();
@@ -714,7 +725,7 @@ function parseSpawnArgs(args: readonly string[]): SpawnOptions {
 		...(timeoutMs ? { timeoutMs } : {}),
 		...(priority ? { priority } : {}),
 	};
-	for (const key of ["prepare", "branch", "base", "head", "repo", "model", "provider", "thinking"] as const) {
+	for (const key of ["prepare", "branch", "base", "head", "repo", "model", "provider", "thinking", "host"] as const) {
 		const value = values[key];
 		if (value) {
 			out[key] = value;

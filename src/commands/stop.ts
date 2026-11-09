@@ -35,6 +35,7 @@ export async function stopCommand(args: readonly string[], cwd: string): Promise
 	}
 	// A wrapper in the start queue ends its own job with this reason at once; then this command finalizes nothing.
 	const queued = existsSync(`${jobDir}/queued`);
+	const remoteHost = await text(`${jobDir}/host`);
 	if (queued) {
 		await writeFile(`${jobDir}/stop-requested`, `${reason}\n`);
 	}
@@ -57,10 +58,18 @@ export async function stopCommand(args: readonly string[], cwd: string): Promise
 		}
 	})().catch(() => {});
 	// Give a signaled wrapper one brief turn to publish its own terminal state before overwriting it.
-	const turn = Date.now() + (queued ? 2_000 : 25);
+	// A remote wrapper needs a few seconds to signal the host before this command finalizes over it.
+	let grace = 25;
+	if (queued) {
+		grace = 2_000;
+	} else if (remoteHost) {
+		grace = 4_000;
+	}
+	const turn = Date.now() + grace;
+	const waitForWrapper = queued || Boolean(remoteHost);
 	do {
 		await new Promise((resolve) => setTimeout(resolve, 25));
-	} while (queued && Date.now() < turn && (await text(`${jobDir}/state`)) === "running");
+	} while (waitForWrapper && Date.now() < turn && (await text(`${jobDir}/state`)) === "running");
 	const settledState = (await readFile(`${jobDir}/state`, "utf8")).trim();
 	if (settledState !== "running") {
 		await markCallerDelivered(jobDir);
