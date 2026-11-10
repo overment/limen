@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { groupLock } from "../job/group-cabinet.ts";
 import { appendLimenLog, atomicWrite, textFile } from "../job/record.ts";
 import { registeredProjects, seatDir } from "../project/seat.ts";
+import { resolveSeatAccount } from "./claude-account.ts";
 import { processAlive } from "./contain.ts";
 import { ENGINES, engineRoute } from "./engine.ts";
 import { type GithubBroker, parseGithubBroker } from "./github-broker.ts";
@@ -12,12 +13,13 @@ import {
 	type HostClone,
 	type HostPlatform,
 	hostEngineScript,
+	loginProbeScript,
 	originProbeScript,
 	probeScript,
 	type RemoteHost,
 	shellText,
 } from "./host-shell.ts";
-import { type Reading, readLoad, type StartGate, startGate } from "./start-queue.ts";
+import { type Reading, readingText, readLoad, type StartGate, startGate } from "./start-queue.ts";
 
 export type { HostPlatform, RemoteHost };
 
@@ -412,7 +414,11 @@ async function overflowHost(
 		await appendLimenLog(jobDir, `remote hosts: none have a clone of ${originKey(origin)}; staying on the seat`);
 		return undefined;
 	}
-	const chosen = await pickHost(eligible, gate, stop);
+	const notes: string[] = [];
+	const chosen = await pickHost(eligible, gate, stop, notes);
+	for (const note of notes) {
+		await appendLimenLog(jobDir, `remote hosts: ${note}`);
+	}
 	if (!chosen) {
 		await appendLimenLog(jobDir, "remote hosts: none free; staying on the seat");
 		return undefined;
@@ -561,20 +567,68 @@ async function pickHost(
 	hosts: readonly RemoteHost[],
 	gate: StartGate,
 	stop: AbortSignal,
+	notes: string[] = [],
 ): Promise<RemoteHost | undefined> {
 	const enabled = hosts.filter((host) => host.enabled);
 	const running: Record<string, number> = {};
 	for (const host of enabled) {
 		running[host.alias] = await runningOnHost(host.alias);
 	}
+	const seatHasAccount = resolveSeatAccount() !== undefined;
 	const readings: Record<string, Reading | undefined> = {};
 	for (const host of enabled) {
-		if (stop.aborted || (running[host.alias] ?? 0) >= host.maxConcurrent) {
+		if (stop.aborted) {
 			continue;
 		}
-		readings[host.alias] = await probeHost(host, stop);
+		if ((running[host.alias] ?? 0) >= host.maxConcurrent) {
+			notes.push(`${host.alias} is full (${running[host.alias]}/${host.maxConcurrent})`);
+			continue;
+		}
+		const login = await hostLoginProblem(host, seatHasAccount, stop);
+		if (login) {
+			notes.push(`${host.alias} skipped: ${login}`);
+			continue;
+		}
+		const probed = await probeHostDetailed(host, stop);
+		if (typeof probed === "string") {
+			notes.push(`${host.alias} skipped: ${probed}`);
+			continue;
+		}
+		readings[host.alias] = probed;
+		if (!readingClears(probed, gate)) {
+			notes.push(`${host.alias} is busy (${readingText(probed, gate)})`);
+		}
 	}
 	return rankHosts(enabled, running, readings, gate);
+}
+
+/**
+ * Why a job on this host could not reach its model, or undefined when it can. A seat account is sent with the job, so
+ * the host needs no login of its own. Without one, the host's own Claude Code must be logged in.
+ */
+export async function hostLoginProblem(
+	host: RemoteHost,
+	seatHasAccount: boolean,
+	stop: AbortSignal,
+): Promise<string | undefined> {
+	if (seatHasAccount) {
+		return undefined;
+	}
+	const result = await shellText(host, loginProbeScript(host.path), 20_000, stop);
+	if (result.code !== 0) {
+		return `could not ask the host about its Claude login (${briefDetail(result.stderr)})`;
+	}
+	const state = result.stdout.trim().split("\n").pop();
+	if (state === "loggedIn") {
+		return undefined;
+	}
+	return state === "claudeMissing"
+		? "no seat Claude account and claude is not on the host PATH"
+		: "no seat Claude account and the host is not logged in to Claude";
+}
+
+function briefDetail(text: string): string {
+	return text.trim().split("\n")[0]?.slice(0, 160) || "no output";
 }
 
 /** Live seat jobs already reserved on this host. `except` is the job taking a slot, so it does not count itself. */
@@ -645,18 +699,25 @@ async function claim(jobDir: string, host: RemoteHost, explicit: boolean): Promi
 }
 
 export async function probeHost(host: RemoteHost, stop: AbortSignal): Promise<Reading | undefined> {
+	const probed = await probeHostDetailed(host, stop);
+	return typeof probed === "string" ? undefined : probed;
+}
+
+/** A reading, or the reason the host could not be read. The reason goes in the job log. */
+export async function probeHostDetailed(host: RemoteHost, stop: AbortSignal): Promise<Reading | string> {
 	const fixed = process.env.LIMEN_HOST_READING?.trim();
 	const sample = Number(process.env.LIMEN_HOST_PROBE_MS);
-	const script = probeScript(Number.isFinite(sample) ? sample : 400, fixed || undefined);
+	const script = probeScript(Number.isFinite(sample) ? sample : 400, fixed || undefined, host.path);
 	const result = await shellText(host, script, 20_000, stop);
 	if (result.code !== 0) {
-		return undefined;
+		const why = result.code === null ? "no answer from ssh" : `probe exited ${result.code}`;
+		return `${why} (${briefDetail(result.stderr)})`;
 	}
 	try {
 		const parsed = JSON.parse(result.stdout) as Partial<Reading>;
 		return { cpuIdle: percent(parsed.cpuIdle), memoryFree: percent(parsed.memoryFree) };
 	} catch {
-		return undefined;
+		return "probe printed no load reading";
 	}
 }
 

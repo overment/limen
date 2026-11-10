@@ -3,7 +3,8 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
-import { chmod, mkdir, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, symlink, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
@@ -11,6 +12,7 @@ import {
 	cmdQuote,
 	type HostPlatform,
 	launchScript,
+	loginProbeScript,
 	probeScript,
 	type RemoteHost,
 	sshArgv,
@@ -381,6 +383,68 @@ test("limen stop kills a remote Pi and the job records stopped", async () => {
 	}
 });
 
+async function seatAccounts(): Promise<string> {
+	const accounts = await mkdtemp(join(tmpdir(), "limen-accounts-"));
+	await writeFile(join(accounts, "work.token"), "sk-ant-oat01-test-token-for-overflow\n");
+	await writeFile(join(accounts, "active"), "work\n");
+	return accounts;
+}
+
+test("the load probe finds node through the host path when ssh's default PATH has none", async () => {
+	const bin = await mkdtemp(join(tmpdir(), "limen-node-"));
+	await symlink(process.execPath, join(bin, "node"));
+	const bare = { PATH: "/usr/bin:/bin" };
+	const ran = spawnSync("bash", ["-c", probeScript(0, undefined, bin)], { encoding: "utf8", env: bare });
+	assert.equal(ran.status, 0, ran.stderr);
+	assert.ok(Number.isFinite((JSON.parse(ran.stdout) as { cpuIdle: number }).cpuIdle));
+});
+
+test("the login probe says whether the host's Claude is logged in, missing, or logged out", async () => {
+	const bin = await mkdtemp(join(tmpdir(), "limen-claude-"));
+	const run = (env: Record<string, string>) =>
+		spawnSync("bash", ["-c", loginProbeScript(bin)], { encoding: "utf8", env }).stdout.trim();
+	assert.equal(run({ PATH: "/usr/bin:/bin" }), "claudeMissing");
+	await writeFile(join(bin, "claude"), "#!/bin/sh\necho '{\"loggedIn\": false}'\n");
+	await chmod(join(bin, "claude"), 0o755);
+	assert.equal(run({ PATH: "/usr/bin:/bin" }), "loggedOut");
+	await writeFile(join(bin, "claude"), "#!/bin/sh\necho '{\"loggedIn\": true}'\n");
+	assert.equal(run({ PATH: "/usr/bin:/bin" }), "loggedIn");
+});
+
+test("overflow keeps a job on the seat when it has no account to send and the host has no login", async () => {
+	const seat = await remotePlant("darwin", "mbp");
+	try {
+		const poolPath = join(seat.made.parent, ".limen", "hosts.json");
+		await writeFile(poolPath, readFileSync(poolPath, "utf8").replace('"overflow": false', '"overflow": true'));
+		await writeFile(join(seat.made.parent, "start-reading.json"), '{"cpuIdle":0,"memoryFree":0}\n');
+		const bin = await mkdtemp(join(tmpdir(), "limen-claude-"));
+		await writeFile(join(bin, "claude"), "#!/bin/sh\necho '{\"loggedIn\": false}'\n");
+		await chmod(join(bin, "claude"), 0o755);
+		const empty = await mkdtemp(join(tmpdir(), "limen-accounts-"));
+		const env = {
+			...seat.env,
+			PATH: `${bin}:${seat.made.env.PATH}`,
+			LIMEN_CLAUDE_ACCOUNTS: empty,
+			LIMEN_HOST_READING: '{"cpuIdle":80,"memoryFree":80}',
+		};
+		const id = plant.spawnJob(seat.made, "finish\nfinish stayed", ["--label", "nologin"], { env });
+		const dir = join(seat.made.root, ".limen", "jobs", id);
+		await plant.until(
+			dir,
+			() => existsSync(join(dir, "log")) && readFileSync(join(dir, "log"), "utf8").includes("not logged in"),
+		);
+		await writeFile(join(seat.made.parent, "start-reading.json"), '{"cpuIdle":100,"memoryFree":100}\n');
+		assert.equal(plant.waitJob(seat.made, id, { env }), "done");
+		assert.equal(existsSync(join(dir, "host")), false);
+		assert.match(
+			readFileSync(join(dir, "log"), "utf8"),
+			/mbp skipped: no seat Claude account and the host is not logged in/,
+		);
+	} finally {
+		await seat.made.cleanup();
+	}
+});
+
 test("overflow sends a job when the seat gate is closed and a host has room", async () => {
 	const seat = await remotePlant("darwin", "mbp");
 	try {
@@ -388,7 +452,11 @@ test("overflow sends a job when the seat gate is closed and a host has room", as
 		const { readFileSync } = await import("node:fs");
 		await writeFile(poolPath, readFileSync(poolPath, "utf8").replace('"overflow": false', '"overflow": true'));
 		await writeFile(join(seat.made.parent, "start-reading.json"), '{"cpuIdle":0,"memoryFree":0}\n');
-		const env = { ...seat.env, LIMEN_HOST_READING: '{"cpuIdle":80,"memoryFree":80}' };
+		const env = {
+			...seat.env,
+			LIMEN_CLAUDE_ACCOUNTS: await seatAccounts(),
+			LIMEN_HOST_READING: '{"cpuIdle":80,"memoryFree":80}',
+		};
 		const id = plant.spawnJob(seat.made, "finish\nfinish overflowed", ["--label", "overflow"], { env });
 		assert.equal(plant.waitJob(seat.made, id, { env }), "done");
 		assert.equal(plant.jobFile(seat.made, id, "host"), "mbp");

@@ -94,14 +94,16 @@ export function remoteLayout(host: Pick<RemoteHost, "root">, jobId: string): { j
 
 /**
  * A short load sample. `fixed` is JSON already read on the seat (`LIMEN_HOST_READING`); the host prints it and exits.
- * Otherwise Node samples CPU, and macOS prefers `memory_pressure` when the script is running natively.
+ * Otherwise Node samples CPU, and macOS prefers `memory_pressure` when the script is running natively. `path` is the
+ * host's configured PATH prefix: a non-interactive ssh session often has no `node`, so the sample must see it too.
  */
-export function probeScript(sampleMs: number, fixed?: string): string {
+export function probeScript(sampleMs: number, fixed?: string, path?: string): string {
 	if (fixed !== undefined) {
 		return `printf %s ${posixQuote(fixed)}\n`;
 	}
 	const ms = Number.isFinite(sampleMs) && sampleMs >= 0 ? Math.round(sampleMs) : 400;
-	return `mem=""
+	const pathLine = path ? `export PATH=${posixQuote(path)}:"$PATH"\n` : "";
+	return `${pathLine}mem=""
 if [ "$(uname -s)" = "Darwin" ] && [ -x /usr/bin/memory_pressure ]; then
   mem=$(/usr/bin/memory_pressure | sed -n 's/.*memory free percentage: *\\([0-9][0-9]*\\).*/\\1/p' | head -n 1)
 elif [ -r /proc/meminfo ]; then
@@ -128,6 +130,14 @@ const memoryFree = hinted !== "" && Number.isFinite(Number(hinted))
 const cpuIdle = total > 0 ? (100 * idle) / total : null;
 process.stdout.write(JSON.stringify({ cpuIdle, memoryFree }));
 END
+`;
+}
+
+/** Asks the host's Claude Code whether it holds a login of its own. Prints `loggedIn` or `loggedOut`, never a secret. */
+export function loginProbeScript(path?: string): string {
+	const pathLine = path ? `export PATH=${posixQuote(path)}:"$PATH"\n` : "";
+	return `${pathLine}if ! command -v claude >/dev/null 2>&1; then echo claudeMissing; exit 0; fi
+if claude auth status 2>&1 | grep -q '"loggedIn": *true'; then echo loggedIn; else echo loggedOut; fi
 `;
 }
 
