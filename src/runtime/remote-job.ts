@@ -77,7 +77,7 @@ export async function runRemoteJob(job: RemoteJob): Promise<void> {
 			return;
 		}
 		cleaned = true;
-		const result = await shellText(job.host, cleanupScript(job.host, job.jobId), 20_000);
+		const result = await shellText(job.host, cleanupScript(job.host, job.jobId, job.branch), 20_000);
 		if (result.code !== 0) {
 			await appendLimenLog(job.jobDir, `remote cleanup failed: ${result.stderr.trim() || result.code}`).catch(() => {});
 		}
@@ -383,8 +383,7 @@ async function killRemote(job: RemoteJob): Promise<void> {
 }
 
 async function copyBack(job: RemoteJob): Promise<void> {
-	const remote = remoteLayout(job.host, job.jobId).jobDir;
-	const packed = await shellText(job.host, bundleScript(remote), 60_000);
+	const packed = await shellText(job.host, bundleScript(job.host, job.jobId), 60_000);
 	const b64 = packed.stdout.trim();
 	if (!b64) {
 		return;

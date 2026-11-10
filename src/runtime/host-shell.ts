@@ -227,13 +227,14 @@ function bridgeFinder(): string {
 }`;
 }
 
-/** Copies result, session-ended, and the session directory back as one base64 tar on stdout. */
-export function bundleScript(jobDir: string): string {
-	const dir = posixQuote(jobDir);
+/** Copies the handoff, the note, and the session back as one base64 tar on stdout. Uses the host PATH so node is found. */
+export function bundleScript(host: RemoteHost, jobId: string): string {
+	const dir = posixQuote(remoteLayout(host, jobId).jobDir);
+	const pathLine = host.path ? `export PATH=${posixQuote(host.path)}:"$PATH"\n` : "";
 	return `set +e
-jobdir=${dir}
+${pathLine}jobdir=${dir}
 files=""
-for name in result session-ended session; do
+for name in result session-ended session note.md note.first.md; do
   if [ -e "$jobdir/$name" ]; then
     files="$files $name"
   fi
@@ -275,12 +276,15 @@ if [ -f "$oauth" ]; then
 fi`;
 }
 
-export function cleanupScript(host: Pick<RemoteHost, "root">, jobId: string): string {
+export function cleanupScript(host: Pick<RemoteHost, "root">, jobId: string, branch: string): string {
 	const { jobDir, worktree } = remoteLayout(host, jobId);
+	const dropBranch = branch.startsWith("limen/")
+		? `git -C ${posixQuote(host.root)} branch -D ${posixQuote(branch)} >/dev/null 2>&1\n`
+		: "";
 	return `set +e
 git -C ${posixQuote(host.root)} worktree remove --force ${posixQuote(worktree)} 2>/dev/null
 rm -rf ${posixQuote(worktree)} ${posixQuote(jobDir)} ${posixQuote(oauthPath(jobId))}
-git -C ${posixQuote(host.root)} worktree prune >/dev/null 2>&1
+${dropBranch}git -C ${posixQuote(host.root)} worktree prune >/dev/null 2>&1
 exit 0
 `;
 }

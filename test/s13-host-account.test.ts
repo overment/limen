@@ -17,15 +17,18 @@ after(() => {
 	}
 });
 
-test("a seat account is the active file's token, and a spaced string is not a token", async () => {
+test("a seat account is the flat active token, and a directory token is only a fallback", async () => {
 	const root = await mkdtemp(join(tmpdir(), "limen-accounts-"));
-	await mkdir(join(root, "work"));
-	await writeFile(join(root, "active"), "work\n");
-	await writeFile(join(root, "work", "token"), `${TOKEN}\n`);
+	await writeFile(join(root, "active"), "acc4\n");
+	await writeFile(join(root, "acc4.token"), `${TOKEN}\n`);
+	await mkdir(join(root, "acc4"));
+	await writeFile(join(root, "acc4", "token"), "sk-ant-oat01-directory-token-not-used\n");
 	process.env.LIMEN_CLAUDE_ACCOUNTS = root;
-	const account = resolveSeatAccount();
-	assert.equal(account?.name, "work");
-	assert.equal(account?.token, TOKEN);
+	assert.equal(resolveSeatAccount()?.token, TOKEN);
+	await mkdir(join(root, "acc5"));
+	await writeFile(join(root, "active"), "acc5\n");
+	await writeFile(join(root, "acc5", "token"), `${TOKEN}\n`);
+	assert.equal(resolveSeatAccount()?.name, "acc5");
 	assert.equal(cleanToken("not a token"), undefined);
 });
 

@@ -218,17 +218,18 @@ Host jobs bill a **file token on the seat**, not the Mac mini's keychain and not
 Put the token in a file. On the mini:
 
 ```bash
-mkdir -p ~/.claude-accounts/work
-chmod 700 ~/.claude-accounts ~/.claude-accounts/work
+mkdir -p ~/.claude-accounts
+chmod 700 ~/.claude-accounts
 claude setup-token
-# The command prints one line, sk-ant-oat01-... . Save that line and nothing else:
+# The command prints one line, sk-ant-oat01-... . Save that line and nothing else.
+# The file is flat, beside active: acc4.token, not acc4/token. That is what the seat rotator writes.
 umask 077
-printf '%s\n' 'sk-ant-oat01-...' > ~/.claude-accounts/work/token
-chmod 600 ~/.claude-accounts/work/token
-printf '%s\n' work > ~/.claude-accounts/active
+printf '%s\n' 'sk-ant-oat01-...' > ~/.claude-accounts/acc4.token
+chmod 600 ~/.claude-accounts/acc4.token
+printf '%s\n' acc4 > ~/.claude-accounts/active
 ```
 
-`active` is the account name (the directory). The token file may also be named `token.txt`. Repeat `claude setup-token` for another account, write `~/.claude-accounts/<name>/token`, and change `active` when that account should be the one host jobs use. A rotator that already writes `~/.claude/.credentials.json` (`claudeAiOauth.accessToken`) is used when the directory above is absent. `claude-account-rotate token` is used when that command is on the seat's PATH (`LIMEN_CLAUDE_ROTATE` names another binary); `claude-account-rotate active` is the name in the log. `LIMEN_CLAUDE_ACCOUNTS` points at another directory and, when set, is the only source.
+`active` is one line, the account name. The token is `~/.claude-accounts/<name>.token`. Switching accounts is rewriting `active` (the live test moved from `acc4` to `acc5` that way). A directory `~/.claude-accounts/<name>/token` is only a fallback. `claude-account-rotate` does not print a token; its commands are check, dry-run, status, coordinators, mark, and clear. Limen reads the files the rotator updates. A credentials file `~/.claude/.credentials.json` (`claudeAiOauth.accessToken`) is used only when those files are absent. `LIMEN_CLAUDE_ACCOUNTS` points at another directory and, when set, is the only source.
 
 At the start of each host job, and again at `limen continue --host`, the seat reads that token.
 
@@ -246,7 +247,7 @@ limen hosts prune
 
 `check` uses BatchMode ssh. It must find `node`, `pi`, the configured `hook/finish.ts`, and `git ls-remote origin HEAD` in the host repo. It also runs `claude auth status` and prints that command's own output, so a failure is `claude fail` plus the reason (for example `User interaction is not allowed` and `-25308`). Exit 0 when node, Pi, the hook, and git work, and either Claude answers or the seat has a file token. A locked host keychain is a note when the seat token is present, and a failure when it is not.
 
-`prune` deletes `origin/limen/<id>` for terminal jobs. It does not delete review branches that are not `limen/<id>`. `"pruneBranches": true` does that delete itself after a successful fast-forward.
+`prune` deletes `origin/limen/<id>` for terminal jobs whose branch is still on origin (`git ls-remote`). A branch already deleted is not listed, including by `--dry-run`. It does not delete review branches that are not `limen/<id>`. The delete runs in the recorded worktree when that directory still exists, and in the repo when it does not. `"pruneBranches": true` deletes the origin branch after a successful fast-forward. The host clone's own `limen/<id>` branch is removed with the worktree.
 
 ## Smoke test (limen-sandbox)
 
@@ -292,7 +293,7 @@ ssh mbp 'pgrep -af "limen: sandbox" || echo stopped'
 2. The wrapper pushes `limen/<id>` (or the review branch) to `origin`, then logs that the host will fetch it.
 3. Over ssh it fetches that branch, adds a worktree, and writes a minimal `.limen/jobs/<id>/` so the hooks have a folder. `finish` does nothing when that folder is missing; creating it is what makes the handoff stick. Those host lines in the job log start with `[alias]`.
 4. Pi runs `--mode json` in the worktree. Stdout is parsed on the seat with the same stream parser as a local job, so `log`, `activity`, and `last-tool` update on the mini.
-5. On exit the host pushes the branch. The seat copies `result`, `session-ended`, and `session/` back, fetches, and fast-forwards the local worktree (a detached review updates the branch ref too).
+5. On exit the host pushes the branch. The seat copies `result`, `session-ended`, `session/`, `note.md`, and `note.first.md` back, fetches, and fast-forwards the local worktree (a detached review updates the branch ref too). Then the host worktree and, for a `limen/<id>` branch, that local branch on the host clone are removed.
 6. `finalizeJob` runs on the seat. The coordinator wake is the normal one. The host worktree and the temporary job folder are removed.
 
 `limen stop` signals the seat wrapper, which ssh's `kill` for the recorded pid and its children, then finalizes `stopped` on the seat. The wrapper has about four seconds before `limen stop` records the terminal state itself, and five before the process group is killed. That is the same budget a Devin session gets.
@@ -301,7 +302,7 @@ Steers written on the seat (`limen steer`, and the timeout warning) are copied t
 
 ## Limitations
 
-- **Claude accounts.** The seat token is a file or `claude-account-rotate`, not the macOS keychain. A keychain-only login on the mini is `no seat Claude account` until you save `claude setup-token` under `~/.claude-accounts/<name>/token` and point `active` at that name. The running Pi keeps the token it was given. A swap on the seat is picked up by the next `continue`, not by the process already on the host. Sharing one account across machines still burns the limit.
+- **Claude accounts.** The seat token is `~/.claude-accounts/<name>.token` with `active` naming `<name>`, not the macOS keychain and not a `claude-account-rotate` subcommand. A keychain-only login on the mini is `no seat Claude account` until `claude setup-token` is saved in that flat file. The running Pi keeps the token it was given. A swap on the seat is picked up by the next `continue`, not by the process already on the host. Sharing one account across machines still burns the limit.
 - **Steers.** Inbox sync is polled, not instant. A host that is asleep keeps the steer in the seat inbox until a later poll. Delivery still happens on the host, because that is where Pi is.
 - **Sleep.** A closed laptop fails the ssh connect (20s) or the server-alive check (about a minute) and the job is `failed`. Wake the machine, or disable that host, before you send it work. Overflow skips a host that does not answer and leaves the job on the seat queue.
 - **Liveness.** Stall detection and `limen stop`'s escaped-child search see the ssh client on the seat, not Pi's children on the host. A tool that hangs inside Pi is not reaped by the seat's CPU-idle watch. `limen stop` kills the recorded pid and its direct children (`pkill -P`); a deeper grandchild can survive. The log's activity is real (it is Pi's stream). A picture that keys off the local process tree will show the ssh client.

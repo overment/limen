@@ -244,7 +244,7 @@ test("a --host job runs Pi over ssh, copies the handoff home, and fast-forwards"
 	try {
 		const id = plant.spawnJob(
 			made,
-			"commit\nfinish\nfinish Hello from the host",
+			"note The plan stays.\ncommit\nfinish\nfinish Hello from the host",
 			["--host", alias, "--label", "remote"],
 			{
 				env,
@@ -257,7 +257,12 @@ test("a --host job runs Pi over ssh, copies the handoff home, and fast-forwards"
 		assert.match(plant.jobFile(made, id, "log"), /\[mbp\] limen-remote: fetch/);
 		const branch = plant.jobFile(made, id, "branch");
 		const work = plant.jobFile(made, id, "worktree");
-		assert.equal(plant.git(work, "rev-parse", "HEAD"), plant.git(clone, "rev-parse", branch));
+		const origin = plant.git(clone, "remote", "get-url", "origin");
+		assert.equal(plant.git(work, "rev-parse", "HEAD"), plant.git(origin, "rev-parse", branch));
+		assert.throws(() => plant.git(clone, "show-ref", "--verify", "--quiet", `refs/heads/${branch}`));
+		assert.ok(plant.jobFile(made, id, "session-ended"));
+		assert.equal(plant.jobFile(made, id, "note.md"), "The plan stays.");
+		assert.ok(existsSync(join(plant.jobDir(made, id), "session", "fake.jsonl")));
 		assert.match(plant.jobFile(made, id, "commits"), /fake commit/);
 		assert.equal(existsSync(join(made.parent, `.host-repo-limen-worktrees/${id}`)), false);
 		assert.equal(existsSync(join(clone, ".limen", "jobs", id)), false);
@@ -338,9 +343,9 @@ test("a host model is the default, a bridged model is checked on the host, and t
 	const seat = await remotePlant("darwin", "mbp");
 	const token = "sk-ant-oat01-test-token-value";
 	const accounts = join(seat.made.parent, "accounts");
-	await mkdir(join(accounts, "work"), { recursive: true });
+	await mkdir(accounts);
 	await writeFile(join(accounts, "active"), "work\n");
-	await writeFile(join(accounts, "work", "token"), `${token}\n`);
+	await writeFile(join(accounts, "work.token"), `${token}\n`);
 	const pool = JSON.parse(readFileSync(join(seat.made.parent, ".limen", "hosts.json"), "utf8")) as {
 		hosts: Array<{ model?: string }>;
 		pruneBranches?: boolean;
@@ -424,6 +429,9 @@ test("hosts check prints a claude keychain failure, and prune uses the repo when
 		assert.equal(pruned.status, 0, `${pruned.stdout}${pruned.stderr}`);
 		assert.match(pruned.stdout, /deleted origin\/limen\/gone/);
 		assert.doesNotMatch(`${pruned.stdout}${pruned.stderr}`, /ENOENT/);
+		const dry = plant.limen(p, ["hosts", "prune", "--dry-run"]);
+		assert.match(dry.stdout, /no limen branches to delete/);
+		assert.doesNotMatch(dry.stdout, /limen\/gone/);
 	} finally {
 		await p.cleanup();
 		await seat.made.cleanup();

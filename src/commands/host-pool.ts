@@ -149,6 +149,9 @@ async function pruneRoot(root: string, dryRun: boolean): Promise<number> {
 		}
 		const recorded = await textFile(`${dir}/worktree`);
 		const gitDir = recorded && existsSync(recorded) ? recorded : root;
+		if (!(await remoteHasBranch(gitDir, branch))) {
+			continue;
+		}
 		if (dryRun) {
 			console.log(`would delete origin/${branch}`);
 			count += 1;
@@ -161,6 +164,14 @@ async function pruneRoot(root: string, dryRun: boolean): Promise<number> {
 		}
 	}
 	return count;
+}
+
+function remoteHasBranch(cwd: string, branch: string): Promise<boolean> {
+	const { promise, resolve } = Promise.withResolvers<boolean>();
+	execFile("git", ["ls-remote", "--exit-code", "origin", `refs/heads/${branch}`], { cwd }, (error) => {
+		resolve(!error);
+	});
+	return promise;
 }
 
 function deleteBranch(cwd: string, branch: string): Promise<{ ok: boolean; line: string }> {
