@@ -6,9 +6,11 @@ import { enqueueSteer } from "../job/steer-inbox.ts";
 import { recordStreamEvents, type StreamSeen } from "./activity-log.ts";
 import { resolveSeatAccount } from "./claude-account.ts";
 import { argvFor, ENGINES, engineRoute } from "./engine.ts";
+import { githubRepo, mintHostToken, redactSecrets } from "./github-broker.ts";
 import {
 	bundleScript,
 	cleanupScript,
+	githubInstallScript,
 	killScript,
 	launchScript,
 	oauthInstallScript,
@@ -83,8 +85,8 @@ export async function runRemoteJob(job: RemoteJob): Promise<void> {
 		}
 	};
 	try {
-		const secret = await pushAndNote(job);
-		const outcome = await streamJob(job, secret);
+		const delivered = await pushAndNote(job);
+		const outcome = await streamJob(job, delivered);
 		await copyBack(job);
 		await bringBack(job, outcome.cause === "stop");
 		if (outcome.cause === "" && outcome.code === 0 && job.branch.startsWith("limen/") && loadHostPool().pruneBranches) {
@@ -100,18 +102,29 @@ export async function runRemoteJob(job: RemoteJob): Promise<void> {
 	}
 }
 
-async function pushAndNote(job: RemoteJob): Promise<string> {
+type Delivered = {
+	readonly secrets: readonly string[];
+	readonly author?: { readonly name: string; readonly email: string };
+};
+
+async function pushAndNote(job: RemoteJob): Promise<Delivered> {
 	const where = `${job.host.alias} (${job.host.ssh}, ${job.host.platform})`;
 	await appendLimenLog(job.jobDir, `remote host ${where}: pushing ${job.branch}`);
 	await git(job.worktree, ["push", "origin", job.branch]);
 	await appendLimenLog(job.jobDir, `remote host ${job.host.alias}: fetching ${job.branch} and adding a worktree`);
-	const secret = await deliverAccount(job);
+	const account = await deliverAccount(job);
+	const github = await deliverGithub(job);
+	const author = github?.name && github.email ? { name: github.name, email: github.email } : seatAuthor(job.worktree);
+	if (author) {
+		await appendLimenLog(job.jobDir, `commit author ${author.name} <${author.email}>`);
+	}
 	await uploadSession(job);
 	const extras = await readWorkerExtensions(job.jobDir, "pi");
 	if (extras.length > 0) {
 		await appendLimenLog(job.jobDir, `remote host: not loading ${extras.length} seat extension path(s)`);
 	}
-	return secret;
+	const secrets = [account, github?.token ?? ""].filter((secret) => secret !== "");
+	return author ? { secrets, author } : { secrets };
 }
 
 async function deliverAccount(job: RemoteJob): Promise<string> {
@@ -128,6 +141,30 @@ async function deliverAccount(job: RemoteJob): Promise<string> {
 			: `seat Claude account ${account.name} was not delivered`,
 	);
 	return account.token;
+}
+
+async function deliverGithub(job: RemoteJob): Promise<{ token: string; name?: string; email?: string } | undefined> {
+	// `remote get-url` applies insteadOf and can hide the GitHub url the broker must see.
+	const url = spawnSync("git", ["config", "--local", "--get", "remote.origin.url"], {
+		cwd: job.worktree,
+		encoding: "utf8",
+	});
+	const repo = url.status === 0 ? githubRepo(url.stdout) : undefined;
+	if (!repo) {
+		return undefined;
+	}
+	const minted = await mintHostToken(repo);
+	if (!minted.minted) {
+		const why = minted.detail && minted.detail !== "no broker" ? `: ${minted.detail}` : "";
+		await appendLimenLog(job.jobDir, `no seat GitHub token; the host uses its own git credentials${why}`);
+		return undefined;
+	}
+	const sent = await shellText(job.host, githubInstallScript(job.jobId, minted.minted.token), 20_000);
+	await appendLimenLog(
+		job.jobDir,
+		sent.code === 0 ? `seat GitHub token for ${repo} for this job` : `seat GitHub token for ${repo} was not delivered`,
+	);
+	return minted.minted;
 }
 
 async function deletePushedBranch(job: RemoteJob): Promise<void> {
@@ -202,7 +239,7 @@ async function settleCleanExit(
 	await settle(failedReason ? "failed" : "done", failedReason || "pi exited 0");
 }
 
-async function streamJob(job: RemoteJob, secret: string): Promise<Outcome> {
+async function streamJob(job: RemoteJob, delivered: Delivered): Promise<Outcome> {
 	const task = job.continueTask ?? (await readFile(job.taskFile, "utf8"));
 	const launch = piArgs(job);
 	const script = launchScript({
@@ -213,8 +250,9 @@ async function streamJob(job: RemoteJob, secret: string): Promise<Outcome> {
 		piArgs: launch.args,
 		bridged: launch.bridged,
 		task,
+		...(delivered.author ? { author: delivered.author } : {}),
 	});
-	return watchRemote(job, openRemoteShell(job.host, script), secret);
+	return watchRemote(job, openRemoteShell(job.host, script), delivered.secrets);
 }
 
 function piArgs(job: RemoteJob): { readonly args: string[]; readonly bridged: boolean } {
@@ -242,12 +280,12 @@ function piArgs(job: RemoteJob): { readonly args: string[]; readonly bridged: bo
 async function watchRemote(
 	job: RemoteJob,
 	child: ReturnType<typeof openRemoteShell>,
-	secret: string,
+	secrets: readonly string[],
 ): Promise<Outcome> {
 	const parser = createStreamParser();
 	const seen: StreamSeen = { activity: "", activityAt: 0, assistant: "", stop: "", tool: "", progress: 0 };
 	const cause: { value: Cause; detail: string } = { value: "", detail: "" };
-	const pipes = attachPipes(job, child, parser, seen, cause, secret);
+	const pipes = attachPipes(job, child, parser, seen, cause, secrets);
 	const onStop = () => endRemote(job, child, cause, "stop", "stop ended the remote process");
 	if (job.stop.aborted) {
 		onStop();
@@ -293,7 +331,7 @@ function attachPipes(
 	parser: ReturnType<typeof createStreamParser>,
 	seen: StreamSeen,
 	cause: { value: Cause; detail: string },
-	secret: string,
+	secrets: readonly string[],
 ): { failLog(error: unknown): void; finish(events: ReturnType<typeof parser.flush>): Promise<void>; stderr(): string } {
 	let tools = 0;
 	let pending = Promise.resolve();
@@ -329,11 +367,11 @@ function attachPipes(
 	const writeHost = (chunk: string) => {
 		const prefixed = prefixHostChunk(job.host.alias, pendingLine, chunk);
 		pendingLine = prefixed.pending;
-		const text = redact(prefixed.text, secret);
+		const text = redact(prefixed.text, secrets);
 		if (!text) {
 			return;
 		}
-		stderr = redact(`${stderr}${text}`, secret).slice(-2_000);
+		stderr = redact(`${stderr}${text}`, secrets).slice(-2_000);
 		pending = pending.then(() => appendFile(`${job.jobDir}/log`, text)).catch(failLog);
 	};
 	child.stderr?.on("data", (chunk: string) => writeHost(chunk));
@@ -346,15 +384,32 @@ function attachPipes(
 			apply(events);
 			await pending;
 		},
-		stderr: () => redact(stderr, secret),
+		stderr: () => redact(stderr, secrets),
 	};
 }
 
-function redact(text: string, secret: string): string {
-	if (!secret || !text.includes(secret)) {
-		return text;
+function redact(text: string, secrets: readonly string[]): string {
+	let next = redactSecrets(text);
+	for (const secret of secrets) {
+		if (secret && next.includes(secret)) {
+			next = next.split(secret).join("[redacted]");
+		}
 	}
-	return text.split(secret).join("[redacted]");
+	return next;
+}
+
+function seatAuthor(cwd: string): { readonly name: string; readonly email: string } | undefined {
+	const name = localConfig(cwd, "user.name");
+	const email = localConfig(cwd, "user.email");
+	if (!name || !email || /[\0\r\n]/.test(name) || /[\0\r\n]/.test(email)) {
+		return undefined;
+	}
+	return { name, email };
+}
+
+function localConfig(cwd: string, key: string): string {
+	const result = spawnSync("git", ["config", "--local", "--get", key], { cwd, encoding: "utf8" });
+	return result.status === 0 ? result.stdout.trim() : "";
 }
 
 function queueDeadlineSteer(job: RemoteJob, failLog: (error: unknown) => void): void {

@@ -95,3 +95,20 @@ test("a job's note shows once, keeps its first version, logs changes, and is che
 	assert.equal(await readFile(join(root, "npm.ran"), "utf8"), "test 0 -- x\n");
 	assert.deepEqual(await open("**Note check**\nAll proven."), ['Note check: no line reads "<check>: <mark>"']);
 });
+
+test("a CRLF shell continuation proves the command, and a bare line break still does not", async (t) => {
+	const root = await mkdtemp(join(tmpdir(), "u14-crlf-"));
+	t.after(() => rm(root, { recursive: true, force: true }));
+	const job = join(root, ".limen/jobs/j1");
+	await mkdir(join(job, "session"), { recursive: true });
+	const records = ["cd . &&\\\r\nCI=1 npm test 0 -- x", "true\nnpm test 0"].flatMap((command, id) => {
+		const call = { content: [{ type: "toolCall", id: `h${id}`, name: "bash", arguments: { command } }] };
+		return [call, { role: "toolResult", toolCallId: `h${id}`, toolName: "bash", isError: false }];
+	});
+	await writeFile(join(job, "session/a.jsonl"), records.map((message) => JSON.stringify({ message })).join("\n"));
+	const open = (result: string) => writeFile(join(job, "result"), result).then(() => noteCheckOpen(job));
+	assert.deepEqual(await open("## Note check\n- C0: proven. `npm test 0`\n"), []);
+	assert.deepEqual(await open("## Note check\n- Only: proven. `true`\n"), [
+		"Only: not proven. Limen: no proof that `true` ran (its shell call holds a line break), and no such file",
+	]);
+});

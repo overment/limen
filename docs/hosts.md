@@ -43,8 +43,7 @@ Do not `limen spawn` from a clone on the laptop. That would be a second cabinet.
     {
       "alias": "win",
       "ssh": "ada@laptop",
-      "platform": "windows-wsl",
-      "distro": "Ubuntu",
+      "platform": "linux",
       "root": "/home/ada/src/limen-sandbox",
       "hook": "/home/ada/src/limen/hook",
       "maxConcurrent": 1,
@@ -59,13 +58,13 @@ Do not `limen spawn` from a clone on the laptop. That would be a second cabinet.
 |---|---|
 | `alias` | Short lowercase name for `--host`. |
 | `ssh` | What the seat passes to `ssh`. Prefer an entry in `~/.ssh/config` (`Host mbp`). No spaces. |
-| `platform` | `darwin` or `windows-wsl`. |
+| `platform` | `darwin`, `linux`, or `windows-wsl`. `linux` is ssh straight into bash (a Mac is `darwin`; WSL sshd is `linux`). |
 | `root` | Optional shorthand for one clone. Absolute POSIX path on that host (inside Ubuntu on Windows, not a `C:\` path). The seat reads that clone's `origin` and uses the path only for a job from the same repo. |
 | `roots` | Optional map of origin to clone. Each key is an `owner/repo` name or the remote url (`https://github.com/HorizonFlex/jira-ops.git` and `HorizonFlex/jira-ops` are the same repo). The value is an absolute POSIX path of that repo's clone on the host. A host needs `root`, `roots`, or both. One origin is listed once. |
 | `hook` | Absolute POSIX path of this package's `hook/` on that host. Pi loads `finish.ts`, `steering.ts`, and `communication.ts` from it. |
 | `maxConcurrent` | How many seat jobs may run there at once. |
 | `enabled` | `false` keeps the entry but never selects it. Omitted means true. |
-| `distro` | WSL distribution. Omitted means `Ubuntu`. Ignored on darwin. |
+| `distro` | WSL distribution for `windows-wsl`. Omitted means `Ubuntu`. Ignored on darwin and linux. |
 | `path` | Optional directories prepended to `PATH` for the job. Non-interactive ssh does not load zshrc or nvm. |
 | `model` | Used when `--model` is omitted. A bridged id such as `claude-bridge/claude-sonnet-5-5` is resolved on the host. Omitted means the seat default, which the host may not be logged into. |
 | `overflow` | Top-level. `true` lets the seat send a job to a free host when the **local** start gate is closed. Omitted or `false` means only an explicit `--host` leaves the seat. |
@@ -99,7 +98,7 @@ The host is not a seat. It does not run Herdr, Moshi, the GitHub doorbell, or th
 - Pi's `~/.pi/agent`, including the same `pi-claude-bridge` (or `claude-bridge`) install the seat uses. A bridged model looks the bridge up on the host, under `~/.pi/agent/npm/node_modules`.
 - Claude Code CLI logged in **on that host** (`claude` / the bridge's login). The seat's login is not copied across.
 - A clone of Limen at the `hook` path, the same revision the seat is running. Hooks import the package next to them.
-- Git credentials that can `git fetch` and `git push` to HorizonFlex GitHub repos over HTTPS or ssh. The job branch is pushed by the seat, fetched on the host, and pushed back by the host when Pi exits.
+- Git that can `git fetch` and `git push` the job branch. The seat pushes first. For a GitHub origin, the seat asks the token broker for an installation token and the host uses that for its fetch and push. Without a broker, the host uses its own credentials.
 - Each clone in `root` or `roots` stays on a branch that is not a job branch (`main` is right; not `limen/<id>`, and not detached). The host creates a worktree beside the clone whose origin is the job's project, the same way the seat does.
 - For review jobs: Python 3.13 and Playwright's Chromium, if the review runs the browser. Install them inside the same environment Pi sees (on Windows, inside Ubuntu).
 
@@ -145,26 +144,47 @@ Host mbp
 
 ## Windows laptop (WSL2)
 
-The laptop runs Ubuntu under WSL2. Windows OpenSSH is the door. The job command is `wsl.exe -d Ubuntu -- bash -c …`, so the script, Pi, git, and the kill signal all run **inside Ubuntu**. Paths in `hosts.json` are Ubuntu paths. You do not point `root` at `C:\Users\...`.
+The laptop runs Ubuntu under WSL2. Paths in `hosts.json` are Ubuntu paths. You do not point `root` at `C:\Users\...`.
 
-Windows side, once:
-
-1. Install WSL2 and Ubuntu: `wsl --install -d Ubuntu` (or the Microsoft Store Ubuntu). Reboot if Windows asks.
-2. Install the Windows OpenSSH server. Settings → System → Optional features → OpenSSH Server, or:
-
-   ```powershell
-   Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0
-   Start-Service sshd
-   Set-Service -Name sshd -StartupType Automatic
-   ```
-
-3. Confirm the seat can ssh to the Windows user (`ssh ada@laptop`). The default shell on the far side is `cmd.exe`. That is expected. Limen wraps the job in `wsl.exe` itself. You do not have to change the OpenSSH default shell.
-4. Leave the laptop awake for the trial (see [Limitations](#limitations)).
-
-Inside Ubuntu:
+An Azure AD (Entra) account cannot use key authentication with Windows OpenSSH. The server answers `unable to get security token for user azuread\...` and the key never gets that far. Do not use that door. Run sshd inside Ubuntu, with keys only, and publish it on the tailnet:
 
 ```bash
-# Node 24 on the default non-login PATH. wsl.exe does not source nvm.
+# Inside Ubuntu, once.
+sudo apt update && sudo apt install -y openssh-server
+sudo ssh-keygen -A
+# sshd in WSL does not use port 22 if Windows already owns it. 2222 stays inside Ubuntu.
+sudo tee /etc/ssh/sshd_config.d/limen.conf >/dev/null <<'EOF'
+Port 2222
+PasswordAuthentication no
+PubkeyAuthentication yes
+EOF
+sudo service ssh start
+```
+
+From Ubuntu, `tailscale serve --tcp 2222 tcp://localhost:2222` publishes that port on the tailnet. WSL's sshd dies when the distro stops, so a Windows logon task keeps it up. Task Scheduler, at log on, hidden:
+
+```powershell
+wsl.exe -d Ubuntu sleep infinity
+```
+
+On the mini, `~/.ssh/config`:
+
+```
+Host laptop
+  HostName laptop.tailnet.ts.net
+  User ada
+  Port 2222
+  IdentityFile ~/.ssh/id_ed25519
+```
+
+`ssh laptop true` lands in Ubuntu bash. The hosts entry uses `"platform": "linux"`. Load is read from `/proc/meminfo` (MemAvailable), not macOS `memory_pressure`.
+
+`windows-wsl` is the other door: ssh to Windows OpenSSH, then `wsl.exe -d Ubuntu`. Use it only for a local Windows account that accepts keys. The remote command is base64 with no `$` in it, so it does not matter whether that OpenSSH default shell is cmd.exe or PowerShell. PowerShell would expand `$(mktemp)` inside the double quotes a cmd-shaped command used to use. `distro` must match `wsl.exe -l -q` (`Ubuntu`, `Ubuntu-24.04`, …). The default is `Ubuntu`.
+
+Inside Ubuntu, for either door:
+
+```bash
+# Node 24 on the default non-login PATH. A non-interactive ssh does not source nvm.
 # A tarball unpacked to /usr/local is the reliable layout:
 curl -fsSL https://nodejs.org/dist/v24.11.0/node-v24.11.0-linux-x64.tar.xz -o /tmp/node.tar.xz
 sudo tar -xJf /tmp/node.tar.xz -C /usr/local --strip-components=1
@@ -185,13 +205,10 @@ python3.13 -m pip install playwright && python3.13 -m playwright install chromiu
 From the mini, this must print v24 before you send a job. It is the command Limen will use, not an interactive Ubuntu terminal:
 
 ```bash
-ssh ada@laptop "wsl.exe -d Ubuntu -- node -v"
-ssh ada@laptop "wsl.exe -d Ubuntu -- bash -lc 'command -v pi && command -v git'"
+ssh laptop 'node -v; command -v pi; command -v git'
 ```
 
-If `node` is only on PATH after nvm starts, set `path` to the nvm node `bin` directory (an absolute Ubuntu path) or symlink `node` and `pi` into `/usr/local/bin`.
-
-`distro` must match `wsl.exe -l -q` on the laptop (`Ubuntu`, `Ubuntu-24.04`, …). The default is `Ubuntu`.
+If `node` is only on PATH after nvm starts, set `path` to the nvm node `bin` directory (an absolute Ubuntu path) or symlink `node` and `pi` into `/usr/local/bin`. Leave the laptop awake for the trial (see [Limitations](#limitations)).
 
 ## Credentials on a Mac host
 
@@ -244,6 +261,20 @@ At the start of each host job, and again at `limen continue --host`, the seat re
 The token goes to the host on ssh's stdin, into a `0600` file under `/tmp`, then into `CLAUDE_CODE_OAUTH_TOKEN` for that Pi process only. The file is removed before Pi is exec'd, and again when the worktree is cleaned up. It is not an ssh argument, not a job-log line, and not left on the host. The log names the account (`seat Claude account work for this job`) and never the token.
 
 A quota swap while Pi is already running does not retarget that process. The next `limen continue --host` reads the rotator again and sends the new token. A job with no seat account still runs, and the host's own login is what Claude Code uses; the log says so.
+
+## GitHub identity on a host
+
+Commits on a host job use the seat checkout's repo-local `user.name` and `user.email` (the bot, when that is what the seat clone records). A broker JSON line `{"token","name","email"}` overrides that pair. The name is a log line. The token is not.
+
+The App key stays with the `limen-github` user. Limen does not read it. For a job whose origin is `github.com/owner/repo` it runs:
+
+```bash
+sudo -n -u limen-github -- node /usr/local/libexec/limen-token-broker.mjs owner/repo
+```
+
+`LIMEN_GITHUB_BROKER` points at another script. The broker's stdout is only the installation token, or one JSON object with `token` and optional `name` and `email`. Anything else it prints goes to stderr. A missing file, or a repo that is not on github.com, skips this and the host uses its own git credentials. The log says which.
+
+The token goes over ssh stdin into a `0600` file under `/tmp`, then into `GH_TOKEN` for that job only. A git credential helper answers `x-access-token` from that variable, and `git@github.com:` is fetched as `https://github.com/` for that process, so the host's personal `gh` token is not what pushes. The file is removed before Pi starts, and again when the worktree is cleaned up. It is not an ssh argument and not a log line. The helper is process config (`GIT_CONFIG_*`), not a line written into the host's git config.
 
 ## Check and prune
 
@@ -311,6 +342,7 @@ Steers written on the seat (`limen steer`, and the timeout warning) are copied t
 ## Limitations
 
 - **Claude accounts.** The seat token is `~/.claude-accounts/<name>.token` with `active` naming `<name>`, not the macOS keychain and not a `claude-account-rotate` subcommand. A keychain-only login on the mini is `no seat Claude account` until `claude setup-token` is saved in that flat file. The running Pi keeps the token it was given. A swap on the seat is picked up by the next `continue`, not by the process already on the host. Sharing one account across machines still burns the limit.
+- **GitHub token.** The installation token lives for that one job. A push after the wrapper exits uses the host's own credentials again. The broker has to be runnable as `limen-github` with `sudo -n`. A token that the broker prints with other words on the same line is refused.
 - **Steers.** Inbox sync is polled, not instant. A host that is asleep keeps the steer in the seat inbox until a later poll. Delivery still happens on the host, because that is where Pi is.
 - **Sleep.** A closed laptop fails the ssh connect (20s) or the server-alive check (about a minute) and the job is `failed`. Wake the machine, or disable that host, before you send it work. Overflow skips a host that does not answer and leaves the job on the seat queue.
 - **Liveness.** Stall detection and `limen stop`'s escaped-child search see the ssh client on the seat, not Pi's children on the host. A tool that hangs inside Pi is not reaped by the seat's CPU-idle watch. `limen stop` kills the recorded pid and its direct children (`pkill -P`); a deeper grandchild can survive. The log's activity is real (it is Pi's stream). A picture that keys off the local process tree will show the ssh client.

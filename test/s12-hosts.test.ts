@@ -7,7 +7,14 @@ import { chmod, mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { cmdQuote, type HostPlatform, launchScript, type RemoteHost, sshArgv } from "../src/runtime/host-shell.ts";
+import {
+	cmdQuote,
+	type HostPlatform,
+	launchScript,
+	probeScript,
+	type RemoteHost,
+	sshArgv,
+} from "../src/runtime/host-shell.ts";
 import { matchProjectRoot, originKey, parseHostPool, rankHosts, validateRemoteLaunch } from "../src/runtime/hosts.ts";
 import * as plant from "./plant.ts";
 
@@ -192,20 +199,22 @@ test("validateRemoteLaunch refuses a group, a tab, and a non-Pi engine", () => {
 	assert.throws(() => validateRemoteLaunch(pool, "mbp", { ...launch, engine: "omp" }), /Pi/);
 });
 
-test("ssh quoting runs the same script on the darwin starter and the WSL command", () => {
+test("ssh quoting runs the same script on darwin, linux, and a shell-agnostic WSL command", () => {
 	const script = "echo quoted-ok\n";
-	for (const platform of ["darwin", "windows-wsl"] as const satisfies readonly HostPlatform[]) {
+	for (const platform of ["darwin", "linux", "windows-wsl"] as const satisfies readonly HostPlatform[]) {
 		const argv = sshArgv("ssh", { ssh: "ada@host", platform, distro: "Ubuntu 24" });
 		assert.equal(argv[0], "ssh");
 		assert.ok(argv.includes("BatchMode=yes"));
 		const command = argv.at(-1) ?? "";
 		if (platform === "windows-wsl") {
 			assert.ok(command.startsWith(`wsl.exe -d ${cmdQuote("Ubuntu 24")} -- bash -c "`), command);
+			assert.ok(command.includes("base64 -d"), command);
+			assert.equal(command.includes("$"), false, command);
 		} else {
 			assert.ok(command.startsWith("bash -c '"), command);
 		}
-		// Darwin: the remote shell receives one single-quoted `bash -c`. Windows cmd does not expand `$`;
-		// the starter is the double-quoted argument WSL's bash -c runs, so run that argument directly.
+		// Darwin and Linux: one single-quoted `bash -c`. Windows: the starter is base64 inside bash -c, so
+		// PowerShell and cmd.exe have no `$` to expand. Run that argument directly.
 		const ran =
 			platform === "windows-wsl"
 				? spawnSync("bash", ["-c", command.match(/bash -c "([^"]*)"$/)?.[1] ?? ""], {
@@ -216,6 +225,11 @@ test("ssh quoting runs the same script on the darwin starter and the WSL command
 		assert.equal(ran.status, 0, ran.stderr);
 		assert.equal(ran.stdout, "quoted-ok\n");
 	}
+	const probed = spawnSync("bash", ["-c", probeScript(0)], { encoding: "utf8" });
+	assert.equal(probed.status, 0, probed.stderr);
+	const reading = JSON.parse(probed.stdout) as { memoryFree: number };
+	assert.ok(reading.memoryFree > 0 && reading.memoryFree <= 100);
+	assert.match(probeScript(0), /MemAvailable/);
 });
 
 test("the launch script quotes a label and a task for both platforms and passes bash -n", () => {
@@ -617,6 +631,44 @@ test("roots send each project to its own clone, and check lists origin and branc
 		assert.notEqual(refused.status, 0);
 		assert.match(refused.stderr, /has no root for/);
 		assert.match(refused.stderr, /horizonflex\/jira-ops/);
+	} finally {
+		await seat.made.cleanup();
+	}
+});
+
+test("a host job commits as the broker's bot and the token stays off the command line", async () => {
+	const seat = await remotePlant("darwin", "mbp");
+	const token = "ghs_testtokenvalue";
+	const broker = join(seat.made.bin, "broker");
+	await writeFile(
+		broker,
+		`#!/bin/sh\nprintf '%s\\n' '{"token":"${token}","name":"limen-macmini[bot]","email":"123+limen-macmini[bot]@users.noreply.github.com"}'\n`,
+	);
+	await chmod(broker, 0o755);
+	const bare = plant.git(seat.made.root, "remote", "get-url", "origin");
+	plant.git(seat.made.root, "remote", "set-url", "origin", "https://github.com/HorizonFlex/limen-sandbox.git");
+	plant.git(seat.made.root, "config", `url.${bare}.insteadOf`, "https://github.com/HorizonFlex/limen-sandbox.git");
+	plant.git(seat.made.root, "config", "user.name", "Local Person");
+	plant.git(seat.made.root, "config", "user.email", "local@example.test");
+	assert.equal(
+		plant.git(seat.made.root, "config", "--get", "remote.origin.url"),
+		"https://github.com/HorizonFlex/limen-sandbox.git",
+	);
+	const env = { ...seat.env, LIMEN_GITHUB_BROKER: broker, LIMEN_GITHUB_BROKER_DIRECT: "1", FAKE_SSH_SECRET: token };
+	try {
+		const id = plant.spawnJob(seat.made, "commit\nfinish\nfinish pushed", ["--host", "mbp", "--label", "gh"], { env });
+		assert.equal(plant.waitJob(seat.made, id, { env }), "done");
+		const logged = plant.jobFile(seat.made, id, "log");
+		assert.match(logged, /seat GitHub token for HorizonFlex\/limen-sandbox for this job/);
+		assert.match(logged, /commit author limen-macmini\[bot\]/);
+		assert.equal(logged.includes(token), false);
+		const calls = readFileSync(seat.log, "utf8");
+		assert.equal(calls.includes(token), false);
+		assert.match(calls, /"secretInStdin":true/);
+		assert.doesNotMatch(calls, /"secretInCommand":true/);
+		const work = plant.jobFile(seat.made, id, "worktree");
+		assert.equal(plant.git(work, "log", "-1", "--format=%an"), "limen-macmini[bot]");
+		assert.equal(plant.git(work, "log", "-1", "--format=%ae"), "123+limen-macmini[bot]@users.noreply.github.com");
 	} finally {
 		await seat.made.cleanup();
 	}

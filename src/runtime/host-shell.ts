@@ -1,9 +1,9 @@
 import { type ChildProcess, spawn } from "node:child_process";
 
 // Platform differences for a remote host live here: the ssh command line, quoting, paths, and how a pid is signaled.
-// Darwin runs the script over OpenSSH. Windows OpenSSH lands in cmd.exe, so the command is one double-quoted
-// `wsl.exe` line and the job itself runs in WSL2 Ubuntu, which is a Linux host from the script's point of view.
-export type HostPlatform = "darwin" | "windows-wsl";
+// Darwin and Linux run the script over OpenSSH into bash. Windows OpenSSH's default shell may be cmd.exe or
+// PowerShell, so that command line holds no `$` and the starter is base64. The job itself still runs in WSL bash.
+export type HostPlatform = "darwin" | "linux" | "windows-wsl";
 
 export type HostClone = {
 	/** Origin url or `owner/repo`. Empty is the shorthand `root`: the clone's own origin is the match. */
@@ -25,7 +25,7 @@ export type RemoteHost = {
 	readonly hook: string;
 	readonly maxConcurrent: number;
 	readonly enabled: boolean;
-	/** WSL distribution. Ignored on darwin. */
+	/** WSL distribution. Ignored on darwin and linux. */
 	readonly distro: string;
 	/** Prepended to PATH inside the job. Empty uses whatever non-interactive ssh already has. */
 	readonly path: string;
@@ -54,11 +54,21 @@ export function sshBinary(): string {
 
 /** One remote command. The script is the process's stdin, not part of the command line. */
 export function sshArgv(binary: string, host: Pick<RemoteHost, "ssh" | "platform" | "distro">): readonly string[] {
-	const command =
-		host.platform === "windows-wsl"
-			? `wsl.exe -d ${cmdQuote(host.distro)} -- bash -c ${cmdQuote(STARTER)}`
-			: `bash -c ${posixQuote(STARTER)}`;
-	return [binary, ...SSH_OPTIONS, host.ssh, command];
+	return [binary, ...SSH_OPTIONS, host.ssh, remoteCommand(host)];
+}
+
+/**
+ * The remote shell reads this command. Darwin and Linux are bash. Windows OpenSSH may be PowerShell, which would
+ * expand `$(...)` inside the double quotes cmd.exe accepts, so the starter is base64 and the command line has no `$`.
+ */
+function remoteCommand(host: Pick<RemoteHost, "platform" | "distro">): string {
+	if (host.platform !== "windows-wsl") {
+		return `bash -c ${posixQuote(STARTER)}`;
+	}
+	const starter = Buffer.from(STARTER, "utf8").toString("base64");
+	// Decode beside the pipe. Piping into bash would swallow the job script, which arrives on stdin.
+	const inner = `echo ${starter} | base64 -d > /tmp/limen-starter && bash /tmp/limen-starter`;
+	return `wsl.exe -d ${cmdQuote(host.distro)} -- bash -c ${cmdQuote(inner)}`;
 }
 
 /** POSIX single quotes. The only character they cannot hold is a single quote, which is closed and reopened. */
@@ -86,7 +96,7 @@ export function remoteLayout(host: Pick<RemoteHost, "root">, jobId: string): { j
  * A short load sample. `fixed` is JSON already read on the seat (`LIMEN_HOST_READING`); the host prints it and exits.
  * Otherwise Node samples CPU, and macOS prefers `memory_pressure` when the script is running natively.
  */
-export function probeScript(sampleMs: number, fixed: string | undefined): string {
+export function probeScript(sampleMs: number, fixed?: string): string {
 	if (fixed !== undefined) {
 		return `printf %s ${posixQuote(fixed)}\n`;
 	}
@@ -94,6 +104,8 @@ export function probeScript(sampleMs: number, fixed: string | undefined): string
 	return `mem=""
 if [ "$(uname -s)" = "Darwin" ] && [ -x /usr/bin/memory_pressure ]; then
   mem=$(/usr/bin/memory_pressure | sed -n 's/.*memory free percentage: *\\([0-9][0-9]*\\).*/\\1/p' | head -n 1)
+elif [ -r /proc/meminfo ]; then
+  mem=$(awk '/MemTotal/{t=$2} /MemAvailable/{a=$2} END{if(t>0) printf "%.4f", 100*a/t}' /proc/meminfo)
 fi
 LIMEN_REMOTE_MEM="$mem" node --input-type=module <<'END'
 import { cpus, freemem, totalmem } from "node:os";
@@ -143,6 +155,8 @@ export type LaunchScript = {
 	readonly piArgs: readonly string[];
 	readonly bridged: boolean;
 	readonly task: string;
+	/** Seat repo-local identity, or the broker's bot. Empty means the host's own git config. */
+	readonly author?: { readonly name: string; readonly email: string };
 };
 
 /** The bash script that prepares the worktree, runs Pi, and pushes the branch before it exits. */
@@ -155,6 +169,7 @@ export function launchScript(input: LaunchScript): string {
 		"set -eu",
 		"export GIT_TERMINAL_PROMPT=0",
 		pathLine,
+		loadGithub(input.jobId, input.author),
 		bridgeFinder(),
 		`root=${posixQuote(input.host.root)}`,
 		`jobdir=${posixQuote(jobDir)}`,
@@ -276,6 +291,53 @@ chmod 600 ${dest}
 `;
 }
 
+export function ghPath(jobId: string): string {
+	return `/tmp/limen-gh-${jobId}`;
+}
+
+/** Writes the seat's GitHub token to a 0600 file. The token is in this script, on ssh stdin, never in argv. */
+export function githubInstallScript(jobId: string, token: string): string {
+	let marker = "LIMEN_GH_END";
+	while (token.includes(marker)) {
+		marker += "X";
+	}
+	const dest = posixQuote(ghPath(jobId));
+	return `set -eu
+umask 077
+cat > ${dest} <<'${marker}'
+${token}
+${marker}
+chmod 600 ${dest}
+`;
+}
+
+function loadGithub(jobId: string, author: LaunchScript["author"]): string {
+	const dest = posixQuote(ghPath(jobId));
+	const authorLines = author
+		? [
+				`export GIT_AUTHOR_NAME=${posixQuote(author.name)}`,
+				`export GIT_AUTHOR_EMAIL=${posixQuote(author.email)}`,
+				`export GIT_COMMITTER_NAME=${posixQuote(author.name)}`,
+				`export GIT_COMMITTER_EMAIL=${posixQuote(author.email)}`,
+			].join("\n")
+		: "";
+	// The helper reads GH_TOKEN when git asks. The value itself does not contain the token. It is tried before a
+	// helper already configured on the host, and an ssh GitHub url is fetched over HTTPS so the token is what pushes.
+	return `ghfile=${dest}
+if [ -f "$ghfile" ]; then
+  GH_TOKEN=$(tr -d '\\n' < "$ghfile")
+  export GH_TOKEN
+  export GITHUB_TOKEN="$GH_TOKEN"
+  rm -f "$ghfile"
+  export GIT_CONFIG_COUNT=2
+  export GIT_CONFIG_KEY_0=credential.helper
+  export GIT_CONFIG_VALUE_0='!f() { echo username=x-access-token; echo "password=$GH_TOKEN"; }; f'
+  export GIT_CONFIG_KEY_1=url.https://github.com/.insteadOf
+  export GIT_CONFIG_VALUE_1=git@github.com:
+fi
+${authorLines}`;
+}
+
 function loadOauth(jobId: string): string {
 	const dest = posixQuote(oauthPath(jobId));
 	return `oauth=${dest}
@@ -293,7 +355,7 @@ export function cleanupScript(host: Pick<RemoteHost, "root">, jobId: string, bra
 		: "";
 	return `set +e
 git -C ${posixQuote(host.root)} worktree remove --force ${posixQuote(worktree)} 2>/dev/null
-rm -rf ${posixQuote(worktree)} ${posixQuote(jobDir)} ${posixQuote(oauthPath(jobId))}
+rm -rf ${posixQuote(worktree)} ${posixQuote(jobDir)} ${posixQuote(oauthPath(jobId))} ${posixQuote(ghPath(jobId))}
 ${dropBranch}git -C ${posixQuote(host.root)} worktree prune >/dev/null 2>&1
 exit 0
 `;

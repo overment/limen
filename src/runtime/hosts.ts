@@ -199,8 +199,8 @@ function parseHost(entry: unknown, path: string, index: number, ignored: string[
 		throw new Error(`${path} host ${alias} ssh target has spaces or shell characters; use a Host alias`);
 	}
 	const platform = requireString(body, "platform", path, index);
-	if (platform !== "darwin" && platform !== "windows-wsl") {
-		throw new Error(`${path} host ${alias} platform must be darwin or windows-wsl`);
+	if (platform !== "darwin" && platform !== "linux" && platform !== "windows-wsl") {
+		throw new Error(`${path} host ${alias} platform must be darwin, linux, or windows-wsl`);
 	}
 	const { shorthand, clones } = parseClones(body, path, alias);
 	const hook = posixPath(requireString(body, "hook", path, index), path, alias, "hook");
