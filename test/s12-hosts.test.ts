@@ -474,6 +474,7 @@ test("a host model is the default, a bridged model is checked on the host, and t
 		assert.match(check.stdout, /hook ok/);
 		assert.match(check.stdout, /git ok/);
 		assert.match(check.stdout, /seat account work/);
+		assert.match(check.stdout, /github token skipped; no github.com origin/);
 		const pruned = plant.limen(seat.made, ["hosts", "prune"], { env });
 		assert.match(pruned.stdout, /already gone|no limen branches deleted/);
 	} finally {

@@ -7,6 +7,7 @@ import { appendLimenLog, atomicWrite, textFile } from "../job/record.ts";
 import { registeredProjects, seatDir } from "../project/seat.ts";
 import { processAlive } from "./contain.ts";
 import { ENGINES, engineRoute } from "./engine.ts";
+import { type GithubBroker, parseGithubBroker } from "./github-broker.ts";
 import {
 	type HostClone,
 	type HostPlatform,
@@ -24,6 +25,8 @@ export type HostPool = {
 	readonly overflow: boolean;
 	/** Delete `limen/<id>` on origin after a host job fast-forwards. */
 	readonly pruneBranches: boolean;
+	/** Client that prints a GitHub App token. Absent means auto-detect `~/.local/bin/limen-git-token`. */
+	readonly githubBroker?: GithubBroker;
 	readonly hosts: readonly RemoteHost[];
 	readonly ignored: readonly string[];
 };
@@ -170,10 +173,11 @@ export function parseHostPool(parsed: unknown, path: string): HostPool {
 		throw new Error(`${path} hosts must be an array`);
 	}
 	for (const key of Object.keys(body)) {
-		if (key !== "overflow" && key !== "hosts" && key !== "pruneBranches") {
+		if (key !== "overflow" && key !== "hosts" && key !== "pruneBranches" && key !== "githubBroker") {
 			ignored.push(key);
 		}
 	}
+	const githubBroker = parseGithubBroker(body.githubBroker, path, ignored);
 	const hosts = body.hosts.map((entry, index) => parseHost(entry, path, index, ignored));
 	const aliases = new Set<string>();
 	for (const host of hosts) {
@@ -182,7 +186,13 @@ export function parseHostPool(parsed: unknown, path: string): HostPool {
 		}
 		aliases.add(host.alias);
 	}
-	return { overflow: body.overflow === true, pruneBranches: body.pruneBranches === true, hosts, ignored };
+	return {
+		overflow: body.overflow === true,
+		pruneBranches: body.pruneBranches === true,
+		hosts,
+		ignored,
+		...(githubBroker ? { githubBroker } : {}),
+	};
 }
 
 function parseHost(entry: unknown, path: string, index: number, ignored: string[]): RemoteHost {
