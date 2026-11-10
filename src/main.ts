@@ -5,6 +5,7 @@ import { diffCommand } from "./commands/diff.ts";
 import { githubCommand } from "./commands/github.ts";
 import { groupCommand } from "./commands/group.ts";
 import { highlightCommand } from "./commands/highlight.ts";
+import { hostsCommand } from "./commands/host-pool.ts";
 import { initCommand, workspaceCommand } from "./commands/init.ts";
 import { jobsCommand } from "./commands/jobs.ts";
 import { keeperCommand } from "./commands/keeper.ts";
@@ -37,6 +38,7 @@ const COMMANDS = {
 	planning: planningCommand,
 	github: githubCommand,
 	group: groupCommand,
+	hosts: hostsCommand,
 	spawn: spawnCommand,
 	continue: continueCommand,
 	diff: diffCommand,
@@ -70,6 +72,7 @@ const COMMANDS = {
 	| "continue"
 	| "github"
 	| "group"
+	| "hosts"
 	| "diff"
 	| "steer"
 	| "stop"
@@ -130,6 +133,8 @@ usage:
   limen status [--all]                          # plant inbox: running, candidates to inspect, needs a decision (last 7 days), coordinator tabs
   limen queue                                   # the seat's start queue in start order, and the CPU and memory reading against the gate
   limen prune [--retire [--dry-run]]           # --retire deletes finished, failed, or stopped job records whose branch is landed (ancestor or cherry-pick) or deleted
+  limen hosts check <alias>                    # over ssh: Pi, git ls-remote, Claude auth; the seat account is named, never printed
+  limen hosts prune [--dry-run]                # delete origin limen/<id> branches of terminal jobs
   limen rule                                    # the seat-wide rules that hold now
   limen rule set NAME --until 90m|12h|3d|"YYYY-MM-DD HH:MM"|ISO [--start-priority 1|2|3] "text"  # one rule for every coordinator; a set or change pings each live coordinator tab once
   limen rule end NAME [reason]                  # end it now; each live coordinator tab gets one end ping, as at its end time

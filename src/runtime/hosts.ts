@@ -5,13 +5,16 @@ import { groupLock } from "../job/group-cabinet.ts";
 import { appendLimenLog, atomicWrite, textFile } from "../job/record.ts";
 import { registeredProjects, seatDir } from "../project/seat.ts";
 import { processAlive } from "./contain.ts";
-import { type HostPlatform, probeScript, type RemoteHost, shellText } from "./host-shell.ts";
+import { ENGINES, engineRoute } from "./engine.ts";
+import { type HostPlatform, hostEngineScript, probeScript, type RemoteHost, shellText } from "./host-shell.ts";
 import { type Reading, readLoad, type StartGate, startGate } from "./start-queue.ts";
 
 export type { HostPlatform, RemoteHost };
 
 export type HostPool = {
 	readonly overflow: boolean;
+	/** Delete `limen/<id>` on origin after a host job fast-forwards. */
+	readonly pruneBranches: boolean;
 	readonly hosts: readonly RemoteHost[];
 	readonly ignored: readonly string[];
 };
@@ -28,7 +31,7 @@ export function hostsFile(): string {
 export function loadHostPool(): HostPool {
 	const path = hostsFile();
 	if (!existsSync(path)) {
-		return { overflow: false, hosts: [], ignored: [] };
+		return { overflow: false, pruneBranches: false, hosts: [], ignored: [] };
 	}
 	let parsed: unknown;
 	try {
@@ -155,11 +158,14 @@ export function parseHostPool(parsed: unknown, path: string): HostPool {
 	if (body.overflow !== undefined && typeof body.overflow !== "boolean") {
 		throw new Error(`${path} overflow must be true or false`);
 	}
+	if (body.pruneBranches !== undefined && typeof body.pruneBranches !== "boolean") {
+		throw new Error(`${path} pruneBranches must be true or false`);
+	}
 	if (!Array.isArray(body.hosts)) {
 		throw new Error(`${path} hosts must be an array`);
 	}
 	for (const key of Object.keys(body)) {
-		if (key !== "overflow" && key !== "hosts") {
+		if (key !== "overflow" && key !== "hosts" && key !== "pruneBranches") {
 			ignored.push(key);
 		}
 	}
@@ -171,7 +177,7 @@ export function parseHostPool(parsed: unknown, path: string): HostPool {
 		}
 		aliases.add(host.alias);
 	}
-	return { overflow: body.overflow === true, hosts, ignored };
+	return { overflow: body.overflow === true, pruneBranches: body.pruneBranches === true, hosts, ignored };
 }
 
 function parseHost(entry: unknown, path: string, index: number, ignored: string[]): RemoteHost {
@@ -206,8 +212,14 @@ function parseHost(entry: unknown, path: string, index: number, ignored: string[
 	if (typeof pathPrefix !== "string" || /[\0\r\n]/.test(pathPrefix)) {
 		throw new Error(`${path} host ${alias} path must be one line`);
 	}
+	const model = body.model === undefined ? "" : body.model;
+	if (typeof model !== "string" || (model !== "" && !/^[A-Za-z0-9._:@+/-]{1,160}$/.test(model))) {
+		throw new Error(`${path} host ${alias} model must be a model id`);
+	}
 	for (const key of Object.keys(body)) {
-		if (!["alias", "ssh", "platform", "root", "hook", "maxConcurrent", "enabled", "distro", "path"].includes(key)) {
+		if (
+			!["alias", "ssh", "platform", "root", "hook", "maxConcurrent", "enabled", "distro", "path", "model"].includes(key)
+		) {
 			ignored.push(`${alias}.${key}`);
 		}
 	}
@@ -221,7 +233,40 @@ function parseHost(entry: unknown, path: string, index: number, ignored: string[
 		enabled,
 		distro,
 		path: pathPrefix,
+		model,
 	};
+}
+
+/** The named host. Throws when the alias is missing; a disabled host is still returned so the caller can say why. */
+export function hostByAlias(pool: HostPool, alias: string): RemoteHost {
+	const host = pool.hosts.find((candidate) => candidate.alias === alias);
+	if (!host) {
+		throw new Error(`--host ${alias} is not in ${hostsFile()}`);
+	}
+	return host;
+}
+
+/** Pi and, when the model is bridged, the Claude bridge, on the host. The seat's PATH is not consulted. */
+export async function assertHostEngine(host: RemoteHost, model?: string, provider?: string): Promise<void> {
+	const bridged = engineRoute(ENGINES.pi, provider, model).bridged;
+	const result = await shellText(host, hostEngineScript(host, bridged), 25_000);
+	if (result.code === 0) {
+		return;
+	}
+	const detail = `${result.stdout}\n${result.stderr}`
+		.split("\n")
+		.map((line) => line.trim())
+		.find((line) => line && !line.startsWith("pi ok"));
+	throw new Error(`host ${host.alias}: ${detail || "Pi check failed"}`);
+}
+
+/** The host's model when spawn or continue did not pass `--model`. */
+export function hostModel(alias: string | undefined): string | undefined {
+	if (!alias) {
+		return undefined;
+	}
+	const model = hostByAlias(loadHostPool(), alias).model;
+	return model || undefined;
 }
 
 function requireString(body: Record<string, unknown>, key: string, path: string, index: number): string {

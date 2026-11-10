@@ -2,8 +2,8 @@
 // launch script in a temp directory, so finalize, fast-forward, stop, and overflow are the seat's own code.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
-import { chmod, writeFile } from "node:fs/promises";
+import { existsSync, readFileSync } from "node:fs";
+import { chmod, mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
@@ -24,6 +24,7 @@ function host(over: Partial<RemoteHost> & Pick<RemoteHost, "alias">): RemoteHost
 		enabled: true,
 		distro: "Ubuntu",
 		path: "",
+		model: "",
 		...over,
 	};
 }
@@ -186,12 +187,15 @@ for (let i = 0; i < args.length; i++) {
   positional.push(args[i]);
 }
 let command = positional.slice(1).join(" ");
-appendFileSync(process.env.FAKE_SSH_LOG, JSON.stringify({ host: positional[0] ?? "", command }) + "\\n");
-const input = readFileSync(0);
+const secret = process.env.FAKE_SSH_SECRET || "";
+const stdin = readFileSync(0);
+const secretInStdin = secret !== "" && stdin.includes(secret);
+const secretInCommand = secret !== "" && command.includes(secret);
+appendFileSync(process.env.FAKE_SSH_LOG, JSON.stringify({ host: positional[0] ?? "", command, secretInStdin, secretInCommand }) + "\\n");
 const wsl = /^wsl\\.exe -d (?:"([^"]*)"|(\\S+)) -- bash -c "(.*)"$/.exec(command);
 const result = wsl
-  ? spawnSync("bash", ["-c", wsl[3]], { input, maxBuffer: 64 * 1024 * 1024 })
-  : spawnSync("bash", ["-lc", command], { input, maxBuffer: 64 * 1024 * 1024 });
+  ? spawnSync("bash", ["-c", wsl[3]], { input: stdin, maxBuffer: 64 * 1024 * 1024 })
+  : spawnSync("bash", ["-lc", command], { input: stdin, maxBuffer: 64 * 1024 * 1024 });
 if (result.stdout) process.stdout.write(result.stdout);
 if (result.stderr) process.stderr.write(result.stderr);
 process.exit(result.status ?? 1);
@@ -249,7 +253,8 @@ test("a --host job runs Pi over ssh, copies the handoff home, and fast-forwards"
 		assert.equal(plant.waitJob(made, id, { env }), "done");
 		assert.equal(plant.jobFile(made, id, "result").split("\n")[0], "Hello from the host");
 		assert.equal(plant.jobFile(made, id, "host"), alias);
-		assert.match(plant.jobFile(made, id, "log"), /remote host mbp/);
+		assert.match(plant.jobFile(made, id, "log"), /remote host mbp: fetching/);
+		assert.match(plant.jobFile(made, id, "log"), /\[mbp\] limen-remote: fetch/);
 		const branch = plant.jobFile(made, id, "branch");
 		const work = plant.jobFile(made, id, "worktree");
 		assert.equal(plant.git(work, "rev-parse", "HEAD"), plant.git(clone, "rev-parse", branch));
@@ -326,5 +331,63 @@ test("a review on a host fast-forwards the candidate and keeps the handoff", asy
 		assert.equal(plant.jobFile(made, id, "host"), alias);
 	} finally {
 		await made.cleanup();
+	}
+});
+
+test("a host model is the default, a bridged model is checked on the host, and the seat token is not logged", async () => {
+	const seat = await remotePlant("darwin", "mbp");
+	const token = "sk-ant-oat01-test-token-value";
+	const accounts = join(seat.made.parent, "accounts");
+	await mkdir(join(accounts, "work"), { recursive: true });
+	await writeFile(join(accounts, "active"), "work\n");
+	await writeFile(join(accounts, "work", "token"), `${token}\n`);
+	const pool = JSON.parse(readFileSync(join(seat.made.parent, ".limen", "hosts.json"), "utf8")) as {
+		hosts: Array<{ model?: string }>;
+		pruneBranches?: boolean;
+	};
+	const host = pool.hosts[0];
+	if (!host) {
+		throw new Error("missing host");
+	}
+	host.model = "host-model/test";
+	pool.pruneBranches = true;
+	await writeFile(join(seat.made.parent, ".limen", "hosts.json"), `${JSON.stringify(pool)}\n`);
+	const env = { ...seat.env, LIMEN_CLAUDE_ACCOUNTS: accounts, FAKE_SSH_SECRET: token };
+	try {
+		const bridged = plant.limen(
+			seat.made,
+			["spawn", "--host", "mbp", "--model", "claude-bridge/claude-sonnet-5-5", "finish"],
+			{ env },
+		);
+		assert.notEqual(bridged.status, 0);
+		assert.match(bridged.stderr, /host mbp: bridge missing/);
+		assert.doesNotMatch(bridged.stderr, /pi is not on PATH/);
+		const local = plant.limen(seat.made, ["spawn", "--model", "claude-bridge/claude-sonnet-5-5", "finish"], { env });
+		assert.match(local.stderr, /pi-claude-bridge/);
+		const id = plant.spawnJob(seat.made, "commit\nfinish\nfinish billed", ["--host", "mbp", "--label", "billed"], {
+			env,
+		});
+		assert.equal(plant.waitJob(seat.made, id, { env }), "done");
+		assert.equal(plant.jobFile(seat.made, id, "model"), "host-model/test");
+		const logged = plant.jobFile(seat.made, id, "log");
+		assert.match(logged, /seat Claude account work for this job/);
+		assert.equal(logged.includes(token), false);
+		const calls = readFileSync(seat.log, "utf8");
+		assert.equal(calls.includes(token), false);
+		assert.match(calls, /"secretInStdin":true/);
+		assert.doesNotMatch(calls, /"secretInCommand":true/);
+		const branch = plant.jobFile(seat.made, id, "branch");
+		assert.match(logged, new RegExp(`deleted origin/${branch.replaceAll("/", "\\/")}`));
+		await writeFile(join(seat.made.bin, "claude"), "#!/bin/sh\nexit 0\n");
+		await chmod(join(seat.made.bin, "claude"), 0o755);
+		const check = plant.limen(seat.made, ["hosts", "check", "mbp"], { env });
+		assert.equal(check.status, 0, check.stderr);
+		assert.match(check.stdout, /pi ok/);
+		assert.match(check.stdout, /git ok/);
+		assert.match(check.stdout, /seat account work/);
+		const pruned = plant.limen(seat.made, ["hosts", "prune"], { env });
+		assert.match(pruned.stdout, /already gone|no limen branches deleted/);
+	} finally {
+		await seat.made.cleanup();
 	}
 });

@@ -4,21 +4,24 @@ import { appendFile, mkdir, readdir, readFile, rename } from "node:fs/promises";
 import { appendLimenLog, atomicWrite, finalizeJob, isFailedStopReason, textFile } from "../job/record.ts";
 import { enqueueSteer } from "../job/steer-inbox.ts";
 import { recordStreamEvents, type StreamSeen } from "./activity-log.ts";
+import { resolveSeatAccount } from "./claude-account.ts";
 import { argvFor, ENGINES, engineRoute } from "./engine.ts";
 import {
 	bundleScript,
 	cleanupScript,
 	killScript,
 	launchScript,
+	oauthInstallScript,
 	openRemoteShell,
 	posixQuote,
+	prefixHostChunk,
 	type RemoteHost,
 	remoteLayout,
 	shellText,
 	steerListScript,
 	steerPushScript,
 } from "./host-shell.ts";
-import { assertJobSegment } from "./hosts.ts";
+import { assertJobSegment, loadHostPool } from "./hosts.ts";
 import { createStreamParser } from "./stream.ts";
 import { readWorkerExtensions } from "./worker-extensions.ts";
 
@@ -80,10 +83,13 @@ export async function runRemoteJob(job: RemoteJob): Promise<void> {
 		}
 	};
 	try {
-		await pushAndNote(job);
-		const outcome = await streamJob(job);
+		const secret = await pushAndNote(job);
+		const outcome = await streamJob(job, secret);
 		await copyBack(job);
 		await bringBack(job, outcome.cause === "stop");
+		if (outcome.cause === "" && outcome.code === 0 && job.branch.startsWith("limen/") && loadHostPool().pruneBranches) {
+			await deletePushedBranch(job);
+		}
 		// Drop the host worktree before the seat marks the job terminal, so the wake is not racing the cleanup.
 		await cleanup();
 		await finishOutcome(job, outcome, settle);
@@ -94,14 +100,43 @@ export async function runRemoteJob(job: RemoteJob): Promise<void> {
 	}
 }
 
-async function pushAndNote(job: RemoteJob): Promise<void> {
+async function pushAndNote(job: RemoteJob): Promise<string> {
 	const where = `${job.host.alias} (${job.host.ssh}, ${job.host.platform})`;
 	await appendLimenLog(job.jobDir, `remote host ${where}: pushing ${job.branch}`);
 	await git(job.worktree, ["push", "origin", job.branch]);
+	await appendLimenLog(job.jobDir, `remote host ${job.host.alias}: fetching ${job.branch} and adding a worktree`);
+	const secret = await deliverAccount(job);
 	await uploadSession(job);
 	const extras = await readWorkerExtensions(job.jobDir, "pi");
 	if (extras.length > 0) {
 		await appendLimenLog(job.jobDir, `remote host: not loading ${extras.length} seat extension path(s)`);
+	}
+	return secret;
+}
+
+async function deliverAccount(job: RemoteJob): Promise<string> {
+	const account = resolveSeatAccount();
+	if (!account) {
+		await appendLimenLog(job.jobDir, "no seat Claude account; the host uses its own login");
+		return "";
+	}
+	const sent = await shellText(job.host, oauthInstallScript(job.jobId, account.token), 20_000);
+	await appendLimenLog(
+		job.jobDir,
+		sent.code === 0
+			? `seat Claude account ${account.name} for this job`
+			: `seat Claude account ${account.name} was not delivered`,
+	);
+	return account.token;
+}
+
+async function deletePushedBranch(job: RemoteJob): Promise<void> {
+	try {
+		await git(job.worktree, ["push", "origin", "--delete", job.branch]);
+		await appendLimenLog(job.jobDir, `deleted origin/${job.branch}`);
+	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error);
+		await appendLimenLog(job.jobDir, `could not delete origin/${job.branch}: ${message}`);
 	}
 }
 
@@ -167,7 +202,7 @@ async function settleCleanExit(
 	await settle(failedReason ? "failed" : "done", failedReason || "pi exited 0");
 }
 
-async function streamJob(job: RemoteJob): Promise<Outcome> {
+async function streamJob(job: RemoteJob, secret: string): Promise<Outcome> {
 	const task = job.continueTask ?? (await readFile(job.taskFile, "utf8"));
 	const launch = piArgs(job);
 	const script = launchScript({
@@ -179,7 +214,7 @@ async function streamJob(job: RemoteJob): Promise<Outcome> {
 		bridged: launch.bridged,
 		task,
 	});
-	return watchRemote(job, openRemoteShell(job.host, script));
+	return watchRemote(job, openRemoteShell(job.host, script), secret);
 }
 
 function piArgs(job: RemoteJob): { readonly args: string[]; readonly bridged: boolean } {
@@ -204,11 +239,15 @@ function piArgs(job: RemoteJob): { readonly args: string[]; readonly bridged: bo
 	return { args, bridged: route.bridged };
 }
 
-async function watchRemote(job: RemoteJob, child: ReturnType<typeof openRemoteShell>): Promise<Outcome> {
+async function watchRemote(
+	job: RemoteJob,
+	child: ReturnType<typeof openRemoteShell>,
+	secret: string,
+): Promise<Outcome> {
 	const parser = createStreamParser();
 	const seen: StreamSeen = { activity: "", activityAt: 0, assistant: "", stop: "", tool: "", progress: 0 };
 	const cause: { value: Cause; detail: string } = { value: "", detail: "" };
-	const pipes = attachPipes(job, child, parser, seen, cause);
+	const pipes = attachPipes(job, child, parser, seen, cause, secret);
 	const onStop = () => endRemote(job, child, cause, "stop", "stop ended the remote process");
 	if (job.stop.aborted) {
 		onStop();
@@ -254,10 +293,12 @@ function attachPipes(
 	parser: ReturnType<typeof createStreamParser>,
 	seen: StreamSeen,
 	cause: { value: Cause; detail: string },
+	secret: string,
 ): { failLog(error: unknown): void; finish(events: ReturnType<typeof parser.flush>): Promise<void>; stderr(): string } {
 	let tools = 0;
 	let pending = Promise.resolve();
 	let stderr = "";
+	let pendingLine = "";
 	const failLog = (error: unknown) => {
 		void appendLimenLog(
 			job.jobDir,
@@ -285,18 +326,35 @@ function attachPipes(
 	child.stdout?.setEncoding("utf8");
 	child.stderr?.setEncoding("utf8");
 	child.stdout?.on("data", (chunk: string) => apply(parser.push(chunk)));
-	child.stderr?.on("data", (chunk: string) => {
-		stderr = `${stderr}${chunk}`.slice(-2_000);
-		pending = pending.then(() => appendFile(`${job.jobDir}/log`, chunk)).catch(failLog);
-	});
+	const writeHost = (chunk: string) => {
+		const prefixed = prefixHostChunk(job.host.alias, pendingLine, chunk);
+		pendingLine = prefixed.pending;
+		const text = redact(prefixed.text, secret);
+		if (!text) {
+			return;
+		}
+		stderr = redact(`${stderr}${text}`, secret).slice(-2_000);
+		pending = pending.then(() => appendFile(`${job.jobDir}/log`, text)).catch(failLog);
+	};
+	child.stderr?.on("data", (chunk: string) => writeHost(chunk));
 	return {
 		failLog,
 		finish: async (events) => {
+			if (pendingLine) {
+				writeHost("\n");
+			}
 			apply(events);
 			await pending;
 		},
-		stderr: () => stderr,
+		stderr: () => redact(stderr, secret),
 	};
+}
+
+function redact(text: string, secret: string): string {
+	if (!secret || !text.includes(secret)) {
+		return text;
+	}
+	return text.split(secret).join("[redacted]");
 }
 
 function queueDeadlineSteer(job: RemoteJob, failLog: (error: unknown) => void): void {

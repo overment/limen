@@ -32,7 +32,8 @@ Do not `limen spawn` from a clone on the laptop. That would be a second cabinet.
       "hook": "/Users/ada/src/limen/hook",
       "maxConcurrent": 2,
       "enabled": true,
-      "path": "/opt/homebrew/bin:/usr/local/bin"
+      "path": "/opt/homebrew/bin:/usr/local/bin",
+      "model": "claude-bridge/claude-sonnet-5-5"
     },
     {
       "alias": "win",
@@ -60,7 +61,9 @@ Do not `limen spawn` from a clone on the laptop. That would be a second cabinet.
 | `enabled` | `false` keeps the entry but never selects it. Omitted means true. |
 | `distro` | WSL distribution. Omitted means `Ubuntu`. Ignored on darwin. |
 | `path` | Optional directories prepended to `PATH` for the job. Non-interactive ssh does not load zshrc or nvm. |
+| `model` | Used when `--model` is omitted. A bridged id such as `claude-bridge/claude-sonnet-5-5` is resolved on the host. Omitted means the seat default, which the host may not be logged into. |
 | `overflow` | Top-level. `true` lets the seat send a job to a free host when the **local** start gate is closed. Omitted or `false` means only an explicit `--host` leaves the seat. |
+| `pruneBranches` | Top-level. `true` deletes `origin/limen/<id>` after that host job fast-forwards. Omitted means leave the branch; `limen hosts prune` deletes it later. |
 
 A bad file fails the job that tries to read it, with the path in the message. A missing file is not an error.
 
@@ -72,7 +75,9 @@ limen spawn --host mbp --review --detached --branch <candidate> --label review "
 limen continue <id> "follow-up" --host mbp
 ```
 
-`--host` is detached Pi only. It refuses `--tab`, `--engine omp`, `--engine devin`, and a group launch. The seat still creates the local worktree and the job folder. `limen jobs <id>` shows `host <alias>` once the wrapper has reserved a slot.
+`--host` is detached Pi only. It refuses `--tab`, `--engine omp`, `--engine devin`, and a group launch. The seat does not need `pi` on its own PATH for that job: before the record exists it asks the host, over the same BatchMode ssh, whether `pi` is on the host PATH and whether a bridged model has `pi-claude-bridge` under the host's `~/.pi/agent/npm`. A job that might still run on the seat (no `--host`) keeps the local check. The seat still creates the local worktree and the job folder. `limen jobs <id>` shows `host <alias>` once the wrapper has reserved a slot.
+
+Host stderr in the job log is prefixed with `[alias]`, one line at a time. The seat's own push is a separate line from the host's fetch and worktree. A `git fetch` complaint is a host line, not a failed push on the mini.
 
 Overflow, when `overflow` is true: the wrapper samples the seat. If the start gate would hold the job, it probes each enabled host (a short CPU sample, and on a Mac `memory_pressure` when the probe runs natively). A host is eligible when it is under `maxConcurrent` and its reading clears the same gate (default 25% CPU idle, 20% memory free). The freest host wins. If none qualifies, the job waits in the seat queue as usual. `LIMEN_HOST_READING` is a JSON file-less override of that probe (`{"cpuIdle":80,"memoryFree":80}`), for a trial or a test. `LIMEN_HOST_PROBE_MS` is the sample length (default 400).
 
@@ -180,6 +185,58 @@ If `node` is only on PATH after nvm starts, set `path` to the nvm node `bin` dir
 
 `distro` must match `wsl.exe -l -q` on the laptop (`Ubuntu`, `Ubuntu-24.04`, …). The default is `Ubuntu`.
 
+## Credentials on a Mac host
+
+Non-interactive ssh does not unlock the macOS login keychain. `gh`, Git HTTPS, and Claude Code then fail with `User interaction is not allowed` (keychain error `-25308`). A Terminal.app window on the laptop is not the session the job gets.
+
+Give Git and `gh` a file credential, not the keychain:
+
+```bash
+# On the MacBook, in the account ssh lands in.
+gh auth login
+gh config set git_protocol https
+gh auth setup-git
+# gh 2.40 and later can keep the token in a file instead of the keychain:
+gh auth login --insecure-storage
+git config --global credential.helper 'cache --timeout=1'
+# or a store file the ssh user can read, mode 0600:
+git config --global credential.helper store
+```
+
+`--insecure-storage` writes the GitHub token under the user's config instead of the keychain. `git credential.helper store` writes `~/.git-credentials` (mode 0600). Do not point those files at a world-readable path. Confirm from the mini, not from Terminal.app:
+
+```bash
+ssh -o BatchMode=yes mbp 'git -C ~/src/limen-sandbox ls-remote origin HEAD'
+```
+
+Claude Code's own keychain login is a different problem, and host jobs do not need it when the seat has a rotated account. See below. `limen hosts check mbp` runs this probe and prints the keychain error when it sees it.
+
+## The seat's Claude account
+
+Host jobs bill the seat's **currently active** rotated account, not a login stored on the laptop.
+
+At the start of each host job, and again at `limen continue --host`, the seat resolves one token, in this order:
+
+1. `claude-account-rotate token` when that command is on the seat's PATH (`LIMEN_CLAUDE_ROTATE` names a different binary). `claude-account-rotate active` is the name written in the log.
+2. `~/.claude-accounts/active` (or `.active`) naming a directory that holds `token` or `token.txt`. `LIMEN_CLAUDE_ACCOUNTS` points at another directory and, when set, is the only source.
+3. `~/.claude/.credentials.json` `claudeAiOauth.accessToken`, which is what a rotator has already written as the live seat login.
+
+The token goes to the host on ssh's stdin, into a `0600` file under `/tmp`, then into `CLAUDE_CODE_OAUTH_TOKEN` for that Pi process only. The file is removed before Pi is exec'd, and again when the worktree is cleaned up. It is not an ssh argument, not a job-log line, and not left on the host. The log names the account (`seat Claude account work for this job`) and never the token.
+
+A quota swap while Pi is already running does not retarget that process. The next `limen continue --host` reads the rotator again and sends the new token. A job with no seat account still runs, and the host's own login is what Claude Code uses; the log says so.
+
+## Check and prune
+
+```bash
+limen hosts check mbp
+limen hosts prune --dry-run
+limen hosts prune
+```
+
+`check` uses BatchMode ssh. It must find `pi`, `git ls-remote origin HEAD` in the host repo, and it reports `claude auth status`. Exit 0 when Pi and git work and either Claude answers or the seat has an active account. A locked keychain with a seat account is a note, not a failure. No seat account and a failed Claude check is a failure.
+
+`prune` deletes `origin/limen/<id>` for terminal jobs. It does not delete review branches that are not `limen/<id>`. `"pruneBranches": true` does that delete itself after a successful fast-forward.
+
 ## Smoke test (limen-sandbox)
 
 On the seat, in a checkout of `HorizonFlex/limen-sandbox` that already has `origin` and a Limen cabinet (`limen init` has been run there, not on the laptop):
@@ -221,8 +278,8 @@ ssh mbp 'pgrep -af "limen: sandbox" || echo stopped'
 ## How a job moves
 
 1. The seat creates the job folder and the local worktree, as always, and prints the id.
-2. The wrapper pushes `limen/<id>` (or the review branch) to `origin`.
-3. Over ssh it fetches that branch, adds a worktree, and writes a minimal `.limen/jobs/<id>/` so the hooks have a folder. `finish` does nothing when that folder is missing; creating it is what makes the handoff stick.
+2. The wrapper pushes `limen/<id>` (or the review branch) to `origin`, then logs that the host will fetch it.
+3. Over ssh it fetches that branch, adds a worktree, and writes a minimal `.limen/jobs/<id>/` so the hooks have a folder. `finish` does nothing when that folder is missing; creating it is what makes the handoff stick. Those host lines in the job log start with `[alias]`.
 4. Pi runs `--mode json` in the worktree. Stdout is parsed on the seat with the same stream parser as a local job, so `log`, `activity`, and `last-tool` update on the mini.
 5. On exit the host pushes the branch. The seat copies `result`, `session-ended`, and `session/` back, fetches, and fast-forwards the local worktree (a detached review updates the branch ref too).
 6. `finalizeJob` runs on the seat. The coordinator wake is the normal one. The host worktree and the temporary job folder are removed.
@@ -233,11 +290,11 @@ Steers written on the seat (`limen steer`, and the timeout warning) are copied t
 
 ## Limitations
 
-- **Claude accounts.** Rotation lives only on the seat. A host uses whatever Claude Code login is on that machine. Pointing every host at the same account burns the limit faster, because the rotator cannot see the host's traffic. Two follow-ups, neither in this proof: pass the seat's active account (a `CLAUDE_CONFIG_DIR` the seat exports, or a short-lived token) into the remote environment, or give each host its own `account` in `hosts.json` and accept that those accounts are outside the rotator. Until then, set the host's own login and watch the limit.
+- **Claude accounts.** The running Pi keeps the token it was given. A swap on the seat is picked up by the next `continue`, not by the process already on the host. The rotator still cannot see the host's traffic except by the token the seat handed out. Sharing one account across machines still burns the limit; the rotator is what chooses which seat account that is.
 - **Steers.** Inbox sync is polled, not instant. A host that is asleep keeps the steer in the seat inbox until a later poll. Delivery still happens on the host, because that is where Pi is.
 - **Sleep.** A closed laptop fails the ssh connect (20s) or the server-alive check (about a minute) and the job is `failed`. Wake the machine, or disable that host, before you send it work. Overflow skips a host that does not answer and leaves the job on the seat queue.
 - **Liveness.** Stall detection and `limen stop`'s escaped-child search see the ssh client on the seat, not Pi's children on the host. A tool that hangs inside Pi is not reaped by the seat's CPU-idle watch. `limen stop` kills the recorded pid and its direct children (`pkill -P`); a deeper grandchild can survive. The log's activity is real (it is Pi's stream). A picture that keys off the local process tree will show the ssh client.
-- **Branches.** The seat pushes `limen/<id>` to `origin` and the host pushes it again. Nothing deletes that remote branch when the job ends. Prune and land on the seat do not know about the host. Delete stale `limen/*` branches on the remote when you delete them locally.
+- **Branches.** The seat pushes `limen/<id>` and the host pushes it again. `limen hosts prune` deletes those remote branches for terminal jobs. `"pruneBranches": true` deletes one after a successful fast-forward. Review branches that are not named `limen/<id>` stay.
 - **Seat extensions and prepare.** `--extension` paths stay on the seat. `--prepare` runs on the seat worktree before the push, and it is not committed for you, so a prepare that only edits the worktree does not reach the host.
 - **Groups, tabs, OMP, Devin.** Not on a host. Group members share a deadline and a cabinet on the seat. A hosted Herdr tab is a person typing on the seat.
 - **Wrapper death.** If the seat wrapper dies, the host's Pi can keep running until someone kills it. The seat reaper does not have a remote pid. The job looks dead on the seat while the laptop is still busy.

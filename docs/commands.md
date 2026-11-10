@@ -36,7 +36,7 @@ Only paths are retained, not extension source or dependency versions. Later edit
 
 **Devin cloud jobs.** `--engine devin` runs the job as a Devin cloud session: `--provider` names the platform (`macos` or `linux`) and `--model` the Devin mode. The job pushes its branch to `origin`, follows the session into its log, and fast-forwards the worktree from the pushed branch when the session finishes; Devin's last message is the result. It runs detached only: spawn refuses `--tab`, `--thinking` and `--extension`, and `continue` and group teams refuse the engine. `limen stop` and the timeout terminate the session. Credentials, limits and failure reasons: [Devin cloud jobs](setup.md#devin-cloud-jobs).
 
-**Another machine.** `--host ALIAS` on `spawn` or `continue` (including `--review`) runs Pi on a machine from `~/.limen/hosts.json`. The seat still owns the job folder, finalizes, and wakes. With no hosts file, nothing changes. Setup, Windows via WSL2, and limits: [Host pool](hosts.md).
+**Another machine.** `--host ALIAS` on `spawn` or `continue` (including `--review`) runs Pi on a machine from `~/.limen/hosts.json`. The seat still owns the job folder, finalizes, and wakes. With no hosts file, nothing changes. `limen hosts check ALIAS` probes that machine; `limen hosts prune` deletes pushed `limen/<id>` branches. The seat's active Claude account is passed for that job only. Setup, Windows via WSL2, the keychain, and limits: [Host pool](hosts.md).
 
 ### Inspect jobs
 

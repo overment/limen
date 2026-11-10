@@ -19,6 +19,8 @@ export type RemoteHost = {
 	readonly distro: string;
 	/** Prepended to PATH inside the job. Empty uses whatever non-interactive ssh already has. */
 	readonly path: string;
+	/** Used when spawn or continue does not pass `--model`. Empty means the seat default. */
+	readonly model: string;
 };
 
 /** Reads stdin into a temp file and runs it, so the script and the engine do not share one stdin stream. */
@@ -150,13 +152,16 @@ export function launchScript(input: LaunchScript): string {
 		`branch=${posixQuote(input.branch)}`,
 		`mkdir -p "$jobdir/steer/inbox" "$jobdir/steer/delivered" "$jobdir/session"`,
 		decodeTo(`"$jobdir/task.md"`, "LIMEN_TASK", task),
+		`echo "limen-remote: fetch $branch" >&2`,
 		`git -C "$root" fetch origin "$branch:$branch"`,
 		`if [ -e "$wt" ]; then`,
 		`  git -C "$root" worktree remove --force "$wt" || rm -rf "$wt"`,
 		"fi",
 		`mkdir -p "$(dirname "$wt")"`,
 		`git -C "$root" worktree add "$wt" "$branch"`,
+		`echo "limen-remote: worktree $wt" >&2`,
 		"export LIMEN_JOB=1",
+		loadOauth(input.jobId),
 		`export LIMEN_JOB_ID=${posixQuote(input.jobId)}`,
 		`export LIMEN_JOB_LABEL=${posixQuote(input.label)}`,
 		`export LIMEN_CONTEXT_ROOT="$root"`,
@@ -240,14 +245,112 @@ exit 0
 `;
 }
 
+export function oauthPath(jobId: string): string {
+	return `/tmp/limen-oauth-${jobId}`;
+}
+
+/** Writes the seat token to a 0600 file. The token is in this script, which ssh carries on stdin, never in argv. */
+export function oauthInstallScript(jobId: string, token: string): string {
+	let marker = "LIMEN_OAUTH_END";
+	while (token.includes(marker)) {
+		marker += "X";
+	}
+	const dest = posixQuote(oauthPath(jobId));
+	return `set -eu
+umask 077
+cat > ${dest} <<'${marker}'
+${token}
+${marker}
+chmod 600 ${dest}
+`;
+}
+
+function loadOauth(jobId: string): string {
+	const dest = posixQuote(oauthPath(jobId));
+	return `oauth=${dest}
+if [ -f "$oauth" ]; then
+  CLAUDE_CODE_OAUTH_TOKEN=$(tr -d '\\n' < "$oauth")
+  export CLAUDE_CODE_OAUTH_TOKEN
+  rm -f "$oauth"
+fi`;
+}
+
 export function cleanupScript(host: Pick<RemoteHost, "root">, jobId: string): string {
 	const { jobDir, worktree } = remoteLayout(host, jobId);
 	return `set +e
 git -C ${posixQuote(host.root)} worktree remove --force ${posixQuote(worktree)} 2>/dev/null
-rm -rf ${posixQuote(worktree)} ${posixQuote(jobDir)}
+rm -rf ${posixQuote(worktree)} ${posixQuote(jobDir)} ${posixQuote(oauthPath(jobId))}
 git -C ${posixQuote(host.root)} worktree prune >/dev/null 2>&1
 exit 0
 `;
+}
+
+/** Confirms Pi, a fetch from origin, and the host's own Claude login. Details stay on stdout for the seat to print. */
+export function hostCheckScript(host: RemoteHost): string {
+	const pathLine = host.path ? `export PATH=${posixQuote(host.path)}:"$PATH"\n` : "";
+	return `set +e
+${pathLine}root=${posixQuote(host.root)}
+if command -v pi >/dev/null 2>&1; then
+  echo "pi ok $(command -v pi)"
+else
+  echo "pi missing"
+fi
+git_err=$(git -C "$root" ls-remote --exit-code origin HEAD 2>&1 >/dev/null)
+git_code=$?
+if [ "$git_code" = 0 ]; then
+  echo "git ok"
+else
+  echo "git fail"
+  printf '%s\n' "$git_err" | head -n 5 | sed 's/^/git /'
+fi
+if ! command -v claude >/dev/null 2>&1; then
+  echo "claude missing"
+  exit 0
+fi
+claude_err=$(claude auth status 2>&1 >/dev/null)
+claude_code=$?
+if [ "$claude_code" = 0 ]; then
+  echo "claude ok"
+else
+  echo "claude fail"
+  printf '%s\n' "$claude_err" | head -n 8 | sed 's/^/claude /'
+fi
+exit 0
+`;
+}
+
+/** Pi, and the bridge when the model needs it. Run before a host job so the seat's own PATH is not the check. */
+export function hostEngineScript(host: RemoteHost, bridged: boolean): string {
+	const pathLine = host.path ? `export PATH=${posixQuote(host.path)}:"$PATH"\n` : "";
+	return `set +e
+${pathLine}${bridgeFinder()}
+if ! command -v pi >/dev/null 2>&1; then
+  echo "pi is not on PATH"
+  exit 1
+fi
+echo "pi ok"
+if [ ${bridged ? "1" : "0"} = 1 ]; then
+  bridge=$(find_bridge || true)
+  if [ -z "$bridge" ]; then
+    echo "bridge missing: no pi-claude-bridge under ~/.pi/agent/npm on this host"
+    exit 1
+  fi
+  echo "bridge ok"
+fi
+exit 0
+`;
+}
+
+/** Prefix each complete line. `pending` is a tail with no newline yet. */
+export function prefixHostChunk(
+	alias: string,
+	pending: string,
+	chunk: string,
+): { readonly text: string; readonly pending: string } {
+	const lines = `${pending}${chunk}`.split("\n");
+	const rest = lines.pop() ?? "";
+	const text = lines.map((line) => `[${alias}] ${line}`).join("\n");
+	return { text: text.length > 0 ? `${text}\n` : "", pending: rest };
 }
 
 /** Writes one inbox file. The name is already a single path segment. */
