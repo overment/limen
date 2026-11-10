@@ -429,9 +429,17 @@ test("hosts check prints a claude keychain failure, and prune uses the repo when
 		assert.equal(pruned.status, 0, `${pruned.stdout}${pruned.stderr}`);
 		assert.match(pruned.stdout, /deleted origin\/limen\/gone/);
 		assert.doesNotMatch(`${pruned.stdout}${pruned.stderr}`, /ENOENT/);
+		plant.git(p.root, "checkout", "-q", "-b", "limen/gone-still");
+		plant.git(p.root, "push", "-q", "origin", "limen/gone-still");
+		plant.git(p.root, "checkout", "-q", "main");
+		const still = join(p.root, ".limen/jobs/still-job");
+		await mkdir(still);
+		await writeFile(join(still, "state"), "done\n");
+		await writeFile(join(still, "branch"), "limen/gone-still\n");
+		await writeFile(join(still, "worktree"), `${join(p.parent, "also-missing")}\n`);
 		const dry = plant.limen(p, ["hosts", "prune", "--dry-run"]);
-		assert.match(dry.stdout, /no limen branches to delete/);
-		assert.doesNotMatch(dry.stdout, /limen\/gone/);
+		assert.match(dry.stdout, /would delete origin\/limen\/gone-still/);
+		assert.doesNotMatch(dry.stdout, /limen\/gone(?:\s|$)/);
 	} finally {
 		await p.cleanup();
 		await seat.made.cleanup();

@@ -167,9 +167,12 @@ async function pruneRoot(root: string, dryRun: boolean): Promise<number> {
 }
 
 function remoteHasBranch(cwd: string, branch: string): Promise<boolean> {
+	const want = `refs/heads/${branch}`;
 	const { promise, resolve } = Promise.withResolvers<boolean>();
-	execFile("git", ["ls-remote", "--exit-code", "origin", `refs/heads/${branch}`], { cwd }, (error) => {
-		resolve(!error);
+	// Exit status alone is not enough: a missing ref can still exit 0 with empty output.
+	// Only an exact advertised ref counts, not a longer name that shares this prefix.
+	execFile("git", ["ls-remote", "origin", want], { cwd, encoding: "utf8" }, (_error, stdout) => {
+		resolve((stdout ?? "").split("\n").some((line) => line.endsWith(`\t${want}`)));
 	});
 	return promise;
 }
