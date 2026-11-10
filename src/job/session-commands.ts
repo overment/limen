@@ -156,7 +156,11 @@ const firstWord = (words: string): string => words.replace(PREFIX, "").split(" "
 /** Splits a shell call at its unquoted separators; each piece keeps the separator before it. Comments are dropped. */
 function pieces(command: string): Piece[] {
 	// A line end right after `&&` or a pipe continues the chain.
+	// A host session can record the same call with CRLF. Normalize before continuation joining, or a
+	// backslash-newline that proves a command on the seat becomes "a line break" for the host.
 	const text = command
+		.replaceAll("\r\n", "\n")
+		.replaceAll("\r", "\n")
 		.replace(HEREDOC, "$3")
 		.replaceAll("\\\n", " ")
 		.replace(/(&&|\|)[ \t]*\n/g, "$1 ")
