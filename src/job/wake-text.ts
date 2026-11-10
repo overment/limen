@@ -62,13 +62,14 @@ export function completionWake(
 ): string {
 	const { fallback = false, instruction: routeInstruction } = route;
 	const location = repo ? ` in repository ${repo}` : "";
+	const machine = hostPhrase(job);
 	const task = firstSentence(text(join(job, "task.md")));
 	// A done job whose final "Note check" left items open is not a plain done; the lead says so and lists them.
 	const open = state === "done" ? openChecks(job) : [];
 	const shown = open.length ? "done with open checks" : state;
 	const said = task
-		? `Limen job ${JSON.stringify(label)}: ${task}\nis ${shown} (${id}) on branch ${branch}${location}.`
-		: `Limen job ${JSON.stringify(label)} is ${shown} (${id}) on branch ${branch}${location}.`;
+		? `Limen job ${JSON.stringify(label)}: ${task}\nis ${shown} (${id}) on branch ${branch}${location}${machine}.`
+		: `Limen job ${JSON.stringify(label)} is ${shown} (${id}) on branch ${branch}${location}${machine}.`;
 	const waited = missedStartNotice(job, route.session);
 	// A start notice the session never got is its own paragraph after the lead, word for word.
 	const lead = [said, waited, open.length ? `Open checks:\n${open.join("\n")}` : ""].filter(Boolean).join("\n\n");
@@ -142,14 +143,19 @@ export function advisoryWake(
 	fallback: boolean,
 ): string {
 	const location = repo ? ` in repository ${repo}` : "";
+	const machine = hostPhrase(job);
 	const task = firstSentence(text(join(job, "task.md")));
 	const lead = task
-		? `Limen job ${JSON.stringify(label)}: ${task}\nis still running (${id}) on branch ${branch}${location}: ${advisory}.`
-		: `Limen job ${JSON.stringify(label)} is still running (${id}) on branch ${branch}${location}: ${advisory}.`;
+		? `Limen job ${JSON.stringify(label)}: ${task}\nis still running (${id}) on branch ${branch}${location}${machine}: ${advisory}.`
+		: `Limen job ${JSON.stringify(label)} is still running (${id}) on branch ${branch}${location}${machine}: ${advisory}.`;
 	const instruction = fallback
 		? "The subscribed coordinator is busy. Do not spawn, stop, or steer on this wake unless the human asks."
 		: "Inspect the job record and continue the loop; steer; or open the tab and exit if you mean the session to end.";
 	return joinWake(lead, jobEnding(job), "", instruction);
+}
+function hostPhrase(job: string): string {
+	const host = text(join(job, "host"));
+	return host ? ` on host ${host}` : "";
 }
 function joinWake(lead: string, ending: string, facts: string, instruction: string): string {
 	const parts = [lead];

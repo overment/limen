@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import { appendFile, readFile, rm } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { promptStartNotice } from "../integrations/coordinator-wake.ts";
+import { refreshJobTab } from "../integrations/herdr.ts";
 import { jobMembership } from "../job/group-cabinet.ts";
 import {
 	appendLimenLog,
@@ -109,6 +110,9 @@ export async function runInternalJob(): Promise<void> {
 		await shake();
 	}
 	const remote = mayRemote && !stop.signal.aborted ? await assignedHost(jobDir, stop.signal) : undefined;
+	if (remote) {
+		await refreshJobTab(jobDir).catch(() => {});
+	}
 	// A group member runs on its group's deadline and a Devin job runs in the cloud; both start at once.
 	const gate = !(membership || profile.id === "devin" || remote) && (await enterStartQueue(jobDir));
 	if (process.env.LIMEN_SETUP_KEEP || gate) {

@@ -4,6 +4,7 @@ import { appendFile, mkdir, readdir, readFile, writeFile } from "node:fs/promise
 import { basename, join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { closedFeatures, closedJobFeatures } from "../job/job.ts";
+import { jobPlace } from "../job/place.ts";
 import { seatDir } from "../project/seat.ts";
 import { ENGINES, type EngineId, engineProfile } from "../runtime/engine.ts";
 
@@ -63,11 +64,18 @@ export async function openWatchTab(input: {
 	readonly cwd: string;
 	readonly logPath: string;
 	readonly role: string;
+	readonly host?: string;
 }): Promise<HerdrPlace | undefined> {
 	if (process.env.HERDR_ENV !== "1") {
 		return;
 	}
-	return createTab({ ...input, label: `${input.label} · running`, mode: "watch", follow: true, focus: false });
+	return createTab({
+		...input,
+		label: jobTabLabel(input.label, "running", input.host),
+		mode: "watch",
+		follow: true,
+		focus: false,
+	});
 }
 
 export async function openHostedTab(input: {
@@ -84,7 +92,7 @@ export async function openHostedTab(input: {
 	const place = await createTab({
 		jobDir: input.jobDir,
 		// Herdr reports a pane waiting for input as idle; the label carries the job state.
-		label: `${input.label} · running`,
+		label: jobTabLabel(input.label, "running"),
 		cwd: input.cwd,
 		workspaceCwd: input.workspaceCwd ?? input.cwd,
 		logPath: `${input.jobDir}/log`,
@@ -520,7 +528,13 @@ export async function closeJobTab(herdr: string, jobDir: string, tab: string): P
 	await note(`failed after one retry (${refusal})`);
 	// The tab stays open; its label must stop saying running.
 	const [label, state] = await Promise.all([text(`${jobDir}/label`), text(`${jobDir}/state`)]);
-	advisoryCall(herdr, ["tab", "rename", tab, limenText(`${label || basename(jobDir)} · ${state || "finished"}`)]);
+	const host = await text(`${jobDir}/host`);
+	advisoryCall(herdr, [
+		"tab",
+		"rename",
+		tab,
+		limenText(jobTabLabel(label || basename(jobDir), state || "finished", host)),
+	]);
 }
 
 /**
@@ -649,11 +663,14 @@ export async function openJobPlace(input: {
 		await skip(input.jobDir, error instanceof Error ? error.message : String(error));
 	}
 	// Hosted agents die with their tab; reopen is always a log view, never a resurrection.
-	const state = (await text(`${input.jobDir}/state`)) || "done";
+	const [state, host] = await Promise.all([
+		text(`${input.jobDir}/state`).then((value) => value || "done"),
+		text(`${input.jobDir}/host`),
+	]);
 	const watch = input.running && !hosted;
 	const place = await createTab({
 		jobDir: input.jobDir,
-		label: `${label} · ${state}`,
+		label: jobTabLabel(label, state, host),
 		cwd: input.cwd,
 		logPath: `${input.jobDir}/log`,
 		mode: watch ? "watch" : "log",
@@ -705,6 +722,31 @@ export async function closeFeatureTabs(input: { readonly root: string; readonly 
 		}
 	}
 	return `closed ${closed} leftover tab${closed === 1 ? "" : "s"} for ${feature}`;
+}
+
+/** `label · win · running`, or the seat name when the job is local. Short enough for a tab. */
+export function jobTabLabel(label: string, state: string, host?: string): string {
+	return `${label} · ${jobPlace(host)} · ${state}`;
+}
+
+/** Rename the job's log tab once the wrapper knows the host. No Herdr, no tab: nothing to do. */
+export async function refreshJobTab(jobDir: string): Promise<void> {
+	const herdr = herdrBinary();
+	const tab = await text(`${jobDir}/herdr/tab`);
+	if (!herdr || !tab) {
+		return;
+	}
+	const [label, state, host] = await Promise.all([
+		text(`${jobDir}/label`),
+		text(`${jobDir}/state`),
+		text(`${jobDir}/host`),
+	]);
+	advisoryCall(herdr, [
+		"tab",
+		"rename",
+		tab,
+		limenText(jobTabLabel(label || basename(jobDir), state === "running" ? "running" : state || "done", host)),
+	]);
 }
 
 async function createTab(input: {

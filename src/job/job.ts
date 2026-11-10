@@ -38,6 +38,8 @@ export type JobView = {
 	readonly queue?: string;
 	/** A done job whose final "Note check" left items open (`open-checks`). */
 	readonly openChecks?: boolean;
+	/** `win` for a host job, or the seat name for a local one. */
+	readonly place?: string;
 	readonly processAlive?: boolean;
 	readonly diffstat: string;
 	readonly logTail: string;
@@ -211,6 +213,7 @@ export function renderJob(job: Job, view: JobView): string {
 		`${view.openChecks ? "DONE WITH OPEN CHECKS" : PHASE_LABELS[job.phase]} ${job.label}`,
 		`id ${job.id}`,
 		`branch ${job.branch}`,
+		...(view.place ? [`on ${view.place}`] : []),
 		`elapsed ${formatDuration(view.elapsedMs)}`,
 		`silent ${formatDuration(view.silentMs)}`,
 	];

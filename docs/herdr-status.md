@@ -56,7 +56,8 @@ Limen adds labels to native `idle` and `done`, without changing Herdr's lifecycl
 For example, `2 RUNNING · 1 watched · 1 unwatched` means there are two unfinished
 job records visible here even though the coordinator can take input. The job
 names and activity follow, with useful words before the feature number:
-`team-2 coordinator · F773 tool`, or `session repair · F012 done`.
+`team-2 coordinator · F773 · mbp · tool`, or `session repair · F012 · mini · done`.
+A host job names that host. A local job names the seat: a short hostname such as `mini`, or `seat` when the hostname is not a short name.
 Legacy feature-first group labels use the same word order in the display.
 Details stop after three jobs in each group, but counts include all RUNNING jobs.
 The footer shows the same job line. A warning such as `1 of 14 needs attention`
@@ -113,7 +114,7 @@ While it is on, these start with `◆ `:
 - the coordinator pane's display agent, pane title, and `limen` token
 - a hosted job pane's display agent and `limen` token
 - the stall overlay on a hosted pane
-- every job tab label: `◆ fix login · F012 · running`
+- every job tab label: `◆ fix login · F012 · mbp · running`
 - the coordinator tab tail: `chat settings · ◆ 2 running · 1 finished`
 - the title of each Herdr notification that Limen shows
 - Limen's line in the coordinator's Pi footer

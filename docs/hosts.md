@@ -85,7 +85,7 @@ limen spawn --host mbp --review --detached --branch <candidate> --label review "
 limen continue <id> "follow-up" --host mbp
 ```
 
-`--host` is detached Pi only. It refuses `--tab`, `--engine omp`, `--engine devin`, and a group launch. The seat does not need `pi` on its own PATH for that job: before the record exists it asks the host, over the same BatchMode ssh, whether `pi` is on the host PATH and whether a bridged model has `pi-claude-bridge` under the host's `~/.pi/agent/npm`. A job that might still run on the seat (no `--host`) keeps the local check. The seat still creates the local worktree and the job folder. `limen jobs <id>` shows `host <alias>` once the wrapper has reserved a slot.
+`--host` is detached Pi only. It refuses `--tab`, `--engine omp`, `--engine devin`, and a group launch. The seat does not need `pi` on its own PATH for that job: before the record exists it asks the host, over the same BatchMode ssh, whether `pi` is on the host PATH and whether a bridged model has `pi-claude-bridge` under the host's `~/.pi/agent/npm`. A job that might still run on the seat (no `--host`) keeps the local check. The seat still creates the local worktree and the job folder. `limen jobs`, `limen status`, and `limen jobs --json` name the machine (`on win`, or `on mini` / `on seat` locally). `limen queue` lists each host's reach, load, and whether overflow is on.
 
 Host stderr in the job log is prefixed with `[alias]`, one line at a time. The seat's own push is a separate line from the host's fetch and worktree. A `git fetch` complaint is a host line, not a failed push on the mini.
 

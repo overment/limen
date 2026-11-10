@@ -21,6 +21,8 @@ export type JobRecord = {
 	readonly spawnedBy?: string;
 	readonly candidate?: string;
 	readonly hosted?: boolean;
+	/** Host alias, or the seat name when the job ran locally. */
+	readonly host?: string;
 	readonly agentStatus?: string;
 	readonly advisory?: string;
 	readonly stopReason?: string;
@@ -115,6 +117,9 @@ export function humanRow(record: JobRecord, labelWidth: number, paint: Paint): s
 					...flags(record).map((flag) => paint("dim", flag)),
 				]
 			: terminalFacts(record, paint);
+	if (record.host) {
+		facts.push(`on ${record.host}`);
+	}
 	return `${glyph(record, paint)} ${job.phase === "running" ? paint("bold", label) : label}  ${paint("dim", jobSuffix(record.id).padEnd(12))}  ${facts.join(paint("dim", " · "))}`;
 }
 export function humanDetail(record: JobRecord, paint: Paint): string {
@@ -127,6 +132,7 @@ export function humanDetail(record: JobRecord, paint: Paint): string {
 		[
 			`${glyph(record, paint)} ${paint("bold", job.label)}`,
 			record.openChecks ? "done with open checks" : job.phase,
+			...(record.host ? [`on ${record.host}`] : []),
 			...flags(record),
 		].join(paint("dim", " · ")),
 	];
