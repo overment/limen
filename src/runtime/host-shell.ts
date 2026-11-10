@@ -285,17 +285,16 @@ exit 0
 `;
 }
 
-/** Confirms Pi, a fetch from origin, and the host's own Claude login. Details stay on stdout for the seat to print. */
+/** Confirms node, Pi, the hook directory, a fetch from origin, and the host's own Claude login. */
 export function hostCheckScript(host: RemoteHost): string {
 	const pathLine = host.path ? `export PATH=${posixQuote(host.path)}:"$PATH"\n` : "";
 	return `set +e
 ${pathLine}root=${posixQuote(host.root)}
-if command -v pi >/dev/null 2>&1; then
-  echo "pi ok $(command -v pi)"
-else
-  echo "pi missing"
-fi
-git_err=$(git -C "$root" ls-remote --exit-code origin HEAD 2>&1 >/dev/null)
+hook=${posixQuote(host.hook)}
+if command -v node >/dev/null 2>&1; then echo "node ok $(command -v node)"; else echo "node missing"; fi
+if command -v pi >/dev/null 2>&1; then echo "pi ok $(command -v pi)"; else echo "pi missing"; fi
+if [ -f "$hook/finish.ts" ]; then echo "hook ok $hook"; else echo "hook missing $hook"; fi
+git_err=$(git -C "$root" ls-remote --exit-code origin HEAD 2>&1)
 git_code=$?
 if [ "$git_code" = 0 ]; then
   echo "git ok"
@@ -307,13 +306,17 @@ if ! command -v claude >/dev/null 2>&1; then
   echo "claude missing"
   exit 0
 fi
-claude_err=$(claude auth status 2>&1 >/dev/null)
+claude_err=$(claude auth status 2>&1)
 claude_code=$?
 if [ "$claude_code" = 0 ]; then
   echo "claude ok"
 else
   echo "claude fail"
-  printf '%s\n' "$claude_err" | head -n 8 | sed 's/^/claude /'
+  if [ -n "$claude_err" ]; then
+    printf '%s\n' "$claude_err" | head -n 8 | sed 's/^/claude /'
+  else
+    echo "claude no output, exit $claude_code"
+  fi
 fi
 exit 0
 `;

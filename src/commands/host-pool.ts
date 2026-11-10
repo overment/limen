@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { existsSync } from "node:fs";
 import { readdir } from "node:fs/promises";
 import { textFile } from "../job/record.ts";
 import { repoRoot } from "../project/git.ts";
@@ -39,9 +40,9 @@ async function checkHost(args: readonly string[]): Promise<void> {
 			? `${host.alias}: seat account ${account.name} (passed to a host job as CLAUDE_CODE_OAUTH_TOKEN; not stored there)`
 			: `${host.alias}: no seat Claude account; a host job uses the host's own login`,
 	);
-	if (report.claudeKeychain && account) {
+	if (report.claudeKeychain) {
 		console.log(
-			`${host.alias}: host Claude keychain is locked for non-interactive ssh. Jobs still use the seat account. gh and git need a file credential; see docs/hosts.md.`,
+			`${host.alias}: keychain -25308: non-interactive ssh cannot unlock the login keychain. Host jobs use a file token on the seat; see docs/hosts.md.`,
 		);
 	}
 	if (!report.ok || (!report.claudeOk && !account)) {
@@ -54,8 +55,11 @@ function readCheck(
 	text: string,
 ): { readonly lines: string[]; readonly ok: boolean; readonly claudeOk: boolean; readonly claudeKeychain: boolean } {
 	const lines: string[] = [];
+	const saw = { pi: false, node: false, git: false, hook: false };
 	let pi = false;
+	let node = false;
 	let git = false;
+	let hook = false;
 	let claudeOk = false;
 	let claudeKeychain = false;
 	for (const raw of text.split("\n")) {
@@ -63,25 +67,51 @@ function readCheck(
 		if (!line) {
 			continue;
 		}
-		if (line.startsWith("pi ")) {
-			pi = line.startsWith("pi ok");
-			lines.push(`${host.alias}: ${line}`);
-		} else if (line.startsWith("git ")) {
-			git = line === "git ok";
-			lines.push(`${host.alias}: ${line}`);
-		} else if (line.startsWith("claude ")) {
-			claudeOk = line === "claude ok";
-			claudeKeychain = /25308|User interaction is not allowed/i.test(line);
+		noteCheckLine(line, saw, (name, ok) => {
+			if (name === "pi") {
+				pi = ok;
+			} else if (name === "node") {
+				node = ok;
+			} else if (name === "git") {
+				git = ok;
+			} else if (name === "hook") {
+				hook = ok;
+			} else {
+				claudeOk = ok;
+			}
+		});
+		if (/25308|User interaction is not allowed/i.test(line)) {
+			claudeKeychain = true;
+		}
+		if (/^(?:pi|node|git|hook|claude) /.test(line)) {
 			lines.push(`${host.alias}: ${line}`);
 		}
 	}
-	if (!pi) {
-		lines.push(`${host.alias}: pi missing`);
+	for (const name of ["pi", "node", "git", "hook"] as const) {
+		if (!saw[name]) {
+			lines.push(`${host.alias}: ${name === "git" ? "git ls-remote failed" : `${name} missing`}`);
+		}
 	}
-	if (!git && !lines.some((line) => line.includes(": git "))) {
-		lines.push(`${host.alias}: git ls-remote failed`);
+	return { lines, ok: pi && node && git && hook, claudeOk, claudeKeychain };
+}
+
+function noteCheckLine(
+	line: string,
+	saw: { pi: boolean; node: boolean; git: boolean; hook: boolean },
+	set: (name: "pi" | "node" | "git" | "hook" | "claude", ok: boolean) => void,
+): void {
+	const name = /^(pi|node|git|hook|claude)\b/.exec(line)?.[1] as "pi" | "node" | "git" | "hook" | "claude" | undefined;
+	if (!name) {
+		return;
 	}
-	return { lines, ok: pi && git, claudeOk, claudeKeychain };
+	if (name !== "claude") {
+		saw[name] = true;
+	}
+	if (line === `${name} ok` || line.startsWith(`${name} ok `)) {
+		set(name, true);
+	} else if (line === `${name} fail` || line === `${name} missing` || line.startsWith(`${name} missing`)) {
+		set(name, false);
+	}
 }
 
 async function prunePushedBranches(cwd: string, args: readonly string[]): Promise<void> {
@@ -117,13 +147,14 @@ async function pruneRoot(root: string, dryRun: boolean): Promise<number> {
 		if (!branch.startsWith("limen/") || (state !== "done" && state !== "failed" && state !== "stopped")) {
 			continue;
 		}
-		const worktree = (await textFile(`${dir}/worktree`)) || root;
+		const recorded = await textFile(`${dir}/worktree`);
+		const gitDir = recorded && existsSync(recorded) ? recorded : root;
 		if (dryRun) {
 			console.log(`would delete origin/${branch}`);
 			count += 1;
 			continue;
 		}
-		const removed = await deleteBranch(worktree, branch);
+		const removed = await deleteBranch(gitDir, branch);
 		console.log(removed.line);
 		if (removed.ok) {
 			count += 1;

@@ -209,17 +209,28 @@ git config --global credential.helper store
 ssh -o BatchMode=yes mbp 'git -C ~/src/limen-sandbox ls-remote origin HEAD'
 ```
 
-Claude Code's own keychain login is a different problem, and host jobs do not need it when the seat has a rotated account. See below. `limen hosts check mbp` runs this probe and prints the keychain error when it sees it.
+Claude Code's own keychain login is not something Limen can read. On the seat or the host, a login that lives only in the macOS keychain is invisible to a host job. `limen hosts check mbp` prints the host's `claude auth status` text, and when that text is error `-25308` it adds the keychain hint.
 
 ## The seat's Claude account
 
-Host jobs bill the seat's **currently active** rotated account, not a login stored on the laptop.
+Host jobs bill a **file token on the seat**, not the Mac mini's keychain and not a login stored on the laptop. Limen does not call `security` and does not read the login keychain. A seat whose only Claude Code login is that keychain gets `no seat Claude account`.
 
-At the start of each host job, and again at `limen continue --host`, the seat resolves one token, in this order:
+Put the token in a file. On the mini:
 
-1. `claude-account-rotate token` when that command is on the seat's PATH (`LIMEN_CLAUDE_ROTATE` names a different binary). `claude-account-rotate active` is the name written in the log.
-2. `~/.claude-accounts/active` (or `.active`) naming a directory that holds `token` or `token.txt`. `LIMEN_CLAUDE_ACCOUNTS` points at another directory and, when set, is the only source.
-3. `~/.claude/.credentials.json` `claudeAiOauth.accessToken`, which is what a rotator has already written as the live seat login.
+```bash
+mkdir -p ~/.claude-accounts/work
+chmod 700 ~/.claude-accounts ~/.claude-accounts/work
+claude setup-token
+# The command prints one line, sk-ant-oat01-... . Save that line and nothing else:
+umask 077
+printf '%s\n' 'sk-ant-oat01-...' > ~/.claude-accounts/work/token
+chmod 600 ~/.claude-accounts/work/token
+printf '%s\n' work > ~/.claude-accounts/active
+```
+
+`active` is the account name (the directory). The token file may also be named `token.txt`. Repeat `claude setup-token` for another account, write `~/.claude-accounts/<name>/token`, and change `active` when that account should be the one host jobs use. A rotator that already writes `~/.claude/.credentials.json` (`claudeAiOauth.accessToken`) is used when the directory above is absent. `claude-account-rotate token` is used when that command is on the seat's PATH (`LIMEN_CLAUDE_ROTATE` names another binary); `claude-account-rotate active` is the name in the log. `LIMEN_CLAUDE_ACCOUNTS` points at another directory and, when set, is the only source.
+
+At the start of each host job, and again at `limen continue --host`, the seat reads that token.
 
 The token goes to the host on ssh's stdin, into a `0600` file under `/tmp`, then into `CLAUDE_CODE_OAUTH_TOKEN` for that Pi process only. The file is removed before Pi is exec'd, and again when the worktree is cleaned up. It is not an ssh argument, not a job-log line, and not left on the host. The log names the account (`seat Claude account work for this job`) and never the token.
 
@@ -233,7 +244,7 @@ limen hosts prune --dry-run
 limen hosts prune
 ```
 
-`check` uses BatchMode ssh. It must find `pi`, `git ls-remote origin HEAD` in the host repo, and it reports `claude auth status`. Exit 0 when Pi and git work and either Claude answers or the seat has an active account. A locked keychain with a seat account is a note, not a failure. No seat account and a failed Claude check is a failure.
+`check` uses BatchMode ssh. It must find `node`, `pi`, the configured `hook/finish.ts`, and `git ls-remote origin HEAD` in the host repo. It also runs `claude auth status` and prints that command's own output, so a failure is `claude fail` plus the reason (for example `User interaction is not allowed` and `-25308`). Exit 0 when node, Pi, the hook, and git work, and either Claude answers or the seat has a file token. A locked host keychain is a note when the seat token is present, and a failure when it is not.
 
 `prune` deletes `origin/limen/<id>` for terminal jobs. It does not delete review branches that are not `limen/<id>`. `"pruneBranches": true` does that delete itself after a successful fast-forward.
 
@@ -290,7 +301,7 @@ Steers written on the seat (`limen steer`, and the timeout warning) are copied t
 
 ## Limitations
 
-- **Claude accounts.** The running Pi keeps the token it was given. A swap on the seat is picked up by the next `continue`, not by the process already on the host. The rotator still cannot see the host's traffic except by the token the seat handed out. Sharing one account across machines still burns the limit; the rotator is what chooses which seat account that is.
+- **Claude accounts.** The seat token is a file or `claude-account-rotate`, not the macOS keychain. A keychain-only login on the mini is `no seat Claude account` until you save `claude setup-token` under `~/.claude-accounts/<name>/token` and point `active` at that name. The running Pi keeps the token it was given. A swap on the seat is picked up by the next `continue`, not by the process already on the host. Sharing one account across machines still burns the limit.
 - **Steers.** Inbox sync is polled, not instant. A host that is asleep keeps the steer in the seat inbox until a later poll. Delivery still happens on the host, because that is where Pi is.
 - **Sleep.** A closed laptop fails the ssh connect (20s) or the server-alive check (about a minute) and the job is `failed`. Wake the machine, or disable that host, before you send it work. Overflow skips a host that does not answer and leaves the job on the seat queue.
 - **Liveness.** Stall detection and `limen stop`'s escaped-child search see the ssh client on the seat, not Pi's children on the host. A tool that hangs inside Pi is not reaped by the seat's CPU-idle watch. `limen stop` kills the recorded pid and its direct children (`pkill -P`); a deeper grandchild can survive. The log's activity is real (it is Pi's stream). A picture that keys off the local process tree will show the ssh client.

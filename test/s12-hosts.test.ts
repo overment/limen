@@ -383,11 +383,49 @@ test("a host model is the default, a bridged model is checked on the host, and t
 		const check = plant.limen(seat.made, ["hosts", "check", "mbp"], { env });
 		assert.equal(check.status, 0, check.stderr);
 		assert.match(check.stdout, /pi ok/);
+		assert.match(check.stdout, /node ok/);
+		assert.match(check.stdout, /hook ok/);
 		assert.match(check.stdout, /git ok/);
 		assert.match(check.stdout, /seat account work/);
 		const pruned = plant.limen(seat.made, ["hosts", "prune"], { env });
 		assert.match(pruned.stdout, /already gone|no limen branches deleted/);
 	} finally {
+		await seat.made.cleanup();
+	}
+});
+
+test("hosts check prints a claude keychain failure, and prune uses the repo when the worktree is gone", async () => {
+	const seat = await remotePlant("darwin", "mbp");
+	await writeFile(
+		join(seat.made.bin, "claude"),
+		"#!/bin/sh\necho 'Error: User interaction is not allowed (os error -25308)'\nexit 1\n",
+	);
+	await chmod(join(seat.made.bin, "claude"), 0o755);
+	const p = await plant.plant();
+	try {
+		const check = plant.limen(seat.made, ["hosts", "check", "mbp"], { env: seat.env });
+		assert.equal(check.status, 1, check.stdout);
+		assert.match(check.stdout, /claude fail/);
+		assert.match(check.stdout, /-25308/);
+		assert.match(check.stdout, /keychain -25308/);
+		const origin = join(p.parent, "origin.git");
+		plant.git(p.parent, "init", "-q", "--bare", "-b", "main", origin);
+		plant.git(p.root, "remote", "add", "origin", origin);
+		plant.git(p.root, "push", "-q", "origin", "main");
+		plant.git(p.root, "checkout", "-q", "-b", "limen/gone");
+		plant.git(p.root, "push", "-q", "origin", "limen/gone");
+		plant.git(p.root, "checkout", "-q", "main");
+		const job = join(p.root, ".limen/jobs/gone-job");
+		await mkdir(job);
+		await writeFile(join(job, "state"), "done\n");
+		await writeFile(join(job, "branch"), "limen/gone\n");
+		await writeFile(join(job, "worktree"), `${join(p.parent, "missing-worktree")}\n`);
+		const pruned = plant.limen(p, ["hosts", "prune"]);
+		assert.equal(pruned.status, 0, `${pruned.stdout}${pruned.stderr}`);
+		assert.match(pruned.stdout, /deleted origin\/limen\/gone/);
+		assert.doesNotMatch(`${pruned.stdout}${pruned.stderr}`, /ENOENT/);
+	} finally {
+		await p.cleanup();
 		await seat.made.cleanup();
 	}
 });
