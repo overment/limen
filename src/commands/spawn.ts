@@ -506,7 +506,14 @@ async function startHostedJob(launch: SpawnLaunch, job: SpawnedJob, versions: Pr
 async function startDetachedJob(launch: SpawnLaunch, job: SpawnedJob, versions: Promise<void>): Promise<void> {
 	const { options, model, group } = launch;
 	const { jobDir, id, root } = job;
-	await openWatchTab({ jobDir, label: options.label, cwd: root, logPath: `${jobDir}/log`, role: job.role });
+	await openWatchTab({
+		jobDir,
+		label: options.label,
+		cwd: root,
+		logPath: `${jobDir}/log`,
+		role: job.role,
+		...(options.host ? { host: options.host } : {}),
+	});
 	const environment: Record<string, string> = {
 		LIMEN_JOB_DIR: jobDir,
 		LIMEN_WORKTREE: job.worktree,

@@ -24,6 +24,8 @@ export type PlantEvent = {
 	readonly reason: string;
 	readonly branch: string;
 	readonly plant: string;
+	/** Host alias when the job did not run on the seat. Absent for a local job. */
+	readonly host?: string;
 	readonly author?: string;
 	readonly handoff?: string;
 	readonly message?: string;
@@ -115,10 +117,11 @@ function terminalKind(state: TerminalState, detail: string): string {
 	return `job.${state}`;
 }
 async function jobFields(jobDir: string): Promise<Omit<PlantEvent, "kind" | "status" | "reason">> {
-	const [title, branch, author] = await Promise.all([
+	const [title, branch, author, host] = await Promise.all([
 		textFile(`${jobDir}/label`),
 		textFile(`${jobDir}/branch`),
 		textFile(`${jobDir}/finish-webhook-author`),
+		textFile(`${jobDir}/host`),
 	]);
 	const login = author.split("\n")[0] ?? "";
 	return {
@@ -126,6 +129,7 @@ async function jobFields(jobDir: string): Promise<Omit<PlantEvent, "kind" | "sta
 		id: basename(jobDir),
 		branch,
 		plant: basename(resolve(jobDir, "../../..")),
+		...(host ? { host } : {}),
 		author: GITHUB_AUTHOR.test(login) ? login.toLowerCase() : "",
 	};
 }

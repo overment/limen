@@ -175,6 +175,7 @@ function send(target, index) {
         job: args[0], status: args[1] === 'done' ? 'waiting' : args[1], branch: args[2],
         ...(args[1] === 'done' ? { jobState: 'done' } : {}),
         ...(event ? { finishEvent: event } : {}),
+        ...(oneLine(process.env.LIMEN_FINISH_HOST, 64) ? { host: oneLine(process.env.LIMEN_FINISH_HOST, 64) } : {}),
         handoff,
         ...Object.fromEntries(fields),
       }),

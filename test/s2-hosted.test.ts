@@ -10,6 +10,7 @@ import { join } from "node:path";
 import { createInterface } from "node:readline";
 import { after, before, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { seatPlace } from "../src/job/place.ts";
 import { FINAL, jobDir, jobFile, LIMEN, limen, type Plant, plant, release, spawnJob, until, waitJob } from "./plant.ts";
 
 const WAKE = fileURLToPath(new URL("../hook/wake.ts", import.meta.url));
@@ -231,12 +232,16 @@ test("limen highlight marks what Limen writes into Herdr; live panes and open ta
 	const tabs = () => [state().tabs["lead:t1"]?.label, state().tabs[jobFile(p, third, "herdr/tab")]?.label];
 	const shown = () => [last("lead:p1"), last(pane(third)), tabs()].flat().join(" ");
 	const label = (m: string, word: string) => `--state-label ${word}=${m && `${word} ${m}`}`;
-	const [job, ready] = ["1 RUNNING · 1 watched · 0 unwatched · lit · F001 think", "job RUNNING · pane ready"];
+	const place = seatPlace();
+	const [job, ready] = [
+		`1 RUNNING · 1 watched · 0 unwatched · lit · F001 · ${place} · think`,
+		"job RUNNING · pane ready",
+	];
 	const want = (m: string) =>
 		`--title ${m}Limen · lit · F001 --display-agent ${m}Limen · waiting on 1 job --token limen=${m}${job} ` +
 		`${label(m, "idle")}${job} ${label(m, "done")}${job} --ttl-ms 180000 --display-agent ${m}limen worker ` +
 		`--token limen=${m}job RUNNING ${label(m, "idle")}${ready} ${label(m, "done")}${ready} --ttl-ms 180000 ` +
-		`origin highlight · ${m}1 running ${m}F001 lit · running`;
+		`origin highlight · ${m}1 running ${m}F001 lit · ${place} · running`;
 	await until(herdr, () => shown() === want(""));
 	assert.match(limen(p, ["highlight", "on"], { env }).stdout, /^on\n.+\n1 open job tab renamed\n$/);
 	await until(herdr, () => shown() === want("◆ "));

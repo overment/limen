@@ -5,6 +5,7 @@ import { relative, resolve } from "node:path";
 import { herdrBinary } from "../integrations/herdr.ts";
 import { type GroupIdentity, jobMembership } from "../job/group-cabinet.ts";
 import { isTerminal } from "../job/job.ts";
+import { jobPlace } from "../job/place.ts";
 import { type JobRecord, noteKind } from "../job/view.ts";
 import { limenRoot, unlandedBranches, workspaceRepository, workspaceRoot } from "../project/git.ts";
 import { confirmDeadJobs } from "../runtime/reap.ts";
@@ -32,6 +33,7 @@ type Finished = {
 	readonly state: string;
 	readonly branch: string;
 	readonly repo: string;
+	readonly host: string;
 };
 
 type JobFiles = {
@@ -45,6 +47,7 @@ type JobFiles = {
 	readonly origin: string;
 	readonly started: string;
 	readonly ended: string;
+	readonly host: string;
 };
 
 /** What one pass over the job directories found, before Git says which branches are unlanded. */
@@ -161,6 +164,7 @@ async function readJobFiles(dir: string): Promise<JobFiles> {
 		origin = "",
 		started = "",
 		ended = "",
+		host = "",
 	] = await Promise.all(
 		[
 			"state",
@@ -173,9 +177,10 @@ async function readJobFiles(dir: string): Promise<JobFiles> {
 			"origin-tab",
 			"started-at",
 			"finished-at",
+			"host",
 		].map((name) => (name === "state" ? shownState(dir) : text(`${dir}/${name}`))),
 	);
-	return { state, label, branch, repo, pane, tab, worktree, origin, started, ended };
+	return { state, label, branch, repo, pane, tab, worktree, origin, started, ended, host };
 }
 
 /** Sorts one job into running, older, unconfirmed, a group's branches, or a finished branch. */
@@ -224,6 +229,7 @@ async function scanJob(scan: Scan, id: string): Promise<void> {
 			state: job.state === "done" && existsSync(`${dir}/open-checks`) ? "done with open checks" : job.state,
 			branch: job.branch,
 			repo: job.repo,
+			host: jobPlace(job.host),
 		});
 	}
 }
@@ -258,6 +264,7 @@ async function runningJobLine(scan: Scan, id: string, job: JobFiles): Promise<st
 		runningAttention(record),
 		record.lastTool ?? "",
 		job.repo ? `repo ${job.repo}` : "",
+		`on ${jobPlace(job.host)}`,
 	]
 		.filter(Boolean)
 		.join(" · ");
@@ -320,7 +327,7 @@ function sortUnlandedBranches(scan: Scan, ready: string[], decide: string[]): vo
 			continue;
 		}
 		for (const job of jobs.filter((each) => unlanded.has(each.branch))) {
-			const line = `  ${job.label} (${job.id}) · ${job.state === "done" ? "" : `${job.state} · `}${job.branch}${repo ? ` · repo ${repo}` : ""}`;
+			const line = `  ${job.label} (${job.id}) · ${job.state === "done" ? "" : `${job.state} · `}${job.branch}${repo ? ` · repo ${repo}` : ""} · on ${job.host}`;
 			(job.state === "done" ? ready : decide).push(line);
 		}
 	}

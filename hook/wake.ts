@@ -22,6 +22,7 @@ import {
 } from "../src/integrations/herdr.ts";
 import { resendQueuedPings } from "../src/integrations/webhook-queue.ts";
 import { closedFeatures, closedJobFeatures, derivePulse, isTerminal, type Pulse, SESSION_ID } from "../src/job/job.ts";
+import { jobPlace } from "../src/job/place.ts";
 import { openChecks } from "../src/job/task-note.ts";
 import {
 	CLAIM_STALE_MS,
@@ -105,7 +106,13 @@ const METADATA_TTL_MS = 180_000;
 const METADATA_REFRESH_MS = 60_000;
 // The tail Limen keeps on the coordinator tab, with or without the highlight mark.
 const TAB_TAIL = /(?:\s*·\s*(?:◆\s+)?\d+\s+(?:running|finished))+$/;
-type FinishedJob = { readonly id: string; readonly label: string; readonly state: string; readonly finishedAt: number };
+type FinishedJob = {
+	readonly id: string;
+	readonly label: string;
+	readonly state: string;
+	readonly finishedAt: number;
+	readonly place: string;
+};
 type HerdrPane = { readonly binary: string; readonly pane: string };
 
 // Toast words for a done job; one whose final "Note check" left items open asks for a decision before landing.
@@ -1191,11 +1198,12 @@ async function jobDisplay(
 			const pulse = await pulseOf(jobs, id);
 			const tool = text(join(jobs, id, "last-tool"));
 			const watching = subscribed(join(jobs, id), session);
+			const place = jobPlace(text(join(jobs, id, "host")));
 			return {
 				label,
 				pulse,
 				watching,
-				status: `${shortLabel(label)} ${pulse === "tool" && tool ? `${pulse}:${tool}` : pulse}${watching ? "" : " (unwatched)"}`,
+				status: `${shortLabel(label)} · ${place} · ${pulse === "tool" && tool ? `${pulse}:${tool}` : pulse}${watching ? "" : " (unwatched)"}`,
 			};
 		}),
 	);
@@ -1204,7 +1212,7 @@ async function jobDisplay(
 	}
 	const summary = [
 		running.map(({ status }) => status),
-		finished.map(({ label, state }) => `${shortLabel(label)} ${state}`),
+		finished.map(({ label, state, place }) => `${shortLabel(label)} · ${place} · ${state}`),
 	]
 		.filter((names) => names.length > 0)
 		.map((names) => `${names.slice(0, 3).join(" ")}${names.length > 3 ? ` +${names.length - 3}` : ""}`)
@@ -1253,6 +1261,7 @@ function finishedJobs(jobs: string, tab: string | undefined, session: string): F
 			label,
 			state,
 			finishedAt,
+			place: jobPlace(text(join(job, "host"))),
 			branch: text(join(job, "branch")),
 			repo: text(join(job, "repo")),
 			landable: text(join(job, "commits")) !== "",

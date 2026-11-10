@@ -564,7 +564,14 @@ async function startHostedContinuation(continuation: Continuation): Promise<void
 }
 async function startDetachedContinuation(continuation: Continuation): Promise<void> {
 	const { jobDir, id, label, root, review, parentId, versions, group } = continuation;
-	await openWatchTab({ jobDir, label, cwd: root, logPath: `${jobDir}/log`, role: continuation.role });
+	await openWatchTab({
+		jobDir,
+		label,
+		cwd: root,
+		logPath: `${jobDir}/log`,
+		role: continuation.role,
+		...(continuation.host ? { host: continuation.host } : {}),
+	});
 	const environment: Record<string, string> = {
 		LIMEN_JOB_DIR: jobDir,
 		LIMEN_WORKTREE: continuation.worktree,

@@ -590,6 +590,36 @@ export async function runningOnHost(alias: string, except?: string): Promise<num
 	return count;
 }
 
+/** `limen queue`: one line per host. Empty when the seat has no hosts file. */
+export async function hostQueueLines(): Promise<string> {
+	if (!existsSync(hostsFile())) {
+		return "";
+	}
+	let pool: HostPool;
+	try {
+		pool = loadHostPool();
+	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error);
+		return `hosts: ${message}`;
+	}
+	if (pool.hosts.length === 0) {
+		return "hosts: none";
+	}
+	const overflow = pool.overflow ? "overflow on" : "overflow off";
+	const lines: string[] = [];
+	for (const host of pool.hosts) {
+		const running = host.enabled ? await runningOnHost(host.alias) : 0;
+		const reach = host.enabled ? await hostReachable(host) : "disabled";
+		lines.push(`${host.alias} · ${reach} · ${running}/${host.maxConcurrent} · ${overflow}`);
+	}
+	return lines.join("\n");
+}
+
+async function hostReachable(host: RemoteHost): Promise<"reachable" | "unknown"> {
+	const result = await shellText(host, "echo ok\n", 5_000);
+	return result.code === 0 && result.stdout.includes("ok") ? "reachable" : "unknown";
+}
+
 async function claim(jobDir: string, host: RemoteHost, explicit: boolean): Promise<RemoteHost | undefined> {
 	return groupLock(join(seatDir(), "host-claims"), async () => {
 		const running = await runningOnHost(host.alias, jobDir);

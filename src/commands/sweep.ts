@@ -62,8 +62,10 @@ async function sweepProject(root: string): Promise<void> {
 			continue;
 		}
 		const label = text(join(job, "label")) || entry.name;
+		const host = text(join(job, "host"));
 		const title = `limen: ${label}${due.headline}`;
-		if (!(await showSeatNotification(title, `job ${entry.name} · ${root}`))) {
+		const where = host ? ` · on ${host}` : "";
+		if (!(await showSeatNotification(title, `job ${entry.name} · ${root}${where}`))) {
 			console.error(`seat notification failed for ${entry.name}; event recorded to avoid an ambiguous retry`);
 		}
 	}

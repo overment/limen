@@ -1,9 +1,11 @@
+import { hostQueueLines } from "../runtime/hosts.ts";
 import { queueReport } from "../runtime/start-queue.ts";
 
-/** `limen queue`: the seat's start queue in start order, and the current reading against the gate. */
+/** `limen queue`: the seat's start queue in start order, the gate, and one line per host. */
 export async function queueCommand(args: readonly string[]): Promise<void> {
 	if (args.length > 0) {
 		throw new Error("queue takes no arguments");
 	}
-	console.log(await queueReport());
+	const hosts = await hostQueueLines();
+	console.log([await queueReport(), ...(hosts ? [hosts] : [])].join("\n"));
 }
