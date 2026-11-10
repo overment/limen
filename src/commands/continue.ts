@@ -41,7 +41,7 @@ import {
 	preflightEngine,
 	resolveSpawnEngine,
 } from "../runtime/engine.ts";
-import { loadHostPool, validateRemoteLaunch } from "../runtime/hosts.ts";
+import { assertHostEngine, hostByAlias, hostModel, loadHostPool, validateRemoteLaunch } from "../runtime/hosts.ts";
 import { jobPriority, parsePriority, queuedLine } from "../runtime/start-queue.ts";
 import { normalizeWorkerExtensions, readWorkerExtensions } from "../runtime/worker-extensions.ts";
 import { launchWrapper } from "../runtime/wrapper.ts";
@@ -196,8 +196,8 @@ function chooseHostedContinue(options: ContinueOptions, grouped: boolean): boole
 }
 async function continueJob(args: readonly string[], cwd: string, locked = false, round?: number): Promise<void> {
 	const options = parseContinueArgs(args);
-	const { review, label, model, provider, thinking } = options;
-	const chosenModel = model ?? defaultModel(review);
+	const { review, label, provider, thinking } = options;
+	const chosenModel = continueModel(options);
 
 	// A job that continues from its own worktree resolves jobs in its canonical root.
 	const inherited = workspaceRoot(cwd) ? undefined : inheritedPlanning(repoRoot(cwd));
@@ -216,7 +216,7 @@ async function continueJob(args: readonly string[], cwd: string, locked = false,
 	const profile = engineProfile(parent.engine);
 	validateRemoteLaunch(loadHostPool(), options.host, remoteLaunch(options, membership !== undefined, profile.id));
 	const extensions = await continuationExtensions(parentDir, membership, options.selected, cwd, profile.id);
-	preflightEngine(profile, chosenModel, provider);
+	await preflightContinuation(options, profile, chosenModel, provider);
 	const source = recordedPlanningSource(parentDir);
 	const followUp = await continuationTask(root, parentDir, options.instruction, source);
 	const finalLabel = label ?? `${(await text(`${parentDir}/label`)) || parentId} · continue`;
@@ -274,6 +274,26 @@ async function continueJob(args: readonly string[], cwd: string, locked = false,
 	};
 	await launchContinuation(continuation, profile, hosted, membership?.run);
 }
+function continueModel(options: ContinueOptions): string {
+	if (options.model) {
+		return options.model;
+	}
+	return hostModel(options.host) ?? defaultModel(options.review);
+}
+
+async function preflightContinuation(
+	options: ContinueOptions,
+	profile: EngineProfile,
+	model: string | undefined,
+	provider: string | undefined,
+): Promise<void> {
+	if (!options.host) {
+		preflightEngine(profile, model, provider);
+		return;
+	}
+	await assertHostEngine(hostByAlias(loadHostPool(), options.host), model, provider);
+}
+
 function remoteLaunch(
 	options: ContinueOptions,
 	grouped: boolean,

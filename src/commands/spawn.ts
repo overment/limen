@@ -43,7 +43,7 @@ import {
 	preflightEngine,
 	resolveSpawnEngine,
 } from "../runtime/engine.ts";
-import { loadHostPool, validateRemoteLaunch } from "../runtime/hosts.ts";
+import { assertHostEngine, hostByAlias, hostModel, loadHostPool, validateRemoteLaunch } from "../runtime/hosts.ts";
 import { liveJob } from "../runtime/reap.ts";
 import { DEFAULT_PRIORITY, parsePriority, queuedLine } from "../runtime/start-queue.ts";
 import { normalizeWorkerExtensions } from "../runtime/worker-extensions.ts";
@@ -182,11 +182,12 @@ async function spawnJob(args: readonly string[], cwd: string, group?: SpawnGroup
 		task: loaded.text,
 		label: parsed.label ?? (loaded.text.trim().split(/\r?\n/, 1)[0]?.trim().slice(0, 80) || "job"),
 	};
-	// Devin's API takes a mode, not a model; without --model the organization's default mode runs.
-	const model = profile.id === "devin" ? options.model : (options.model ?? defaultModel(options.review));
+	// Devin's API takes a mode, not a model. A host's own model wins over the seat default when --model is omitted.
+	const model =
+		profile.id === "devin" ? options.model : (options.model ?? hostModel(options.host) ?? defaultModel(options.review));
 	const extensions = await launchExtensions(group, options.extensions, cwd, profile.id);
 	if (profile.id !== "devin") {
-		preflightEngine(profile, model, options.provider);
+		await preflightSpawn(options.host, profile, model, options.provider);
 	}
 	const notificationSession = currentNotificationSession();
 	const coordinatorTab = process.env.HERDR_TAB_ID?.trim();
@@ -210,6 +211,19 @@ async function spawnJob(args: readonly string[], cwd: string, group?: SpawnGroup
 		task,
 	});
 }
+async function preflightSpawn(
+	host: string | undefined,
+	profile: EngineProfile,
+	model: string | undefined,
+	provider: string | undefined,
+): Promise<void> {
+	if (!host) {
+		preflightEngine(profile, model, provider);
+		return;
+	}
+	await assertHostEngine(hostByAlias(loadHostPool(), host), model, provider);
+}
+
 /** Outside a group no job may claim the owner-facing lead; a group launch keeps its recorded route and branches. */
 async function checkLaunchAuthority(parsed: SpawnOptions, group: SpawnGroup | undefined): Promise<void> {
 	if (!group) {

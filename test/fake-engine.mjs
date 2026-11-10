@@ -151,6 +151,8 @@ for (const line of task.split("\n")) {
 		const child = spawn(process.execPath, ["-e", "setInterval(() => {}, 1e9)"], { detached: true, stdio: "ignore" });
 		child.unref();
 		writeFileSync(join(dir, "fake-orphan"), String(child.pid));
+	} else if (word === "note") {
+		writeFileSync(join(dir, "note.md"), `${value}\n`);
 	} else if (word === "finish") {
 		await tools.get("finish")?.execute("fake", { handoff: value }, undefined, undefined, context);
 	} else if (word.startsWith("/")) {
