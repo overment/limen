@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
@@ -6,7 +7,15 @@ import { appendLimenLog, atomicWrite, textFile } from "../job/record.ts";
 import { registeredProjects, seatDir } from "../project/seat.ts";
 import { processAlive } from "./contain.ts";
 import { ENGINES, engineRoute } from "./engine.ts";
-import { type HostPlatform, hostEngineScript, probeScript, type RemoteHost, shellText } from "./host-shell.ts";
+import {
+	type HostClone,
+	type HostPlatform,
+	hostEngineScript,
+	originProbeScript,
+	probeScript,
+	type RemoteHost,
+	shellText,
+} from "./host-shell.ts";
 import { type Reading, readLoad, type StartGate, startGate } from "./start-queue.ts";
 
 export type { HostPlatform, RemoteHost };
@@ -104,9 +113,10 @@ export async function assignedHost(jobDir: string, stop: AbortSignal): Promise<R
 	if (pool.ignored.length > 0) {
 		await appendLimenLog(jobDir, `hosts.json: ignored ${pool.ignored.join("; ")}`);
 	}
+	const project = jobProject();
 	const explicit = explicitHostName();
 	if (explicit) {
-		return claimExplicit(jobDir, pool, explicit);
+		return claimExplicit(jobDir, pool, explicit, project);
 	}
 	if (!pool.overflow || stop.aborted) {
 		return undefined;
@@ -119,12 +129,7 @@ export async function assignedHost(jobDir: string, stop: AbortSignal): Promise<R
 	if (!reading || stop.aborted || readingClears(reading, gate)) {
 		return undefined;
 	}
-	const chosen = await pickHost(pool.hosts, gate, stop);
-	if (!chosen) {
-		await appendLimenLog(jobDir, "remote hosts: none free; staying on the seat");
-		return undefined;
-	}
-	return claim(jobDir, chosen, false);
+	return overflowHost(jobDir, pool.hosts, project, gate, stop);
 }
 
 /** Enabled hosts under their cap whose probe clears `gate`, freest slot first, then idlest CPU, then alias. */
@@ -197,7 +202,7 @@ function parseHost(entry: unknown, path: string, index: number, ignored: string[
 	if (platform !== "darwin" && platform !== "windows-wsl") {
 		throw new Error(`${path} host ${alias} platform must be darwin or windows-wsl`);
 	}
-	const root = posixPath(requireString(body, "root", path, index), path, alias, "root");
+	const { shorthand, clones } = parseClones(body, path, alias);
 	const hook = posixPath(requireString(body, "hook", path, index), path, alias, "hook");
 	const maxConcurrent = requireCount(body.maxConcurrent, path, alias);
 	const enabled = body.enabled === undefined ? true : body.enabled;
@@ -218,7 +223,19 @@ function parseHost(entry: unknown, path: string, index: number, ignored: string[
 	}
 	for (const key of Object.keys(body)) {
 		if (
-			!["alias", "ssh", "platform", "root", "hook", "maxConcurrent", "enabled", "distro", "path", "model"].includes(key)
+			![
+				"alias",
+				"ssh",
+				"platform",
+				"root",
+				"roots",
+				"hook",
+				"maxConcurrent",
+				"enabled",
+				"distro",
+				"path",
+				"model",
+			].includes(key)
 		) {
 			ignored.push(`${alias}.${key}`);
 		}
@@ -227,7 +244,9 @@ function parseHost(entry: unknown, path: string, index: number, ignored: string[
 		alias,
 		ssh,
 		platform: platform as HostPlatform,
-		root,
+		root: shorthand,
+		shorthand,
+		clones,
 		hook,
 		maxConcurrent,
 		enabled,
@@ -258,6 +277,52 @@ export async function assertHostEngine(host: RemoteHost, model?: string, provide
 		.map((line) => line.trim())
 		.find((line) => line && !line.startsWith("pi ok"));
 	throw new Error(`host ${host.alias}: ${detail || "Pi check failed"}`);
+}
+
+/**
+ * Refuses `--host` when this host has no clone of `project`. The message names the project's origin and the clones
+ * the host does have. Spawn and continue call this before a job record exists.
+ */
+export async function assertHostProject(host: RemoteHost, project: string): Promise<void> {
+	const origin = localOrigin(project);
+	if (!origin) {
+		throw new Error(`--host ${host.alias}: ${project} has no origin remote`);
+	}
+	const located = await locateRoot(host, origin);
+	if (!located.path) {
+		throw new Error(located.note);
+	}
+}
+
+/** The clone of `origin` on this host, if the shorthand or a `roots` entry matches. */
+export async function matchProjectRoot(host: RemoteHost, origin: string): Promise<string | undefined> {
+	return (await locateRoot(host, origin)).path;
+}
+
+/**
+ * `owner/repo` for a GitHub-style remote or a two-segment name. A local path stays as written, without a trailing
+ * `.git`, so two checkouts of one bare repo still match.
+ */
+export function originKey(value: string): string {
+	const stripped = value
+		.trim()
+		.replace(/\.git$/i, "")
+		.replace(/\/+$/, "");
+	if (stripped.startsWith("/") || stripped.startsWith("file:")) {
+		return stripped;
+	}
+	if (/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(stripped)) {
+		return stripped.toLowerCase();
+	}
+	const url = httpish(stripped);
+	if (url) {
+		return url;
+	}
+	const scp = /^(?:[^@\s/]+@)?[^:\s/]+:([^/\s]+)\/([^/\s]+)$/.exec(stripped);
+	if (scp?.[1] && scp[2]) {
+		return `${scp[1]}/${scp[2]}`.toLowerCase();
+	}
+	return stripped.toLowerCase();
 }
 
 /** The host's model when spawn or continue did not pass `--model`. */
@@ -295,7 +360,7 @@ function readingClears(reading: Reading, gate: Pick<StartGate, "cpuIdle" | "memo
 	return (reading.cpuIdle ?? 100) >= gate.cpuIdle && (reading.memoryFree ?? 100) >= gate.memoryFree;
 }
 
-async function claimExplicit(jobDir: string, pool: HostPool, alias: string): Promise<RemoteHost> {
+async function claimExplicit(jobDir: string, pool: HostPool, alias: string, project: string): Promise<RemoteHost> {
 	const host = pool.hosts.find((candidate) => candidate.alias === alias);
 	if (!host) {
 		throw new Error(`--host ${alias} is not in ${hostsFile()}`);
@@ -303,11 +368,183 @@ async function claimExplicit(jobDir: string, pool: HostPool, alias: string): Pro
 	if (!host.enabled) {
 		throw new Error(`--host ${alias} is disabled`);
 	}
-	const claimed = await claim(jobDir, host, true);
+	const bound = await bindProject(host, project);
+	const claimed = await claim(jobDir, bound, true);
 	if (!claimed) {
 		throw new Error(`--host ${alias} is disabled`);
 	}
 	return claimed;
+}
+
+async function overflowHost(
+	jobDir: string,
+	hosts: readonly RemoteHost[],
+	project: string,
+	gate: StartGate,
+	stop: AbortSignal,
+): Promise<RemoteHost | undefined> {
+	const origin = project ? localOrigin(project) : undefined;
+	if (!origin) {
+		await appendLimenLog(jobDir, "remote hosts: this project has no origin; staying on the seat");
+		return undefined;
+	}
+	const eligible: RemoteHost[] = [];
+	for (const host of hosts) {
+		if (!host.enabled || stop.aborted) {
+			continue;
+		}
+		const located = await locateRoot(host, origin);
+		if (located.path) {
+			eligible.push({ ...host, root: located.path });
+		}
+	}
+	if (eligible.length === 0) {
+		await appendLimenLog(jobDir, `remote hosts: none have a clone of ${originKey(origin)}; staying on the seat`);
+		return undefined;
+	}
+	const chosen = await pickHost(eligible, gate, stop);
+	if (!chosen) {
+		await appendLimenLog(jobDir, "remote hosts: none free; staying on the seat");
+		return undefined;
+	}
+	return claim(jobDir, chosen, false);
+}
+
+async function bindProject(host: RemoteHost, project: string): Promise<RemoteHost> {
+	const origin = project ? localOrigin(project) : undefined;
+	if (!origin) {
+		throw new Error(`--host ${host.alias}: ${project || "this project"} has no origin remote`);
+	}
+	const located = await locateRoot(host, origin);
+	if (!located.path) {
+		throw new Error(located.note);
+	}
+	return { ...host, root: located.path };
+}
+
+type Located =
+	| { readonly path: string; readonly note?: undefined }
+	| { readonly path?: undefined; readonly note: string };
+
+const cloneOrigins = new Map<string, string | undefined>();
+
+async function locateRoot(host: RemoteHost, origin: string): Promise<Located> {
+	const want = originKey(origin);
+	for (const clone of host.clones) {
+		if (originKey(clone.key) === want) {
+			return { path: clone.path };
+		}
+	}
+	const notes = host.clones.map((clone) => originKey(clone.key));
+	if (host.shorthand) {
+		const found = await readCloneOrigin(host, host.shorthand);
+		if (found && originKey(found) === want) {
+			return { path: host.shorthand };
+		}
+		notes.push(found ? `${originKey(found)} at ${host.shorthand}` : `${host.shorthand} origin unreadable`);
+	}
+	const have = notes.length > 0 ? `; this host has ${notes.join(", ")}` : "";
+	return { note: `--host ${host.alias} has no root for ${want}${have}` };
+}
+
+async function readCloneOrigin(host: RemoteHost, path: string): Promise<string | undefined> {
+	const cacheKey = `${host.ssh}\0${path}`;
+	if (cloneOrigins.has(cacheKey)) {
+		return cloneOrigins.get(cacheKey);
+	}
+	const result = await shellText(host, originProbeScript(path), 20_000);
+	const line = result.stdout
+		.split("\n")
+		.map((item) => item.trim())
+		.find((item) => item && item !== "missing");
+	const origin = result.code === 0 ? line : undefined;
+	cloneOrigins.set(cacheKey, origin);
+	return origin;
+}
+
+function jobProject(): string {
+	return process.env.LIMEN_WORKTREE?.trim() || process.env.LIMEN_CONTEXT_ROOT?.trim() || "";
+}
+
+function localOrigin(cwd: string): string | undefined {
+	if (!cwd) {
+		return undefined;
+	}
+	const result = spawnSync("git", ["remote", "get-url", "origin"], { cwd, encoding: "utf8" });
+	const url = result.stdout?.trim();
+	return result.status === 0 && url ? url : undefined;
+}
+
+function httpish(value: string): string | undefined {
+	try {
+		const url = new URL(value);
+		if (url.protocol !== "http:" && url.protocol !== "https:" && url.protocol !== "ssh:" && url.protocol !== "git:") {
+			return undefined;
+		}
+		const parts = url.pathname.split("/").filter(Boolean);
+		const owner = parts.at(-2);
+		const repo = parts.at(-1);
+		return owner && repo ? `${owner}/${repo}`.toLowerCase() : undefined;
+	} catch {
+		return undefined;
+	}
+}
+
+function parseClones(
+	body: Record<string, unknown>,
+	path: string,
+	alias: string,
+): { shorthand: string; clones: HostClone[] } {
+	const shorthand = parseShorthand(body, path, alias);
+	const clones = parseRootMap(body.roots, path, alias);
+	if (!shorthand && clones.length === 0) {
+		throw new Error(`${path} host ${alias} needs root or roots`);
+	}
+	const seen = new Set<string>();
+	const paths = new Set<string>(shorthand ? [shorthand] : []);
+	for (const clone of clones) {
+		const key = originKey(clone.key);
+		if (seen.has(key)) {
+			throw new Error(`${path} host ${alias} lists ${clone.key} twice`);
+		}
+		seen.add(key);
+		if (paths.has(clone.path)) {
+			throw new Error(`${path} host ${alias} lists ${clone.path} twice`);
+		}
+		paths.add(clone.path);
+	}
+	return { shorthand, clones };
+}
+
+function parseShorthand(body: Record<string, unknown>, path: string, alias: string): string {
+	if (body.root === undefined) {
+		return "";
+	}
+	if (typeof body.root !== "string" || !body.root.trim()) {
+		throw new Error(`${path} host ${alias} root must be an absolute POSIX path`);
+	}
+	return posixPath(body.root.trim(), path, alias, "root");
+}
+
+function parseRootMap(value: unknown, path: string, alias: string): HostClone[] {
+	if (value === undefined) {
+		return [];
+	}
+	if (!value || typeof value !== "object" || Array.isArray(value)) {
+		throw new Error(`${path} host ${alias} roots must be an object`);
+	}
+	const clones: HostClone[] = [];
+	for (const [rawKey, rawPath] of Object.entries(value)) {
+		const key = rawKey.trim();
+		if (!key || /[\0\r\n\s]/.test(key)) {
+			throw new Error(`${path} host ${alias} roots key must be an origin url or owner/repo`);
+		}
+		if (typeof rawPath !== "string" || !rawPath.trim()) {
+			throw new Error(`${path} host ${alias} roots ${key} must be an absolute POSIX path`);
+		}
+		clones.push({ key, path: posixPath(rawPath.trim(), path, alias, "roots") });
+	}
+	return clones;
 }
 
 async function pickHost(

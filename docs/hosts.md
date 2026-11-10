@@ -29,6 +29,11 @@ Do not `limen spawn` from a clone on the laptop. That would be a second cabinet.
       "ssh": "ada@mbp",
       "platform": "darwin",
       "root": "/Users/ada/src/limen-sandbox",
+      "roots": {
+        "HorizonFlex/agent-pipeline": "/Users/ada/src/agent-pipeline",
+        "https://github.com/HorizonFlex/jira-ops.git": "/Users/ada/src/jira-ops",
+        "HorizonFlex/JiraOrchestrator": "/Users/ada/src/JiraOrchestrator"
+      },
       "hook": "/Users/ada/src/limen/hook",
       "maxConcurrent": 2,
       "enabled": true,
@@ -55,7 +60,8 @@ Do not `limen spawn` from a clone on the laptop. That would be a second cabinet.
 | `alias` | Short lowercase name for `--host`. |
 | `ssh` | What the seat passes to `ssh`. Prefer an entry in `~/.ssh/config` (`Host mbp`). No spaces. |
 | `platform` | `darwin` or `windows-wsl`. |
-| `root` | Absolute POSIX path of a clone of the **same** repo on that host. On Windows this is the path **inside** Ubuntu, not a `C:\` path. |
+| `root` | Optional shorthand for one clone. Absolute POSIX path on that host (inside Ubuntu on Windows, not a `C:\` path). The seat reads that clone's `origin` and uses the path only for a job from the same repo. |
+| `roots` | Optional map of origin to clone. Each key is an `owner/repo` name or the remote url (`https://github.com/HorizonFlex/jira-ops.git` and `HorizonFlex/jira-ops` are the same repo). The value is an absolute POSIX path of that repo's clone on the host. A host needs `root`, `roots`, or both. One origin is listed once. |
 | `hook` | Absolute POSIX path of this package's `hook/` on that host. Pi loads `finish.ts`, `steering.ts`, and `communication.ts` from it. |
 | `maxConcurrent` | How many seat jobs may run there at once. |
 | `enabled` | `false` keeps the entry but never selects it. Omitted means true. |
@@ -79,7 +85,9 @@ limen continue <id> "follow-up" --host mbp
 
 Host stderr in the job log is prefixed with `[alias]`, one line at a time. The seat's own push is a separate line from the host's fetch and worktree. A `git fetch` complaint is a host line, not a failed push on the mini.
 
-Overflow, when `overflow` is true: the wrapper samples the seat. If the start gate would hold the job, it probes each enabled host (a short CPU sample, and on a Mac `memory_pressure` when the probe runs natively). A host is eligible when it is under `maxConcurrent` and its reading clears the same gate (default 25% CPU idle, 20% memory free). The freest host wins. If none qualifies, the job waits in the seat queue as usual. `LIMEN_HOST_READING` is a JSON file-less override of that probe (`{"cpuIdle":80,"memoryFree":80}`), for a trial or a test. `LIMEN_HOST_PROBE_MS` is the sample length (default 400).
+The seat matches the job's origin (`git remote get-url origin` in that project) to a host clone. `roots` matches the key. `root` matches only after the seat reads that clone's origin over ssh. A host with no clone of the project is never an overflow candidate. `--host` refuses before a job record exists, and the message names the origin and the clones that host does have. A jira-ops job does not run in an agent-pipeline clone.
+
+Overflow, when `overflow` is true: the wrapper samples the seat. If the start gate would hold the job, it keeps the hosts that have a clone of this project and probes those (a short CPU sample, and on a Mac `memory_pressure` when the probe runs natively). A host is eligible when it is under `maxConcurrent` and its reading clears the same gate (default 25% CPU idle, 20% memory free). The freest host wins. If none of those hosts is free, the job waits in the seat queue as usual. If none has this repo, the log says `none have a clone of <origin>` and the job stays on the seat too. `LIMEN_HOST_READING` is a JSON file-less override of that probe (`{"cpuIdle":80,"memoryFree":80}`), for a trial or a test. `LIMEN_HOST_PROBE_MS` is the sample length (default 400).
 
 ## What each host needs
 
@@ -92,7 +100,7 @@ The host is not a seat. It does not run Herdr, Moshi, the GitHub doorbell, or th
 - Claude Code CLI logged in **on that host** (`claude` / the bridge's login). The seat's login is not copied across.
 - A clone of Limen at the `hook` path, the same revision the seat is running. Hooks import the package next to them.
 - Git credentials that can `git fetch` and `git push` to HorizonFlex GitHub repos over HTTPS or ssh. The job branch is pushed by the seat, fetched on the host, and pushed back by the host when Pi exits.
-- The clone at `root` stays on a branch that is not a job branch (`main` is right). The host creates a worktree beside it, the same way the seat does.
+- Each clone in `root` or `roots` stays on a branch that is not a job branch (`main` is right; not `limen/<id>`, and not detached). The host creates a worktree beside the clone whose origin is the job's project, the same way the seat does.
 - For review jobs: Python 3.13 and Playwright's Chromium, if the review runs the browser. Install them inside the same environment Pi sees (on Windows, inside Ubuntu).
 
 `path` covers Homebrew (`/opt/homebrew/bin`), a Node tarball in `/usr/local/bin`, and `~/.local/bin`. Use absolute paths. The job does not source `.zshrc` or `.bashrc`, so a login banner cannot corrupt Pi's JSON stream.
@@ -245,7 +253,7 @@ limen hosts prune --dry-run
 limen hosts prune
 ```
 
-`check` uses BatchMode ssh. It must find `node`, `pi`, the configured `hook/finish.ts`, and `git ls-remote origin HEAD` in the host repo. It also runs `claude auth status` and prints that command's own output, so a failure is `claude fail` plus the reason (for example `User interaction is not allowed` and `-25308`). Exit 0 when node, Pi, the hook, and git work, and either Claude answers or the seat has a file token. A locked host keychain is a note when the seat token is present, and a failure when it is not.
+`check` uses BatchMode ssh. It must find `node`, `pi`, and the configured `hook/finish.ts`. It lists every clone (`root` and each `roots` path) and checks that the clone's origin matches the configured repo, that `git ls-remote origin HEAD` works, and that the checkout is on a non-job branch. A mismatch looks like `root fail <path> origin is foo/bar, want horizonflex/jira-ops`. A job branch looks like `root fail <path> on job branch limen/<id>`. It also runs `claude auth status` and prints that command's own output, so a failure is `claude fail` plus the reason (for example `User interaction is not allowed` and `-25308`). Exit 0 when node, Pi, the hook, and every clone check out, and either Claude answers or the seat has a file token. A locked host keychain is a note when the seat token is present, and a failure when it is not.
 
 `prune` deletes `origin/limen/<id>` for terminal jobs whose branch is still on origin (`git ls-remote`). A branch already deleted is not listed, including by `--dry-run`. It does not delete review branches that are not `limen/<id>`. The delete runs in the recorded worktree when that directory still exists, and in the repo when it does not. `"pruneBranches": true` deletes the origin branch after a successful fast-forward. The host clone's own `limen/<id>` branch is removed with the worktree.
 
@@ -291,7 +299,7 @@ ssh mbp 'pgrep -af "limen: sandbox" || echo stopped'
 
 1. The seat creates the job folder and the local worktree, as always, and prints the id.
 2. The wrapper pushes `limen/<id>` (or the review branch) to `origin`, then logs that the host will fetch it.
-3. Over ssh it fetches that branch, adds a worktree, and writes a minimal `.limen/jobs/<id>/` so the hooks have a folder. `finish` does nothing when that folder is missing; creating it is what makes the handoff stick. Those host lines in the job log start with `[alias]`.
+3. Over ssh it fetches that branch into the clone of this project, adds a worktree, and writes a minimal `.limen/jobs/<id>/` so the hooks have a folder. `finish` does nothing when that folder is missing; creating it is what makes the handoff stick. Those host lines in the job log start with `[alias]`. The worktree path names the clone.
 4. Pi runs `--mode json` in the worktree. Stdout is parsed on the seat with the same stream parser as a local job, so `log`, `activity`, and `last-tool` update on the mini.
 5. On exit the host pushes the branch. The seat copies `result`, `session-ended`, `session/`, `note.md`, and `note.first.md` back, fetches, and fast-forwards the local worktree (a detached review updates the branch ref too). Then the host worktree and, for a `limen/<id>` branch, that local branch on the host clone are removed.
 6. `finalizeJob` runs on the seat. The coordinator wake is the normal one. The host worktree and the temporary job folder are removed.
@@ -311,6 +319,6 @@ Steers written on the seat (`limen steer`, and the timeout warning) are copied t
 - **Groups, tabs, OMP, Devin.** Not on a host. Group members share a deadline and a cabinet on the seat. A hosted Herdr tab is a person typing on the seat.
 - **Wrapper death.** If the seat wrapper dies, the host's Pi can keep running until someone kills it. The seat reaper does not have a remote pid. The job looks dead on the seat while the laptop is still busy.
 - **Argument size.** The script travels on ssh's stdin, so the task can be large. The session upload and the handoff copy are base64 in that stream. A huge session makes a huge copy; it is not chunked.
-- **One repo per host entry.** `root` is one clone. A second repo needs a second alias (or a later config shape). Workspace `--repo` jobs use the seat's layout and are not remapped.
+- **One clone per repo.** `roots` maps each origin to a path, and `root` is the shorthand for one more clone. A host that does not list the job's project is skipped for overflow, and `--host` stops with no job record. Two keys for one origin, or two paths for one origin, are a configuration error. Workspace `--repo` jobs use that child repository's origin.
 
 `LIMEN_SSH` overrides the ssh binary. The tests point it at a fake. Leave it unset on the seat.

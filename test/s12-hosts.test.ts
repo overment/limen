@@ -8,17 +8,20 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { cmdQuote, type HostPlatform, launchScript, type RemoteHost, sshArgv } from "../src/runtime/host-shell.ts";
-import { parseHostPool, rankHosts, validateRemoteLaunch } from "../src/runtime/hosts.ts";
+import { matchProjectRoot, originKey, parseHostPool, rankHosts, validateRemoteLaunch } from "../src/runtime/hosts.ts";
 import * as plant from "./plant.ts";
 
 const HOOK = fileURLToPath(new URL("../hook", import.meta.url));
 const gate = { cpuIdle: 25, memoryFree: 20 };
 
 function host(over: Partial<RemoteHost> & Pick<RemoteHost, "alias">): RemoteHost {
+	const root = over.root ?? "/repo";
 	return {
 		ssh: over.alias,
 		platform: "darwin",
-		root: "/repo",
+		root,
+		shorthand: over.shorthand ?? (over.root === "" ? "" : root),
+		clones: over.clones ?? [],
 		hook: "/hook",
 		maxConcurrent: 2,
 		enabled: true,
@@ -84,6 +87,71 @@ test("hosts.json parses darwin and WSL hosts and rejects a bad platform or a dup
 				"hosts.json",
 			),
 		/twice/,
+	);
+});
+
+test("owner/repo and a remote url name one clone, and a repeated origin is refused", async () => {
+	assert.equal(originKey("https://github.com/HorizonFlex/jira-ops.git"), "horizonflex/jira-ops");
+	assert.equal(originKey("git@github.com:HorizonFlex/JiraOrchestrator.git"), "horizonflex/jiraorchestrator");
+	assert.equal(originKey("HorizonFlex/agent-pipeline"), "horizonflex/agent-pipeline");
+	const mapped = host({
+		alias: "mbp",
+		root: "",
+		shorthand: "",
+		clones: [
+			{ key: "HorizonFlex/jira-ops", path: "/src/jira-ops" },
+			{ key: "https://github.com/HorizonFlex/agent-pipeline.git", path: "/src/agent-pipeline" },
+		],
+	});
+	assert.equal(await matchProjectRoot(mapped, "git@github.com:HorizonFlex/jira-ops.git"), "/src/jira-ops");
+	assert.equal(await matchProjectRoot(mapped, "https://github.com/HorizonFlex/limen-sandbox.git"), undefined);
+	const parsed = parseHostPool(
+		{
+			hosts: [
+				{
+					alias: "mbp",
+					ssh: "h",
+					platform: "darwin",
+					root: "/src/limen-sandbox/",
+					hook: "/h",
+					maxConcurrent: 1,
+					roots: { "HorizonFlex/jira-ops": "/src/jira-ops/" },
+				},
+			],
+		},
+		"hosts.json",
+	);
+	assert.equal(parsed.hosts[0]?.shorthand, "/src/limen-sandbox");
+	assert.deepEqual(parsed.hosts[0]?.clones, [{ key: "HorizonFlex/jira-ops", path: "/src/jira-ops" }]);
+	assert.throws(
+		() =>
+			parseHostPool(
+				{
+					hosts: [
+						{
+							alias: "mbp",
+							ssh: "h",
+							platform: "darwin",
+							hook: "/h",
+							maxConcurrent: 1,
+							roots: {
+								"HorizonFlex/jira-ops": "/src/jira-ops",
+								"https://github.com/HorizonFlex/jira-ops.git": "/src/other",
+							},
+						},
+					],
+				},
+				"hosts.json",
+			),
+		/twice/,
+	);
+	assert.throws(
+		() =>
+			parseHostPool(
+				{ hosts: [{ alias: "mbp", ssh: "h", platform: "darwin", hook: "/h", maxConcurrent: 1 }] },
+				"hosts.json",
+			),
+		/needs root or roots/,
 	);
 });
 
@@ -442,6 +510,114 @@ test("hosts check prints a claude keychain failure, and prune uses the repo when
 		assert.doesNotMatch(dry.stdout, /limen\/gone(?:\s|$)/);
 	} finally {
 		await p.cleanup();
+		await seat.made.cleanup();
+	}
+});
+
+async function otherProject(seat: Awaited<ReturnType<typeof remotePlant>>, name: string) {
+	const origin = join(seat.made.parent, `${name}.git`);
+	const checkout = join(seat.made.parent, name);
+	const clone = join(seat.made.parent, `${name}-host`);
+	plant.git(seat.made.parent, "init", "-q", "--bare", "-b", "main", origin);
+	await plant.repository(checkout);
+	plant.git(checkout, "remote", "add", "origin", origin);
+	plant.git(checkout, "push", "-q", "origin", "main");
+	const init = plant.limen(seat.made, ["init"], { cwd: checkout, env: seat.env });
+	assert.equal(init.status, 0, init.stderr);
+	plant.git(seat.made.parent, "clone", "-q", origin, clone);
+	plant.git(clone, "config", "user.email", "limen@example.test");
+	plant.git(clone, "config", "user.name", "Limen Test");
+	return { checkout, clone, origin: plant.git(checkout, "remote", "get-url", "origin") };
+}
+
+test("a shorthand root is not a wildcard: the wrong project is refused and not overflowed", async () => {
+	const seat = await remotePlant("darwin", "mbp");
+	try {
+		const other = await otherProject(seat, "jira-ops");
+		const refused = plant.limen(seat.made, ["spawn", "--host", "mbp", "--label", "wrong", "finish"], {
+			cwd: other.checkout,
+			env: seat.env,
+		});
+		assert.notEqual(refused.status, 0);
+		assert.match(refused.stderr, /--host mbp has no root for/);
+		assert.match(refused.stderr, /origin unreadable|at \//);
+		assert.doesNotMatch(refused.stdout, /started /);
+		const poolPath = join(seat.made.parent, ".limen", "hosts.json");
+		await writeFile(poolPath, readFileSync(poolPath, "utf8").replace('"overflow": false', '"overflow": true'));
+		await writeFile(join(seat.made.parent, "start-reading.json"), '{"cpuIdle":0,"memoryFree":0}\n');
+		const env = { ...seat.env, LIMEN_HOST_READING: '{"cpuIdle":80,"memoryFree":80}' };
+		const id = plant.spawnJob(seat.made, "finish\nfinish stayed", ["--label", "stay"], { cwd: other.checkout, env });
+		const dir = join(other.checkout, ".limen", "jobs", id);
+		const logPath = join(dir, "log");
+		await plant.until(dir, () => existsSync(logPath) && readFileSync(logPath, "utf8").includes("none have a clone"));
+		await writeFile(join(seat.made.parent, "start-reading.json"), '{"cpuIdle":100,"memoryFree":100}\n');
+		assert.equal(plant.waitJob(seat.made, id, { cwd: other.checkout, env }), "done");
+		assert.equal(existsSync(join(dir, "host")), false);
+		assert.match(readFileSync(join(dir, "log"), "utf8"), new RegExp(`none have a clone of ${originKey(other.origin)}`));
+	} finally {
+		await seat.made.cleanup();
+	}
+});
+
+test("roots send each project to its own clone, and check lists origin and branch", async () => {
+	const seat = await remotePlant("darwin", "mbp");
+	try {
+		const other = await otherProject(seat, "jira-ops");
+		const poolPath = join(seat.made.parent, ".limen", "hosts.json");
+		const pool = JSON.parse(readFileSync(poolPath, "utf8")) as {
+			hosts: Array<{ root?: string; roots?: Record<string, string> }>;
+		};
+		const entry = pool.hosts[0];
+		if (!entry) {
+			throw new Error("missing host");
+		}
+		entry.roots = { "HorizonFlex/jira-ops": other.clone, [other.origin]: other.clone };
+		await writeFile(poolPath, `${JSON.stringify(pool)}\n`);
+		// The two keys are one origin only after normalization when the clone's url is github-shaped.
+		// Here the local url and the owner/repo key differ, so parsing must reject the duplicate path.
+		const rejected = plant.limen(seat.made, ["spawn", "--host", "mbp", "finish"], { env: seat.env });
+		assert.match(rejected.stderr, /lists .* twice/);
+		entry.roots = { [other.origin]: other.clone };
+		await writeFile(poolPath, `${JSON.stringify(pool)}\n`);
+		const home = plant.spawnJob(seat.made, "finish\nfinish home", ["--host", "mbp", "--label", "home"], {
+			env: seat.env,
+		});
+		assert.equal(plant.waitJob(seat.made, home, { env: seat.env }), "done");
+		assert.match(plant.jobFile(seat.made, home, "log"), /host-repo-limen-worktrees/);
+		assert.doesNotMatch(plant.jobFile(seat.made, home, "log"), /jira-ops-host-limen-worktrees/);
+		const away = plant.spawnJob(seat.made, "finish\nfinish away", ["--host", "mbp", "--label", "away"], {
+			cwd: other.checkout,
+			env: seat.env,
+		});
+		assert.equal(plant.waitJob(seat.made, away, { cwd: other.checkout, env: seat.env }), "done");
+		const awayLog = readFileSync(join(other.checkout, ".limen", "jobs", away, "log"), "utf8");
+		assert.match(awayLog, /jira-ops-host-limen-worktrees/);
+		assert.doesNotMatch(awayLog, /host-repo-limen-worktrees/);
+		await writeFile(join(seat.made.bin, "claude"), "#!/bin/sh\nexit 0\n");
+		await chmod(join(seat.made.bin, "claude"), 0o755);
+		const listed = plant.limen(seat.made, ["hosts", "check", "mbp"], { env: seat.env });
+		assert.equal(listed.status, 0, `${listed.stdout}\n${listed.stderr}`);
+		assert.match(listed.stdout, new RegExp(seat.clone));
+		assert.match(listed.stdout, new RegExp(other.clone));
+		assert.match(listed.stdout, /\(main\)/);
+		plant.git(other.clone, "checkout", "-q", "-b", "limen/stuck");
+		const stuck = plant.limen(seat.made, ["hosts", "check", "mbp"], { env: seat.env });
+		assert.notEqual(stuck.status, 0);
+		assert.match(stuck.stdout, /on job branch limen\/stuck/);
+		plant.git(other.clone, "checkout", "-q", "main");
+		entry.roots = { "HorizonFlex/jira-ops": other.clone };
+		await writeFile(poolPath, `${JSON.stringify(pool)}\n`);
+		const mismatch = plant.limen(seat.made, ["hosts", "check", "mbp"], { env: seat.env });
+		assert.notEqual(mismatch.status, 0);
+		assert.match(mismatch.stdout, /want horizonflex\/jira-ops/);
+		const refused = plant.limen(seat.made, ["spawn", "--host", "mbp", "finish"], {
+			cwd: other.checkout,
+			env: seat.env,
+		});
+		assert.notEqual(refused.status, 0);
+		assert.match(refused.stderr, /has no root for/);
+		assert.match(refused.stderr, /horizonflex\/jira-ops/);
+	} finally {
 		await seat.made.cleanup();
 	}
 });

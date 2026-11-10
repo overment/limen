@@ -5,8 +5,8 @@ import { textFile } from "../job/record.ts";
 import { repoRoot } from "../project/git.ts";
 import { registeredProjects } from "../project/seat.ts";
 import { resolveSeatAccount } from "../runtime/claude-account.ts";
-import { hostCheckScript, type RemoteHost, shellText } from "../runtime/host-shell.ts";
-import { hostByAlias, loadHostPool } from "../runtime/hosts.ts";
+import { configuredClones, hostCheckScript, type RemoteHost, shellText } from "../runtime/host-shell.ts";
+import { hostByAlias, loadHostPool, originKey } from "../runtime/hosts.ts";
 
 /** `limen hosts check ALIAS` and `limen hosts prune [--dry-run]`. */
 export async function hostsCommand(args: readonly string[], cwd: string): Promise<void> {
@@ -50,12 +50,21 @@ async function checkHost(args: readonly string[]): Promise<void> {
 	}
 }
 
+type FoundRoot = {
+	readonly path: string;
+	readonly branch: string;
+	readonly origin: string;
+	readonly detail: string;
+	readonly ok: boolean;
+};
+
 function readCheck(
 	host: RemoteHost,
 	text: string,
 ): { readonly lines: string[]; readonly ok: boolean; readonly claudeOk: boolean; readonly claudeKeychain: boolean } {
 	const lines: string[] = [];
 	const saw = { pi: false, node: false, git: false, hook: false };
+	const found: FoundRoot[] = [];
 	let pi = false;
 	let node = false;
 	let git = false;
@@ -65,6 +74,11 @@ function readCheck(
 	for (const raw of text.split("\n")) {
 		const line = raw.trim();
 		if (!line) {
+			continue;
+		}
+		const root = parseRootLine(line);
+		if (root) {
+			found.push(root);
 			continue;
 		}
 		noteCheckLine(line, saw, (name, ok) => {
@@ -83,16 +97,81 @@ function readCheck(
 		if (/25308|User interaction is not allowed/i.test(line)) {
 			claudeKeychain = true;
 		}
-		if (/^(?:pi|node|git|hook|claude) /.test(line)) {
+		if (/^(?:pi|node|hook|claude) /.test(line)) {
 			lines.push(`${host.alias}: ${line}`);
 		}
+	}
+	const roots = describeRoots(host, found);
+	for (const line of roots.lines) {
+		lines.push(`${host.alias}: ${line}`);
+	}
+	if (saw.git) {
+		lines.push(`${host.alias}: ${git && roots.ok ? "git ok" : "git fail"}`);
 	}
 	for (const name of ["pi", "node", "git", "hook"] as const) {
 		if (!saw[name]) {
 			lines.push(`${host.alias}: ${name === "git" ? "git ls-remote failed" : `${name} missing`}`);
 		}
 	}
-	return { lines, ok: pi && node && git && hook, claudeOk, claudeKeychain };
+	return { lines, ok: pi && node && git && hook && roots.ok, claudeOk, claudeKeychain };
+}
+
+function parseRootLine(line: string): FoundRoot | undefined {
+	if (!line.startsWith("root ok\t") && !line.startsWith("root fail\t")) {
+		return undefined;
+	}
+	const [, path, branch, origin, ...rest] = line.split("\t");
+	return {
+		path: path ?? "",
+		branch: branch ?? "",
+		origin: origin ?? "",
+		detail: rest.join(" ").trim(),
+		ok: line.startsWith("root ok\t"),
+	};
+}
+
+function describeRoots(
+	host: RemoteHost,
+	found: readonly FoundRoot[],
+): { readonly lines: string[]; readonly ok: boolean } {
+	const lines: string[] = [];
+	const seen = new Map<string, string>();
+	let ok = configuredClones(host).length > 0;
+	for (const clone of configuredClones(host)) {
+		const row = found.find((item) => item.path === clone.path);
+		const judged = judgeRoot(clone.key, clone.path, row);
+		if (judged.ok && seen.has(judged.key)) {
+			ok = false;
+			lines.push(`root fail ${clone.path} same origin as ${seen.get(judged.key)}`);
+			continue;
+		}
+		if (judged.ok) {
+			seen.set(judged.key, clone.path);
+		} else {
+			ok = false;
+		}
+		lines.push(judged.line);
+	}
+	return { lines, ok };
+}
+
+function judgeRoot(
+	want: string,
+	path: string,
+	row: FoundRoot | undefined,
+): { readonly ok: boolean; readonly line: string; readonly key: string } {
+	if (!row) {
+		return { ok: false, line: `root fail ${path} no report`, key: "" };
+	}
+	if (!row.ok) {
+		const why = row.detail === "on job branch" ? `on job branch ${row.branch}` : row.detail || "failed";
+		return { ok: false, line: `root fail ${path} ${why}`, key: "" };
+	}
+	const have = originKey(row.origin);
+	if (want && originKey(want) !== have) {
+		return { ok: false, line: `root fail ${path} origin is ${have}, want ${originKey(want)}`, key: have };
+	}
+	return { ok: true, line: `root ${path} ${have} (${row.branch})`, key: have };
 }
 
 function noteCheckLine(

@@ -5,12 +5,22 @@ import { type ChildProcess, spawn } from "node:child_process";
 // `wsl.exe` line and the job itself runs in WSL2 Ubuntu, which is a Linux host from the script's point of view.
 export type HostPlatform = "darwin" | "windows-wsl";
 
+export type HostClone = {
+	/** Origin url or `owner/repo`. Empty is the shorthand `root`: the clone's own origin is the match. */
+	readonly key: string;
+	readonly path: string;
+};
+
 export type RemoteHost = {
 	readonly alias: string;
 	readonly ssh: string;
 	readonly platform: HostPlatform;
-	/** Absolute POSIX path of the repo checkout on the host. WSL paths stay POSIX (`/home/...`). */
+	/** Clone this job uses. On a pool entry, the shorthand path, or "" when the entry only lists `roots`. */
 	readonly root: string;
+	/** `root` from hosts.json. Empty when the entry only lists `roots`. */
+	readonly shorthand: string;
+	/** `roots` from hosts.json. The shorthand is not repeated here. */
+	readonly clones: readonly HostClone[];
 	/** Absolute POSIX path of this package's `hook/` directory on the host. */
 	readonly hook: string;
 	readonly maxConcurrent: number;
@@ -289,23 +299,80 @@ exit 0
 `;
 }
 
-/** Confirms node, Pi, the hook directory, a fetch from origin, and the host's own Claude login. */
+/** Every clone a pool entry names: the shorthand `root`, then each `roots` path. */
+export function configuredClones(host: Pick<RemoteHost, "shorthand" | "clones">): readonly HostClone[] {
+	return host.shorthand ? [{ key: "", path: host.shorthand }, ...host.clones] : [...host.clones];
+}
+
+/** Prints the clone's origin, or `missing`. The seat matches a shorthand `root` against this line. */
+export function originProbeScript(path: string): string {
+	const quoted = posixQuote(path);
+	return `set +e
+if ! git -C ${quoted} rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  echo missing
+  exit 0
+fi
+url=$(git -C ${quoted} remote get-url origin 2>/dev/null) || url=""
+if [ -z "$url" ]; then
+  echo missing
+  exit 0
+fi
+printf '%s\\n' "$url"
+exit 0
+`;
+}
+
+/** One tab-separated line per clone: branch, origin, and whether it is a non-job branch of a readable origin. */
+function rootCheckFunction(): string {
+	return `check_root() {
+  path="$1"
+  if ! git -C "$path" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    printf 'root fail\\t%s\\t-\\t-\\tnot a git clone\\n' "$path"
+    return 1
+  fi
+  origin=$(git -C "$path" remote get-url origin 2>/dev/null) || origin=""
+  if [ -z "$origin" ]; then
+    printf 'root fail\\t%s\\t-\\t-\\tno origin\\n' "$path"
+    return 1
+  fi
+  branch=$(git -C "$path" branch --show-current 2>/dev/null) || branch=""
+  if [ -z "$branch" ]; then
+    printf 'root fail\\t%s\\t-\\t%s\\tdetached HEAD\\n' "$path" "$origin"
+    return 1
+  fi
+  case "$branch" in
+    limen/*)
+      printf 'root fail\\t%s\\t%s\\t%s\\ton job branch\\n' "$path" "$branch" "$origin"
+      return 1
+      ;;
+  esac
+  err=$(git -C "$path" ls-remote --exit-code origin HEAD 2>&1)
+  code=$?
+  if [ "$code" != 0 ]; then
+    one=$(printf '%s\\n' "$err" | head -n 1 | tr '\\t' ' ')
+    printf 'root fail\\t%s\\t%s\\t%s\\tls-remote failed: %s\\n' "$path" "$branch" "$origin" "$one"
+    return 1
+  fi
+  printf 'root ok\\t%s\\t%s\\t%s\\t-\\n' "$path" "$branch" "$origin"
+  return 0
+}`;
+}
+
+/** Confirms node, Pi, the hook directory, each clone, and the host's own Claude login. */
 export function hostCheckScript(host: RemoteHost): string {
 	const pathLine = host.path ? `export PATH=${posixQuote(host.path)}:"$PATH"\n` : "";
+	const calls = configuredClones(host)
+		.map((clone) => `check_root ${posixQuote(clone.path)} || bad=1`)
+		.join("\n");
 	return `set +e
-${pathLine}root=${posixQuote(host.root)}
+${pathLine}${rootCheckFunction()}
+bad=0
+${calls}
+if [ "$bad" = 0 ]; then echo "git ok"; else echo "git fail"; fi
 hook=${posixQuote(host.hook)}
 if command -v node >/dev/null 2>&1; then echo "node ok $(command -v node)"; else echo "node missing"; fi
 if command -v pi >/dev/null 2>&1; then echo "pi ok $(command -v pi)"; else echo "pi missing"; fi
 if [ -f "$hook/finish.ts" ]; then echo "hook ok $hook"; else echo "hook missing $hook"; fi
-git_err=$(git -C "$root" ls-remote --exit-code origin HEAD 2>&1)
-git_code=$?
-if [ "$git_code" = 0 ]; then
-  echo "git ok"
-else
-  echo "git fail"
-  printf '%s\n' "$git_err" | head -n 5 | sed 's/^/git /'
-fi
 if ! command -v claude >/dev/null 2>&1; then
   echo "claude missing"
   exit 0

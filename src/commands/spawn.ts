@@ -43,7 +43,14 @@ import {
 	preflightEngine,
 	resolveSpawnEngine,
 } from "../runtime/engine.ts";
-import { assertHostEngine, hostByAlias, hostModel, loadHostPool, validateRemoteLaunch } from "../runtime/hosts.ts";
+import {
+	assertHostEngine,
+	assertHostProject,
+	hostByAlias,
+	hostModel,
+	loadHostPool,
+	validateRemoteLaunch,
+} from "../runtime/hosts.ts";
 import { liveJob } from "../runtime/reap.ts";
 import { DEFAULT_PRIORITY, parsePriority, queuedLine } from "../runtime/start-queue.ts";
 import { normalizeWorkerExtensions } from "../runtime/worker-extensions.ts";
@@ -186,14 +193,14 @@ async function spawnJob(args: readonly string[], cwd: string, group?: SpawnGroup
 	const model =
 		profile.id === "devin" ? options.model : (options.model ?? hostModel(options.host) ?? defaultModel(options.review));
 	const extensions = await launchExtensions(group, options.extensions, cwd, profile.id);
+	const place = resolveSpawnPlace(cwd, group, options.repo);
 	if (profile.id !== "devin") {
-		await preflightSpawn(options.host, profile, model, options.provider);
+		await preflightSpawn(options.host, profile, model, options.provider, place.repository);
 	}
 	const notificationSession = currentNotificationSession();
 	const coordinatorTab = process.env.HERDR_TAB_ID?.trim();
 	// A group member never subscribes a session, so its pane stays recorded even under Pi: it is the lead's route when the group hook is not running.
 	const coordinatorPane = herdrWakePane(group ? undefined : notificationSession);
-	const place = resolveSpawnPlace(cwd, group, options.repo);
 	const task = await spawnTaskText(loaded, options.repo, place);
 	await recordSpawnedJob({
 		cwd,
@@ -216,12 +223,15 @@ async function preflightSpawn(
 	profile: EngineProfile,
 	model: string | undefined,
 	provider: string | undefined,
+	project: string,
 ): Promise<void> {
 	if (!host) {
 		preflightEngine(profile, model, provider);
 		return;
 	}
-	await assertHostEngine(hostByAlias(loadHostPool(), host), model, provider);
+	const found = hostByAlias(loadHostPool(), host);
+	await assertHostProject(found, project);
+	await assertHostEngine(found, model, provider);
 }
 
 /** Outside a group no job may claim the owner-facing lead; a group launch keeps its recorded route and branches. */

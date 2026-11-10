@@ -41,7 +41,14 @@ import {
 	preflightEngine,
 	resolveSpawnEngine,
 } from "../runtime/engine.ts";
-import { assertHostEngine, hostByAlias, hostModel, loadHostPool, validateRemoteLaunch } from "../runtime/hosts.ts";
+import {
+	assertHostEngine,
+	assertHostProject,
+	hostByAlias,
+	hostModel,
+	loadHostPool,
+	validateRemoteLaunch,
+} from "../runtime/hosts.ts";
 import { jobPriority, parsePriority, queuedLine } from "../runtime/start-queue.ts";
 import { normalizeWorkerExtensions, readWorkerExtensions } from "../runtime/worker-extensions.ts";
 import { launchWrapper } from "../runtime/wrapper.ts";
@@ -216,7 +223,8 @@ async function continueJob(args: readonly string[], cwd: string, locked = false,
 	const profile = engineProfile(parent.engine);
 	validateRemoteLaunch(loadHostPool(), options.host, remoteLaunch(options, membership !== undefined, profile.id));
 	const extensions = await continuationExtensions(parentDir, membership, options.selected, cwd, profile.id);
-	await preflightContinuation(options, profile, chosenModel, provider);
+	const repository = parent.repo ? workspaceRepository(root, parent.repo) : root;
+	await preflightContinuation(options, profile, chosenModel, provider, repository);
 	const source = recordedPlanningSource(parentDir);
 	const followUp = await continuationTask(root, parentDir, options.instruction, source);
 	const finalLabel = label ?? `${(await text(`${parentDir}/label`)) || parentId} · continue`;
@@ -228,7 +236,6 @@ async function continueJob(args: readonly string[], cwd: string, locked = false,
 	const member = membership?.member
 		? await claimMember(membership.run, membership.member.team, slot, id, parentId, round)
 		: undefined;
-	const repository = parent.repo ? workspaceRepository(root, parent.repo) : root;
 	if (!existsSync(parent.worktree) && !branchExists(repository, parent.branch)) {
 		throw new Error(
 			`parent worktree ${parent.worktree} is gone and branch ${parent.branch} is missing in ${repository}; restore that branch before continuing`,
@@ -286,12 +293,15 @@ async function preflightContinuation(
 	profile: EngineProfile,
 	model: string | undefined,
 	provider: string | undefined,
+	project: string,
 ): Promise<void> {
 	if (!options.host) {
 		preflightEngine(profile, model, provider);
 		return;
 	}
-	await assertHostEngine(hostByAlias(loadHostPool(), options.host), model, provider);
+	const found = hostByAlias(loadHostPool(), options.host);
+	await assertHostProject(found, project);
+	await assertHostEngine(found, model, provider);
 }
 
 function remoteLaunch(
