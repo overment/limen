@@ -1,10 +1,20 @@
 import { execFile } from "node:child_process";
-import { existsSync } from "node:fs";
+import { constants } from "node:fs";
+import { access } from "node:fs/promises";
+import { homedir } from "node:os";
+import { join } from "node:path";
 
-// The seat's GitHub App key stays with the limen-github user. This asks that user's broker for one installation
-// token for one repo. The token is the broker's stdout. It is never an argument here and never written to a log.
-const BROKER_USER = "limen-github";
-const DEFAULT_BROKER = "/usr/local/libexec/limen-token-broker.mjs";
+// The App key stays inside the broker server on the unix socket /var/lib/limen-token/token.sock.
+// The seat's own git talks to that server through ~/.local/bin/limen-git-token. This module is that client.
+// It never runs the server, and it never uses sudo: starting the server .mjs deletes and recreates the socket.
+const CLIENT_NAME = "limen-git-token";
+
+export type GithubBroker = {
+	/** Executable client. Run directly, with the `owner/repo` as its only argument. */
+	readonly command: string;
+	/** Always true. `false` is rejected so a config file cannot ask Limen to sudo the server. */
+	readonly direct: true;
+};
 
 export type MintedToken = {
 	readonly token: string;
@@ -14,16 +24,38 @@ export type MintedToken = {
 
 export type MintResult = {
 	readonly minted?: MintedToken;
-	/** Safe to log: broker stderr with token-shaped text removed, or why there was no token. */
+	/** Safe to log. Token-shaped text is removed. `no broker` means nothing is configured. */
 	readonly detail: string;
 };
 
-/** `LIMEN_GITHUB_BROKER`, or the seat path. A missing file means the host keeps its own git credentials. */
-export function githubBrokerPath(): string {
-	return process.env.LIMEN_GITHUB_BROKER?.trim() || DEFAULT_BROKER;
+/** `githubBroker` from hosts.json. Omitted means auto-detect. `direct: false` is refused. */
+export function parseGithubBroker(value: unknown, path: string, ignored: string[]): GithubBroker | undefined {
+	if (value === undefined) {
+		return undefined;
+	}
+	if (!value || typeof value !== "object" || Array.isArray(value)) {
+		throw new Error(`${path} githubBroker must be an object`);
+	}
+	const body = value as Record<string, unknown>;
+	const command = body.command;
+	if (typeof command !== "string" || !command.trim() || /[\0\r\n]/.test(command)) {
+		throw new Error(`${path} githubBroker.command must be a path`);
+	}
+	if (body.direct === false) {
+		throw new Error(`${path} githubBroker.direct must be true; Limen does not start the broker server`);
+	}
+	if (body.direct !== undefined && body.direct !== true) {
+		throw new Error(`${path} githubBroker.direct must be true`);
+	}
+	for (const key of Object.keys(body)) {
+		if (key !== "command" && key !== "direct") {
+			ignored.push(`githubBroker.${key}`);
+		}
+	}
+	return { command: command.trim(), direct: true };
 }
 
-/** `owner/repo` from an HTTPS or ssh GitHub origin. Other urls are not sent to the broker. */
+/** `owner/repo` from an HTTPS or ssh GitHub origin. Other urls are not sent to the client. */
 export function githubRepo(url: string): string | undefined {
 	const match = /^(?:https:\/\/github\.com\/|git@github\.com:)([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+?)(?:\.git)?\/?$/.exec(
 		url.trim(),
@@ -32,28 +64,80 @@ export function githubRepo(url: string): string | undefined {
 }
 
 /**
- * Runs the broker. Production is `sudo -n -u limen-github -- node <broker> owner/repo`.
- * `LIMEN_GITHUB_BROKER_DIRECT=1` runs the file itself, which is how tests stand in for it.
- * Stdout is one token line, or JSON `{"token","name","email"}`.
+ * Which client to run. `LIMEN_GITHUB_BROKER` wins, then `githubBroker.command` in hosts.json, then
+ * `~/.local/bin/limen-git-token` when that file is executable. Otherwise there is no client.
  */
-export async function mintHostToken(repo: string): Promise<MintResult> {
-	const path = githubBrokerPath();
-	if (!existsSync(path)) {
-		return { detail: "no broker" };
+export async function resolveBrokerCommand(configured?: GithubBroker): Promise<string | undefined> {
+	const env = process.env.LIMEN_GITHUB_BROKER?.trim();
+	if (env) {
+		return env;
 	}
+	if (configured?.command) {
+		return configured.command;
+	}
+	const detected = join(process.env.HOME?.trim() || homedir(), ".local", "bin", CLIENT_NAME);
+	try {
+		await access(detected, constants.X_OK);
+		return detected;
+	} catch {
+		return undefined;
+	}
+}
+
+/**
+ * Asks the client for one installation token. The command is `<client> owner/repo`, the same call that already
+ * worked with `LIMEN_GITHUB_BROKER` pointed at `limen-git-token`. Git itself may instead run that file as a
+ * credential helper (`get`, with `protocol` and `host` on stdin). Stdout may be one token line, JSON
+ * `{"token","name","email"}`, or helper attributes with `password=`. The token is not logged.
+ */
+export async function mintHostToken(repo: string, configured?: GithubBroker): Promise<MintResult> {
 	if (!/^[\w.-]+\/[\w.-]+$/.test(repo)) {
 		return { detail: "not a github repo" };
 	}
-	const direct = process.env.LIMEN_GITHUB_BROKER_DIRECT === "1";
-	const run = direct
-		? await execText(path, [repo])
-		: await execText("sudo", ["-n", "-u", BROKER_USER, "--", "node", path, repo]);
+	const command = await resolveBrokerCommand(configured);
+	if (!command) {
+		return { detail: "no broker" };
+	}
+	const run = await execText(command, [repo]);
 	const minted = run.code === 0 ? parseMint(run.stdout) : undefined;
 	if (minted) {
 		return { minted, detail: "" };
 	}
 	const detail = redactSecrets(run.stderr).trim();
 	return { detail: detail || `broker exit ${run.code ?? "none"}` };
+}
+
+/** One check line per GitHub origin. The token is not included. */
+export async function githubTokenLines(
+	origins: readonly string[],
+	configured?: GithubBroker,
+): Promise<readonly string[]> {
+	const lines: string[] = [];
+	const seen = new Set<string>();
+	for (const origin of origins) {
+		const repo = githubRepo(origin);
+		if (!repo || seen.has(repo)) {
+			continue;
+		}
+		seen.add(repo);
+		const minted = await mintHostToken(repo, configured);
+		lines.push(minted.minted ? `github token ok ${repo}` : unavailable(repo, minted.detail));
+	}
+	return lines.length > 0 ? lines : ["github token skipped; no github.com origin"];
+}
+
+/** The job log line when the seat cannot hand the host a bot token. */
+export function missingTokenLine(repo: string, detail: string): string {
+	const why = detail === "no broker" ? "limen-git-token is not configured" : redactSecrets(detail).trim() || "no token";
+	return `no seat GitHub bot token for ${repo} (${why}); the host push uses the host's own credentials`;
+}
+
+function unavailable(repo: string, detail: string): string {
+	if (detail === "no broker") {
+		return `github token unavailable ${repo}; limen-git-token is not configured`;
+	}
+	const why = redactSecrets(detail).trim();
+	return why ? `github token unavailable ${repo}; ${why}` : `github token unavailable ${repo}`;
 }
 
 function parseMint(stdout: string): MintedToken | undefined {
@@ -69,7 +153,18 @@ function parseMint(stdout: string): MintedToken | undefined {
 			return undefined;
 		}
 	}
-	return clean(text.split("\n")[0] ?? "", undefined, undefined);
+	const password = text
+		.split("\n")
+		.map((line) => line.trim())
+		.find((line) => line.startsWith("password="));
+	if (password) {
+		return clean(password.slice("password=".length), undefined, undefined);
+	}
+	const lines = text
+		.split("\n")
+		.map((line) => line.trim())
+		.filter(Boolean);
+	return lines.length === 1 ? clean(lines[0] ?? "", undefined, undefined) : undefined;
 }
 
 function clean(token: string, name: unknown, email: unknown): MintedToken | undefined {

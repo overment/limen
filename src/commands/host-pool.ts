@@ -5,6 +5,7 @@ import { textFile } from "../job/record.ts";
 import { repoRoot } from "../project/git.ts";
 import { registeredProjects } from "../project/seat.ts";
 import { resolveSeatAccount } from "../runtime/claude-account.ts";
+import { githubTokenLines } from "../runtime/github-broker.ts";
 import { configuredClones, hostCheckScript, type RemoteHost, shellText } from "../runtime/host-shell.ts";
 import { hostByAlias, loadHostPool, originKey } from "../runtime/hosts.ts";
 
@@ -27,14 +28,19 @@ async function checkHost(args: readonly string[]): Promise<void> {
 	if (!alias || args.length > 1) {
 		throw new Error("hosts check <alias>");
 	}
-	const host = hostByAlias(loadHostPool(), alias);
+	const pool = loadHostPool();
+	const host = hostByAlias(pool, alias);
 	if (!host.enabled) {
 		throw new Error(`--host ${alias} is disabled`);
 	}
 	const result = await shellText(host, hostCheckScript(host), 40_000);
 	const report = readCheck(host, `${result.stdout}\n${result.stderr}`);
+	const tokens = await githubTokenLines(report.origins, pool.githubBroker);
 	const account = resolveSeatAccount();
 	console.log(report.lines.join("\n"));
+	for (const line of tokens) {
+		console.log(`${host.alias}: ${line}`);
+	}
 	console.log(
 		account
 			? `${host.alias}: seat account ${account.name} (passed to a host job as CLAUDE_CODE_OAUTH_TOKEN; not stored there)`
@@ -61,7 +67,13 @@ type FoundRoot = {
 function readCheck(
 	host: RemoteHost,
 	text: string,
-): { readonly lines: string[]; readonly ok: boolean; readonly claudeOk: boolean; readonly claudeKeychain: boolean } {
+): {
+	readonly lines: string[];
+	readonly origins: readonly string[];
+	readonly ok: boolean;
+	readonly claudeOk: boolean;
+	readonly claudeKeychain: boolean;
+} {
 	const lines: string[] = [];
 	const saw = { pi: false, node: false, git: false, hook: false };
 	const found: FoundRoot[] = [];
@@ -113,7 +125,13 @@ function readCheck(
 			lines.push(`${host.alias}: ${name === "git" ? "git ls-remote failed" : `${name} missing`}`);
 		}
 	}
-	return { lines, ok: pi && node && git && hook && roots.ok, claudeOk, claudeKeychain };
+	return {
+		lines,
+		origins: found.map((row) => row.origin).filter(Boolean),
+		ok: pi && node && git && hook && roots.ok,
+		claudeOk,
+		claudeKeychain,
+	};
 }
 
 function parseRootLine(line: string): FoundRoot | undefined {

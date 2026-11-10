@@ -6,7 +6,7 @@ import { enqueueSteer } from "../job/steer-inbox.ts";
 import { recordStreamEvents, type StreamSeen } from "./activity-log.ts";
 import { resolveSeatAccount } from "./claude-account.ts";
 import { argvFor, ENGINES, engineRoute } from "./engine.ts";
-import { githubRepo, mintHostToken, redactSecrets } from "./github-broker.ts";
+import { githubRepo, mintHostToken, missingTokenLine, redactSecrets } from "./github-broker.ts";
 import {
 	bundleScript,
 	cleanupScript,
@@ -153,10 +153,9 @@ async function deliverGithub(job: RemoteJob): Promise<{ token: string; name?: st
 	if (!repo) {
 		return undefined;
 	}
-	const minted = await mintHostToken(repo);
+	const minted = await mintHostToken(repo, loadHostPool().githubBroker);
 	if (!minted.minted) {
-		const why = minted.detail && minted.detail !== "no broker" ? `: ${minted.detail}` : "";
-		await appendLimenLog(job.jobDir, `no seat GitHub token; the host uses its own git credentials${why}`);
+		await appendLimenLog(job.jobDir, missingTokenLine(repo, minted.detail));
 		return undefined;
 	}
 	const sent = await shellText(job.host, githubInstallScript(job.jobId, minted.minted.token), 20_000);

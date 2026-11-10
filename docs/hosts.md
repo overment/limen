@@ -23,6 +23,10 @@ Do not `limen spawn` from a clone on the laptop. That would be a second cabinet.
 ```json
 {
   "overflow": false,
+  "githubBroker": {
+    "command": "/Users/agent/.local/bin/limen-git-token",
+    "direct": true
+  },
   "hosts": [
     {
       "alias": "mbp",
@@ -68,6 +72,7 @@ Do not `limen spawn` from a clone on the laptop. That would be a second cabinet.
 | `path` | Optional directories prepended to `PATH` for the job. Non-interactive ssh does not load zshrc or nvm. |
 | `model` | Used when `--model` is omitted. A bridged id such as `claude-bridge/claude-sonnet-5-5` is resolved on the host. Omitted means the seat default, which the host may not be logged into. |
 | `overflow` | Top-level. `true` lets the seat send a job to a free host when the **local** start gate is closed. Omitted or `false` means only an explicit `--host` leaves the seat. |
+| `githubBroker` | Top-level. `command` is the seat's token client, run directly as `<command> owner/repo`. `direct` must be true or omitted. This is read at job start, so a coordinator does not need a restart. |
 | `pruneBranches` | Top-level. `true` deletes `origin/limen/<id>` after that host job fast-forwards. Omitted means leave the branch; `limen hosts prune` deletes it later. |
 
 A bad file fails the job that tries to read it, with the path in the message. A missing file is not an error.
@@ -264,15 +269,21 @@ A quota swap while Pi is already running does not retarget that process. The nex
 
 ## GitHub identity on a host
 
-Commits on a host job use the seat checkout's repo-local `user.name` and `user.email` (the bot, when that is what the seat clone records). A broker JSON line `{"token","name","email"}` overrides that pair. The name is a log line. The token is not.
+Commits on a host job use the seat checkout's repo-local `user.name` and `user.email` (the bot, when that is what the seat clone records). A client JSON line `{"token","name","email"}` overrides that pair. The name is a log line. The token is not.
 
-The App key stays with the `limen-github` user. Limen does not read it. For a job whose origin is `github.com/owner/repo` it runs:
+The App key stays in the broker server behind the unix socket `/var/lib/limen-token/token.sock`. That server is `/usr/local/libexec/limen-token-broker.mjs`, and it deletes and recreates the socket when it starts. Limen does not run it, and does not `sudo` it. A second start would drop the socket the seat is already using. The seat's own `git` and `gh` talk to the socket through the client `~/.local/bin/limen-git-token` (for the seat user `agent`, `/Users/agent/.local/bin/limen-git-token`).
 
-```bash
-sudo -n -u limen-github -- node /usr/local/libexec/limen-token-broker.mjs owner/repo
-```
+Which client runs, first match wins:
 
-`LIMEN_GITHUB_BROKER` points at another script. The broker's stdout is only the installation token, or one JSON object with `token` and optional `name` and `email`. Anything else it prints goes to stderr. A missing file, or a repo that is not on github.com, skips this and the host uses its own git credentials. The log says which.
+1. `LIMEN_GITHUB_BROKER`, when that variable is set. This overrides hosts.json. Tests and a one-off use it. `LIMEN_GITHUB_BROKER_DIRECT` is ignored: the command is always executed directly.
+2. `githubBroker.command` in `~/.limen/hosts.json`. Read at job start, so changing it does not need a coordinator restart.
+3. `~/.local/bin/limen-git-token`, when that file exists and is executable.
+
+`githubBroker.direct` must be true or omitted. `false` is a configuration error.
+
+The client is run as `<command> owner/repo`. That is the call that already made a host push use the bot token. Git's own config may instead invoke the same file as a credential helper (`get`, with `protocol` and `host` on stdin, answering `username=` and `password=`). Limen accepts any of these on stdout: one token line, a JSON object with `token` and optional `name` and `email`, or helper attributes whose `password` is the token. Stderr is logged only after token-shaped text is removed.
+
+No client, or a client that prints nothing, logs `no seat GitHub bot token for <owner/repo> (...); the host push uses the host's own credentials` and the host keeps its own git credentials. `limen hosts check <alias>` prints `github token ok <owner/repo>` or `github token unavailable <owner/repo>` for each clone whose origin is on github.com, and does not print the token.
 
 The token goes over ssh stdin into a `0600` file under `/tmp`, then into `GH_TOKEN` for that job only. A git credential helper answers `x-access-token` from that variable, and `git@github.com:` is fetched as `https://github.com/` for that process, so the host's personal `gh` token is not what pushes. The file is removed before Pi starts, and again when the worktree is cleaned up. It is not an ssh argument and not a log line. The helper is process config (`GIT_CONFIG_*`), not a line written into the host's git config.
 
@@ -284,7 +295,7 @@ limen hosts prune --dry-run
 limen hosts prune
 ```
 
-`check` uses BatchMode ssh. It must find `node`, `pi`, and the configured `hook/finish.ts`. It lists every clone (`root` and each `roots` path) and checks that the clone's origin matches the configured repo, that `git ls-remote origin HEAD` works, and that the checkout is on a non-job branch. A mismatch looks like `root fail <path> origin is foo/bar, want horizonflex/jira-ops`. A job branch looks like `root fail <path> on job branch limen/<id>`. It also runs `claude auth status` and prints that command's own output, so a failure is `claude fail` plus the reason (for example `User interaction is not allowed` and `-25308`). Exit 0 when node, Pi, the hook, and every clone check out, and either Claude answers or the seat has a file token. A locked host keychain is a note when the seat token is present, and a failure when it is not.
+`check` uses BatchMode ssh. It must find `node`, `pi`, and the configured `hook/finish.ts`. It lists every clone (`root` and each `roots` path) and checks that the clone's origin matches the configured repo, that `git ls-remote origin HEAD` works, and that the checkout is on a non-job branch. For each github.com origin it also says whether the seat client can mint a bot token (`github token ok` or `github token unavailable`) and does not print the token. A mismatch looks like `root fail <path> origin is foo/bar, want horizonflex/jira-ops`. A job branch looks like `root fail <path> on job branch limen/<id>`. It also runs `claude auth status` and prints that command's own output, so a failure is `claude fail` plus the reason (for example `User interaction is not allowed` and `-25308`). Exit 0 when node, Pi, the hook, and every clone check out, and either Claude answers or the seat has a file token. A locked host keychain is a note when the seat token is present, and a failure when it is not.
 
 `prune` deletes `origin/limen/<id>` for terminal jobs whose branch is still on origin (`git ls-remote`). A branch already deleted is not listed, including by `--dry-run`. It does not delete review branches that are not `limen/<id>`. The delete runs in the recorded worktree when that directory still exists, and in the repo when it does not. `"pruneBranches": true` deletes the origin branch after a successful fast-forward. The host clone's own `limen/<id>` branch is removed with the worktree.
 
@@ -342,7 +353,7 @@ Steers written on the seat (`limen steer`, and the timeout warning) are copied t
 ## Limitations
 
 - **Claude accounts.** The seat token is `~/.claude-accounts/<name>.token` with `active` naming `<name>`, not the macOS keychain and not a `claude-account-rotate` subcommand. A keychain-only login on the mini is `no seat Claude account` until `claude setup-token` is saved in that flat file. The running Pi keeps the token it was given. A swap on the seat is picked up by the next `continue`, not by the process already on the host. Sharing one account across machines still burns the limit.
-- **GitHub token.** The installation token lives for that one job. A push after the wrapper exits uses the host's own credentials again. The broker has to be runnable as `limen-github` with `sudo -n`. A token that the broker prints with other words on the same line is refused.
+- **GitHub token.** The installation token lives for that one job. A push after the wrapper exits uses the host's own credentials again. The client is `limen-git-token`, not the broker server. A token printed with other words on the same line is refused.
 - **Steers.** Inbox sync is polled, not instant. A host that is asleep keeps the steer in the seat inbox until a later poll. Delivery still happens on the host, because that is where Pi is.
 - **Sleep.** A closed laptop fails the ssh connect (20s) or the server-alive check (about a minute) and the job is `failed`. Wake the machine, or disable that host, before you send it work. Overflow skips a host that does not answer and leaves the job on the seat queue.
 - **Liveness.** Stall detection and `limen stop`'s escaped-child search see the ssh client on the seat, not Pi's children on the host. A tool that hangs inside Pi is not reaped by the seat's CPU-idle watch. `limen stop` kills the recorded pid and its direct children (`pkill -P`); a deeper grandchild can survive. The log's activity is real (it is Pi's stream). A picture that keys off the local process tree will show the ssh client.
