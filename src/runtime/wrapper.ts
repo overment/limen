@@ -204,7 +204,7 @@ export async function runInternalJob(): Promise<void> {
 	}
 	// A detached job must not inherit the coordinator's Herdr pane.
 	for (const name of Object.keys(childEnvironment)) {
-		if (name.startsWith("HERDR_")) {
+		if (name.startsWith("HERDR_") || name === "HC_TERMINAL_ID") {
 			delete childEnvironment[name];
 		}
 	}

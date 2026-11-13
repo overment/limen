@@ -24,7 +24,7 @@ const task = prompt ? readFileSync(prompt.slice(1), "utf8") : (flag("--continue"
 const preamble = flag("--append-system-prompt") ?? "";
 mkdirSync(dir, { recursive: true });
 writeFileSync(join(dir, "fake-argv.json"), JSON.stringify(args));
-const names = Object.keys(process.env).filter((name) => /^(LIMEN|HERDR|PI)_/.test(name));
+const names = Object.keys(process.env).filter((name) => /^(LIMEN|HERDR|PI)_|^HC_TERMINAL_ID$/.test(name));
 writeFileSync(join(dir, "fake-env.json"), JSON.stringify(names.sort()));
 writeFileSync(join(dir, "fake-task.txt"), task);
 if (flag("--session-dir")) {

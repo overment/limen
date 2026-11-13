@@ -6,6 +6,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import { closedFeatures, closedJobFeatures } from "../job/job.ts";
 import { seatDir } from "../project/seat.ts";
 import { ENGINES, type EngineId, engineProfile } from "../runtime/engine.ts";
+import { openCoreLog } from "./herdr-core.ts";
 
 export type HerdrPlace = {
 	readonly workspace: string;
@@ -64,6 +65,14 @@ export async function openWatchTab(input: {
 	readonly logPath: string;
 	readonly role: string;
 }): Promise<HerdrPlace | undefined> {
+	if (process.env.HC_TERMINAL_ID?.trim()) {
+		try {
+			await openCoreLog(input);
+		} catch (error) {
+			await skip(input.jobDir, error instanceof Error ? error.message : String(error));
+		}
+		return;
+	}
 	if (process.env.HERDR_ENV !== "1") {
 		return;
 	}
@@ -474,15 +483,18 @@ export function restoreHostedPane(pane: string, role: string): void {
 
 /** Terminal jobs leave no open tabs. A detached closer does the close so finalize never waits on Herdr; the closer records the result in the job log. */
 export async function settleJobTab(jobDir: string): Promise<void> {
-	const place = await readPlace(jobDir);
-	if (!place) {
+	const core = existsSync(`${jobDir}/herdr-core/terminal`);
+	const place = core ? undefined : await readPlace(jobDir);
+	if (!core && !place) {
 		return;
 	}
-	const herdr = herdrBinary();
-	if (!herdr) {
+	const herdr = core ? undefined : herdrBinary();
+	if (!core && !herdr) {
 		return skip(jobDir, "herdr is not available");
 	}
-	const closer = `import { closeJobTab } from ${JSON.stringify(import.meta.url)}; await closeJobTab(${JSON.stringify(herdr)}, ${JSON.stringify(jobDir)}, ${JSON.stringify(place.tab)});`;
+	const closer = core
+		? `import { closeCoreLog } from ${JSON.stringify(new URL("./herdr-core.ts", import.meta.url).href)}; await closeCoreLog(${JSON.stringify(jobDir)});`
+		: `import { closeJobTab } from ${JSON.stringify(import.meta.url)}; await closeJobTab(${JSON.stringify(herdr)}, ${JSON.stringify(jobDir)}, ${JSON.stringify(place?.tab)});`;
 	try {
 		const child = spawn(process.execPath, ["--no-warnings", "--input-type=module", "--eval", closer], {
 			detached: true,
@@ -633,6 +645,16 @@ export async function openJobPlace(input: {
 	readonly cwd: string;
 	readonly running: boolean;
 }): Promise<string> {
+	if (process.env.HC_TERMINAL_ID?.trim() || existsSync(`${input.jobDir}/herdr-core/terminal`)) {
+		const label = (await text(`${input.jobDir}/label`)) || basename(input.jobDir);
+		try {
+			await openCoreLog(input);
+		} catch (error) {
+			await skip(input.jobDir, error instanceof Error ? error.message : String(error));
+			throw error;
+		}
+		return `opened ${label}`;
+	}
 	const herdr = herdrBinary();
 	if (!herdr) {
 		throw new Error("herdr is not available");

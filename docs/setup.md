@@ -162,6 +162,32 @@ limen spawn --engine <engine> \
 
 This job is detached, also in Herdr: a log-tail tab, a 90-minute timeout (change it with `--timeout`), a tool-call cap and process containment. Use `--tab` when a person will type into the worker. In both modes, `--provider`, `--model`, and `--thinking` go to the selected engine as separate flag and value pairs. `limen continue` accepts the same flags.
 
+### Detached log views in the Herdr app
+
+The desktop app uses `herdr-core` (`hc`), not the legacy Herdr TUI server.
+When the source shell has `HC_TERMINAL_ID`, detached spawn and continue use
+`hc get` to read its `herdr.space` label. They start a log terminal in that
+space with `hc run --bg --no-notify --outlive-parent`. The app adopts this
+terminal without changing the selected tab. No parent notes are sent.
+
+`limen open <job>` reuses a live log terminal or creates one in the caller's
+space. It does not select the tab. Views show the whole log and follow new
+lines. Even a completed job's reopened view stays running until you close it,
+so the app can adopt it. Job completion closes the automatically opened view.
+Limen stores the view address in the job's `herdr-core/terminal` file;
+the existing TUI place records and wake routes do not change.
+
+`hc` must be on `PATH`. A missing source-space label or a transport error goes
+to the job log as `herdr skipped: ...`; the detached job still starts.
+Hosted app jobs are not supported by this path. Legacy TUI and non-Herdr
+launches keep their existing behavior.
+
+The interface is documented in the
+[app agent guide](https://github.com/herdrdev/herdr-app/blob/master/src/SKILL.md)
+and `hc run --help`. The app's
+[adoption code](https://github.com/herdrdev/herdr-app/blob/master/src/window.rs)
+preserves the selected tab when it adopts a space-labeled terminal.
+
 ### Devin cloud jobs
 
 `--engine devin` runs the job's agent as a Devin cloud session on Devin's own virtual machine, macOS or Linux. The job's folder, branch and worktree stay on the seat, so `jobs`, `wait`, `diff` and `land` work as for any job.
