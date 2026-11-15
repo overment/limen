@@ -37,8 +37,7 @@ const wakes = (dir: string, id: string) =>
 
 test("spawn returns before --prepare; prune keeps live, nested and starting work, drops and explains the rest", async () => {
 	// Spawn returns while its job's --prepare still waits on a FIFO.
-	const gate = join(p.parent, "prepare-gate"),
-		prepared = join(p.parent, "prepared");
+	const [gate, prepared] = [join(p.parent, "prepare-gate"), join(p.parent, "prepared")];
 	execFileSync("mkfifo", [gate]);
 	const half = spawnJob(p, "say half", ["--prepare", `pwd > ${prepared}; cat ${gate} > /dev/null`]);
 	await until(p.parent, () => existsSync(prepared) && readFileSync(prepared, "utf8").endsWith("\n"));
@@ -58,9 +57,10 @@ test("spawn returns before --prepare; prune keeps live, nested and starting work
 	const nestedDir = join(liveTree, ".limen/jobs", nested);
 	const nestedTree = readFileSync(join(nestedDir, "worktree"), "utf8").trim();
 	await until(nestedDir, () => readFileSync(join(nestedDir, "log"), "utf8").includes("prune: removed"));
-	// Records with a worktree and no state, their spawner alive (this test) or long gone; one running, its process gone.
+	// Records with a worktree: no state, spawner alive (this test) or gone; one running, process gone; one failed, dirty.
 	const [stale, starting, gone] = ["2000-01-stale-aaaaaaaa", "2000-01-starting-aaaaaaaa", "2000-01-gone-aaaaaaaa"];
-	for (const id of [stale, starting, gone]) {
+	const dirty = "2000-01-dirty-aaaaaaaa";
+	for (const id of [stale, starting, gone, dirty]) {
 		await mkdir(jobDir(p, id));
 		await writeFile(join(jobDir(p, id), "started-at"), "2000-01-01T00:00:00.000Z\n");
 		await writeFile(join(jobDir(p, id), "starting"), `${id === starting ? process.pid : ""}\n`);
@@ -68,14 +68,16 @@ test("spawn returns before --prepare; prune keeps live, nested and starting work
 		git(p.root, "worktree", "add", "-q", "--detach", join(halfTree, "..", id), "HEAD");
 	}
 	await writeFile(join(jobDir(p, gone), "state"), "running\n");
+	await writeFile(join(jobDir(p, dirty), "state"), "failed\n");
+	await writeFile(join(halfTree, "..", dirty, "edit.txt"), "unsaved work\n");
 	git(p.root, "worktree", "add", "-q", "--detach", join(liveTree, "tmp/scratch"), "HEAD"); // the live job's own
-
 	const pruned = limen(p, ["prune"]);
 	assert.match(pruned.stdout, new RegExp(`pruned .*/${stale} \\(job ${stale}\\): its record never got a state`));
+	assert.match(pruned.stdout, new RegExp(`kept .*/${dirty} \\(job ${dirty}\\): it has uncommitted changes`));
 	for (const dropped of [jobFile(p, landed, "worktree"), jobFile(p, unmerged, "worktree"), jobDir(p, stale)]) {
 		assert.ok(!existsSync(dropped), `prune kept ${dropped}`);
 	}
-	const others = [...[starting, gone].map((id) => join(halfTree, "..", id)), join(liveTree, "tmp/scratch")];
+	const others = [...[starting, gone, dirty].map((id) => join(halfTree, "..", id)), join(liveTree, "tmp/scratch")];
 	for (const kept of [liveTree, nestedTree, halfTree, jobDir(p, half), nestedDir, ...others]) {
 		assert.ok(existsSync(kept), `prune removed ${kept}`);
 	}
@@ -84,7 +86,6 @@ test("spawn returns before --prepare; prune keeps live, nested and starting work
 	assert.equal(waitJob(p, half), "done");
 	await release(nestedDir);
 	assert.equal(waitJob(p, nested, { cwd: liveTree }), "done");
-
 	const landedBranch = jobFile(p, landed, "branch");
 	git(p.root, "merge", "-q", "--no-edit", landedBranch);
 	assert.equal(limen(p, ["prune", "--retire"]).status, 0);
