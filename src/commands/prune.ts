@@ -217,9 +217,6 @@ async function deleteLandedBranch(
 	if (holder?.locked || (path && !use?.worktrees.has(path))) {
 		return { branch, kept: `it is checked out at ${path}${holder?.locked ? ", which is locked" : ""}` };
 	}
-	if (path && worktreeState(path) === "dirty") {
-		return { branch, kept: `its worktree ${path} has uncommitted changes` };
-	}
 	try {
 		if (path) {
 			trashRoots.add(dirname(path));
