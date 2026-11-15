@@ -14,6 +14,7 @@ import {
 	pruneWorktrees,
 	unlandedBranches,
 	workspaceRepository,
+	worktreeState,
 } from "../project/git.ts";
 import { STARTUP_GRACE_MS, startingJob } from "../runtime/reap.ts";
 
@@ -27,9 +28,12 @@ export async function pruneCommand(args: readonly string[], cwd: string): Promis
 		throw new Error("prune --dry-run requires --retire");
 	}
 	if (!retire) {
-		const removals = await pruneFinishedWorktrees(limenRoot(cwd));
+		const { removals, kept } = await pruneFinishedWorktrees(limenRoot(cwd));
 		for (const removal of removals) {
 			console.log(pruneLine(removal));
+		}
+		for (const keep of kept) {
+			console.log(keptLine(keep));
 		}
 		console.log(
 			removals.length === 0
@@ -112,36 +116,45 @@ async function retireFinishedJobs(
 	return { ids: retired.map((job) => job.id), branches: deleted };
 }
 
-/** One path that prune removed: the job that recorded it, when one did, and why no job kept it. */
+/** One path that prune removed or kept: the job that recorded it, when one did, and why. */
 export type PruneRemoval = { readonly path: string; readonly jobDir: string | undefined; readonly reason: string };
 /** Why prune removes a worktree some job recorded; a job that keeps it never gets here. */
 type PruneOwners = Map<string, { readonly jobDir: string; readonly reason: string }>;
+type PruneResult = { readonly removals: PruneRemoval[]; readonly kept: PruneRemoval[] };
 export function pruneLine(removal: PruneRemoval): string {
 	return `pruned ${removal.path} (job ${removal.jobDir ? basename(removal.jobDir) : "none"}): ${removal.reason}`;
 }
-/** Prunes, writes each line to this job's log and to the log of the job whose worktree went; returns the count. */
+function keptLine(keep: PruneRemoval): string {
+	return `kept ${keep.path} (job ${keep.jobDir ? basename(keep.jobDir) : "none"}): ${keep.reason}`;
+}
+/** Prunes, writes each line to this job's log and to the log of the job whose worktree went or stayed; returns the count removed. */
 export async function pruneForJob(jobDir: string, root: string, keep: readonly string[]): Promise<number> {
-	const removals = await pruneFinishedWorktrees(root, keep);
-	for (const removal of removals) {
-		const line = pruneLine(removal);
+	const { removals, kept } = await pruneFinishedWorktrees(root, keep);
+	for (const [entry, line] of [
+		...removals.map((removal) => [removal, pruneLine(removal)] as const),
+		...kept.map((entry) => [entry, keptLine(entry)] as const),
+	]) {
 		await appendLimenLog(jobDir, line);
-		if (removal.jobDir && removal.jobDir !== jobDir) {
-			await appendLimenLog(removal.jobDir, line).catch(() => {});
+		if (entry.jobDir && entry.jobDir !== jobDir) {
+			await appendLimenLog(entry.jobDir, line).catch(() => {});
 		}
 	}
 	return removals.length;
 }
-export async function pruneFinishedWorktrees(root: string, keep: readonly string[] = []): Promise<PruneRemoval[]> {
+export async function pruneFinishedWorktrees(root: string, keep: readonly string[] = []): Promise<PruneResult> {
 	const jobsRoot = `${root}/.limen/jobs`;
 	const keepPaths = new Set<string>();
 	for (const path of keep) {
 		keepPaths.add(await resolved(path));
 	}
 	const { repositories, removals, owners } = await removeUnstartedRecords(root, jobsRoot);
+	const kept: PruneRemoval[] = [];
 	for (const repository of repositories) {
-		removals.push(...(await pruneRepositoryWorktrees(repository, jobsRoot, keepPaths, owners)));
+		const result = await pruneRepositoryWorktrees(repository, jobsRoot, keepPaths, owners);
+		removals.push(...result.removals);
+		kept.push(...result.kept);
 	}
-	return removals;
+	return { removals, kept };
 }
 /**
  * The one rule every removal obeys: a job keeps its record and its worktree while it is starting, running, or in an
@@ -284,27 +297,37 @@ async function pruneRepositoryWorktrees(
 	jobsRoot: string,
 	keepPaths: ReadonlySet<string>,
 	removedOwners: PruneOwners,
-): Promise<PruneRemoval[]> {
+): Promise<PruneResult> {
 	const worktreeRoot = await resolved(`${dirname(repository)}/.${basename(repository)}-limen-worktrees`);
 	const candidates = await removalCandidates(repository, worktreeRoot);
-	const removals = await worktreeLock(jobsRoot, async () => {
+	const result = await worktreeLock(jobsRoot, async () => {
 		const { kept, owners } = await worktreeClaims(jobsRoot, keepPaths);
 		const detached: PruneRemoval[] = [];
+		const dirty: PruneRemoval[] = [];
 		for (const [path, registered] of candidates) {
 			// A worktree a kept job made inside its own worktree stays with it.
-			if ([...kept].some((keptPath) => path === keptPath || path.startsWith(`${keptPath}/`)) || !(await detach(path))) {
+			if ([...kept].some((keptPath) => path === keptPath || path.startsWith(`${keptPath}/`))) {
 				continue;
 			}
 			const owner = owners.get(path) ?? removedOwners.get(path);
+			// Uncommitted work outlives its job: a person or the next job may still recover it.
+			if (registered && worktreeState(path) === "dirty") {
+				kept.add(path);
+				dirty.push({ path, jobDir: owner?.jobDir, reason: "it has uncommitted changes; commit or discard them" });
+				continue;
+			}
+			if (!(await detach(path))) {
+				continue;
+			}
 			const reason = registered ? "no job records this worktree" : "directory is not a registered Git worktree";
 			detached.push({ path, jobDir: owner?.jobDir, reason: owner?.reason ?? reason });
 		}
 		// Git forgets the moved worktrees before a job can claim their paths again.
 		pruneWorktrees(repository);
-		return detached;
+		return { removals: detached, kept: dirty };
 	});
 	await emptyTrash(worktreeRoot);
-	return removals;
+	return result;
 }
 /**
  * Every path prune may remove, parents first, and whether Git registers it: unlocked worktrees under the root, then the
